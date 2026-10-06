@@ -30,9 +30,9 @@ def msvc():
             k,v=line.split('=',1);env[k.upper()]=v
     return env
 
-def dsk(path,records):
+def dsk(path,records,grid_offset=0):
     path.parent.mkdir(parents=True,exist_ok=True)
-    path.write_bytes(struct.pack('<II',len(records),0)+b''.join(struct.pack('<III',len(data),key,1) for key,data in records)+b''.join(data for key,data in records)+bytes(2048))
+    path.write_bytes(struct.pack('<II',len(records),grid_offset)+b''.join(struct.pack('<III',len(data),key,1) for key,data in records)+b''.join(data for key,data in records)+bytes(2048))
 
 def read_dsk(path):
     data=path.read_bytes();n,tag=struct.unpack_from('<II',data);offset=8+12*n;out={}
@@ -60,7 +60,7 @@ def main():
         (game/'read-only.bin').write_bytes(b'vanilla')
         original=[(1,b'skin'),(2,b'vehicle'),(3,b'deleted-by-je3')]
         dsk(game/'DATAxbox/assets.dsk',original)
-        dsk(root/'mods/JE3/assets.dsk',[(1,b'je3 skin'),(2,b'je3 vehicle'),(4,b'je3 addition')])
+        dsk(root/'mods/JE3/assets.dsk',[(1,b'je3 skin'),(2,b'je3 vehicle'),(4,b'je3 addition')],grid_offset=0x0D07FAEC)
         dsk(root/'mods/Skin/assets.dsk',[(1,b'custom skin'),*original[1:]])
         added=root/'mods/JE3/game_files/new-folder/addition.bin';added.parent.mkdir(parents=True);added.write_bytes(b'added')
         (root/'mods/JE3/SDL2.dll').write_bytes(b'mod DLL')

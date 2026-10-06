@@ -52,8 +52,11 @@ include(scripts/Mission-Script-Fixes.cmake)
 # Core game sources
 set(GAME_SOURCES
     src/main.c
+    src/plugin_host.cpp
     src/recomp_manual.c
     src/mod_compatibility.c
+    src/mod_gameplay.c
+    src/mod_saves.cpp
     src/mod_extensions.c
     src/recomp_world_properties.c
     src/shop_config.c
@@ -94,6 +97,9 @@ endif()
 
 # Link against the xboxrecomp umbrella target (all 6 runtime libraries)
 target_link_libraries(${PROJECT_NAME} PRIVATE xboxrecomp)
+
+# Plugin host uses the versioned C ABI and C++17 filesystem internally.
+set_target_properties(mercenaries_recomp PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 
 # Include paths for generated recomp headers
 target_include_directories(${PROJECT_NAME} PRIVATE

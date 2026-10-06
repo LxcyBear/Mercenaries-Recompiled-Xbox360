@@ -1,4 +1,6 @@
 #include "recomp_controls.h"
+#include "plugin_host.h"
+#include "slope_slide.h"
 #include "preview_log.h"
 #include "dev_menu.h"
 /* Manual guest-function overrides and indirect-call diagnostics.
@@ -3389,6 +3391,7 @@ float recomp_options_camera_fov(uint32_t camera, float fov)
 #include "dev_battle_guest.h"
 #include "dev_factions_guest.h"
 #include "dev_mission_guest.h"
+#include "mod_gameplay_guest.h"
 #include "boids_guest.h"
 #include "freecam_streaming.h"
 #include "cargo_helicopters.h"
@@ -3621,7 +3624,7 @@ void recomp_extraction_use_probe(uint32_t stage, uint32_t actor,
 }
 
 /* The retail money counter advances its digits every update and plays a cue
- * on alternate updates. Batch only that counter at the original 30 Hz; its
+ * on alternate updates. Batch only that counter at the requested 60 Hz; its
  * fade/scale still use every frame's unmodified game-plus-UI delta. This HUD
  * is a singleton updated on the game thread. A reset guest frame serial also
  * resets the sidecar, including when the widget is reconstructed in place. */
@@ -3631,7 +3634,7 @@ float recomp_money_counter_dt(uint32_t widget, uint32_t frame,
     static uint32_t owner, next_frame;
     static double cadence_time, counter_time;
     static unsigned odd_tick;
-    const double period = 1.0 / 30.0;
+    const double period = 1.0 / 60.0;
     double ticks;
     float elapsed;
 
@@ -3649,7 +3652,7 @@ float recomp_money_counter_dt(uint32_t widget, uint32_t frame,
     }
     cadence_time += real_dt;
     counter_time += animation_dt;
-    /* Allow float delta rounding at an exact 30 Hz boundary. */
+    /* Allow float delta rounding at an exact 60 Hz boundary. */
     ticks = floor(cadence_time / period + 0.000001);
     if (ticks < 1.0)
         return 0.0f;
@@ -7838,6 +7841,11 @@ uint32_t recomp_xinput_set_state(uint32_t handle, uint32_t feedback_address)
 }
 void recomp_input_logical_checkpoint(uint32_t joystick_address)
 {
+    /* Retail logical-input checkpoint on the guest owner thread. This is an
+     * input-update callback, not a render/vblank or simulation tick. */
+    if (!merc_plugins_update())
+        merc_plugins_show_error();
+    recomp_mod_gameplay_tick();
     recomp_dev_missions_tick();
     static uint32_t samples;
     static uint32_t last_current = UINT32_MAX;
@@ -15693,6 +15701,12 @@ void recomp_title_heap_free(uint32_t address)
 }
 /* Prepare the optional mission correction without changing guest registers.
  * The Lua parser consumes this temporary buffer before the script executes. */
+static int mod_script_contains(const char *text,size_t size,const char *token)
+{
+    size_t n=strlen(token);
+    for(size_t i=0;i+n<=size;++i)if(text[i]==*token&&!memcmp(text+i,token,n))return 1;
+    return 0;
+}
 uint32_t recomp_prepare_mission_script(uint32_t source, uint32_t length, uint32_t *out_length)
 {
     char *recomp_patch_mission_script(const char *, size_t, size_t *);
@@ -15704,6 +15718,20 @@ uint32_t recomp_prepare_mission_script(uint32_t source, uint32_t length, uint32_
         length > 0x04000000u - source)
         return 0u;
     patched = recomp_patch_mission_script((const char *)guest_ptr(source), length, &patched_length);
+    /* The optional adapter attaches only to the mission utility's definitions,
+     * after they have loaded. The original/mod-authored body remains intact. */
+    if (*recomp_mod_gameplay_script() && length &&
+        mod_script_contains((const char *)guest_ptr(source), length, "function mission_MissionFailure2()") &&
+        mod_script_contains((const char *)guest_ptr(source), length, "function mission_HeroKilled2()")) {
+        static const char tail[] = "\nif Recomp_InstallMissionHooks then Recomp_InstallMissionHooks() end\n";
+        size_t base = patched ? patched_length : length;
+        char *combined = (char *)malloc(base + sizeof(tail));
+        if (combined) {
+            memcpy(combined, patched ? patched : (const char *)guest_ptr(source), base);
+            memcpy(combined + base, tail, sizeof(tail));
+            free(patched); patched = combined; patched_length = base + sizeof(tail) - 1;
+        }
+    }
     if (!patched)
         return 0u;
     buffer = recomp_title_heap_allocate((uint32_t)patched_length + 1u);
@@ -19653,4 +19681,24 @@ int recomp_prepare_empty_cache_volume(void)
     g_eax = 1;
     g_esp += 12u;
     return 1;
+}
+
+/* Called before the ordinary movement routine adds gravity and runs collision.
+ * Fields +61/+63 are previous contact/steep-slide state; +62 is airborne.
+ * +A4 selects the retail direct-input branch whose per-update reset causes this.
+ * Do not alter jumps, other movement modes, moving-platform/external impulses,
+ * NPC acceleration, or the reference 60 FPS calculation. */
+void recomp_slope_slide_prepare(uint32_t physics, float dt,
+                                uint32_t desired_va, uint32_t gravity_va)
+{
+    unsigned char *p = (unsigned char *)((uintptr_t)g_xbox_mem_offset + physics);
+    const float *normal = (const float *)(p + 0xCC);
+    const float *extra = (const float *)(p + 0xC0);
+    float threshold = *(const float *)((uintptr_t)g_xbox_mem_offset + 0x30E8D0u);
+    if (!p[0xA4] || !p[0x61] || !p[0x63] || p[0x62] || p[0x60] ||
+        !(normal[1] < threshold) || extra[0] != 0.0f || extra[1] != 0.0f || extra[2] != 0.0f)
+        return;
+    merc_slope_slide_step(dt, normal, (const float *)(p + 0xE4),
+        (float *)((uintptr_t)g_xbox_mem_offset + desired_va),
+        (float *)((uintptr_t)g_xbox_mem_offset + gravity_va));
 }

@@ -94,6 +94,7 @@ struct State
     HWND window = nullptr;
     fs::path install, game;
     Selection selection;
+    std::vector<PluginInfo> plugins;
     Art art;
     size_t selected = 0;
     double scroll = 0, scroll_target = 0;
@@ -265,6 +266,8 @@ void scene(Graphics &g, int width, int height, State &s)
         label(g, s.art, std::to_wstring(index + 1), RectF(449, y + 18, 66, 44), true);
         image(g, s.art.up.get(), RectF(521, y + 20, 44, 44));
         checkbox(g, 640, y + 8, mod.enabled, 64);
+        if (index < s.plugins.size() && !s.plugins[index].status.empty())
+            label(g, s.art, s.plugins[index].status + L"  i", RectF(723, y + 28, 126, 20), true);
     }
     g.Restore(row_clip);
     if (!count)
@@ -329,6 +332,7 @@ void move(State &s, size_t index, int direction)
     std::swap(s.selection.mods[index], s.selection.mods[next]);
     s.selected = next;
     reveal_selected(s);
+    s.plugins = inspect_plugins(s.selection);
 }
 LRESULT CALLBACK proc(HWND window, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -426,6 +430,10 @@ LRESULT CALLBACK proc(HWND window, UINT msg, WPARAM wp, LPARAM lp)
             DestroyWindow(window);
         return 0;
     case WM_KEYDOWN:
+        if (wp == VK_F1 && !s->busy && s->selected < s->plugins.size() && !s->plugins[s->selected].details.empty()) {
+            MessageBoxW(window, s->plugins[s->selected].details.c_str(), L"Plugin details", MB_OK | MB_ICONINFORMATION);
+            return 0;
+        }
         if (s->busy)
             return 0;
         if (wp == VK_ESCAPE)
@@ -445,15 +453,19 @@ LRESULT CALLBACK proc(HWND window, UINT msg, WPARAM wp, LPARAM lp)
                 launch(*s, s->focus == 1);
             else if (s->focus == 3)
                 s->selection.separate_saves = !s->selection.separate_saves;
-            else if (!s->selection.mods.empty())
+            else if (!s->selection.mods.empty()) {
                 s->selection.mods[s->selected].enabled = !s->selection.mods[s->selected].enabled;
+                s->plugins = inspect_plugins(s->selection);
+            }
         }
         if (wp == VK_SPACE)
         {
             if (s->focus == 3)
                 s->selection.separate_saves = !s->selection.separate_saves;
-            else if (s->focus == 0 && !s->selection.mods.empty())
+            else if (s->focus == 0 && !s->selection.mods.empty()) {
                 s->selection.mods[s->selected].enabled = !s->selection.mods[s->selected].enabled;
+                s->plugins = inspect_plugins(s->selection);
+            }
         }
         if ((wp == VK_UP || wp == VK_DOWN) && !s->selection.mods.empty())
         {
@@ -546,8 +558,12 @@ LRESULT CALLBACK proc(HWND window, UINT msg, WPARAM wp, LPARAM lp)
                     move(*s, index, 1);
                 else if (x >= 521 && x <= 565)
                     move(*s, index, -1);
-                else if (x >= 640 && x <= 704)
+                else if (x >= 640 && x <= 704) {
                     s->selection.mods[index].enabled = !s->selection.mods[index].enabled;
+                    s->plugins = inspect_plugins(s->selection);
+                } else if (x >= 723 && index < s->plugins.size() && !s->plugins[index].details.empty()) {
+                    MessageBoxW(window, s->plugins[index].details.c_str(), s->selection.mods[index].name.c_str(), MB_OK | MB_ICONINFORMATION);
+                }
             }
         }
         InvalidateRect(window, nullptr, FALSE);
@@ -598,6 +614,7 @@ BOOL selector(HWND owner, const fs::path &installation, const fs::path &game, Se
     s.install = installation;
     s.game = game;
     s.selection = std::move(selection);
+    s.plugins = inspect_plugins(s.selection);
     if (!s.art.init())
         throw std::runtime_error("The mod selector artwork could not be loaded.");
     auto instance = GetModuleHandleW(nullptr);
@@ -646,6 +663,12 @@ extern "C" BOOL mercenaries_mod_preview(const wchar_t *output)
                                              : L"Example mod " + std::to_wstring(i + 1),
                                     {},
                                     i < 2});
+    if (GetEnvironmentVariableW(L"MERCENARIES_PREVIEW_PLUGINS", nullptr, 0)) {
+        s.plugins.resize(s.selection.mods.size());
+        if (!s.plugins.empty()) s.plugins[0] = {true, L"Ready", L"Example plugin ready."};
+        if (s.plugins.size() > 1) s.plugins[1] = {true, L"Error", L"Missing dependency example."};
+        if (s.plugins.size() > 2) s.plugins[2] = {false, L"DLL", L"Legacy DLL example."};
+    }
     Bitmap bitmap(mercmods::W, mercmods::H, PixelFormat32bppPARGB);
     {
         Graphics g(&bitmap);

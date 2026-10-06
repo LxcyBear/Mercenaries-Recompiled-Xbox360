@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 #include "mod_loader.h"
+#include "plugin_manifest.h"
 #include <algorithm>
 #include <array>
 #include <bcrypt.h>
@@ -123,7 +124,6 @@ struct Record
 };
 struct Archive
 {
-    uint32_t tag;
     bool trailer;
     std::vector<Record> records;
 };
@@ -140,10 +140,17 @@ Archive read_dsk(const fs::path &p)
     if (!f)
         fail("Cannot open DSK archive.");
     uint64_t bytes = fs::file_size(p);
+    auto invalid = [&](const char *reason) {
+        throw std::runtime_error("Cannot merge DSK '" + p.u8string() + "': " + reason);
+    };
+    if (bytes < 8) invalid("Truncated archive header.");
     uint32_t count = read32(f);
-    Archive a{read32(f), false, {}};
+    // The second word is the optional grid-data offset, not a format version.
+    // It has no effect when there is no grid index after the ordinary assets.
+    (void)read32(f);
+    Archive a{false, {}};
     if (bytes < 8 || count > (bytes - 8) / 12 || count > 1000000)
-        fail("Invalid DSK directory.");
+        invalid("Invalid archive directory.");
     uint64_t offset = 8ull + count * 12ull;
     std::map<uint64_t, bool> unique;
     for (uint32_t i = 0; i < count; ++i)
@@ -151,14 +158,29 @@ Archive read_dsk(const fs::path &p)
         Record r{read32(f), read32(f), read32(f), offset, p};
         offset += r.size;
         if (offset > bytes || !unique.emplace((uint64_t(r.key) << 32) | r.kind, true).second)
-            fail("Invalid DSK bounds or duplicate asset identifiers.");
+            invalid("Invalid asset bounds or duplicate asset identifiers.");
         a.records.push_back(r);
     }
-    if (bytes - offset != 0 && bytes - offset != 2048)
-        fail("Unsupported DSK trailer.");
-    a.trailer = bytes != offset;
-    // Archive builders may place a signature in the sector after the indexed payload.
-    // That sector is not an asset; single archives remain byte-for-byte unchanged.
+    // Only flatten archives whose indexed assets account for all data, apart
+    // from the optional zero-filled sector and its final cache signature word.
+    // A real grid index starts here, irrespective of the header offset value.
+    const uint64_t remaining = bytes - offset;
+    if (remaining) {
+        f.seekg(offset);
+        if (remaining >= 4 && read32(f) == 0x00FF8040u)
+            invalid("Grid-indexed archives are not supported by the asset merger.");
+        if (remaining != 2048)
+            invalid("Unsupported data after the indexed assets.");
+        f.seekg(offset);
+        std::array<char, 2048> padding{};
+        if (!f.read(padding.data(), padding.size()))
+            invalid("Cannot read archive padding.");
+        if (std::any_of(padding.begin(), padding.end() - 4,
+                        [](char value) { return value != 0; }))
+            invalid("Unsupported non-padding data after the indexed assets.");
+    }
+    a.trailer = remaining != 0;
+    // Single replacement archives bypass merging and stay byte-for-byte intact.
     return a;
 }
 bool same_record(const Record &a, const Record &b)
@@ -196,8 +218,6 @@ void merge_dsk(const fs::path &base, const std::vector<fs::path> &layers, const 
     for (auto &path : layers)
     {
         Archive mod = read_dsk(path);
-        if (mod.tag != original.tag)
-            fail("DSK versions do not match.");
         std::map<uint64_t, Record> entries;
         for (auto &r : mod.records)
             entries.emplace((uint64_t(r.key) << 32) | r.kind, r);
@@ -219,7 +239,7 @@ void merge_dsk(const fs::path &base, const std::vector<fs::path> &layers, const 
     std::ofstream f(out, std::ios::binary | std::ios::trunc);
     auto put = [&](uint32_t v) { f.write((char *)&v, 4); };
     put((uint32_t)current.size());
-    put(original.tag);
+    put(0); // The merged output has no grid index; never retain a stale offset.
     for (auto id : order)
     {
         auto it = current.find(id);
@@ -316,7 +336,7 @@ void preserve_settings(const fs::path &installation, const fs::path &profile)
     checked_tree(installation / L"mod-settings");
     for (const auto &e : files(profile / L"runtime"))
     {
-        if (!setting_file(e.second)) continue;
+        if (e.first.rfind(L"plugins\\", 0) == 0 || !setting_file(e.second)) continue;
         auto target = destination / e.first;
         bounded(target);
         fs::create_directories(target.parent_path());
@@ -364,6 +384,45 @@ std::shared_ptr<void> acquire_lease(const fs::path &installation)
 }
 std::wstring quoted(const fs::path &p) { return L"\"" + p.wstring() + L"\""; }
 } // namespace
+
+std::vector<PluginInfo> inspect_plugins(const Selection &selection)
+{
+    std::vector<PluginInfo> info(selection.mods.size());
+    std::vector<mercplugins::Manifest> enabled;
+    std::vector<size_t> indices;
+    for (size_t i = 0; i < selection.mods.size(); ++i) {
+        const auto &mod = selection.mods[i];
+        try {
+            auto m = mercplugins::read_manifest(mod.root);
+            if (!m) {
+                for (const auto &e : files(mod.root))
+                    if (lower(e.second.extension().wstring()) == L".dll") {
+                        info[i].status = L"DLL";
+                        info[i].details = L"Legacy or dependency DLL files.\nNo [Plugin] manifest is present. Windows or another module must load these files; the plugin host does not initialize them.";
+                        break;
+                    }
+                continue;
+            }
+            info[i].declared = true;
+            info[i].status = mod.enabled ? L"Ready" : L"Plugin";
+            info[i].details = mercplugins::wide(m->name + "\nID: " + m->id +
+                "\nPlugin Interface: 1\nLibrary: " + m->library +
+                "\n\n" + (mod.enabled ? "Preflight passed. DLL initialization is checked when the game starts." : "Disabled. Enable this mod to check its requirements."));
+            if (mod.enabled) { indices.push_back(i); enabled.push_back(*m); }
+        } catch (const std::exception &e) {
+            info[i].declared = true; info[i].status = L"Error";
+            info[i].details = mercplugins::wide(e.what());
+        }
+    }
+    auto errors = mercplugins::problems(enabled);
+    for (size_t i = 0; i < errors.size(); ++i)
+        if (!errors[i].empty()) {
+            info[indices[i]].status = L"Error";
+            info[indices[i]].details = mercplugins::wide(enabled[i].name + "\n\n" + errors[i]);
+        }
+    return info;
+}
+
 Selection discover(const fs::path &installation)
 {
     Selection s;
@@ -424,6 +483,17 @@ Launch prepare(const fs::path &installation, const fs::path &game, const Selecti
                   {},
                   {},
                   installation};
+    std::vector<mercplugins::Manifest> plugins;
+    if (!vanilla) {
+        for (const auto &mod : s.mods) if (mod.enabled) {
+            try {
+                if (auto p = mercplugins::read_manifest(mod.root)) plugins.push_back(*p);
+            } catch (const std::exception &e) {
+                throw std::runtime_error(mercplugins::utf8(mod.name) + ": " + e.what());
+            }
+        }
+        mercplugins::validate(plugins);
+    }
     launch.lease = acquire_lease(installation);
     if (vanilla ||
         std::none_of(s.mods.begin(), s.mods.end(), [](const Mod &m) { return m.enabled; }))
@@ -431,12 +501,12 @@ Launch prepare(const fs::path &installation, const fs::path &game, const Selecti
         retire_profiles(installation, {});
         return launch;
     }
-    Files retail = files(game), merged = retail, host;
+    Files retail = files(game), merged = retail, host, plugin_files;
     std::map<std::wstring, std::vector<fs::path>> archives;
     Hash settings_identity;
     settings_identity.name(L"native-settings-v1");
     Hash fingerprint;
-    fingerprint.name(L"mercenaries-mod-overlay-v5");
+    fingerprint.name(L"mercenaries-mod-overlay-v7-plugins1-flat-dsk");
     fingerprint.name(fs::absolute(game).wstring());
     fingerprint.file(launch.executable);
     Files runtime_inputs;
@@ -466,6 +536,8 @@ Launch prepare(const fs::path &installation, const fs::path &game, const Selecti
         if (m.enabled)
         {
             fingerprint.name(m.name);
+            const mercplugins::Manifest *plugin = nullptr;
+            for (const auto &p : plugins) if (p.root == fs::absolute(m.root)) plugin = &p;
             auto entries = files(m.root);
             bool native_mod = false;
             for (auto &e : entries)
@@ -509,8 +581,14 @@ Launch prepare(const fs::path &installation, const fs::path &game, const Selecti
                         key.rfind(L"saves\\", 0) == 0 || key.rfind(L"mod-saves\\", 0) == 0)
                         fail("Mods may not replace the game executable or include player "
                              "saves.");
-                    native_mod = true;
-                    host[key] = e.second;
+                    if (key.rfind(L"plugins\\", 0) == 0)
+                        fail("The plugins directory is reserved for managed plugin files.");
+                    if (plugin && key != L"modcompatibility.ini") {
+                        plugin_files[mercplugins::wide(plugin->id) + L"\\" + key] = e.second;
+                    } else {
+                        native_mod = true;
+                        host[key] = e.second;
+                    }
                 }
             }
             if (native_mod) settings_identity.name(m.name);
@@ -614,7 +692,7 @@ Launch prepare(const fs::path &installation, const fs::path &game, const Selecti
     {
         for (const auto &e : files(runtime))
         {
-            if (!setting_file(e.second)) continue;
+            if (e.first.rfind(L"plugins\\", 0) == 0 || !setting_file(e.second)) continue;
             auto saved = settings_root / e.first;
             auto previous_default = defaults_root / e.first;
             bool unchanged = regular(saved) && regular(previous_default) &&
@@ -634,6 +712,7 @@ Launch prepare(const fs::path &installation, const fs::path &game, const Selecti
         preserve_settings(installation, cache);
     for (const auto &e : files(settings_root))
     {
+        if (e.first.rfind(L"plugins\\", 0) == 0) continue;
         auto target = runtime / e.first;
         bounded(target);
         fs::create_directories(target.parent_path());
@@ -644,6 +723,27 @@ Launch prepare(const fs::path &installation, const fs::path &game, const Selecti
         // Some filesystems cannot link files. Also resynchronize on preparation
         // and retirement for mods that save by replacing the file atomically.
         if (error) fs::copy_file(e.second, target);
+    }
+    if (!plugins.empty()) {
+        launch.plugin_settings = fs::absolute(installation / L"plugin-settings");
+        checked_tree(launch.plugin_settings);
+        fs::create_directories(launch.plugin_settings);
+        for (const auto &e : plugin_files) {
+            auto target = runtime / L"plugins" / e.first;
+            copy_file_into(e.second, target);
+            // Seed defaults once; mod.ini is metadata, never a saved setting.
+            if (setting_file(e.second) && lower(e.second.filename().wstring()) != L"mod.ini") {
+                auto saved = launch.plugin_settings / e.first;
+                bounded(saved);
+                if (!regular(saved)) copy_file_into(e.second, saved);
+            }
+        }
+        launch.plugins = fs::absolute(runtime / L"plugins/active.list");
+        std::ofstream active(launch.plugins, std::ios::binary | std::ios::trunc);
+        active << "MERCENARIES_PLUGINS_1\n";
+        for (const auto &p : plugins) active << p.id << "\n";
+        active.close();
+        if (!active) fail("Cannot write the enabled plugin list.");
     }
     launch.executable = runtime / L"mercenaries_recomp.exe";
     launch.working = runtime;
@@ -674,6 +774,8 @@ void start(const Launch &l)
     env[L"mercenaries_mod_overlay"] = l.manifest.wstring();
     env[L"mercenaries_mod_cache"] = l.cache.wstring();
     env[L"mercenaries_mod_bootstrapped"] = L"1";
+    env[L"mercenaries_plugin_list"] = l.plugins.wstring();
+    env[L"mercenaries_plugin_settings"] = l.plugin_settings.wstring();
     std::vector<wchar_t> bytes;
     for (auto &v : env)
     {

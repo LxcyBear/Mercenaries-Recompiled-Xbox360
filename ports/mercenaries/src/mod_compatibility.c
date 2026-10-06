@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "mod_gameplay.h"
+
 static int expanded_world_properties;
 static int faction_support, impact_stun_ammo, extra_grenade_slot;
 
@@ -99,6 +101,7 @@ void recomp_mod_compatibility_init(void)
         if (slash) {
             slash[1] = '\0';
             if (strcat_s(path, MAX_PATH, "modcompatibility.ini") == 0) {
+                recomp_mod_gameplay_config(path);
                 extended_graphics = GetPrivateProfileIntA(
                     "Mods", "extended_graphics_memory", 0, path) == 1;
                 expanded_world_properties = GetPrivateProfileIntA(
@@ -113,6 +116,9 @@ void recomp_mod_compatibility_init(void)
             }
         }
     }
+    for(unsigned i=0;i<impact_count;++i)
+        if(impact[i].value && recomp_mod_c4_for_template(impact[i].key))
+            config_error("ThrowableC4", "ammo is also enabled in ImpactStunAmmo");
     xbox_SetExtendedGraphicsMemory(extended_graphics);
 }
 

@@ -311,7 +311,8 @@ static void d3d8_pump_host_messages(void)
             fprintf(stderr, "[HOST-WINDOW] WM_QUIT site=frame-pump code=%llu\n",
                     (unsigned long long)msg.wParam);
             fflush(stderr);
-            ExitProcess(0);
+            /* Run registered plugin/log cleanup on a normal exit. */
+            exit(0);
         }
         TranslateMessage(&msg);
         DispatchMessageA(&msg);
@@ -2883,8 +2884,12 @@ static HRESULT d3d11_try_device_and_swap_chain(
     scd.BufferDesc.Width = pp->BackBufferWidth ? pp->BackBufferWidth : 640;
     scd.BufferDesc.Height = pp->BackBufferHeight ? pp->BackBufferHeight : 480;
     scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    scd.BufferDesc.RefreshRate.Numerator = 60;
-    scd.BufferDesc.RefreshRate.Denominator = 1;
+    /* Leave the host refresh unspecified (0/0). A fixed 60/1 becomes a
+     * fullscreen mode request, including after a later windowed-to-exclusive
+     * transition. Let DXGI select the output's refresh independently of the
+     * guest vblank clock and the user's FPS cap. Keep this for blit fallback. */
+    scd.BufferDesc.RefreshRate.Numerator = 0;
+    scd.BufferDesc.RefreshRate.Denominator = 0;
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     scd.OutputWindow = pp->hDeviceWindow;
     scd.SampleDesc.Count = 1;
@@ -3353,7 +3358,8 @@ static HRESULT __stdcall dev_Present(IDirect3DDevice8 *self, const RECT *src, co
             fprintf(stderr, "[HOST-WINDOW] WM_QUIT site=present code=%llu\n",
                     (unsigned long long)msg.wParam);
             fflush(stderr);
-            ExitProcess(0);
+            /* Run registered plugin/log cleanup on a normal exit. */
+            exit(0);
         }
         TranslateMessage(&msg);
         DispatchMessageA(&msg);
@@ -4274,7 +4280,8 @@ static HRESULT __stdcall dev_Swap(IDirect3DDevice8 *self, DWORD Flags)
             fprintf(stderr, "[HOST-WINDOW] WM_QUIT site=swap code=%llu\n",
                     (unsigned long long)msg.wParam);
             fflush(stderr);
-            ExitProcess(0);
+            /* Run registered plugin/log cleanup on a normal exit. */
+            exit(0);
         }
         TranslateMessage(&msg);
         DispatchMessageA(&msg);

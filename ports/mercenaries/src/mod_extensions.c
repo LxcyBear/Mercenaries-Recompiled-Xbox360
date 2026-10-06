@@ -1,5 +1,6 @@
 #include "mod_extensions.h"
 #include "mod_compatibility.h"
+#include "mod_gameplay.h"
 #include "kernel/xbox_memory_layout.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -132,9 +133,8 @@ int recomp_mod_pda_has_available_supplier(uint32_t shop)
     return 0;
 }
 
-int recomp_mod_projectile_impact_stun(uint32_t projectile)
+static uint32_t actor_template(uint32_t projectile)
 {
-    if (!recomp_mod_impact_stun_enabled()) return 0;
     /* Match the template Name as retail serialization does (0x1ED370):
      * Actor +8 -> PPD record +4 -> sorted inherited property tables.
      * The record's +0x28 identifies the instance, not its template. */
@@ -148,7 +148,7 @@ int recomp_mod_projectile_impact_stun(uint32_t projectile)
             int middle = low + (high - low) / 2;
             uint32_t key = U32(entries + middle * 8);
             if (key == 0x8D39BDE6u)
-                return recomp_mod_impact_stun(U32(entries + middle * 8 + 4));
+                return U32(entries + middle * 8 + 4);
             if (key < 0x8D39BDE6u) low = middle + 1;
             else high = middle - 1;
         }
@@ -157,8 +157,25 @@ int recomp_mod_projectile_impact_stun(uint32_t projectile)
     return 0;
 }
 
+uint32_t recomp_mod_human_voice(uint32_t actor, uint32_t original)
+{
+    uint32_t effect = recomp_mod_voice_for_template(actor_template(actor));
+    return effect ? effect : original;
+}
+int recomp_mod_projectile_impact_stun(uint32_t projectile)
+{
+    return recomp_mod_impact_stun_enabled() && recomp_mod_impact_stun(actor_template(projectile));
+}
 void recomp_mod_projectile_init(uint32_t projectile)
 {
+    if (recomp_mod_projectile_c4(projectile)) {
+        if(recomp_mod_projectile_impact_stun(projectile)) {
+            fprintf(stderr,"[mod-compatibility] An ammo template cannot be both impact stun and throwable C4.\n");exit(86);
+        }
+        /* Retain the authored grenade physics and splash parameters. */
+        U32(projectile+0x1A0)=U32(projectile+0x1A4)=0x25124F2Du;
+        return;
+    }
     if (!recomp_mod_projectile_impact_stun(projectile)) return;
     /* Retain the authored trajectory; use the retail stun effect and its
      * zero-damage payload instead of the launcher's explosive payload. */
@@ -167,4 +184,32 @@ void recomp_mod_projectile_init(uint32_t projectile)
     F32(projectile + 0x18C) = F32(projectile + 0x190) = 0;
     U32(projectile + 0x1A0) = STUN_EFFECT;
     U32(projectile + 0x1A4) = STUN_EFFECT;
+}
+
+/* Only active projectile updates register charges; cached template prototypes
+ * never create a detonator. Deinit unregisters before the instance is recycled. */
+typedef struct remote_charge { uint32_t actor; int fired; struct remote_charge *next; } remote_charge;
+static remote_charge *charges;
+static int c4_menu_dirty;
+int recomp_mod_projectile_c4(uint32_t projectile) { return recomp_mod_c4_for_template(actor_template(projectile)); }
+int recomp_mod_c4_active(void) { return charges!=NULL; }
+int recomp_mod_c4_menu_dirty(void) { return c4_menu_dirty; }
+void recomp_mod_c4_menu_done(void) { c4_menu_dirty=0; }
+int recomp_mod_c4_update(uint32_t projectile) {
+    if(!recomp_mod_projectile_c4(projectile))return -1;
+    for(remote_charge *c=charges;c;c=c->next)if(c->actor==projectile)return c->fired;
+    remote_charge *c=(remote_charge *)calloc(1,sizeof(*c));
+    if(!c){fprintf(stderr,"[mod-compatibility] Could not track throwable C4.\n");exit(86);}
+    c->actor=projectile;c->next=charges;charges=c;c4_menu_dirty=1;
+    return 0;
+}
+void recomp_mod_c4_remove(uint32_t projectile) {
+    for(remote_charge **p=&charges;*p;p=&(*p)->next)if((*p)->actor==projectile) {
+        remote_charge *c=*p;*p=c->next;free(c);c4_menu_dirty=1;return;
+    }
+}
+void recomp_mod_c4_broadcast(uint32_t trigger) {
+    /* FNV-1a, case-folded retail C4Trigger; unrelated broadcasts are untouched. */
+    if(trigger!=0xDA313ED2u)return;
+    for(remote_charge *c=charges;c;c=c->next)c->fired=1;
 }

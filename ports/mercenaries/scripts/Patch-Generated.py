@@ -14923,5 +14923,9 @@ import runpy as _runpy
 PATCHES += tuple(GeneratedPatch(*entry) for entry in _runpy.run_path(
     str(Path(__file__).with_name("Mod-Extensions-Patches.py")))["PATCHES"])
 
+PATCHES += (GeneratedPatch("Frame-rate independent direct-input slope sliding",
+    'loc_0013E625: ;\n    recomp_xmm_loadss(xmm0v, eax); /* movss */',
+    'loc_0013E625: ;\n    { void recomp_slope_slide_prepare(uint32_t, float, uint32_t, uint32_t);\n      recomp_slope_slide_prepare(esi, MEMF(ebp + 8u), esp + 0x24u, eax); }\n    recomp_xmm_loadss(xmm0v, eax); /* movss */'),)
+
 if __name__ == "__main__":
     main()

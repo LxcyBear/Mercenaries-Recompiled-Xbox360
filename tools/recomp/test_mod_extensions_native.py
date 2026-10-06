@@ -62,7 +62,9 @@ static void sub_00017370(void) { ++bounces; esp+=4; }
 static void sub_001EF7B0(void) { eax=ecx; esp+=4; }
 static void sub_000994F0(void) { esp+=16; }
 static void sub_000B6460(void) {
-    assert(MEM32(esp+28)==0 && MEM32(esp+32)==7 && MEM32(esp+36)==10);
+    if(recomp_mod_projectile_c4(SHOT)) {
+        assert(MEMF(esp+28)==200 && MEM32(esp+32)==5 && MEM32(esp+36)==11 && MEM32(esp+40)==2);
+    } else assert(MEM32(esp+28)==0 && MEM32(esp+32)==7 && MEM32(esp+36)==10);
     ++explosions; esp+=4;
 }
 static void sub_00030B60(void) { esp+=8; }
@@ -88,6 +90,10 @@ int main(int argc,char **argv) {
     g_xbox_mem_offset=(ptrdiff_t)memory;
     recomp_mod_compatibility_init();
     assert(recomp_mod_extra_grenade_slot()==enabled);
+    assert(!strcmp(recomp_mod_save_profile(),"je3"));
+    assert(recomp_mod_permadeath()==enabled);
+    recomp_mod_player_died();assert(recomp_mod_take_death()==enabled);assert(!recomp_mod_take_death());
+    assert(recomp_mod_voice_for_template(VOICE_HASH)==(enabled?EFFECT_HASH:0));
     MEM32(PLAYER)=0x2E32B8; MEM32(NPC)=VT;
     MEMF(0x2E6CE8)=-0.6f;
     MEM32(ITEM+0x1A4)=AMMO_HASH;
@@ -165,23 +171,41 @@ int main(int argc,char **argv) {
     assert(LO8(eax)==enabled && explosions==enabled && bounces==!enabled);
     MEM32(PROP+0x204)=999; // An ordinary stun grenade still bounces.
     call0(sub_000212E0,SHOT); assert(!LO8(eax) && bounces==(enabled?1:2));
-    puts("PASS: config, factions, inventory add/cycle/clear, collision stun, vanilla isolation");
+    MEM32(PROP+0x204)=C4_HASH;
+    MEMF(SHOT+0x18C)=200;
+    recomp_mod_projectile_init(SHOT);
+    assert(recomp_mod_projectile_c4(SHOT)==enabled);
+    assert(recomp_mod_c4_update(SHOT)==(enabled?0:-1));
+    if(enabled) {
+        assert(recomp_mod_c4_active() && recomp_mod_c4_menu_dirty());
+        recomp_mod_c4_menu_done();assert(!recomp_mod_c4_menu_dirty());
+        recomp_mod_c4_broadcast(123);assert(recomp_mod_c4_update(SHOT)==0);
+        recomp_mod_c4_broadcast(0xDA313ED2);assert(recomp_mod_c4_update(SHOT)==1);
+        call1(sub_0001CAD0,SHOT,0);assert(LO8(eax) && explosions==2);
+        recomp_mod_c4_remove(SHOT);assert(!recomp_mod_c4_active());
+        assert(recomp_mod_c4_update(SHOT)==0); // Reused instance does not inherit a pending detonation.
+        recomp_mod_c4_remove(SHOT);
+    }
+    assert(!recomp_mod_c4_active());
+    puts("PASS: opt-in config, factions, inventory, stun, remote C4 lifecycle/blast ABI, vanilla isolation");
     return 0;
 }
 """
-        hashes={'AMMO_HASH':'template_sam_deliverAlliesHumvee','SHOP_HASH':'allies_humvee','MAFIA_HASH':'template_sam_mafia_test','STUN_HASH':'template_amm_STUNGRENADELAUNCHER'}
+        hashes={'AMMO_HASH':'template_sam_deliverAlliesHumvee','SHOP_HASH':'allies_humvee','MAFIA_HASH':'template_sam_mafia_test','STUN_HASH':'template_amm_STUNGRENADELAUNCHER','C4_HASH':'template_amm_THROWABLEC4','VOICE_HASH':'template_my_exops_soldier','EFFECT_HASH':'my_exops_human_sound'}
         for macro,name in hashes.items(): prefix+=f'\n#define {macro} 0x{hash_string(name):08X}u\n'
         cc=next((p for p in [shutil.which('gcc'), 'C:/MinGW/bin/gcc.exe','C:/msys64/mingw64/bin/gcc.exe'] if p and Path(p).exists()),None)
         self.assertIsNotNone(cc,'GCC is required')
         with tempfile.TemporaryDirectory(prefix='merc-mod-extensions-') as tmp:
             folder=Path(tmp); source=folder/'test.c';exe=folder/'test.exe'
             source.write_text(prefix+'\n'.join(bodies)+tail)
+            import json
+            (folder/'mod_gameplay_script.h').write_text('static const char mod_gameplay_script[]='+json.dumps((ROOT/'ports/mercenaries/src/mod_gameplay.lua').read_text())+';')
             port=ROOT/'ports/mercenaries/src'
-            result=subprocess.run([cc,'-std=c11','-O2','-include','windows.h','-I',str(ROOT/'src'),'-I',str(port),str(source),str(port/'mod_compatibility.c'),str(port/'mod_extensions.c'),'-o',str(exe)],capture_output=True,text=True,timeout=90)
+            result=subprocess.run([cc,'-std=c11','-O2','-include','windows.h','-I',str(ROOT/'src'),'-I',str(port),str(source),str(port/'mod_compatibility.c'),str(port/'mod_extensions.c'),str(port/'mod_gameplay.c'),'-I',str(folder),'-o',str(exe)],capture_output=True,text=True,timeout=90)
             self.assertEqual(result.returncode,0,result.stderr)
             mappings='[SupportFactions]\ntemplate_sam_deliverAlliesHumvee=allies\nallies_humvee=allies\ntemplate_sam_mafia_test=mafia\n[ImpactStunAmmo]\ntemplate_amm_STUNGRENADELAUNCHER=1\n'
             for enabled in [0,1]:
-                (folder/'modcompatibility.ini').write_text(f'[Mods]\nfaction_support={enabled}\nimpact_stun_ammo={enabled}\nextra_grenade_slot={enabled}\n'+mappings)
+                (folder/'modcompatibility.ini').write_text(f'[Mods]\nfaction_support={enabled}\nimpact_stun_ammo={enabled}\nextra_grenade_slot={enabled}\nthrowable_c4={enabled}\ncustom_voice_packs={enabled}\npermadeath={enabled}\n[Permadeath]\nsave_profile=JE3\n[VoicePacks]\ntemplate_my_exops_soldier=my_exops_human_sound\n'+mappings+'[ThrowableC4]\ntemplate_amm_THROWABLEC4=1\n')
                 result=subprocess.run([str(exe),str(enabled)],capture_output=True,text=True,timeout=10)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             for invalid in ['[SupportFactions]\nbad=alliess\n','[ImpactStunAmmo]\nbad=2\n']:

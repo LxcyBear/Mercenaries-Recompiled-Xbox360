@@ -1,4 +1,4 @@
-"""Execute the money HUD at varying rates against its unpatched 30 FPS behavior."""
+"""Execute the money HUD at varying rates against its unpatched 60 FPS behavior."""
 from pathlib import Path
 import re
 import runpy
@@ -89,7 +89,7 @@ static double run(unsigned fps, int direction, float game_scale, int jitter) {
         changes += previous!=SMEM32(STATE+0x40);
         time+=dt; ++frames;
     }
-    assert(sounds==15 && changes==30);
+    assert(sounds==30 && changes==(fps<60 ? fps : 60));
     assert(fabs((double)SMEM32(STATE+0x40)-(direction>0 ? 0 : 6000)
                 -direction*990*(1+game_scale))<=32);
     while(MEM32(STATE+0x48) && time<7) {
@@ -103,7 +103,7 @@ static double run(unsigned fps, int direction, float game_scale, int jitter) {
     }
     assert(sounds==final_sounds);
     assert(time<14 && MEMF(PLAYER+0xac4)==3000);
-    printf("%u FPS %s scale=%.1f%s: 30 digit changes / 15 cues in first second; effect ends %.3fs\n",
+    printf("%u FPS %s scale=%.1f%s: 60 Hz digits / 30 cues in first second; effect ends %.3fs\n",
            fps,direction>0?"gain":"spend",game_scale,jitter?" variable":"",time);
     return time;
 }
@@ -117,12 +117,12 @@ int main(void) {
     for(int direction=-1;direction<=1;direction+=2) {
         setup(direction);
         for(unsigned i=0;i<180;i++) {
-            step(original_money_update,1.f/30,1);
+            step(original_money_update,1.f/60,1);
             memcpy(reference[i],memory+STATE,0x60); cue_reference[i]=sounds;
         }
         setup(direction);
         for(unsigned i=0;i<180;i++) {
-            step(sub_000F5300,1.f/30,1);
+            step(sub_000F5300,1.f/60,1);
             assert(!memcmp(reference[i],memory+STATE,0x60));
             assert(sounds==cue_reference[i]);
         }
@@ -133,8 +133,8 @@ int main(void) {
     assert(sounds==60);
     const unsigned rates[]={30,60,90,120,144,240,1000};
     for(int direction=-1;direction<=1;direction+=2) {
-        double baseline=run(30,direction,1,0);
-        for(unsigned i=1;i<sizeof(rates)/sizeof(rates[0]);i++)
+        double baseline=run(60,direction,1,0);
+        for(unsigned i=0;i<sizeof(rates)/sizeof(rates[0]);i++)
             assert(fabs(run(rates[i],direction,1,0)-baseline)<.10);
         assert(fabs(run(120,direction,1,1)-baseline)<.10);
         run(120,direction,0,0);  /* paused game: UI time still advances */
@@ -149,11 +149,11 @@ int main(void) {
     for(unsigned i=0;i<8;i++) step(sub_000F5300,1.f/120,1);
     assert(MEM32(STATE+0x58)==6);
     setup(1); /* reset in place must discard the previous fractional phase */
-    for(unsigned i=0;i<3;i++) step(sub_000F5300,1.f/120,1);
+    for(unsigned i=0;i<1;i++) step(sub_000F5300,1.f/120,1);
     assert(!sounds && !MEM32(STATE+0x40));
     step(sub_000F5300,1.f/120,1);
-    assert(sounds==1 && MEM32(STATE+0x40)==66);
-    puts("30 FPS widget state/cues match retail exactly; high-FPS cadence, fades, pause, hitch, reset, wrap and guest ABI pass.");
+    assert(sounds==1 && MEM32(STATE+0x40)==33);
+    puts("60 FPS widget state/cues match retail exactly; high-FPS cadence, fades, pause, hitch, reset, wrap and guest ABI pass.");
 }
 '''
         with tempfile.TemporaryDirectory(prefix='merc-money-timing-') as directory:

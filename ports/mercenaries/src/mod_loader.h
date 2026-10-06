@@ -31,7 +31,13 @@ struct Launch
 {
     fs::path executable, working, game, saves, cache, manifest, config;
     std::shared_ptr<void> lease;
+    fs::path plugins, plugin_settings;
 };
+struct PluginInfo {
+    bool declared = false;
+    std::wstring status, details;
+};
+std::vector<PluginInfo> inspect_plugins(const Selection &selection);
 Selection discover(const fs::path &installation);
 void save_selection(const fs::path &installation, const Selection &selection);
 Launch prepare(const fs::path &installation, const fs::path &game, const Selection &selection,

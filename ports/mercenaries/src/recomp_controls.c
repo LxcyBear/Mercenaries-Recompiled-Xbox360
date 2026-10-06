@@ -225,13 +225,19 @@ static unsigned short resolved_binding(int device,int context,unsigned action) {
     }
     return b;
 }
-/* Retail RsHudMessageWindow is distinct from frontend save confirmations,
- * tutorials (Continue), and support selection. Read its live type so reopening
- * a different message cannot retain a previous Yes/No mapping. */
+/* RsHudMessageWindow reads raw Confirm/Decline, not joystick action events.
+ * Its initialized fade state also covers a visible message whose screen or
+ * joystick state was reset by another retail action. Higher-level menus win. */
+static int message_window_active(void) {
+    if(!g_in_game || g_menu || g_shell_menu || g_pause_navigation ||
+       g_waiting_controller || g_result_screen)return 0;
+    if(g_polled_sub==0xDDFB69D8u)return 1;
+    return (g_polled_sub==0xC2CBD863u || g_polled_sub==0xC739FD0Fu) &&
+        MEM32(0x35F798u+0x5C4u)==0x4140D8u && MEM32(0x35F798u+0x30u)<3;
+}
 static int mission_yes_no_active(void) {
-    return g_in_game && g_polled_sub==0xDDFB69D8u && g_polled_joysub==5 &&
-        !g_menu && !g_shell_menu && !g_pause_navigation &&
-        MEM32(0x35F798u+0x30u)!=3 && MEM32(0x35F798u+0x4B4u)==1;
+    return message_window_active() && MEM32(0x35F798u+0x30u)!=3 &&
+        MEM32(0x35F798u+0x4B4u)==1;
 }
 static int menu_active(void) { return g_pause_navigation || g_shell_menu || g_modal || (g_result_screen && !g_result_slowdown) || g_menu || g_waiting_controller; }
 /* Render-only visibility: never deactivate retail canvases or their updates.
@@ -452,6 +458,18 @@ static BOOL mapper(XBOX_INPUT_STATE *state,BOOL keyboard) {
             }
         }
         memset(state,0,sizeof(*state));return TRUE;
+    }
+    if(message_window_active()){
+        /* Directional menu inputs can open support under a tutorial when the
+         * retail joystick table falls back to On Foot. Emit only its buttons;
+         * latch all held sources so dismissing cannot also fire/use/reload. */
+        if(keyboard){for(unsigned k=1;k<=WHEEL_DOWN;++k)menu_source(1,(unsigned short)k,raw);}
+        else {for(unsigned k=0;k<CONTROL_CHANNELS;++k)menu_source(0,(unsigned short)k,raw);}
+        memset(out,0,sizeof(out));
+        out[8]=menu_source(keyboard,resolved_binding(keyboard?0:1,MENU_CONTEXT,8),raw);
+        if(mission_yes_no_active())
+            out[11]=menu_source(keyboard,resolved_binding(keyboard?0:1,MENU_CONTEXT,11),raw);
+        pack(&state->Gamepad,out);return TRUE;
     }
     if(menu_active()){
         const int mission_yes_no=mission_yes_no_active();
@@ -693,7 +711,10 @@ void recomp_controls_substate(uint32_t substate) {
      * or re-equipping a weapon restores the joystick table's Default substate.
      * Keep its Menus bindings until the actual screen returns to gameplay. */
     g_support=g_in_game && (g_polled_sub==0xC739FD0Fu || substate==1 || substate==2);
-    g_modal=g_in_game && (g_support || (substate==4 && !g_result_slowdown) || substate==5);
+    /* Message windows can outlive a joystick-substate reset. Their Continue
+     * footer and input must remain on Menus until the screen returns to gameplay. */
+    g_modal=g_in_game && (message_window_active() || g_support ||
+        (substate==4 && !g_result_slowdown) || substate==5);
     g_modal_back_y=g_modal && substate!=4;
     if(g_modal){InterlockedExchange(&g_dx,0);InterlockedExchange(&g_dy,0);}
 }
@@ -702,6 +723,9 @@ void recomp_controls_substate(uint32_t substate) {
  * using that new table. The next poll supplies correctly remapped input. */
 int recomp_controls_event_current(uint32_t main,uint32_t sub,uint32_t joystick,uint32_t joysub) {
     if(!g_initialized)return 1;
+    /* The message updater consumes raw button edges independently. Never
+     * dispatch its Confirm/Decline through a restored gameplay action table. */
+    if(message_window_active())return 0;
     if(main!=g_polled_main || sub!=g_polled_sub || joystick!=g_polled_joystick)return 0;
     if(joysub==g_polled_joysub)return 1;
     /* GPS acquisition enters/leaves ManualTargeting within an update. Both
@@ -778,7 +802,7 @@ static int prompt_binding_context(unsigned *action_inout,int device,int context)
         if(context<0)context=g_last_gameplay_context;
     }else if(mission_yes_no_active() && action==11){
         context=MENU_CONTEXT; /* No has its own bind, independent of ordinary Back. */
-    }else if(menu_active()) {
+    }else if(message_window_active() || menu_active()) {
         if(action==4 && (g_waiting_controller ||
             (g_shell_menu && keyboard && resolved_binding(0,MENU_CONTEXT,4)==0xffffu)))action=8;
         if(g_modal_back_y && (action==11 || action==9))action=9;

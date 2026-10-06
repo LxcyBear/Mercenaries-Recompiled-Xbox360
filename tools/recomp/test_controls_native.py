@@ -494,7 +494,7 @@ int main(int argc,char**argv){
  const unsigned substates[]={0,4,5,1,2};
  for(unsigned m=0;m<5;++m){
   reset_input();play(4);if(m==0)recomp_controls_state(0x59C00449,0xC2CBD863,4,0);
-  else {recomp_controls_state(0x4249D707,0xDDFB69D8,4,1);recomp_controls_substate(substates[m]);}
+  else {recomp_controls_state(0x4249D707,0x7084D38D,4,1);recomp_controls_substate(substates[m]);}
   test_keys['Z']=test_keys['Q']=1;mapper(&state,TRUE);
   assert((state.Gamepad.wButtons&15)==5 && !state.Gamepad.bAnalogButtons[0] && !state.Gamepad.bAnalogButtons[6]);
   memset(test_keys,0,sizeof(test_keys));test_keys[VK_RETURN]=1;mapper(&state,TRUE);
@@ -546,7 +546,7 @@ int main(int argc,char**argv){
   MEM32(0x35F798+0x4B4)=0;
   assert(!mission_yes_no_active());assert(recomp_controls_prompt_binding(11,family,-1)==resolved_binding(device,MENU_CONTEXT,9));
   MEM32(0x35F798+0x4B4)=1;
-  recomp_controls_substate(1);assert(!mission_yes_no_active());
+  recomp_controls_state(0x4249D707,0xC2CBD863,4,1);recomp_controls_substate(1);assert(!mission_yes_no_active());
   assert(recomp_controls_prompt_binding(11,family,-1)==resolved_binding(device,MENU_CONTEXT,9));
   reset_input();memset(&state,0,sizeof(state));if(device)state.Gamepad.bAnalogButtons[1]=255;else test_keys[VK_ESCAPE]=1;
   mapper(&state,!device);assert(state.Gamepad.bAnalogButtons[3]==255);

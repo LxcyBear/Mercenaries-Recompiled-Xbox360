@@ -135,3 +135,15 @@ PATCHES = (
      'loc_00019562: ;\n',
      'loc_00019562: ;\n    recomp_mod_projectile_init(esi);\n'),
 )
+
+PATCHES += (('Optional gameplay API after retail Lua registration', 'loc_0011291F: ;\n    POP32(esp, esi);', 'loc_0011291F: ;\n    recomp_mod_lua_init(MEM32(ebx + 0x1C));\n    POP32(esp, esi);'), ('Optional permadeath at player death notification', 'loc_00058500: ;\n    esp = esp - 0xC;', 'loc_00058500: ;\n    recomp_mod_player_died();\n    esp = esp - 0xC;'))
+
+PATCHES += (('Optional per-template human voice effect', 'loc_00050FD2: ;\n    MEM32(esi + 0x7F4) = eax;', 'loc_00050FD2: ;\n    MEM32(esi + 0x7F4) = recomp_mod_human_voice(esi, eax);'),)
+
+PATCHES += (
+    ('Throwable C4 remote fuse', 'loc_00021A27: ;\n', 'loc_00021A27: ;\n    { int remote=recomp_mod_c4_update(esi);\n      if(remote==0)goto loc_00021B5C;\n      if(remote==1)goto loc_00021A38;\n    }\n'),
+    ('Throwable C4 deinit', 'loc_0001FAA0: ;\n', 'loc_0001FAA0: ;\n    recomp_mod_c4_remove(ecx);\n'),
+    ('Throwable C4 detonation broadcast', 'loc_0001CF42: ;\n', 'loc_0001CF42: ;\n    recomp_mod_c4_broadcast(edi);\n'),
+    ('Throwable C4 detonator retention', 'loc_0005CAF0: ;\n', 'loc_0005CAF0: ;\n    if(recomp_mod_c4_active()){esp+=4;return;}\n'),
+    ('Throwable C4 blast presentation and damage', 'loc_0001CB48: ;\n    ecx = MEM32(esi + 0x18C);\n    PUSH32(esp, 0);\n    PUSH32(esp, 1);\n    PUSH32(esp, 0);\n    PUSH32(esp, 0);\n    PUSH32(esp, 9);\n    PUSH32(esp, 6);\n    PUSH32(esp, ecx);\n', 'loc_0001CB48: ;\n    ecx = MEM32(esi + 0x18C);\n    PUSH32(esp, 0);\n    PUSH32(esp, 1);\n    PUSH32(esp, 0);\n    PUSH32(esp, recomp_mod_projectile_c4(esi)?2:0);\n    PUSH32(esp, recomp_mod_projectile_c4(esi)?11:9);\n    PUSH32(esp, recomp_mod_projectile_c4(esi)?5:6);\n    PUSH32(esp, ecx);\n'),
+)

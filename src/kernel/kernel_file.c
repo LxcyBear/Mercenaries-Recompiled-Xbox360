@@ -576,6 +576,15 @@ NTSTATUS __stdcall xbox_NtReadFile(
     return STATUS_UNSUCCESSFUL;
 }
 
+#include "file_observer.h"
+static xbox_file_write_observer title_write_observer;
+static xbox_file_close_observer title_close_observer;
+void xbox_file_observe(xbox_file_write_observer write, xbox_file_close_observer close)
+{
+    title_write_observer = write;
+    title_close_observer = close;
+}
+
 NTSTATUS __stdcall xbox_NtWriteFile(
     HANDLE FileHandle, HANDLE Event, PIO_APC_ROUTINE ApcRoutine, PVOID ApcContext,
     PXBOX_IO_STATUS_BLOCK IoStatusBlock, PVOID Buffer, ULONG Length,
@@ -584,6 +593,8 @@ NTSTATUS __stdcall xbox_NtWriteFile(
     DWORD bytes_written = 0;
     BOOL result;
     OVERLAPPED ov;
+    LARGE_INTEGER observed_offset, zero_offset;
+    observed_offset.QuadPart = -1; zero_offset.QuadPart = 0;
     (void)ApcRoutine; (void)ApcContext;
 
     if (!IoStatusBlock)
@@ -591,6 +602,10 @@ NTSTATUS __stdcall xbox_NtWriteFile(
 
     invalidate_read_cache_for_handle(FileHandle);
 
+    if (title_write_observer) {
+        if (ByteOffset && ByteOffset->QuadPart >= 0) observed_offset = *ByteOffset;
+        else SetFilePointerEx(FileHandle, zero_offset, &observed_offset, FILE_CURRENT);
+    }
     if (ByteOffset && ByteOffset->QuadPart >= 0) {
         memset(&ov, 0, sizeof(ov));
         ov.Offset = ByteOffset->LowPart;
@@ -601,6 +616,8 @@ NTSTATUS __stdcall xbox_NtWriteFile(
     }
 
     if (result) {
+        if (title_write_observer && observed_offset.QuadPart >= 0)
+            title_write_observer(FileHandle, observed_offset.QuadPart, Buffer, bytes_written);
         IoStatusBlock->Status = STATUS_SUCCESS;
         IoStatusBlock->Information = bytes_written;
         if (Event) SetEvent(Event);
@@ -620,7 +637,8 @@ NTSTATUS __stdcall xbox_NtClose(HANDLE Handle)
     if (Handle && Handle != INVALID_HANDLE_VALUE) {
         cleanup_dir_context_for_handle(Handle);
         cleanup_read_cache_for_handle(Handle);
-        CloseHandle(Handle);
+        if (!CloseHandle(Handle)) return STATUS_INVALID_HANDLE;
+        if (title_close_observer) title_close_observer(Handle);
         return STATUS_SUCCESS;
     }
     return STATUS_INVALID_HANDLE;

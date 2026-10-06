@@ -1,5 +1,7 @@
 #include "kernel/mod_overlay.h"
 #include "mod_compatibility.h"
+#include "mod_gameplay.h"
+#include "plugin_host.h"
 #include "app_icon.h"
 #include "recomp_controls.h"
 #include "dev_menu.h"
@@ -2130,6 +2132,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         /* Hidden diagnostics have their own title/user/cache storage. The
          * ordinary preview retains its existing saves and settings location. */
         xbox_path_init(g_game_dir, diagnostic_save_directory(g_save_dir));
+        recomp_mod_saves_init(diagnostic_save_directory(g_save_dir));
     }
 
     /* Step 5: Initialize kernel bridge (thunk table in Xbox memory) */
@@ -2165,8 +2168,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         getenv("MERCENARIES_TRACE_UPDATE_ICALL") != NULL ||
         getenv("MERCENARIES_TRACE_TRANSITION_POOL_COUNT") != NULL ||
         getenv("MERCENARIES_TRACE_REDSCENE_WRITE_WATCH") != NULL;
+    if (!merc_plugins_initialize(xbox_GetMemoryBase(), 0x04000000u)) {
+        merc_plugins_show_error();
+        return 1;
+    }
+    atexit(merc_plugins_shutdown);
     start_trace_watchdog();
     xbe_entry_point();
+    merc_plugins_shutdown();
 
     printf("\nGame returned. Cleaning up...\n");
 

@@ -12,6 +12,7 @@
  */
 
 #include "kernel.h"
+#include <stdlib.h>
 #if defined(_WIN32)
 #include <intrin.h>
 #endif
@@ -277,13 +278,15 @@ VOID __stdcall xbox_HalReturnToFirmware(ULONG Routine)
 {
     xbox_log(XBOX_LOG_INFO, XBOX_LOG_HAL,
         "HalReturnToFirmware: routine=%u (exiting)", Routine);
-    ExitProcess(0);
+    /* Run registered plugin/log cleanup on a normal exit. */
+    exit(0);
 }
 
 VOID __stdcall xbox_HalInitiateShutdown(void)
 {
     xbox_log(XBOX_LOG_INFO, XBOX_LOG_HAL, "HalInitiateShutdown (exiting)");
-    ExitProcess(0);
+    /* Run registered plugin/log cleanup on a normal exit. */
+    exit(0);
 }
 
 BOOLEAN __stdcall xbox_HalIsResetOrShutdownPending(void)

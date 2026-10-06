@@ -27,6 +27,7 @@ def main():
     p.add_argument('--notes',type=Path,required=True,help='Human-readable release notes')
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--public-release',action='store_true',help='Package the main public release instead of a preview')
+    p.add_argument('--public-readme',type=Path,help='Use an existing public README unchanged')
     p.add_argument('--include-toolchain',action='store_true',help='Bundle developer sources inside the player ZIP (default: separate download)')
     p.add_argument('--toolchain-output',type=Path,help='Opt in to copying a separate developer source ZIP (default: keep it only in provenance storage)')
     a=p.parse_args()
@@ -52,7 +53,18 @@ def main():
             target=root/rel;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source,target)
         shutil.copy2(Path(__file__).resolve().parents[1]/'resources/developer.ini',root/'developer.ini')
         shutil.copy2(Path(__file__).resolve().parents[1]/'resources/modcompatibility.ini',root/'modcompatibility.ini')
-        shutil.copy2(Path(__file__).resolve().parents[3]/'docs/MODDING.md',root/'MODDING.md')
+        source_root=Path(__file__).resolve().parents[3]
+        for rel in ('docs/MODDING.md', 'docs/MOD_EXTENSIONS.md',
+                    'docs/examples/je3-modcompatibility.ini'):
+            target=root/rel;target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(source_root/rel,target)
+        shutil.copytree(source_root/'ports/mercenaries/sdk',root/'ports/mercenaries/sdk',
+                        ignore=shutil.ignore_patterns('__pycache__', 'build'))
+        # Keep the existing entry point, with links valid at the package root.
+        guide=(source_root/'docs/MODDING.md').read_text(encoding='utf-8')
+        guide=guide.replace('../ports/', 'ports/').replace('(MOD_EXTENSIONS.md)',
+            '(docs/MOD_EXTENSIONS.md)').replace('(examples/', '(docs/examples/')
+        (root/'MODDING.md').write_text(guide,encoding='utf-8')
         if a.include_toolchain:
             shutil.copy2(a.archive/'toolchain-source.zip',root/'ISO-to-Port-Toolchain.zip')
         notes=a.notes.read_text(encoding='utf-8-sig').strip()
@@ -123,9 +135,11 @@ Release notes
 
 '''+notes+'\n\nBuild identity and validation limits are recorded in mercenaries-distribution-provenance.json.\n'
         if a.public_release:
-            readme = (Path(__file__).resolve().parents[1]/'resources/public-readme.txt').read_text(encoding='utf-8').rstrip()
-            readme += '\n\nRelease notes\n\n' + notes + '\n\nBuild identity and validation limits are recorded in mercenaries-distribution-provenance.json.\n'
-        (root/'README-FIRST-LAUNCH.txt').write_text(readme,encoding='utf-8')
+            readme_path=a.public_readme or Path(__file__).resolve().parents[1]/'resources/public-readme.txt'
+            shutil.copy2(readme_path,root/'README-FIRST-LAUNCH.txt')
+        else:
+            (root/'README-FIRST-LAUNCH.txt').write_text(readme,encoding='utf-8')
+        shutil.copy2(a.notes,root/'RELEASE_NOTES.txt')
         manifest={'schema':18,'kind':'validated-iso-to-port-release' if a.public_release else 'validated-iso-to-port-preview',
                   'packagedUtc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
                   'generatedCDisposable':True,'sourceProvenance':provenance,
