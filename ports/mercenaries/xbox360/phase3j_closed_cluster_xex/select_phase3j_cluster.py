@@ -178,8 +178,13 @@ def source_surface_ok(source, own_name, dependency_names):
     if defs != [own_name]:
         return False, "function signature is not one exact void sub_XXXXXXXX(void)"
 
-    ret_n_matches = list(RET_N_RE.finditer(executable))
-    plain_ret_matches = list(PLAIN_RET_RE.finditer(executable))
+    # RET shape is intentionally encoded in generated comments by the lifter:
+    #   esp += 4;     return; /* ret */
+    #   esp += 4 + N; return; /* ret N */
+    # Helper/control-flow scans use the comment-stripped source, but return
+    # classification must inspect the raw generated source.
+    ret_n_matches = list(RET_N_RE.finditer(source))
+    plain_ret_matches = list(PLAIN_RET_RE.finditer(source))
 
     if not ret_n_matches and not plain_ret_matches:
         return False, "no translated RET"
@@ -254,6 +259,21 @@ def topo_dependencies_first(root, graph):
 
 
 def main():
+    # The lifter's translated RET identity is encoded in generated comments.
+    # Keep this invariant executable so a future comment-stripping refactor
+    # fails immediately instead of producing a misleading selector histogram.
+    _ret_probe = "esp += 4; return; /* ret */"
+    _retn_probe = "esp += 8; return; /* ret 4 */"
+    if not PLAIN_RET_RE.search(_ret_probe):
+        raise SystemExit("[Phase3J] internal error: plain RET classifier broken")
+    if not RET_N_RE.search(_retn_probe):
+        raise SystemExit("[Phase3J] internal error: RET-N classifier broken")
+    if (PLAIN_RET_RE.search(executable_c(_ret_probe)) or
+            RET_N_RE.search(executable_c(_retn_probe))):
+        raise SystemExit(
+            "[Phase3J] internal error: RET classifiers unexpectedly survive "
+            "comment stripping")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--xbe", required=True)
     ap.add_argument("--disasm-dir", required=True)
@@ -399,7 +419,7 @@ def main():
         # The root must return normally to the harness with exactly one
         # ordinary return slot. Nested dependencies may use bounded RET-N, but
         # the root remains plain-RET so final ESP has one exact expectation.
-        root_source = executable_c(lift(root))
+        root_source = lift(root)
         if (len(PLAIN_RET_RE.findall(root_source)) != 1 or
                 RET_N_RE.search(root_source)):
             return None, "root must have exactly one plain RET and no RET-N"
