@@ -1263,6 +1263,22 @@ unexecuted test PASS.**
 - **Next:** run `Prepare-Phase3I.ps1`, compile generated
   `build\phase3i_composite_slice\main.cpp`, and capture xbWatson.
 
+### 2026-10-18 — Phase 3I first prep attempt hits template-token bookkeeping bug
+
+- Local prep verified the exact supported retail XBE and successfully reused the
+  Phase 3E reviewed-seed disassembly.
+- The composite retail functions lifted far enough to reach template assembly.
+- Preparation then stopped before XDK source generation because the preparer's
+  replacement table contained unused token `__P3I_TAIL_CALLEE_NAME__`, while
+  the template injects the tail-callee body directly and has no such placeholder.
+- Removed the unused replacement token.
+- Performed a bidirectional template audit afterward:
+  - template tokens missing replacements: 0
+  - replacement tokens absent from template: 0
+- **No translated semantic failure, explicit-memory audit failure, compile, or
+  hardware execution occurred in this attempt.**
+- Fix commit on the Phase 3I branch: `c5f3dbb48a84a44e7c22b54ed84194132fc5ce85`.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
