@@ -29,6 +29,7 @@ from .lifter import (
     _make_condition,
     lift_basic_block,
     detect_seh_helpers,
+    guest_memory_abi_is_explicit,
 )
 
 
@@ -806,7 +807,36 @@ class FunctionTranslator:
         lines.append(f"}}")
         lines.append(f"")
 
-        return "\n".join(lines)
+        source = "\n".join(lines)
+
+        if guest_memory_abi_is_explicit():
+            # Strip C comments while preserving line count, then reject any
+            # executable legacy host-lvalue guest-memory access that escaped
+            # the explicit lifter paths.
+            def _blank_block_comment(match):
+                return "\n" * match.group(0).count("\n")
+
+            audited = re.sub(r"/\*.*?\*/", _blank_block_comment,
+                             source, flags=re.S)
+            audited = re.sub(r"//[^\n]*", "", audited)
+            legacy = re.compile(
+                r"\b(?:MEM8|MEM16|MEM32|MEM64|"
+                r"SMEM8|SMEM16|SMEM32|SMEM64|MEMF|MEMD|XBOX_PTR)\s*\(")
+            hits = []
+            for line_number, line_text in enumerate(audited.splitlines(), 1):
+                if legacy.search(line_text):
+                    hits.append((line_number, line_text.strip()))
+                    if len(hits) >= 8:
+                        break
+            if hits:
+                details = "; ".join(
+                    f"line {line_number}: {line_text}"
+                    for line_number, line_text in hits)
+                raise RuntimeError(
+                    f"{name} emitted legacy guest-memory access in explicit "
+                    f"mode: {details}")
+
+        return source
 
     def _find_used_registers(self, instructions):
         """Find which 32-bit registers are referenced by any instruction."""
@@ -1025,6 +1055,8 @@ class BatchTranslator:
         c_chunks.append(" */")
         c_chunks.append("")
         c_chunks.append('#define RECOMP_GENERATED_CODE')
+        if guest_memory_abi_is_explicit():
+            c_chunks.append('#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI')
         c_chunks.append('#include "recomp_types.h"')
         c_chunks.append('#include <math.h>')
         c_chunks.append("")
@@ -1220,6 +1252,8 @@ class BatchTranslator:
                 " */",
                 "",
                 "#define RECOMP_GENERATED_CODE",
+                *(["#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI"]
+                  if guest_memory_abi_is_explicit() else []),
                 f'#include "{header_name}"',
                 '#include <math.h>',
                 "",
