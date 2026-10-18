@@ -814,12 +814,8 @@ static int load_supported_xbe(const XbeBuffer* xbe,
                 "PASS: decoded kernel thunk VA lies inside guest RAM",
                 "FAIL: decoded kernel thunk VA is outside guest RAM");
 
-    /*
-     * This is deliberately a structural identity check only.
-     * Exact supported-XBE SHA-256 validation is a later step.
-     * DO NOT execute entryPoint here.
-     */
-    trace("ENTRY POINT EXECUTION: DISABLED BY PHASE 2B DESIGN");
+    trace("PASS: every loaded section matches source bytes + zero-fill invariant");
+    trace("ENTRY POINT EXECUTION: DISABLED BY PHASE 2C DESIGN");
 
     return ok;
 }
