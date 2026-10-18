@@ -230,6 +230,9 @@ def linear_icall_candidate(source, own_name):
     if not target_info:
         return None, why
 
+    if target_info["kind"] != "guest_read32":
+        return None, "Phase 3H-B requires a guest READ32 function-pointer slot"
+
     return {
         "expr": match.group("expr").strip(),
         "target_expression": target_info,
@@ -468,6 +471,13 @@ def main():
     reference_src = rename_function(
         caller_src, caller_name, "phase3h_reference_caller")
 
+    target_expr = details["target_expression"]
+    slot_base = target_expr["base_register"]
+    slot_offset = int(target_expr.get("offset", 0))
+    slot_expr = (
+        slot_base if slot_offset == 0
+        else f"{slot_base} + 0x{slot_offset:X}")
+
     reference_re = ICALL_RE
     reference_src, replaced = reference_re.subn(
         lambda m: (
@@ -481,12 +491,27 @@ def main():
     if replaced != 1:
         raise SystemExit("failed to construct Phase 3H reference caller")
 
+    discovery_src = rename_function(
+        caller_src, caller_name, "phase3h_discovery_caller")
+    discovery_src, discovery_replaced = reference_re.subn(
+        lambda m: (
+            f"phase3h_discovery_icall_slot((uint32_t)({slot_expr}), "
+            f"_icall_esp); "
+            f"/* Phase 3H-B discover real guest function-pointer slot */"
+        ),
+        discovery_src,
+        count=1,
+    )
+    if discovery_replaced != 1:
+        raise SystemExit("failed to construct Phase 3H-B discovery caller")
+
     target_impl_src = rename_function(
         target_src, target_name, "phase3h_target_impl")
 
     paths = {
         "caller": out_dir / f"{caller_name}.c",
         "reference": out_dir / "reference_caller.c",
+        "discovery": out_dir / "discovery_caller.c",
         "target": out_dir / f"{target_name}.c",
         "target_impl": out_dir / "target_impl.c",
     }
@@ -494,6 +519,7 @@ def main():
         paths["helper"] = out_dir / f"{helper_info['name']}.c"
     paths["caller"].write_text(caller_src + "\n", encoding="utf-8")
     paths["reference"].write_text(reference_src + "\n", encoding="utf-8")
+    paths["discovery"].write_text(discovery_src + "\n", encoding="utf-8")
     paths["target"].write_text(target_src + "\n", encoding="utf-8")
     paths["target_impl"].write_text(target_impl_src + "\n", encoding="utf-8")
     if helper_src is not None:
@@ -505,8 +531,9 @@ def main():
         "caller_size": int(caller_info.get("size", 0)),
         "caller_instructions": int(caller_info.get("num_instructions", 0) or 0),
         "icall_expression": details["expr"],
-        "target_strategy": "discover exact deterministic guest VA, then resolve same observed VA",
+        "target_strategy": "discover real guest pointer-slot address, seed slot with 0x0004CFF0, then run unchanged caller",
         "target_expression": details["target_expression"],
+        "pointer_slot_expression": slot_expr,
         "dispatch_target": f"0x{TARGET_VA:08X}",
         "dispatch_target_name": target_name,
         "dispatch_target_size": int(target_info.get("size", 0)),
@@ -526,6 +553,7 @@ def main():
             helper_src if helper_src is not None
             else "/* no direct translated helper selected */"),
         "/*__PHASE3H_TARGET_IMPL__*/": target_impl_src,
+        "/*__PHASE3H_DISCOVERY_CALLER__*/": discovery_src,
         "/*__PHASE3H_REFERENCE_CALLER__*/": reference_src,
         "/*__PHASE3H_REAL_CALLER__*/": caller_src,
         "__PHASE3H_CALLER_NAME__": caller_name,
@@ -550,6 +578,7 @@ def main():
         f"({caller_info.get('size')} bytes / "
         f"{caller_info.get('num_instructions')} insns)")
     print(f"[Phase3H] ICALL expression: {details['expr']}")
+    print(f"[Phase3H] Pointer slot expression: {slot_expr}")
     if helper_addr is not None:
         print(
             f"[Phase3H] Direct helper: {helper_info['name']} @ "
@@ -562,6 +591,7 @@ def main():
         f"({target_info.get('size')} bytes / "
         f"{target_info.get('num_instructions')} insns)")
     print("[Phase3H] Generated RECOMP_ICALL_SAFE shape verified")
+    print("[Phase3H] Phase 3H-B will discover and seed the real guest function-pointer slot")
     print("[Phase3H] No guest arguments are pushed before the dummy return slot")
     print("[Phase3H] Caller is linear, flag-free, plain-RET and stack-simple")
     print("[Phase3H] XDK source: " + args.main_out)
