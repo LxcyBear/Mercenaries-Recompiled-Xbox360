@@ -23,6 +23,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+# This file is intentionally launched directly by Prepare-Phase3G.ps1.
+# Add the repository root before importing in-tree tools.* modules; otherwise
+# Python only places this deeply nested script directory on sys.path.
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from tools.recomp import config
 from tools.recomp.lifter import configure_guest_memory_abi
 from tools.recomp.translator import BatchTranslator
