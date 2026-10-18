@@ -1,6 +1,6 @@
 # Phase 1 — Build the first Mercenaries Xbox 360 diagnostics XEX
 
-**Status: VS17 + Xbox 360 XDK compile succeeded; real-hardware test not yet verified.**
+**Status: Phase 1 COMPLETE — VS17/XDK build, real-hardware launch, logging, controller exit and timeout exit all verified.**
 
 This phase tests that an isolated Xbox 360 game/title can start, log,
 read controller input, and quit. **This is NOT a Mercenaries build.** It
@@ -104,7 +104,7 @@ or the timeout is used.
 - [x] xbWatson debug trace captured.
 - [x] Startup and repeated 1-second heartbeats seen.
 - [x] Controller 0 detection and button A exit confirmed; `[XAPI RETURN VALUE] 0`.
-- [ ] 15-second timeout exit confirmed in a separate test. **Still pending.**
+- [x] 15-second timeout exit confirmed in a separate test; `[XAPI RETURN VALUE] 0`.
 - [ ] Compiler/XDK build details, console/kernel, commit SHA and
       test logs added to the root README evidence and progress log.
 
