@@ -99,7 +99,13 @@ contract before we add:
 4. GPU/APU MMIO routing;
 5. generated x86-to-C code.
 
-Passing this test is Phase 2A, not the whole Phase 2 gate.
+**Hardware result (October 18, 2026): PASS.** Xenon reported big-endian native
+byte order; every guest RAM, endian, unaligned, top-of-RAM and bounds test
+passed. The diagnostic released the arena, completed its post-test timeout and
+returned `[XAPI RETURN VALUE] 0`.
+
+Passing this test completes **Phase 2A**, not the whole Phase 2 gate. Phase 2B
+will parse and load a user-supplied supported retail XBE without executing it.
 
 
 ## First two compile attempts
