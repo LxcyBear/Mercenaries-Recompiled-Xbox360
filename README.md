@@ -646,6 +646,23 @@ unexecuted test PASS.**
 - **Next:** build/run Phase 3B on modified Xbox 360 hardware. SSE/XMM, MMX and
   REP/string/manual legacy-memory paths remain later Phase 3 slices.
 
+### 2026-10-18 — Phase 3B signed/x87 memory ABI passes on Xenon
+
+- Runtime build tag `P3B-X87MEM-20261018-A` confirmed the intended XEX.
+- Signed 8/16/32/64-bit guest reads and sign extension passed, including
+  unaligned 16/32/64-bit accesses.
+- Float32/float64 round-trips passed with exact little-endian IEEE-754 bytes.
+- FILD-style signed integer load and FIADD-style signed memory arithmetic passed.
+- FLD/FADD/FSTP-style explicit floating memory path passed.
+- FIST-style explicit integer destination write passed.
+- FCOM-style memory operand comparison passed.
+- Float32 RAM-mirror and float64 KSEG0 coherence passed.
+- Float32 MMIO rejection and float64 cross-64MiB rejection passed.
+- Guest RAM released, timeout completed, and `[XAPI RETURN VALUE] 0`.
+- **Phase 3B: COMPLETE.**
+- **Next:** Phase 3C SSE/XMM + MMX guest-memory helpers, still without
+  translated Mercenaries function execution.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
