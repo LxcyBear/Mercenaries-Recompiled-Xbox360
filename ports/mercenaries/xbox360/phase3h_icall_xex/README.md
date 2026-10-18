@@ -220,3 +220,37 @@ The hardware fixture was also strengthened:
 
 If no candidate survives the relaxed gate, the selector now prints each early
 ICALL caller VA with its exact rejection reason.
+
+## Second selector pass — runtime target discovery
+
+The second local diagnostic identified two especially useful real callers:
+
+- `0x0008DE60`
+- `0x0008DE70`
+
+Both survived the bounded ICALL gate except for one selector-only rule: their
+ICALL base register `EAX` is modified before the call.
+
+That rule has been removed. Phase 3H no longer forces or predicts the guest
+function pointer. Instead:
+
+1. an unresolved discovery prepass executes the exact transformed translated
+   caller and records the single guest VA produced at the real ICALL site
+2. state is reset identically
+3. resolved mode maps that exact observed guest VA through generated lookup to
+   translated `0x0004CFF0`
+4. state is reset again
+5. unresolved mode leaves the same observed VA unresolved and verifies the full
+   manual/generated/kernel miss chain
+
+This preserves the caller's real pointer-building instructions and proves the
+same deterministic target is reproduced across runs.
+
+The production middle-range guard remains unchanged. Its `0x00400000` test is
+now a separate direct macro-vs-reference fixture rather than an artificial
+rewrite of the selected caller's target expression.
+
+The resolved and unresolved real-caller paths still compare architecture,
+translated trace, immediate ICALL saved/post ESP and EAX observations, target
+entry, callee-saved-register restoration, fault state and the complete 64 MiB
+guest-RAM digest.
