@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3F — first bounded translated Mercenaries call chain.
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3F — first bounded translated Mercenaries tail-call chain.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E hardware PASS; translated call chain next** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E hardware PASS; 3F tail-call chain ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -821,6 +821,26 @@ unexecuted test PASS.**
 - **Phase 3E: COMPLETE.**
 - **Next:** Phase 3F — a small audited translated direct-call chain before
   indirect-call dispatch or broad startup execution.
+
+### 2026-10-18 — Phase 3F translated tail-call chain prepared
+
+- Created `xbox360/phase3f-translated-tail-call-chain` from completed Phase 3E.
+- Selected reviewed retail wrapper `0x00034AD0` and translated callee
+  `0x00034AE0`. The seed documents the wrapper as `ECX += 0x78` followed
+  by a direct tail jump to the callee.
+- The prep workflow verifies the exact retail XBE, reuses Phase 3E analysis when
+  available, confirms the call-graph edge, lifts both functions with
+  `--explicit-guest-memory`, and rejects unexpected third-function calls,
+  ICALL/ITAIL, runtime-copy/kernel dependencies, debug/RDTSC, or SIMD/x87 state.
+- It also requires the generated wrapper tail-jump marker and rejects any
+  synthetic `PUSH32` in that tail-call path.
+- Hardware reference is differential rather than a guessed callee model:
+  direct callee at `ECX=BASE+0x78` is compared with wrapper at `ECX=BASE`.
+- Three deterministic cases compare final integer register state, SEH EBP,
+  guest ESP cleanup, function-trace sequence, access-fault state and a hash of
+  the complete 64 MiB guest arena.
+- **Next:** run Phase 3F prep locally, compile the generated
+  `build\phase3f_translated_tailcall\main.cpp`, and capture xbWatson.
 
 ### How future updates are recorded
 
