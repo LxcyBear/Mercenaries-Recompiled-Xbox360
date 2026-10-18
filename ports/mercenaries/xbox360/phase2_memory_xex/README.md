@@ -32,7 +32,9 @@ Use a **copy** of the working Phase 1 Xbox 360 project.
    - or otherwise make both \`guest_memory.h\` and \`guest_endian.h\`
      resolvable by the source.
 3. Build with the exact same known-good Xbox 360 / PowerPC XDK configuration.
-4. Send the **entire compiler output** if it fails. Do not substitute desktop
+4. Important: if `guest_memory.h` cannot be found, all later `MercGuestMemory` / `memory` errors are cascading errors. Fix the include first, rebuild, and only troubleshoot errors that remain.
+
+Send the **entire compiler output** if it still fails. Do not substitute desktop
    Win32 headers/libraries to make an error disappear.
 
 ## Expected real-console output
