@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3A explicit scalar guest-memory ABI after completing Gate 2.
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3E — first bounded mechanically translated Mercenaries function.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D hardware PASS; 3E first translated function ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -66,22 +66,24 @@ Xbox 360 hardware. The pinned retail SHA-256 was computed on Xenon itself and
 matched exactly. Translated Mercenaries game code has still **not** been
 executed on Xbox 360.
 
-**Present blockers:** generated `MEM16/32/64` expressions are assignable
-native-pointer lvalues and still require a coordinated lifter/runtime refactor;
-the Windows mapped-alias model cannot be carried directly to the 32-bit Xbox
-360 process; guest RAM mirrors/KSEG/synthetic kernel/MMIO routing still need
-native checked dispatch; D3D11, Win32, DXGI and host-audio dependencies still
-need Xbox 360-native replacements.
+**Present blockers:** the explicit PowerPC-safe guest-memory ABI is now proven
+for scalar integer, signed/x87, SSE/XMM/MMX, shared stack and string/copy paths
+on modified Xbox 360 hardware. Remaining Phase 3 blockers are execution of a
+real translated function, broader x86 flags/call/ICALL/return behavior, full
+post-patch generated-tree audit, and compiler/linker/runtime scale limits.
+D3D11, Win32, DXGI and host-audio dependencies still need Xbox 360-native
+replacements in later phases.
 
 ### Immediate next tests
 
 1. **Done:** native XEX bootstrap, input, heartbeat and clean timeout.
-2. **Done:** 64 MiB guest RAM + little-endian access contract on Xenon.
-3. **Done:** bounded retail XBE parse/load and exact on-console SHA-256.
-4. Implement a checked guest-address router for low RAM mirrors, KSEG0/KSEG1
-   aliases, synthetic kernel/fence pages, and explicit MMIO classification.
-5. Validate alias coherence and low-memory/TIB fixtures on real hardware before
-   any translated Mercenaries function is permitted to execute.
+2. **Done:** guest RAM, exact retail XBE loading, aliases and execution-environment fixtures.
+3. **Done:** explicit scalar, signed/x87, SSE/XMM/MMX and runtime/string memory ABI fixtures on Xenon.
+4. Generate reviewed retail function `0x00208F30` locally with
+   `--explicit-guest-memory`; reject unexpected calls/writes/legacy lvalues.
+5. Compile the generated function into the bounded Phase 3E XDK harness and
+   compare six controlled inputs against the independent `(byte & 1)` reference.
+6. Only after that PASS, expand to a small translated call chain.
 
 ### Evidence policy
 
@@ -190,16 +192,17 @@ executes as Xbox 360 PowerPC.
       `GUEST_READ8/16/32/64` + `GUEST_WRITE8/16/32/64` emission. Legacy PC
       output remains unchanged by default; float/SSE/MMX/string/manual paths
       remain later Phase 3 work.
-- [ ] Generate and compile isolated instruction fixtures under the actual
-      Xbox 360 compiler before attempting all translated functions.
+- [x] Generate and compile isolated memory/instruction fixtures under the actual
+      Xbox 360 compiler before attempting translated game functions. Phase
+      3A/3B/3C/3D all passed on modified Xbox 360 hardware.
 - [ ] Validate flags, sign extension, stack/calling convention, frame saving,
       `RECOMP_ICALL` dispatch, direct/tail calls and function returns.
 - [ ] Validate x87, MMX and SSE semantics against the original instruction
       results; test rounding, NaN and exceptional paths.
 - [ ] Evaluate Xenon limitations: native stack depth, object/code size,
       memory budget and compiler/linker constraints.
-- [ ] Execute a bounded translated function, then a small call chain, then
-      the game's entry sequence with guardrails and logging.
+- [ ] Execute a bounded translated function (**Phase 3E active**), then a small
+      call chain, then the game's entry sequence with guardrails and logging.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -324,6 +327,10 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 2D checked guest-address router hardware fixture | **PASS** | Real Xbox 360 Xenon: coherent RAM mirrors + KSEG0/KSEG1, synthetic-page priority, MMIO/thunk isolation, gap rejection, XAPI 0 |
 | 2026-10-18 | Phase 2E guest execution-environment portable contract | **PASS (GCC / Clang / ASan+UBSan)** | TIB/KTHREAD/TLS negative-index math, 256 KiB guest stack, kernel-data mirror/KSEG coherence |
 | 2026-10-18 | Phase 2E guest execution-environment hardware fixture | **PASS** | Modified Xbox 360: exact XBE reverify, TLS block 20 B, TIB→KTHREAD→TLS chain, negative TLS index, kernel-data aliases, guest stack PUSH/POP, XAPI 0 |
+| 2026-10-18 | Phase 3A explicit scalar guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: big-endian host + LE guest bytes, 8/16/32/64 MOV/RMW, CMPXCHG-style paths, PUSH/POP order, aliases and MMIO/boundary rejection |
+| 2026-10-18 | Phase 3B signed + x87 guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: signed loads, float/double IEEE-754 bytes, FILD/FIADD/FLD/FADD/FSTP/FIST/FCOM-style memory paths |
+| 2026-10-18 | Phase 3C SSE/XMM + MMX guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: 128-bit lanes, MOVSS/MOVSD/MOVLPS/MOVHPS, packed arithmetic/bitwise, MMX, alias + boundary/MMIO rejection |
+| 2026-10-18 | Phase 3D runtime/string guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: shared PUSH/POP, XBOX_MEMCPY, REP MOVS overlap/order, MOVS/STOS/LODS, CMPS/SCAS, alias + MMIO/boundary semantics |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -747,6 +754,25 @@ unexecuted test PASS.**
 - **Next:** first small audited mechanically translated Mercenaries function,
   generated with `--explicit-guest-memory`, compiled into a bounded XDK harness
   and compared against a reference result before broader translated execution.
+
+### 2026-10-18 — Phase 3E first bounded translated-function gate prepared
+
+- Selected reviewed retail function `0x00208F30`: a tiny one-byte state
+  accessor documented by the manual seed as returning bit zero of
+  `[ECX + 0x14]`.
+- Created `xbox360/phase3e-first-translated-function`.
+- No new retail-derived generated C is committed. A local PowerShell prep
+  script verifies the pinned retail XBE, runs one reviewed-seed disassembly,
+  lifts only `0x00208F30` with `--explicit-guest-memory`, audits it, and
+  injects it into a gitignored local XDK harness.
+- The candidate is rejected if it no longer has exactly the expected 8-bit
+  read-only shape, contains guest writes, ICALL/runtime dependencies, wider
+  reads or another translated-function call.
+- The hardware harness tests inputs `00 01 02 03 FE FF`, compares the
+  translated low-byte result to `input & 1`, verifies function trace VA,
+  object immutability, no guest access fault and exact four-byte RET cleanup.
+- **Next:** run the local prep script, compile the generated
+  `build\phase3e_first_translated\main.cpp`, and capture xbWatson.
 
 ### How future updates are recorded
 
