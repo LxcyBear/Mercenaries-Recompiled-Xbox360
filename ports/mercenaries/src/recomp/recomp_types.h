@@ -873,19 +873,31 @@ uint8_t  recomp_guest_read8(uint32_t address);
 uint16_t recomp_guest_read16(uint32_t address);
 uint32_t recomp_guest_read32(uint32_t address);
 uint64_t recomp_guest_read64(uint32_t address);
+float    recomp_guest_readf32(uint32_t address);
+double   recomp_guest_readf64(uint32_t address);
 void recomp_guest_write8(uint32_t address, uint8_t value);
 void recomp_guest_write16(uint32_t address, uint16_t value);
 void recomp_guest_write32(uint32_t address, uint32_t value);
 void recomp_guest_write64(uint32_t address, uint64_t value);
+void recomp_guest_writef32(uint32_t address, float value);
+void recomp_guest_writef64(uint32_t address, double value);
 
 #define GUEST_READ8(addr)   recomp_guest_read8((uint32_t)(addr))
 #define GUEST_READ16(addr)  recomp_guest_read16((uint32_t)(addr))
 #define GUEST_READ32(addr)  recomp_guest_read32((uint32_t)(addr))
 #define GUEST_READ64(addr)  recomp_guest_read64((uint32_t)(addr))
+#define GUEST_SREAD8(addr)  ((int8_t)GUEST_READ8(addr))
+#define GUEST_SREAD16(addr) ((int16_t)GUEST_READ16(addr))
+#define GUEST_SREAD32(addr) ((int32_t)GUEST_READ32(addr))
+#define GUEST_SREAD64(addr) ((int64_t)GUEST_READ64(addr))
+#define GUEST_READF32(addr) recomp_guest_readf32((uint32_t)(addr))
+#define GUEST_READF64(addr) recomp_guest_readf64((uint32_t)(addr))
 #define GUEST_WRITE8(addr, value)  recomp_guest_write8((uint32_t)(addr), (uint8_t)(value))
 #define GUEST_WRITE16(addr, value) recomp_guest_write16((uint32_t)(addr), (uint16_t)(value))
 #define GUEST_WRITE32(addr, value) recomp_guest_write32((uint32_t)(addr), (uint32_t)(value))
 #define GUEST_WRITE64(addr, value) recomp_guest_write64((uint32_t)(addr), (uint64_t)(value))
+#define GUEST_WRITEF32(addr, value) recomp_guest_writef32((uint32_t)(addr), (float)(value))
+#define GUEST_WRITEF64(addr, value) recomp_guest_writef64((uint32_t)(addr), (double)(value))
 
 /* ================================================================
  * Memory access helpers
