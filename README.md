@@ -62,8 +62,10 @@ Each phase has independently checkable checkpoints below.
 
 **Already written in Draft PR #1:** portable little-endian guest-memory
 helpers, a host-side test source, a platform architecture note, and an initial
-15-second **diagnostic-only** XDK entry point. **None have been proven by an
-executed Xbox 360 build or hardware test yet.**
+15-second **diagnostic-only** XDK entry point. The portable guest-memory tests
+**pass GCC 14.2.0, Clang 17.0.0 and Clang UndefinedBehaviorSanitizer** on a
+Linux x86-64 host, with exact Git blob SHA checks. **No Xbox 360 XEX build or
+hardware test has been performed.**
 
 **Present blockers:** no verified Xbox 360 executable; original Xbox guest data
 is little-endian while Xbox 360 PowerPC is big-endian; generated `MEM16/32/64`
@@ -73,7 +75,8 @@ host audio dependencies need native replacements.
 
 ### Immediate next tests
 
-1. Compile/run portable guest endian tests on a PC and record their output.
+1. **Done:** run portable endian tests on a PC (GCC, Clang and UBSan; see
+   evidence below).
 2. Build the small XDK diagnostic from the active development branch as an
    Xbox 360 **game/XEX** target using the user's installed XDK and VS2010.
 3. Launch it from an isolated test folder on RGH/JTAG Xbox 360 hardware,
@@ -107,8 +110,10 @@ guest-memory contract before modifying generated code.
 - [x] Write explicit little-endian 16/32/64-bit and float access helpers in
       the development branch (not integrated with generated code yet).
 - [x] Write unaligned byte-order tests in the development branch (not yet run).
-- [ ] Run the portable tests with a host C compiler and record exact command,
-      compiler version, output and commit.
+- [x] Run the portable endian tests with GCC 14.2.0 and Clang 17.0.0 on Linux
+      x86-64; also run Clang UBSan. All 3 passed. Confirm that the tested
+      source Git blobs match the branch versions (guest endian header
+      `289c8792` and test source `00149528`). This is **not** PowerPC proof.
 - [ ] Audit read, write, compound assignment and read-modify-write forms in
       generated C, maintained lifter, patches, manual hooks, guest structures
       and hardware MMIO.
@@ -287,7 +292,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 - [Active Xbox 360 foundation PR](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1) —
   currently contains the experimental target; review before merging.
 - [Xbox 360-specific working notes on the branch](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/README.md).
-- [Hardware bootstrap on the branch](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex).
+- [Hardware bootstrap on the branch](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex) and its [VS2010/XDK build and safety checklist](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex/BUILD_FIRST_XEX.md).
 - Upstream Windows build is **not** our Xbox 360 build:
   [`ports/mercenaries/scripts/Build-From-Iso.ps1`](ports/mercenaries/scripts/Build-From-Iso.ps1)
   compiles a Windows x64 game, not an XEX.
@@ -297,7 +302,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | Date | Evidence | Status | Build / hardware |
 | --- | --- | --- | --- |
 | 2026-10-18 | Source inspection: Windows host and direct guest memory macros | Confirmed in source | No console run |
-| 2026-10-18 | Guest endian helper/test sources written to draft branch | Written, **not executed** | No console run |
+| 2026-10-18 | Little-endian memory and float tests: GCC 14.2.0, Clang 17.0.0, Clang UBSan | **PASS (3/3)** | Linux x86-64; branch blobs `289c8792`, `00149528`; no console run |
 | 2026-10-18 | XDK bootstrap diagnostic source written to draft branch | Written, **not compiled** | No console run |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
@@ -317,9 +322,14 @@ unexecuted test PASS.**
   to isolate portable guest endian helpers, tests, and Xbox 360 target notes.
 - Added source for a minimal **non-game** XDK diagnostic with 15-second safety
   exit, heartbeat, A-button input and logging fallback.
+- Ran the portable byte-order and unaligned-access test successfully under
+  GCC 14.2, Clang 17, and Clang UBSan; confirmed exact Git blob identities.
+- Corrected a test diagnostic newline and added
+  [VS2010/XDK XEX build instructions](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex/BUILD_FIRST_XEX.md).
 - Replaced the nearly empty fork README with the **phase gates, checklists,
   blockers, test evidence and durable progression log**.
-- **Next gate:** host tests; VS2010/XDK diagnostic compile; real-console logs.
+- **Next gate:** VS2010/XDK diagnostic compile, then real-console logs and
+  controller/timeout verification. Host endian tests are now passing.
 - **No playable XEX exists.** Phase 1 hardware success is not yet claimed.
 
 ### How future updates are recorded
