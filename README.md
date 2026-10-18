@@ -53,7 +53,7 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A COMPLETE; Phase 2B XBE loader ready for hardware test** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A + 2B COMPLETE on Xenon** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
@@ -313,6 +313,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Independent 15-second safety-timeout run | **PASS** | RGH/JTAG Xbox 360; timeout log + `[XAPI RETURN VALUE] 0` |
 | 2026-10-18 | Phase 2A bounded 64 MiB guest-RAM host contract | **PASS (GCC / Clang / ASan+UBSan)** | Linux x86-64; host preflight |
 | 2026-10-18 | Phase 2A 64 MiB guest-RAM hardware diagnostic | **PASS** | Real Xbox 360 Xenon: big-endian host, LE guest bytes, unaligned access, high-bound rejection, clean timeout / XAPI 0 |
+| 2026-10-18 | Phase 2B retail XBE parse + bounded section load | **PASS** | Real Xbox 360 Xenon: 3,223,552-byte XBE, Title ID 0x4C410015, entry 0x0022964A, 14/14 sections, 3,188,156 initialized bytes, XAPI 0 |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -417,6 +418,29 @@ unexecuted test PASS.**
 - **Next:** compile Phase 2B in VS17/XDK, place the user's retail
   `default.xbe` beside the diagnostic `default.xex`, and capture all
   `[Merc360:P2B]` xbWatson output.
+
+### 2026-10-18 — Phase 2B retail XBE load passes on hardware
+
+- Read the user's own `game:\default.xbe` successfully on Xbox 360.
+- XBE size: **3,223,552 bytes** (`0x00313000`).
+- Parsed little-endian header correctly on big-endian Xenon:
+  - base `0x00010000`
+  - image size `0x00868AA0`
+  - decoded retail entry `0x0022964A`
+  - TLS VA `0x00302CB4`
+  - decoded kernel thunk VA `0x002DBCE0`
+  - **14 sections**
+  - certificate Title ID `0x4C410015`
+- Loaded **14/14** sections into the proven 64 MiB guest arena.
+- Copied **3,188,156 initialized bytes** and zero-filled each virtual section.
+- Decoded entry point landed inside a loaded section; kernel thunk VA remained
+  inside guest RAM.
+- Entry-point execution remained explicitly disabled.
+- Guest arena was released, 10-second timeout completed, and
+  `[XAPI RETURN VALUE] 0` confirmed.
+- **Phase 2B: COMPLETE.**
+- **Next:** Phase 2C exact SHA-256 enforcement and stronger post-load
+  invariants before any translated guest code can execute.
 
 ### How future updates are recorded
 
