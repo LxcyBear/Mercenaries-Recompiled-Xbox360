@@ -793,9 +793,9 @@ extern volatile uint32_t g_recomp_recent_asset_request_idx;
     if (_trace_va == 0x0008C810u) \
         recomp_player_vehicle_exit_checkpoint(1u, g_ecx); \
     if (_trace_va == 0x00045C50u) \
-        recomp_vehicle_wheel_actor_checkpoint(g_ecx, MEM32(g_esp + 4u)); \
+        recomp_vehicle_wheel_actor_checkpoint(g_ecx, RECOMP_READ32(g_esp + 4u)); \
     if (_trace_va == 0x002157A0u) \
-        recomp_humvee_render_item_checkpoint(MEM32(g_esp + 4u)); \
+        recomp_humvee_render_item_checkpoint(RECOMP_READ32(g_esp + 4u)); \
     if (_trace_va == 0x001DE230u) \
         recomp_lua_checkcode_checkpoint(); \
     if (_trace_va == 0x001DDE70u) \
@@ -929,6 +929,31 @@ void recomp_guest_write128(uint32_t address, const uint32_t words[4]);
 /** Float/double memory access. */
 #define MEMF(addr)   (*(volatile float    *)XBOX_PTR(addr))
 #define MEMD(addr)   (*(volatile double   *)XBOX_PTR(addr))
+
+/*
+ * Runtime-internal memory bridge.  Maintained helpers use these names so the
+ * same source works with the historical flat host mapping and with the checked
+ * explicit guest-memory ABI used by the Xbox 360 target.
+ */
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+#define RECOMP_READ8(addr)        GUEST_READ8(addr)
+#define RECOMP_READ16(addr)       GUEST_READ16(addr)
+#define RECOMP_READ32(addr)       GUEST_READ32(addr)
+#define RECOMP_READ64(addr)       GUEST_READ64(addr)
+#define RECOMP_WRITE8(addr, v)    GUEST_WRITE8((addr), (v))
+#define RECOMP_WRITE16(addr, v)   GUEST_WRITE16((addr), (v))
+#define RECOMP_WRITE32(addr, v)   GUEST_WRITE32((addr), (v))
+#define RECOMP_WRITE64(addr, v)   GUEST_WRITE64((addr), (v))
+#else
+#define RECOMP_READ8(addr)        MEM8(addr)
+#define RECOMP_READ16(addr)       MEM16(addr)
+#define RECOMP_READ32(addr)       MEM32(addr)
+#define RECOMP_READ64(addr)       MEM64(addr)
+#define RECOMP_WRITE8(addr, v)    (MEM8(addr) = (uint8_t)(v))
+#define RECOMP_WRITE16(addr, v)   (MEM16(addr) = (uint16_t)(v))
+#define RECOMP_WRITE32(addr, v)   (MEM32(addr) = (uint32_t)(v))
+#define RECOMP_WRITE64(addr, v)   (MEM64(addr) = (uint64_t)(v))
+#endif
 
 /* Full 128-bit XMM helpers. Scalar SSE instructions use lane zero through
  * the xmmN aliases below; packed instructions use the xmmNv aliases. */
@@ -1171,18 +1196,22 @@ static __forceinline uint32_t recomp_xmm_movmskps(const float src[4]) {
 static __forceinline void XBOX_MEMCPY(uint32_t destination, uint32_t source,
                                       uint32_t length) {
     uint32_t offset = 0;
+#if !defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
     if (destination < 0xFD000000u && source < 0xFD000000u) {
         memcpy((void *)XBOX_PTR(destination), (const void *)XBOX_PTR(source),
                length);
         return;
     }
+#endif
     while (length - offset >= 4u &&
            (((destination + offset) | (source + offset)) & 3u) == 0u) {
-        MEM32(destination + offset) = MEM32(source + offset);
+        RECOMP_WRITE32(destination + offset,
+                       RECOMP_READ32(source + offset));
         offset += 4u;
     }
     while (offset < length) {
-        MEM8(destination + offset) = MEM8(source + offset);
+        RECOMP_WRITE8(destination + offset,
+                      RECOMP_READ8(source + offset));
         ++offset;
     }
 }
@@ -1190,6 +1219,7 @@ static __forceinline void XBOX_REP_MOVS(uint32_t destination, uint32_t source,
                                        uint32_t count, uint32_t width) {
     uint64_t length = (uint64_t)count * width;
     if (count == 0u) return;
+#if !defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
     if ((uint64_t)destination + length <= 0xFD000000ull &&
         (uint64_t)source + length <= 0xFD000000ull) {
         if ((uint64_t)destination + length <= source ||
@@ -1204,12 +1234,15 @@ static __forceinline void XBOX_REP_MOVS(uint32_t destination, uint32_t source,
             return;
         }
     }
-    /* Volatile guest accesses preserve element width/order for overlap and
-     * hardware registers, including unaligned word/dword instructions. */
+#else
+    (void)length;
+#endif
+    /* Element-at-a-time access preserves x86 REP MOVS ordering, overlap,
+     * checked guest ranges, endian conversion and MMIO width semantics. */
     while (count-- != 0u) {
-        if (width == 4u) MEM32(destination) = MEM32(source);
-        else if (width == 2u) MEM16(destination) = MEM16(source);
-        else MEM8(destination) = MEM8(source);
+        if (width == 4u) RECOMP_WRITE32(destination, RECOMP_READ32(source));
+        else if (width == 2u) RECOMP_WRITE16(destination, RECOMP_READ16(source));
+        else RECOMP_WRITE8(destination, RECOMP_READ8(source));
         destination += width;
         source += width;
     }
@@ -1354,12 +1387,12 @@ static inline uint32_t ROR32(uint32_t val, int n) {
 #define PUSH32(sp, val) do { \
     uint32_t _pv = (uint32_t)(val); \
     (sp) -= 4; \
-    MEM32(sp) = _pv; \
+    RECOMP_WRITE32((sp), _pv); \
 } while(0)
 
 /** Pop a 32-bit value from the simulated stack. */
 #define POP32(sp, dst) do { \
-    (dst) = MEM32(sp); \
+    (dst) = RECOMP_READ32(sp); \
     (sp) += 4; \
 } while(0)
 
