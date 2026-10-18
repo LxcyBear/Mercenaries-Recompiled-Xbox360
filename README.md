@@ -1125,6 +1125,45 @@ unexecuted test PASS.**
   range, the hardware fixture stops rather than weakening that guard.
 - **No hardware execution occurred in this selector attempt.**
 
+### 2026-10-18 — Phase 3H-A real ICALL dispatcher mechanics pass on Xenon
+
+- Build tag `P3H-ICALL-20261018-A` executed real translated caller
+  `0x0008DE60` through `RECOMP_ICALL_SAFE` on modified Xbox 360 hardware.
+- The deterministic discovery seed produced guest ICALL target `0x00000000`
+  in all three cases.
+- Resolved mode deliberately mapped that observed guest key through generated
+  lookup to translated target `0x0004CFF0`.
+- All resolved cases verified:
+  - no guest-memory fault
+  - identical discovered ICALL target on reference and real paths
+  - translated target entered exactly once
+  - target entered with one zero-valued synthetic return slot
+  - generated lookup hit after manual miss
+  - target deliberately clobbered EBX/ESI/EDI and RECOMP_ICALL_SAFE restored all
+    three
+  - caller/target translated trace matched the independent reference
+  - final guest ESP matched
+  - complete 64 MiB RAM hashes matched
+- All unresolved cases verified:
+  - target was not entered
+  - saved ESP restored immediately at ICALL boundary
+  - EAX forced to zero immediately
+  - manual/generated/kernel lookup chain exhausted
+  - translated trace matched the reference
+  - complete 64 MiB RAM hashes matched
+- Separate production range-guard tests at `0x00400000` verified rejection
+  before lookup, saved-ESP restoration, EAX=0 and full RAM-hash equality.
+- Final observed marker:
+  `PHASE 3H TRANSLATED INDIRECT-CALL RESULT: PASS`.
+- Supplied excerpt ends during post-test heartbeats; no final XAPI line was
+  supplied, so only the observed functional PASS is recorded.
+- **Phase 3H-A dispatcher mechanics: PASS.**
+- Because the real caller's seeded function-pointer value was NULL
+  (`0x00000000`), full Phase 3H completion is intentionally deferred until a
+  follow-up run seeds the caller's naturally computed guest pointer slot with a
+  nonzero valid translated code VA and proves the same path without mapping
+  NULL as the resolved key.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
