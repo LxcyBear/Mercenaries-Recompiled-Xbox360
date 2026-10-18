@@ -727,6 +727,18 @@ unexecuted test PASS.**
 - **Next:** build/run Phase 3D on modified Xbox 360 hardware. A PASS makes the
   next gate the first small audited translated Mercenaries function.
 
+### 2026-10-18 — Phase 3D first hardware attempt produced no P3D trace
+
+- Build tag `P3D-RUNTIME-20261018-A` was compiled/deployed, but xbWatson showed
+  no visible `[Merc360:P3D]` output from the diagnostic.
+- This is treated as an early-startup observability failure, not as a memory-ABI
+  test failure: no Phase 3D assertions were observed running.
+- Added raw `OutputDebugStringA` breadcrumbs at the very start of `main()`,
+  before file logging, allocation or test setup.
+- Moved the visible build tag to `P3D-RUNTIME-20261018-B`.
+- **Next:** run B and report the earliest P3D line observed. That will distinguish
+  "main not entered" from a stall/failure around optional file-log creation.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
