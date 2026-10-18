@@ -53,7 +53,7 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A COMPLETE on Xenon** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A COMPLETE; Phase 2B XBE loader ready for hardware test** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
@@ -400,6 +400,23 @@ unexecuted test PASS.**
   `[XAPI RETURN VALUE] 0` confirmed.
 - **Phase 2A: COMPLETE.**
 - **Next:** Phase 2B XBE header/section parsing and non-executing section load.
+
+### 2026-10-18 — Phase 2B XBE loader prepared
+
+- Created `xbox360/phase2b-xbe-loader` from the completed Phase 2A branch.
+- Added a self-contained, non-executing Xbox 360 diagnostic that reads the
+  user's own `game:\default.xbe`.
+- Parser uses explicit little-endian reads on Xenon and mirrors the upstream
+  XBE layout: base/header fields, certificate, 56-byte section headers,
+  retail entry/thunk XOR decoding, and bounded section copies.
+- The supported structural identifiers checked are Title ID `0x4C410015`,
+  base `0x00010000`, decoded retail entry `0x0022964A`, and 14 sections.
+- Entry-point execution is explicitly disabled.
+- Pinned SHA-256 is documented but not yet calculated on-console; exact hash
+  enforcement remains mandatory before guest game code is ever run.
+- **Next:** compile Phase 2B in VS17/XDK, place the user's retail
+  `default.xbe` beside the diagnostic `default.xex`, and capture all
+  `[Merc360:P2B]` xbWatson output.
 
 ### How future updates are recorded
 
