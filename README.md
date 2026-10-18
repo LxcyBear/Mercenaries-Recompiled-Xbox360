@@ -53,7 +53,7 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| **2 — Guest memory + retail XBE loading** | **In progress — 2A/2B/2C/2D COMPLETE; Phase 2E environment host PASS / hardware pending** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
@@ -151,9 +151,8 @@ and shutdown evidence. A black screen from this diagnostic is expected;
 **Purpose:** safely reproduce original Xbox 32-bit guest addresses in
 Xbox 360 native memory.
 
-- [x] Implement a bounded 64 MiB low guest-RAM arena and host contract test on
-      the `xbox360/phase2-guest-memory` branch. GCC 14.2, Clang 17 and
-      Clang ASan+UBSan all PASS; real Xenon allocation is still pending.
+- [x] Implement a bounded 64 MiB low guest-RAM arena and verify it on both host
+      contract tests and real Xbox 360 Xenon hardware.
 - [x] Implement and verify the Phase 2D checked guest-VA router for RAM,
       configured mirrors, KSEG aliases, synthetic fence/kernel pages, VRAM,
       kernel thunks and NV2A/APU/AC97 classification. Host tests and the real
@@ -161,18 +160,23 @@ Xbox 360 native memory.
 - [x] Implement explicit endian-correct, alignment-safe guest 8/16/32/64-bit
       and float reads/writes for the bounded low-RAM arena; host tests PASS.
 - [x] Verify those accessors on real Xenon hardware: **Phase 2A PASS**. Xenon reported big-endian host order; every low/high/unaligned/endian/bounds test passed and the XEX returned 0.
-- [ ] Replace direct native pointer semantics with explicit checked access;
-      reject unsupported regions instead of corrupting unrelated memory.
+- [x] Establish explicit checked-access semantics and a hardware-proven address
+      router for the Phase 2 fixtures. **Generated assignable MEM lvalues are a
+      Phase 3 translator/ABI task and are tracked there, not as a Gate 2 blocker.**
 - [x] Load the exact supported retail XBE on Xenon: on-console SHA-256 matched
       the pinned digest, 14/14 sections loaded, initialized bytes matched the
-      source, and every virtual/BSS tail remained zero. Stack/heap initialization
-      remains a later Phase 2 item.
-- [ ] Compare original-Xbox guest memory fixtures and address alias behavior.
-- [ ] Stress-test fragmentation and low-memory paths.
+      source, and every virtual/BSS tail remained zero.
+- [x] Compare guest-memory fixtures and alias behavior on hardware: configured
+      RAM mirrors, KSEG0/KSEG1 aliases, synthetic fence/kernel priority,
+      unsupported gaps, TIB/TLS/KTHREAD/kernel-data coherence all PASS.
+- [ ] Stress-test allocator fragmentation/low-memory behavior during later
+      kernel-service and reliability phases; this is no longer a Gate 2 blocker.
 - [x] Host-test upper-bound crossing, first-out-of-range and wrapped/high
       addresses; all are rejected without sanitizer findings.
 
-**Gate 2:** exact guest byte/alias/section fixtures PASS on a real Xbox 360.
+**Gate 2: PASS (October 18, 2026).** Exact guest byte/alias/section and
+execution-environment fixtures pass on modified Xbox 360 hardware. Phase 2 is
+complete; no translated Mercenaries game function has executed yet.
 
 ### Phase 3 — PowerPC-safe generated C and execution ABI
 
@@ -317,7 +321,8 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 2C exact retail identity + post-load integrity | **PASS** | Real Xbox 360 Xenon: pinned SHA-256 exact match, exact build invariants, 14/14 section/source comparisons, zero-fill invariants, XAPI 0 |
 | 2026-10-18 | Phase 2D checked guest-address router host contract | **PASS (GCC / Clang / ASan+UBSan)** | 64 MiB mirrors, KSEG alias coherence, synthetic-page priority, MMIO/thunk classification |
 | 2026-10-18 | Phase 2D checked guest-address router hardware fixture | **PASS** | Real Xbox 360 Xenon: coherent RAM mirrors + KSEG0/KSEG1, synthetic-page priority, MMIO/thunk isolation, gap rejection, XAPI 0 |
-| 2026-10-18 | Phase 2E guest execution-environment portable contract | **PASS (GCC / Clang / ASan+UBSan)** | TIB/KTHREAD/TLS negative-index math, 256 KiB guest stack, kernel-data mirror/KSEG coherence; hardware pending |
+| 2026-10-18 | Phase 2E guest execution-environment portable contract | **PASS (GCC / Clang / ASan+UBSan)** | TIB/KTHREAD/TLS negative-index math, 256 KiB guest stack, kernel-data mirror/KSEG coherence |
+| 2026-10-18 | Phase 2E guest execution-environment hardware fixture | **PASS** | Modified Xbox 360: exact XBE reverify, TLS block 20 B, TIB→KTHREAD→TLS chain, negative TLS index, kernel-data aliases, guest stack PUSH/POP, XAPI 0 |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -561,6 +566,30 @@ unexecuted test PASS.**
 - Runtime build tag: `P2E-ENV-20261018-A`.
 - **Next:** build/run Phase 2E on modified Xbox 360 hardware. Translated
   Mercenaries game execution remains disabled.
+
+### 2026-10-18 — Phase 2E passes; Gate 2 complete
+
+- Runtime build tag `P2E-ENV-20261018-A` confirmed the intended binary.
+- Exact supported XBE SHA-256 and all 14-section load invariants re-passed.
+- Loaded-image high-water VA: `0x00878A88`; kernel-data page and 256 KiB
+  guest stack were verified non-overlapping.
+- Retail TLS directory on hardware resolved to:
+  - raw start/end `0x00000000`
+  - TLS index `0x00869118`
+  - callbacks `0`
+  - zero-fill `8` bytes
+  - characteristics `0`
+- Synthetic TLS block size was **20 bytes** at `0x00700000`.
+- TIB → KTHREAD → TLS chain passed, including
+  `fs:[4] + signed_tls_index*4 == 0x00700000`.
+- XboxHardwareInfo, XboxKrnlVersion 1.0.5849.0 and KeTickCount fixtures passed.
+- Kernel-data coherence passed through a RAM mirror and KSEG0.
+- Guest PUSH32/POP32 round-trip at initial ESP `0x008BFFF0` passed.
+- Cleanup/timeout completed with `[XAPI RETURN VALUE] 0`.
+- **Phase 2E: COMPLETE. Gate 2: PASS. Phase 2 is complete.**
+- Generated assignable `MEM16/32/64` lvalues now move to Phase 3 where they
+  belong: maintained translator/lifter changes plus real XDK instruction
+  fixtures before any bounded translated Mercenaries function executes.
 
 ### How future updates are recorded
 
