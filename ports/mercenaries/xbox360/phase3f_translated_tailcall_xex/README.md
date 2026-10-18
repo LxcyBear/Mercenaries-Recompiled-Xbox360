@@ -203,3 +203,20 @@ The differential is now:
 Both receive identical live XMM0 state and identical guest stack contents.
 The harness also explicitly checks that the XMM0 lane-0 bits are stored at the
 common effective `this + 0xDC` address and that `ret 4` restores guest ESP.
+
+## Candidate B callee stack-MOVSS shape — confirmed
+
+The generated callee itself performs the scalar load from guest `[ESP+4]`
+before storing to `this + 0xDC`. The prior rule that rejected a callee-side
+`recomp_xmm_loadss` was therefore incorrect.
+
+Phase 3F now requires:
+- wrapper: `ECX += 0x28`, direct tail call, no synthetic `PUSH32`
+- callee: `recomp_xmm_loadss(g_xmm0, esp + 4)`
+- callee: `GUEST_WRITEF32(ecx + 0xDC, xmm0)`
+- callee: translated `ret 4`
+
+The hardware harness poisons XMM0 before entry and places the real scalar only
+on the guest stack. A PASS therefore proves the translated callee really loads
+the stack scalar, applies the already-proven memory-form MOVSS lane semantics,
+stores it at the correct effective object field, and cleans the guest stack.
