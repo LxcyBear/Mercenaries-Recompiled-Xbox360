@@ -163,3 +163,29 @@ A complete clean run should also reach the normal timeout and
 If 3J-A passes, Phase 3K widens the selected translated surface to real
 branch/flags control flow and the remaining mixed ABI/FP paths before the larger
 Phase 3 scale gate.
+
+
+## First local selector pass — scanner fixes
+
+The first local selection considered 2,200 candidate roots but found no cluster
+under the original 3J-A gate.
+
+Top rejection classes:
+- 1,144 branch/loop control flow
+- 640 dynamic/SIMD/FPU/runtime surface
+- 246 apparent `self` helper calls
+- 86 RET-N members
+
+The `self` class was a false positive. The helper scanner was analyzing
+generated C comments such as `/* sbb self (CF extend) */` and treating the
+word before the comment's parenthesis as a function call.
+
+The selector now removes generated `/* ... */` comments before:
+- static dependency scanning
+- helper-call classification
+- control-flow surface classification
+
+The real zero-extension helpers emitted by `movzx`, `ZX8` and `ZX16`,
+are also now accepted and implemented by the Phase 3J XDK harness.
+
+No closure bounds, retail hash checks, or hardware pass criteria were weakened.
