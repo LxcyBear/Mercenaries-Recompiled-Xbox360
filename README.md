@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3H — first bounded translated indirect-call dispatch.
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3I — first broader multi-function translated execution slice.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G hardware PASS; 3H ICALL selector/harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G/3H hardware PASS; 3I broader translated slice next** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -217,8 +217,13 @@ executes as Xbox 360 PowerPC.
       push: translated `0x00050010 -> 0x0004CFF0` matched an independent explicit
       guest-stack reference across all three hardware cases, including callee
       entry ESP/[ESP], final registers and complete 64 MiB RAM digest.
-- [ ] Execute indirect translated call dispatch, then the game's entry sequence
-      with guardrails and logging.
+- [x] Execute indirect translated call dispatch: real translated caller
+      `0x0008DE60` computed its own guest function-pointer slot, read nonzero
+      `0x0004CFF0`, and dispatched through `RECOMP_ICALL_SAFE` to translated
+      `0x0004CFF0`; resolved, unresolved and range-reject paths all matched the
+      independent reference on modified Xbox 360 hardware.
+- [ ] Execute a broader multi-function translated slice, then the game's entry
+      sequence with guardrails and logging.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -350,6 +355,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 3E first bounded translated Mercenaries function | **PASS** | Modified Xbox 360 Xenon: real translated retail function `0x00208F30`, six reference-matched inputs, guest object preserved, translated RET restored ESP |
 | 2026-10-18 | Phase 3F first translated Mercenaries tail-call chain | **PASS** | Modified Xbox 360 Xenon: translated `0x001EF850 -> 0x0021AB90`, scalar MOVSS stack load/store, ret-4 cleanup, XMM0 equality, full 64 MiB RAM-hash equality |
 | 2026-10-18 | Phase 3G first translated Mercenaries normal-CALL chain | **PASS** | Modified Xbox 360 Xenon: translated `0x00050010 -> 0x0004CFF0`, synthetic zero return-slot push, callee RET/caller RET stack restoration, full 64 MiB RAM-hash equality, clean XAPI 0 |
+| 2026-10-18 | Phase 3H first translated Mercenaries indirect-call dispatch | **PASS** | Modified Xbox 360 Xenon: caller `0x0008DE60` discovered real guest pointer slot `0x00000034`, consumed nonzero `0x0004CFF0`, resolved through `RECOMP_ICALL_SAFE`, matched unresolved/range-guard reference, clean XAPI 0 |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -1183,6 +1189,48 @@ unexecuted test PASS.**
   real caller, reference caller, optional direct helper, and translated target.
 - **Next:** rerun Phase 3H prep, compile generated `main.cpp`, and capture the
   B-build xbWatson log.
+
+### 2026-10-18 — Phase 3H translated ICALL dispatch passes fully on Xenon
+
+- Follow-up build tag `P3H-ICALL-20261018-B` removed the Phase 3H-A NULL-key
+  caveat.
+- Real mechanically translated caller `0x0008DE60` computed guest
+  function-pointer slot `0x00000034` under all three deterministic seeds.
+- The fixture reset identical state and wrote nonzero translated code VA
+  `0x0004CFF0` into that exact discovered guest slot.
+- The **unchanged translated caller** then read `0x0004CFF0` through its real
+  `GUEST_READ32(...)` ICALL operand.
+- Real ICALL trace was exactly `0x0004CFF0` for resolved and unresolved runs.
+- Resolved mode verified:
+  - no guest-memory faults
+  - target entered exactly once
+  - zero synthetic guest return slot
+  - manual lookup miss -> generated lookup hit
+  - target deliberately clobbered EBX/ESI/EDI and `RECOMP_ICALL_SAFE`
+    restored all three
+  - translated trace matched the independent reference
+  - final guest ESP matched
+  - complete 64 MiB guest-RAM hash matched
+- Unresolved mode verified:
+  - same unchanged caller read the same nonzero `0x0004CFF0`
+  - target was not entered
+  - saved ESP restored immediately at the ICALL boundary
+  - EAX forced to zero immediately
+  - manual/generated/kernel lookup chain exhausted
+  - translated trace and full 64 MiB RAM hash matched the reference
+- Separate production range-guard tests at `0x00400000` again verified
+  rejection before lookup, saved-ESP restoration, EAX=0 and full RAM equality.
+- Case hashes:
+  - case 0: `5FEC0A1C02F3BEE5`
+  - case 1: `BB6103599BF3BEE5`
+  - case 2: `64F113F868F3BEE5`
+- Final markers observed:
+  - `PHASE 3H TRANSLATED INDIRECT-CALL RESULT: PASS`
+  - `[XAPI RETURN VALUE] 0`
+- **Phase 3H: COMPLETE.**
+- **Next:** Phase 3I — first broader multi-function translated execution slice
+  combining proven scalar/memory, direct CALL, tail-call and ICALL behavior
+  before guarded game-entry/startup execution.
 
 ### How future updates are recorded
 
