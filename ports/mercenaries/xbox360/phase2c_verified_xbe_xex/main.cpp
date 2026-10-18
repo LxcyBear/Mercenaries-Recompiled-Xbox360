@@ -845,6 +845,7 @@ VOID __cdecl main()
         NULL);
 
     trace("PHASE 2C VERIFIED RETAIL XBE DIAGNOSTIC START");
+    trace("BUILD TAG: P2C-NAMEFIX-20261018-B");
     trace("Expected user file: game:\\default.xbe");
     trace("This test NEVER executes the XBE entry point");
 
