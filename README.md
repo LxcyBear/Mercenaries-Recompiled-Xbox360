@@ -458,6 +458,21 @@ unexecuted test PASS.**
 - **Next:** build/run the Phase 2C XEX on the same Xbox 360 and capture the
   complete `[Merc360:P2C]` xbWatson trace.
 
+### 2026-10-18 — First Phase 2C hardware run finds test-harness bug
+
+- Exact on-console SHA-256 **PASS**:
+  `AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7`.
+- All exact file/header/image/entry/TLS/thunk/title checks passed.
+- Header byte-for-byte guest copy passed.
+- Section loads passed through section 10.
+- Test stopped at real section 11 `$XTIMAGE` because the committed expected
+  table accidentally contained `$XTIMAGE` / `$XSIMAGE` with one dollar.
+- This was a **diagnostic bug, not an XBE mismatch**; the cryptographic hash had
+  already proven the exact supported retail executable.
+- Fixed expected names using explicit `\x24\x24` literals, corrected stale
+  Phase 2B log labels, and added actual-vs-expected mismatch logging.
+- **Phase 2C remains in progress.** Rebuild/run the corrected diagnostic.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
