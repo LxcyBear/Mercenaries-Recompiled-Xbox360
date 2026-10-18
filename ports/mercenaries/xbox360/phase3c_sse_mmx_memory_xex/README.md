@@ -72,3 +72,25 @@ A PASS closes the principal SSE/XMM + MMX memory-transfer endian/routing
 contract. REP/string helpers, shared PUSH/POP runtime macros and remaining
 manual legacy-memory sites still need cleanup before a translated Mercenaries
 function is allowed to execute.
+
+## Hardware result — PASS
+
+Build tag `P3C-SIMD-20261018-A` passed the complete functional Phase 3C SIMD
+fixture on modified Xbox 360 hardware.
+
+Verified:
+- unaligned 128-bit XMM lane reconstruction/store
+- MOVSS/MOVSD/MOVLPS/MOVHPS memory semantics
+- packed arithmetic + raw bitwise lanes
+- MMX 64-bit memory semantics
+- mirror + KSEG0 coherence
+- checked 128-bit / 64-bit boundary rejection
+- NV2A MMIO rejection
+
+The observed trace contains:
+`[Merc360:P3C] PHASE 3C SIMD MEMORY ABI RESULT: PASS`
+
+The pasted excerpt ends during post-test heartbeats, so this record does not
+claim an unshown final XAPI return value.
+
+**Phase 3C is complete.**
