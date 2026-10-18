@@ -90,7 +90,7 @@ static const BYTE kSupportedXbeSha256[32] =
 static const char* kExpectedSectionNames[MERC_SECTION_COUNT] =
 {
     ".text", "XMV", "XACTENG", "D3D", "XGRPH", "DSOUND", "WMADEC",
-    "XPP", ".rdata", ".data", "DOLBY", "$XTIMAGE", "$XSIMAGE", ".XTLID"
+    "XPP", ".rdata", ".data", "DOLBY", "\x24\x24XTIMAGE", "\x24\x24XSIMAGE", ".XTLID"
 };
 
 static DWORD sha_rotr(DWORD value, DWORD count)
@@ -730,7 +730,11 @@ static int load_supported_xbe(const XbeBuffer* xbe,
 
         if (strcmp(name, kExpectedSectionNames[i]) != 0)
         {
-            trace("FAIL: section name/order differs from supported retail build");
+            char mismatch[160];
+            sprintf(mismatch,
+                    "FAIL: section %u name mismatch: actual='%s' expected='%s'",
+                    (unsigned int)i, name, kExpectedSectionNames[i]);
+            trace(mismatch);
             return 0;
         }
 
@@ -840,7 +844,7 @@ VOID __cdecl main()
         FILE_ATTRIBUTE_NORMAL,
         NULL);
 
-    trace("PHASE 2B RETAIL XBE PARSE/LOAD DIAGNOSTIC START");
+    trace("PHASE 2C VERIFIED RETAIL XBE DIAGNOSTIC START");
     trace("Expected user file: game:\\default.xbe");
     trace("This test NEVER executes the XBE entry point");
 
@@ -872,9 +876,9 @@ VOID __cdecl main()
 
         result = load_supported_xbe(&xbe, &memory);
         if (result)
-            trace("PHASE 2B XBE LOAD RESULT: PASS");
+            trace("PHASE 2C VERIFIED XBE LOAD RESULT: PASS");
         else
-            trace("PHASE 2B XBE LOAD RESULT: FAIL");
+            trace("PHASE 2C VERIFIED XBE LOAD RESULT: FAIL");
     }
     while (0);
 
@@ -917,7 +921,7 @@ VOID __cdecl main()
         Sleep(33);
     }
 
-    trace("PHASE 2B RETAIL XBE PARSE/LOAD DIAGNOSTIC END");
+    trace("PHASE 2C VERIFIED RETAIL XBE DIAGNOSTIC END");
 
     if (s_logFile != INVALID_HANDLE_VALUE)
     {
