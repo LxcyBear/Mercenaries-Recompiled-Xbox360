@@ -1745,6 +1745,9 @@ class Lifter:
             return ["XBOX_REP_MOVS(edi, esi, ecx, 2u);",
                     "esi += ecx * 2; edi += ecx * 2; ecx = 0; /* rep movsw */"]
         if "stosb" in m:
+            if self._direction_step > 0 and not _EXPLICIT_GUEST_MEMORY_ABI:
+                return ["memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx);",
+                        "edi += ecx; ecx = 0; /* rep stosb */"]
             step = "edi - _i" if self._direction_step < 0 else "edi + _i"
             return [
                 "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
