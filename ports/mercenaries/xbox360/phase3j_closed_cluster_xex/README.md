@@ -242,3 +242,26 @@ so a subsequent failure will separate dynamic dispatch, SIMD, FPU, runtime-copy,
 RDTSC, and other real surfaces instead of aggregating all of them.
 
 No Phase 3J closure bound or hardware criterion was relaxed.
+
+## Fourth local selector pass — bounded nested RET-N enabled
+
+The latest rejection profile is now dominated by real code-shape constraints:
+
+- 799 backward/loop guest control flow
+- 381 `RECOMP_ICALL_SAFE`
+- 380 RET-N members
+- 281 x87 `fp_push`
+- 80 `recomp_xmm_loadss`
+- 50 `recomp_xmm_zero`
+
+The next relaxation is deliberately narrow: **nested translated dependencies
+may use bounded RET-N**.
+
+Phase 3F already proved translated `ret 4` cleanup on hardware. The Phase 3J
+root still must have exactly one plain RET and no RET-N, preserving the harness
+expectation that the complete cluster returns to `ROOT_STACK + 4`.
+
+Nested RET-N immediates must be parseable and no larger than 64 bytes.
+
+No loop, dynamic-dispatch, x87/SSE, closure-budget, hash-verification, or
+hardware-pass rule was loosened.
