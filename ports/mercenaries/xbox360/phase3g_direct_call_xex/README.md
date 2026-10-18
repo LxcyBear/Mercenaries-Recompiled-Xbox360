@@ -149,3 +149,35 @@ before importing `tools.recomp`.
 The selector was also tightened to prefer linear, flag-free pairs for this first
 normal-CALL proof. No candidate was selected and no hardware run occurred in
 the failed attempt.
+
+## Hardware result — PASS
+
+Build tag `P3G-CALL-20261018-A` executed on modified Xbox 360 hardware.
+
+Selected real translated pair:
+- caller `0x00050010`
+- callee `0x0004CFF0`
+
+All three deterministic cases passed.
+
+Observed on every case:
+- no guest-memory fault
+- translated callee entered exactly once
+- callee entry ESP = `0x008BFDFC` = caller initial ESP - 4
+- guest `[ESP]` at callee entry = `0x00000000`
+- final ESP = `0x008BFE04`
+- translated trace = `[0x00050010, 0x0004CFF0]`
+- generated `PUSH32(esp, 0)` matched the independent explicit-stack reference
+- complete 64 MiB guest-RAM hashes matched
+
+Case hashes:
+- case 0: `BDABF3F60D2792E5`
+- case 1: `7BC023EB662792E5`
+- case 2: `7D456C28BF2792E5`
+
+Observed final markers:
+`[Merc360:P3G] PHASE 3G TRANSLATED NORMAL-CALL RESULT: PASS`
+`[XAPI RETURN VALUE] 0`
+
+**Phase 3G is complete.** The next bounded execution gate is real translated
+indirect-call dispatch / `RECOMP_ICALL_SAFE`.
