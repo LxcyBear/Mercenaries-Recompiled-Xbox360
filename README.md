@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3E — first bounded mechanically translated Mercenaries function.
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3F — first bounded translated Mercenaries call chain.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D hardware PASS; 3E local generation PASS / hardware pending** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E hardware PASS; translated call chain next** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -81,9 +81,11 @@ replacements in later phases.
 3. **Done:** explicit scalar, signed/x87, SSE/XMM/MMX and runtime/string memory ABI fixtures on Xenon.
 4. Generate reviewed retail function `0x00208F30` locally with
    `--explicit-guest-memory`; reject unexpected calls/writes/legacy lvalues.
-5. Compile the generated function into the bounded Phase 3E XDK harness and
-   compare six controlled inputs against the independent `(byte & 1)` reference.
-6. Only after that PASS, expand to a small translated call chain.
+5. **Done:** compile the generated function into the bounded Phase 3E XDK
+   harness and match all six controlled inputs against the independent
+   `(byte & 1)` reference on modified Xbox 360 hardware.
+6. Expand to a small translated direct-call chain with explicit guest memory,
+   then cover indirect-call dispatch before broader startup execution.
 
 ### Evidence policy
 
@@ -201,8 +203,11 @@ executes as Xbox 360 PowerPC.
       results; test rounding, NaN and exceptional paths.
 - [ ] Evaluate Xenon limitations: native stack depth, object/code size,
       memory budget and compiler/linker constraints.
-- [ ] Execute a bounded translated function (**Phase 3E active**), then a small
-      call chain, then the game's entry sequence with guardrails and logging.
+- [x] Execute one bounded real translated Mercenaries function on hardware:
+      `sub_00208F30` matched the independent reference for six inputs, preserved
+      guest state, and returned with correct guest ESP cleanup.
+- [ ] Execute a small translated call chain, then indirect-call dispatch, then
+      the game's entry sequence with guardrails and logging.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -331,6 +336,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 3B signed + x87 guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: signed loads, float/double IEEE-754 bytes, FILD/FIADD/FLD/FADD/FSTP/FIST/FCOM-style memory paths |
 | 2026-10-18 | Phase 3C SSE/XMM + MMX guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: 128-bit lanes, MOVSS/MOVSD/MOVLPS/MOVHPS, packed arithmetic/bitwise, MMX, alias + boundary/MMIO rejection |
 | 2026-10-18 | Phase 3D runtime/string guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: shared PUSH/POP, XBOX_MEMCPY, REP MOVS overlap/order, MOVS/STOS/LODS, CMPS/SCAS, alias + MMIO/boundary semantics |
+| 2026-10-18 | Phase 3E first bounded translated Mercenaries function | **PASS** | Modified Xbox 360 Xenon: real translated retail function `0x00208F30`, six reference-matched inputs, guest object preserved, translated RET restored ESP |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -792,6 +798,26 @@ unexecuted test PASS.**
 - **Phase 3E local-generation gate: PASS. Hardware execution remains pending.**
 - **Next:** compile the generated local `main.cpp` in VS17/XDK and run the
   resulting XEX on modified Xbox 360 hardware.
+
+### 2026-10-18 — Phase 3E first real translated Mercenaries function passes on Xenon
+
+- Runtime build tag `P3E-FIRSTFUNC-20261018-A` confirmed the intended XEX.
+- Real mechanically translated retail function `sub_00208F30` executed on
+  modified Xbox 360 Xenon hardware.
+- Controlled inputs and independent reference results:
+  `00→0`, `01→1`, `02→0`, `03→1`, `FE→0`, `FF→1`.
+- Every case matched `input & 1`.
+- Full EAX retained its seeded upper 24 bits while the translated function
+  updated the expected low byte.
+- Guest object byte remained unchanged for every read-only accessor case.
+- No guest-memory access fault was observed.
+- Function trace VA matched `0x00208F30`.
+- Translated `RET` consumed exactly one 4-byte guest return-address slot and
+  restored ESP to `0x008BFFF0` on every case.
+- `PHASE 3E FIRST TRANSLATED FUNCTION RESULT: PASS` observed on hardware.
+- **Phase 3E: COMPLETE.**
+- **Next:** Phase 3F — a small audited translated direct-call chain before
+  indirect-call dispatch or broad startup execution.
 
 ### How future updates are recorded
 
