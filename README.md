@@ -1101,6 +1101,30 @@ unexecuted test PASS.**
   reason for the first real ICALL candidates.
 - **No hardware run occurred in the first selector attempt.**
 
+### 2026-10-18 — Phase 3H second selector pass identifies two near-clean real callers
+
+- The diagnostic rerun again found 11 real ICALL callers.
+- Exact rejection details showed `0x0008DE60` and `0x0008DE70` passed every
+  existing first-gate rule except the selector's requirement that the ICALL
+  base register not be modified before the call.
+- That requirement was an analysis convenience, not a dispatcher requirement,
+  and has been removed.
+- Phase 3H now preserves the exact translated caller pointer-computation path.
+  A deterministic unresolved discovery prepass records the guest VA the caller
+  actually computes at its real ICALL site.
+- Resolved mode resets identical state and maps that exact observed guest VA
+  through generated lookup to the already-proven translated target
+  `0x0004CFF0`.
+- Unresolved mode resets the same state and requires manual/generated/kernel
+  lookup to exhaust without entering the target; immediate ICALL probes require
+  saved-ESP restoration and `EAX=0`.
+- The generic `0x00400000` range-reject behavior is now tested separately
+  against the same production `RECOMP_ICALL_SAFE` macro and independent
+  explicit-stack reference instead of rewriting the real caller's operand.
+- If the discovered real guest VA itself falls inside the production rejected
+  range, the hardware fixture stops rather than weakening that guard.
+- **No hardware execution occurred in this selector attempt.**
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
