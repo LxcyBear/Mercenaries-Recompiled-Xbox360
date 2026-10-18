@@ -65,10 +65,23 @@ cc -std=c11 -Wall -Wextra -Werror -pedantic -O2 \
 ./merc_guest_endian_test
 ~~~
 
+**Host-side verification (October 18, 2026): PASS.** The exact committed
+header and corrected test-source Git blobs (`289c8792`, `00149528`)
+were compiled/run on Linux x86-64 with GCC 14.2.0, Clang 17.0.0 and
+Clang UndefinedBehaviorSanitizer, all passing. The first run also spotted
+and fixed a cosmetic failure-message newline escaping issue.
+
 This is **not integrated** into generated game memory access yet; nor does
-passing it on an x86/ARM development computer prove PowerPC compatibility.
+passing it on a development computer prove PowerPC compatibility.
 It provides a simple canonical contract to test future PowerPC/XDK code
 against, including under intentionally unaligned addresses.
+
+## First Xbox 360 hardware test
+
+Follow [bootstrap_xex/BUILD_FIRST_XEX.md](bootstrap_xex/BUILD_FIRST_XEX.md).
+The diagnostic XDK `main.cpp` exists, but has **not** yet been built with
+VS2010/XDK or tested on an Xbox 360; do not mistake host-side memory
+tests for a successful XEX build.
 
 ## Milestones / required proof
 
