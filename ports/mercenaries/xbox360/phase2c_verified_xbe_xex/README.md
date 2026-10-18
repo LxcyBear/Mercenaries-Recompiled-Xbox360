@@ -104,3 +104,22 @@ now encoded as `\x24\x24XTIMAGE` and `\x24\x24XSIMAGE`, and mismatch
 logs now print both actual and expected names.
 
 Rebuild the latest `main.cpp` and rerun Phase 2C.
+
+## Corrected hardware rerun — PASS
+
+The build tagged `P2C-NAMEFIX-20261018-B` passed the complete Phase 2C gate.
+
+Verified on real Xbox 360 hardware:
+
+- exact pinned SHA-256: PASS
+- exact file/header/image/entry/TLS/thunk/title invariants: PASS
+- 14 expected section names/order: PASS
+- full guest header byte comparison: PASS
+- 14/14 section loads: PASS
+- initialized data matches source bytes: PASS
+- zero-filled virtual/BSS tails remain zero: PASS
+- entry-point execution remained disabled
+- cleanup/timeout: PASS
+- `[XAPI RETURN VALUE] 0`
+
+**Phase 2C is complete.**
