@@ -134,3 +134,16 @@ A PASS proves a real translated Mercenaries caller -> callee tail chain and
 guest-stack return behavior on Xenon. The next escalation is a normal direct
 CALL (with its synthetic guest return-address push), followed by indirect-call
 dispatch.
+
+## First local candidate attempt — dependency gate rejection
+
+The first prep run successfully detected and lifted:
+- wrapper `0x00034AD0`: 12 bytes / 3 instructions
+- callee `0x00034AE0`: 108 bytes / 36 instructions
+
+The strict dependency audit rejected the callee before XDK compilation because
+its generated output matched the guarded ICALL/kernel/runtime-copy dependency
+class. No Xbox 360 hardware test occurred.
+
+The prep script now prints every exact generated line that triggers this guard.
+Rerun after updating the branch and send those lines.
