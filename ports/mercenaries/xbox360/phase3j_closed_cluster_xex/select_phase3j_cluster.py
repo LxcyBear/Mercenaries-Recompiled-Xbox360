@@ -77,6 +77,8 @@ FORBIDDEN_CONTROL_RE = re.compile(
     r"\b(?:while|for)\s*\(|\bgoto\s+loc_|\bif\s*\("
 )
 
+C_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+
 ALLOWED_CALLS = {
     "RECOMP_TRACE_FUNC",
     "GUEST_READ8", "GUEST_READ16", "GUEST_READ32", "GUEST_READ64",
@@ -86,7 +88,7 @@ ALLOWED_CALLS = {
     "RECOMP_WRITE8", "RECOMP_WRITE16", "RECOMP_WRITE32", "RECOMP_WRITE64",
     "PUSH32", "POP32",
     "LO8", "HI8", "LO16", "SET_LO8", "SET_HI8", "SET_LO16",
-    "SX8", "SX16", "BSWAP32",
+    "SX8", "SX16", "ZX8", "ZX16", "BSWAP32",
 }
 
 
@@ -103,7 +105,13 @@ def int_field(info, name, default=0):
     return int(value or 0)
 
 
+def executable_c(source):
+    """Strip generated C comments before semantic surface scanning."""
+    return C_COMMENT_RE.sub(" ", source)
+
+
 def static_dependencies(source, own_name):
+    source = executable_c(source)
     deps = []
     seen = set()
 
@@ -120,13 +128,15 @@ def static_dependencies(source, own_name):
 
 
 def source_surface_ok(source, own_name, dependency_names):
-    if FORBIDDEN_SOURCE_RE.search(source):
+    executable = executable_c(source)
+
+    if FORBIDDEN_SOURCE_RE.search(executable):
         return False, "unsupported dynamic/SIMD/FPU/runtime surface"
 
-    if FORBIDDEN_CONTROL_RE.search(source):
+    if FORBIDDEN_CONTROL_RE.search(executable):
         return False, "branch/loop control flow deferred to Phase 3K"
 
-    defs = FUNC_DEF_RE.findall(source)
+    defs = FUNC_DEF_RE.findall(executable)
     if defs != [own_name]:
         return False, "function signature is not one exact void sub_XXXXXXXX(void)"
 
@@ -141,7 +151,7 @@ def source_surface_ok(source, own_name, dependency_names):
     allowed.update(dependency_names)
 
     unknown = []
-    for token in CALL_TOKEN_RE.findall(source):
+    for token in CALL_TOKEN_RE.findall(executable):
         if token not in allowed:
             unknown.append(token)
 
