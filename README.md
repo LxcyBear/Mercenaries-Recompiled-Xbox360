@@ -703,6 +703,30 @@ unexecuted test PASS.**
   remaining maintained/manual legacy `MEM*` sites before first bounded
   translated-function execution.
 
+### 2026-10-18 — Phase 3D explicit runtime/string cleanup prepared
+
+- Created `xbox360/phase3d-explicit-runtime-cleanup` from completed Phase 3C.
+- Added real recompiler CLI switch `--explicit-guest-memory`.
+- Generated C now defines `RECOMP_EXPLICIT_GUEST_MEMORY_ABI` automatically
+  when that mode is selected, keeping lifter/runtime ABI selection in sync.
+- Shared `PUSH32/POP32`, `XBOX_MEMCPY`, `XBOX_REP_MOVS` and runtime
+  checkpoint reads route through the explicit guest-memory bridge.
+- String lifting now covers MOVS/STOS/LODS plus REP MOVS/STOS/CMPS/SCAS without
+  native guest-pointer dereferences in explicit mode.
+- Normal PC generation preserves the historical default path, including the
+  forward REP STOSB memset fast path.
+- Per-function explicit translation now hard-fails on executable legacy
+  `MEM*`, `SMEM*`, `MEMF/MEMD` or `XBOX_PTR` accesses.
+- Added post-patch scanner
+  `tools.recomp.audit_explicit_guest_memory` so generated patch scripts cannot
+  silently reintroduce unsafe host-lvalue memory after translation.
+- Corrected SIMD/string boundary semantics: one scalar/SIMD access is checked
+  as a whole width; string/copy instructions remain sequences of individual
+  x86 accesses and may advance into a mapped mirror.
+- Added self-contained XDK fixture tagged `P3D-RUNTIME-20261018-A`.
+- **Next:** build/run Phase 3D on modified Xbox 360 hardware. A PASS makes the
+  next gate the first small audited translated Mercenaries function.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
