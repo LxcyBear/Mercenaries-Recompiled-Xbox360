@@ -44,7 +44,8 @@ FORBIDDEN = re.compile(
     r"mm[0-7]|g_mm[0-7]|"
     r"fp_push|fp_pop|fp_top|fp_st|"
     r"GUEST_READF32|GUEST_READF64|GUEST_WRITEF32|GUEST_WRITEF64|"
-    r"recomp_xmm_[A-Za-z0-9_]+"
+    r"recomp_xmm_[A-Za-z0-9_]+|"
+    r"cf|zf|sf|of|pf|af|eflags|g_eflags"
     r")\b"
 )
 
@@ -258,6 +259,14 @@ def main():
 
         if "tail jmp" in caller_src or "tail jmp" in callee_src:
             rejected["tail jump present"] += 1
+            continue
+
+        # Keep the first normal-CALL proof linear. Branch/flag-sensitive callers
+        # belong in a later representative-chain gate after the CALL stack itself
+        # is proven independently.
+        if (re.search(r"\bif\s*\(|\bgoto\s+loc_", caller_src) or
+                re.search(r"\bif\s*\(|\bgoto\s+loc_", callee_src)):
+            rejected["branching control flow present"] += 1
             continue
 
         ok, why = helper_surface_ok(caller_src, caller_name, callee_name)
