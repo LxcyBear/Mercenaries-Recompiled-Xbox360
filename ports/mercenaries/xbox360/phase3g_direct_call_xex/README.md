@@ -133,3 +133,19 @@ A complete functional PASS ends with:
 After Phase 3G passes, the next bounded execution gate is indirect translated
 call dispatch. The ICALL-heavy Phase 3F Candidate A remains a useful real-game
 target for that milestone.
+
+
+## First local prep attempt — standalone selector import fix
+
+The first Phase 3G prep verified the supported XBE and reused the existing Phase
+3E analysis, then stopped before candidate selection with:
+
+`ModuleNotFoundError: No module named 'tools'`
+
+The selector is intentionally launched as a standalone Python file from a
+nested port directory. It now inserts the repository root into `sys.path`
+before importing `tools.recomp`.
+
+The selector was also tightened to prefer linear, flag-free pairs for this first
+normal-CALL proof. No candidate was selected and no hardware run occurred in
+the failed attempt.
