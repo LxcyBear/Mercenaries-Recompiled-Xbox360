@@ -105,6 +105,7 @@ try {
     $selection = Get-Content -LiteralPath $selectionJson -Raw | ConvertFrom-Json
     $callerFile = Join-Path $buildRoot "$($selection.caller_name).c"
     $referenceCaller = Join-Path $buildRoot "reference_caller.c"
+    $discoveryCaller = Join-Path $buildRoot "discovery_caller.c"
     $targetFile = Join-Path $buildRoot "$($selection.dispatch_target_name).c"
     $targetImpl = Join-Path $buildRoot "target_impl.c"
     $helperFile = $null
@@ -116,6 +117,7 @@ try {
     Write-Host "[Phase3H] Auditing generated sources for legacy guest-memory lvalues..."
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $callerFile
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $referenceCaller
+    Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $discoveryCaller
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $targetFile
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $targetImpl
     if ($null -ne $helperFile) {
@@ -140,7 +142,7 @@ try {
     }
     Write-Host "[Phase3H] Dispatch target: $($selection.dispatch_target_name) @ $($selection.dispatch_target)"
     Write-Host "[Phase3H] Target size:     $($selection.dispatch_target_size) bytes / $($selection.dispatch_target_instructions) instructions"
-    Write-Host "[Phase3H] Modes:           discover caller target -> resolved / unresolved; direct range guard"
+    Write-Host "[Phase3H] Modes:           discover real pointer slot -> seed 0x0004CFF0 -> resolved / unresolved; direct range guard"
     Write-Host "[Phase3H] XDK source:      $mainOut"
 }
 finally {
