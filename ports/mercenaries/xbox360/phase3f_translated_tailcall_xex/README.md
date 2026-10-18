@@ -165,3 +165,21 @@ with a native return after the generated EBP bridge. Hardware then compares:
 Both start from identical guest state, use the same retail-derived translated
 code, and are compared across registers, guest ESP, access-fault state, trace
 sequence, and a digest of the complete 64 MiB guest arena.
+
+## Candidate B scalar XMM0 refinement
+
+The first Candidate B prep stopped on:
+
+`GUEST_WRITEF32(ecx + 0xDC, xmm0); /* movss */`
+
+This is an expected scalar SSE path already proven by Phase 3C, not a new
+unsupported subsystem. The guard has therefore been narrowed rather than
+removed.
+
+Candidate B is now accepted only if the generated shape contains:
+- wrapper scalar load: `recomp_xmm_loadss(g_xmm0, esp + 4)`
+- callee scalar store: `GUEST_WRITEF32(ecx + 0xDC, xmm0)`
+
+Every broader SIMD/x87 form remains rejected. The hardware harness also seeds,
+captures and compares all four XMM0 lanes between the differential reference
+and the unmodified translated tail-call chain.
