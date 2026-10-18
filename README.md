@@ -53,7 +53,7 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| **2 — Guest memory + retail XBE loading** | **In progress — 2A/2B/2C COMPLETE; Phase 2D router host PASS / Xenon pending** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A/2B/2C/2D COMPLETE on Xenon; execution environment next** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
@@ -154,10 +154,10 @@ Xbox 360 native memory.
 - [x] Implement a bounded 64 MiB low guest-RAM arena and host contract test on
       the `xbox360/phase2-guest-memory` branch. GCC 14.2, Clang 17 and
       Clang ASan+UBSan all PASS; real Xenon allocation is still pending.
-- [x] Implement the Phase 2D checked guest-VA router prototype for RAM,
+- [x] Implement and verify the Phase 2D checked guest-VA router for RAM,
       configured mirrors, KSEG aliases, synthetic fence/kernel pages, VRAM,
-      kernel thunks and NV2A/APU/AC97 classification. Host GCC/Clang/ASan+UBSan
-      tests PASS; real Xenon router test is pending.
+      kernel thunks and NV2A/APU/AC97 classification. Host tests and the real
+      Xenon hardware fixture both PASS.
 - [x] Implement explicit endian-correct, alignment-safe guest 8/16/32/64-bit
       and float reads/writes for the bounded low-RAM arena; host tests PASS.
 - [x] Verify those accessors on real Xenon hardware: **Phase 2A PASS**. Xenon reported big-endian host order; every low/high/unaligned/endian/bounds test passed and the XEX returned 0.
@@ -315,7 +315,8 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 2A 64 MiB guest-RAM hardware diagnostic | **PASS** | Real Xbox 360 Xenon: big-endian host, LE guest bytes, unaligned access, high-bound rejection, clean timeout / XAPI 0 |
 | 2026-10-18 | Phase 2B retail XBE parse + bounded section load | **PASS** | Real Xbox 360 Xenon: 3,223,552-byte XBE, Title ID 0x4C410015, entry 0x0022964A, 14/14 sections, 3,188,156 initialized bytes, XAPI 0 |
 | 2026-10-18 | Phase 2C exact retail identity + post-load integrity | **PASS** | Real Xbox 360 Xenon: pinned SHA-256 exact match, exact build invariants, 14/14 section/source comparisons, zero-fill invariants, XAPI 0 |
-| 2026-10-18 | Phase 2D checked guest-address router host contract | **PASS (GCC / Clang / ASan+UBSan)** | 64 MiB mirrors, KSEG alias coherence, synthetic-page priority, MMIO/thunk classification; Xenon pending |
+| 2026-10-18 | Phase 2D checked guest-address router host contract | **PASS (GCC / Clang / ASan+UBSan)** | 64 MiB mirrors, KSEG alias coherence, synthetic-page priority, MMIO/thunk classification |
+| 2026-10-18 | Phase 2D checked guest-address router hardware fixture | **PASS** | Real Xbox 360 Xenon: coherent RAM mirrors + KSEG0/KSEG1, synthetic-page priority, MMIO/thunk isolation, gap rejection, XAPI 0 |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -520,6 +521,26 @@ unexecuted test PASS.**
   ASan+UBSan.
 - **Next:** compile/run Phase 2D on real Xbox 360 and capture the complete
   `[Merc360:P2D]` trace. Game execution remains disabled.
+
+### 2026-10-18 — Phase 2D checked address router passes on Xenon
+
+- Runtime build tag `P2D-ROUTER-20261018-A` confirmed the intended XEX.
+- Primary RAM, first/deep/final configured mirror windows all classified
+  correctly.
+- Mirror coherence passed in both directions, including the upstream fixture
+  `0x20000448 == 0x00000448`.
+- KSEG0 `0x81230000` and KSEG1 `0xA1230000` both coherently aliased
+  low RAM `0x01230000`.
+- Synthetic D3D fence `0x80000000` and fake kernel page `0x80010000`
+  correctly overrode generic KSEG translation and remained distinct from low RAM.
+- Last valid RAM dword was accepted; a crossing dword was rejected.
+- VRAM, NV2A, synthetic kernel thunk, MCPX APU and AC97 regions classified
+  separately; NV2A/APU/thunk routes exposed no ordinary RAM/data pointer.
+- Unsupported pre/post-KSEG gaps and `0xFFFFFFFF` were rejected.
+- Address backing released; timeout completed; `[XAPI RETURN VALUE] 0`.
+- **Phase 2D: COMPLETE.**
+- **Next:** Phase 2E guest stack + low TIB/KTHREAD/TLS + initial kernel-data
+  fixtures through the checked router. Translated game execution stays disabled.
 
 ### How future updates are recorded
 
