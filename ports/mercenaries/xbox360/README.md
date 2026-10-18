@@ -4,7 +4,7 @@
 
 **Research/bootstrap only. No playable Xbox 360 XEX is produced by this tree.**
 
-This folder starts a *native Xbox 360* target for RGH/JTAG hardware. It is not
+This folder starts a *native Xbox 360* target for modified Xbox 360 hardware. It is not
 the original Xbox backward-compatibility emulator, not an Xbox 360 emulator,
 and not a rebuild of the existing Windows runtime.
 
@@ -90,7 +90,7 @@ value 0 are all confirmed. Phase 1 is complete.
 | Phase | Concrete exit criterion |
 | --- | --- |
 | 0 - Reference foundation | Host-neutral byte-access tests pass. Identify all guest memory lvalue forms and runtime direct memory reads/writes. |
-| 1 - Console toolchain | A separate minimal XDK-built diagnostics XEX launches on real RGH/JTAG hardware, logs to a usable channel, checks controller input and exits cleanly. |
+| 1 - Console toolchain | A separate minimal XDK-built diagnostics XEX launches on real modified Xbox 360 hardware, logs to a usable channel, checks controller input and exits cleanly. |
 | 2 - Guest memory | Allocate 64 MiB guest RAM where feasible; implement explicit guest virtual-address translation, alias/MMIO routes and correct little-endian reads/writes without assuming a 4 GiB host aperture. Validate section loading and pointer bounds. |
 | 3 - Recompiler ABI | Regenerate translated code with correct read/write/RMW semantics. Validate stack, flags, x87/SSE/MMX, indirect calls and guest-to-host callbacks against known original-Xbox traces. Ensure build size and native stack usage fit Xenon limits. |
 | 4 - Host kernel | Implement the subset of file, memory, synchronization, timer, thread, logging, handle and controller services actually used by Mercenaries. |
