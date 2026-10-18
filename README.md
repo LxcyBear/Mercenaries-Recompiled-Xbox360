@@ -374,11 +374,13 @@ unexecuted test PASS.**
   were changed to inline and all access widths were added to the test.
 - Final host result: **PASS** under GCC 14.2.0, Clang 17.0.0, and Clang
   AddressSanitizer + UndefinedBehaviorSanitizer.
-- First VS17/XDK Phase 2A compile attempt: **FAIL (setup/include path)** because
-  the diagnostic used repository-relative `../include/guest_memory.h` after
-  `main.cpp` was copied into the standalone Xbox 360 project. This caused
-  cascading undefined-type errors. Fixed the source to use
-  `#include "guest_memory.h"` and updated the setup guide.
+- First VS17/XDK Phase 2A compile attempts: **FAIL (setup/include path)**. The
+  actual compiler error was `C1083: Cannot open include file:
+  '../include/guest_memory.h'`; all `MercGuestMemory`, `memory`, storage
+  class and declaration errors were cascading parser errors.
+- To remove this friction entirely, the Phase 2A hardware diagnostic is now a
+  **single self-contained `main.cpp`** with the guest-memory/endian helpers
+  embedded. No auxiliary headers or Additional Include Directories are needed.
 - **Next:** build the Phase 2A XEX in the same VS17/XDK project and send the
   complete xbWatson transcript. No retail XBE is loaded yet.
 
