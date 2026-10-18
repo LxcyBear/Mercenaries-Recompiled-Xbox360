@@ -69,6 +69,8 @@ typedef struct XbeBuffer
 } XbeBuffer;
 
 
+static void trace(const char* line);
+
 typedef struct Sha256Context
 {
     DWORD state[8];
