@@ -69,7 +69,7 @@ Use the same VS17 + Xbox 360 XDK diagnostic project.
 4. Require:
 
 ~~~text
-[Merc360:P3D] BUILD TAG: P3D-RUNTIME-20261018-B
+[Merc360:P3D] BUILD TAG: P3D-RUNTIME-20261018-A
 ~~~
 
 ## Hardware fixture
@@ -108,19 +108,27 @@ Mercenaries function, generating it with --explicit-guest-memory, compiling it
 into a bounded XDK harness, and comparing its guest-visible result against a
 reference fixture before allowing broader translated execution.
 
-## Hardware attempt A — no visible P3D trace
 
-The first hardware attempt using `P3D-RUNTIME-20261018-A` produced no visible
-`[Merc360:P3D]` xbWatson output. No Phase 3D test assertion was observed, so
-this is not counted as a functional test failure.
+## Hardware result — PASS
 
-Build B adds raw debugger breadcrumbs before optional file logging:
+The initial lack of visible output was an xbWatson issue rather than a problem
+with the XEX. The original tested build tag `P3D-RUNTIME-20261018-A` produced
+a complete functional PASS on modified Xbox 360 hardware.
 
-~~~text
-[Merc360:P3D] EARLY MAIN ENTRY
-[Merc360:P3D] BUILD TAG: P3D-RUNTIME-20261018-B
-[Merc360:P3D] Opening optional game log file
-[Merc360:P3D] File-log open returned
-~~~
+Verified:
+- shared PUSH32 / POP32 explicit-memory contract
+- XBOX_MEMCPY aligned + unaligned copies
+- REP MOVSB overlap ordering
+- REP MOVSW / REP MOVSD element semantics
+- generated MOVSD / STOSW / LODSB
+- generated REP STOSD + backwards REP MOVSD
+- CMPSW / SCASB explicit reads
+- RAM-mirror + KSEG0 coherence
+- scalar cross-window rejection
+- element-wise copy progression into a mapped mirror
+- NV2A MMIO rejection
 
-Send whatever appears, even if it stops after only one of these lines.
+Observed final functional marker:
+`[Merc360:P3D] PHASE 3D RUNTIME MEMORY ABI RESULT: PASS`
+
+**Phase 3D is complete.**
