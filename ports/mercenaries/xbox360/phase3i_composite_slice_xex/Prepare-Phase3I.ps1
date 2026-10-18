@@ -118,7 +118,7 @@ try {
 
     if ($null -ne $selection.icall_direct_helper_name -and
         -not [string]::IsNullOrWhiteSpace([string]$selection.icall_direct_helper_name)) {
-        $generatedFiles += Join-Path $buildRoot "$($selection.icall_direct_helper_name).c"
+        $generatedFiles += (Join-Path $buildRoot "$($selection.icall_direct_helper_name).c")
     }
 
     Write-Host "[Phase3I] Auditing every generated translated body for legacy guest-memory lvalues..."
