@@ -193,6 +193,15 @@ def linear_icall_candidate(source, own_name):
     if "g_seh_ebp" in source:
         return None, "SEH/EBP bridge dependency present"
 
+    # Keep EBX/ESI/EDI otherwise untouched so the hardware fixture can prove
+    # RECOMP_ICALL_SAFE restores Xbox x86 callee-saved registers after the
+    # dispatch target deliberately clobbers them.
+    for nonvolatile in ("ebx", "esi", "edi"):
+        if (re.search(rf"\b{nonvolatile}\s*=", source) or
+                re.search(rf"\bSET_(?:LO8|HI8|LO16)\s*\(\s*{nonvolatile}\b", source) or
+                re.search(rf"\bPOP32\s*\(\s*esp\s*,\s*{nonvolatile}\s*\)", source)):
+            return None, f"caller modifies callee-saved {nonvolatile}"
+
     seed, why = parse_seed(match.group("expr"), pre)
     if not seed:
         return None, why
