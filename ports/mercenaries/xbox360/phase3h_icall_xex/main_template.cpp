@@ -107,6 +107,10 @@ static DWORD s_targetEntryEsp = 0u;
 static DWORD s_targetEntryTop = 0xFFFFFFFFu;
 static DWORD s_targetClobberIssued = 0u;
 
+static DWORD s_icallSavedEsp = 0u;
+static DWORD s_icallPostEsp = 0u;
+static DWORD s_icallPostEax = 0u;
+
 static void trace_func(DWORD va)
 {
     if (s_traceCount < TRACE_CAPACITY)
@@ -375,14 +379,17 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
  */
 #define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \
     uint32_t _va = (uint32_t)(xbox_va); \
+    const uint32_t _saved_esp_local = (uint32_t)(saved_esp); \
     const uint32_t _callee_saved_ebx = g_ebx; \
     const uint32_t _callee_saved_esi = g_esi; \
     const uint32_t _callee_saved_edi = g_edi; \
+    s_icallSavedEsp = _saved_esp_local; \
     g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
     g_icall_trace_idx++; \
     g_icall_count++; \
     if (_va >= 0x00400000u && _va < 0xFE000000u) { \
-        g_esp = (saved_esp); eax = 0; break; \
+        g_esp = _saved_esp_local; eax = 0; \
+        s_icallPostEsp = g_esp; s_icallPostEax = g_eax; break; \
     } \
     recomp_func_t _fn = recomp_lookup_manual(_va); \
     if (!_fn) _fn = recomp_lookup(_va); \
@@ -393,8 +400,12 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
         g_esi = _callee_saved_esi; \
         g_edi = _callee_saved_edi; \
     } \
-    else { g_esp = (saved_esp); eax = 0; } \
+    else { g_esp = _saved_esp_local; eax = 0; } \
+    s_icallPostEsp = g_esp; s_icallPostEax = g_eax; \
 } while(0)
+
+/* Optional one bounded real direct translated helper used by the caller. */
+/*__PHASE3H_DIRECT_HELPER__*/
 
 /* Real translated dispatch target body, renamed locally by prep. */
 /*__PHASE3H_TARGET_IMPL__*/
@@ -424,6 +435,7 @@ static void phase3h_reference_icall(uint32_t xbox_va, uint32_t saved_esp)
     uint32_t savedEsi = g_esi;
     uint32_t savedEdi = g_edi;
 
+    s_icallSavedEsp = saved_esp;
     g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE - 1u)] = xbox_va;
     ++g_icall_trace_idx;
     ++g_icall_count;
@@ -440,6 +452,8 @@ static void phase3h_reference_icall(uint32_t xbox_va, uint32_t saved_esp)
     {
         g_esp = saved_esp;
         g_eax = 0u;
+        s_icallPostEsp = g_esp;
+        s_icallPostEax = g_eax;
         return;
     }
 
@@ -450,11 +464,15 @@ static void phase3h_reference_icall(uint32_t xbox_va, uint32_t saved_esp)
         g_ebx = savedEbx;
         g_esi = savedEsi;
         g_edi = savedEdi;
+        s_icallPostEsp = g_esp;
+        s_icallPostEax = g_eax;
         return;
     }
 
     g_esp = saved_esp;
     g_eax = 0u;
+    s_icallPostEsp = g_esp;
+    s_icallPostEax = g_eax;
 }
 
 /* Exact translated caller with only ICALL rewritten for differential reference. */
@@ -491,6 +509,10 @@ typedef struct RunResult
     DWORD targetEntryEsp;
     DWORD targetEntryTop;
     DWORD targetClobberIssued;
+
+    DWORD icallSavedEsp;
+    DWORD icallPostEsp;
+    DWORD icallPostEax;
 } RunResult;
 
 static unsigned __int64 hash_guest_ram(void)
@@ -534,6 +556,10 @@ static void reset_observers(void)
     s_targetEntryEsp = 0u;
     s_targetEntryTop = 0xFFFFFFFFu;
     s_targetClobberIssued = 0u;
+
+    s_icallSavedEsp = 0u;
+    s_icallPostEsp = 0u;
+    s_icallPostEax = 0xFFFFFFFFu;
 }
 
 static void seed_guest_state(DWORD caseIndex, int mode)
@@ -600,6 +626,10 @@ static void capture_result(RunResult* result)
     result->targetEntryEsp = s_targetEntryEsp;
     result->targetEntryTop = s_targetEntryTop;
     result->targetClobberIssued = s_targetClobberIssued;
+
+    result->icallSavedEsp = s_icallSavedEsp;
+    result->icallPostEsp = s_icallPostEsp;
+    result->icallPostEax = s_icallPostEax;
 }
 
 static int architectural_results_match(
@@ -623,7 +653,46 @@ static int architectural_results_match(
         reference->targetProbeCount == real->targetProbeCount &&
         reference->targetEntryEsp == real->targetEntryEsp &&
         reference->targetEntryTop == real->targetEntryTop &&
-        reference->targetClobberIssued == real->targetClobberIssued;
+        reference->targetClobberIssued == real->targetClobberIssued &&
+        reference->icallSavedEsp == real->icallSavedEsp &&
+        reference->icallPostEsp == real->icallPostEsp &&
+        reference->icallPostEax == real->icallPostEax;
+}
+
+static DWORD trace_occurrences(const RunResult* result, DWORD va)
+{
+    DWORD i;
+    DWORD count = 0u;
+    DWORD limit = result->traceCount < TRACE_CAPACITY
+        ? result->traceCount : TRACE_CAPACITY;
+
+    for (i = 0u; i < limit; ++i)
+    {
+        if (result->trace[i] == va)
+            ++count;
+    }
+
+    return count;
+}
+
+static int traces_match(const RunResult* a, const RunResult* b)
+{
+    DWORD i;
+    DWORD limit;
+
+    if (a->traceCount != b->traceCount)
+        return 0;
+
+    limit = a->traceCount < TRACE_CAPACITY
+        ? a->traceCount : TRACE_CAPACITY;
+
+    for (i = 0u; i < limit; ++i)
+    {
+        if (a->trace[i] != b->trace[i])
+            return 0;
+    }
+
+    return 1;
 }
 
 static const char* mode_name(int mode)
@@ -711,8 +780,15 @@ static int run_one_case(DWORD caseIndex, int mode)
             "FAIL: resolved target entry count is unexpected");
 
         ok &= check(
-            reference.targetEntryEsp == CALLER_INITIAL_ESP - 4u &&
-            real.targetEntryEsp == CALLER_INITIAL_ESP - 4u &&
+            reference.icallSavedEsp == real.icallSavedEsp &&
+            reference.icallPostEsp == reference.icallSavedEsp &&
+            real.icallPostEsp == real.icallSavedEsp,
+            "PASS: resolved ICALL returns to the saved pre-call ESP",
+            "FAIL: resolved ICALL post-dispatch ESP is incorrect");
+
+        ok &= check(
+            reference.targetEntryEsp == reference.icallSavedEsp - 4u &&
+            real.targetEntryEsp == real.icallSavedEsp - 4u &&
             reference.targetEntryTop == 0u &&
             real.targetEntryTop == 0u,
             "PASS: resolved ICALL target sees one zero-valued synthetic return slot",
@@ -735,10 +811,11 @@ static int run_one_case(DWORD caseIndex, int mode)
             "FAIL: callee-saved registers were not restored after resolved ICALL");
 
         ok &= check(
-            real.traceCount == 2u &&
+            traces_match(&reference, &real) &&
+            real.traceCount >= 2u &&
             real.trace[0] == CALLER_VA &&
-            real.trace[1] == DISPATCH_TARGET_VA,
-            "PASS: resolved translated trace is caller then indirect target",
+            trace_occurrences(&real, DISPATCH_TARGET_VA) == 1u,
+            "PASS: resolved translated trace matches reference and enters indirect target once",
             "FAIL: resolved translated trace sequence is unexpected");
     }
     else
@@ -750,14 +827,19 @@ static int run_one_case(DWORD caseIndex, int mode)
             "FAIL: failed ICALL unexpectedly entered dispatch target");
 
         ok &= check(
-            reference.eax == 0u && real.eax == 0u,
-            "PASS: failed ICALL returns zero in EAX",
-            "FAIL: failed ICALL did not force EAX to zero");
+            reference.icallPostEax == 0u &&
+            real.icallPostEax == 0u &&
+            reference.icallPostEsp == reference.icallSavedEsp &&
+            real.icallPostEsp == real.icallSavedEsp,
+            "PASS: failed ICALL immediately restores saved ESP and forces EAX=0",
+            "FAIL: failed ICALL immediate safe-failure contract is incorrect");
 
         ok &= check(
-            real.traceCount == 1u &&
-            real.trace[0] == CALLER_VA,
-            "PASS: failed translated trace contains only the caller",
+            traces_match(&reference, &real) &&
+            real.traceCount >= 1u &&
+            real.trace[0] == CALLER_VA &&
+            trace_occurrences(&real, DISPATCH_TARGET_VA) == 0u,
+            "PASS: failed translated trace matches reference and never enters indirect target",
             "FAIL: failed translated trace is unexpected");
 
         if (mode == PHASE3H_UNRESOLVED)
