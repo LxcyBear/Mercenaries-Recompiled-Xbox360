@@ -91,7 +91,7 @@ function Assert-No-UnsafeDependency {
         [string]$Label
     )
 
-    if ($Source -match '\b(?:RECOMP_ICALL_SAFE|RECOMP_ITAIL|XBOX_MEMCPY|XBOX_REP_MOVS|xbox_[A-Za-z0-9_]+)\b') {
+    if ($Source -match '\b(?:RECOMP_ICALL_SAFE|RECOMP_ITAIL|RECOMP_RDTSC|XBOX_MEMCPY|XBOX_REP_MOVS|xbox_[A-Za-z0-9_]+|__debugbreak)\b') {
         throw "$Label unexpectedly depends on ICALL/kernel/runtime-copy services. Stop for re-audit."
     }
 
