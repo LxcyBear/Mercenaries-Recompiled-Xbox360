@@ -86,6 +86,31 @@ volatile uint32_t g_recomp_14fa2b_entry = 0u;
 #define ZX8(v)  ((uint32_t)(uint8_t)(v))
 #define ZX16(v) ((uint32_t)(uint16_t)(v))
 
+#define CMP_EQ(a, b)  ((uint32_t)(a) == (uint32_t)(b))
+#define CMP_NE(a, b)  ((uint32_t)(a) != (uint32_t)(b))
+#define CMP_B(a, b)   ((uint32_t)(a) <  (uint32_t)(b))
+#define CMP_AE(a, b)  ((uint32_t)(a) >= (uint32_t)(b))
+#define CMP_BE(a, b)  ((uint32_t)(a) <= (uint32_t)(b))
+#define CMP_A(a, b)   ((uint32_t)(a) >  (uint32_t)(b))
+#define CMP_L(a, b)   ((int32_t)(a) <  (int32_t)(b))
+#define CMP_GE(a, b)  ((int32_t)(a) >= (int32_t)(b))
+#define CMP_LE(a, b)  ((int32_t)(a) <= (int32_t)(b))
+#define CMP_G(a, b)   ((int32_t)(a) >  (int32_t)(b))
+
+#define TEST_Z(a, b)  (((uint32_t)(a) & (uint32_t)(b)) == 0u)
+#define TEST_NZ(a, b) (((uint32_t)(a) & (uint32_t)(b)) != 0u)
+#define TEST_S(a, b)  (sizeof(a) == 1 ? \
+    ((((uint8_t)(a) & (uint8_t)(b)) & 0x80u) != 0u) : \
+    (sizeof(a) == 2 ? \
+        ((((uint16_t)(a) & (uint16_t)(b)) & 0x8000u) != 0u) : \
+        ((((uint32_t)(a) & (uint32_t)(b)) & 0x80000000u) != 0u)))
+
+static int EVEN_PARITY8(uint8_t value)
+{
+    value ^= (uint8_t)(value >> 4);
+    return (int)((0x9669u >> (value & 0xFu)) & 1u);
+}
+
 static uint32_t bswap32_local(uint32_t value)
 {
     return ((value & 0x000000FFu) << 24) |
