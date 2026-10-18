@@ -631,6 +631,21 @@ unexecuted test PASS.**
 - **Next:** migrate the remaining non-scalar memory paths, beginning with
   x87/float/double and signed-memory helpers before SSE/MMX/string helpers.
 
+### 2026-10-18 — Phase 3B signed/x87 memory ABI prepared
+
+- Created `xbox360/phase3b-x87-memory-abi` from completed Phase 3A.
+- Explicit ABI now includes signed scalar reads and IEEE-754 float/double
+  guest reads/writes.
+- Maintained lifter migration now covers MOVSX and x87 memory paths including
+  FILD/FIST, integer-memory x87 arithmetic, FLD/FST, float/double arithmetic
+  memory operands and x87 memory comparisons.
+- Legacy PC output remains the default unless explicit guest-memory mode is
+  enabled.
+- Added generator regression coverage for legacy vs explicit signed/x87 output.
+- Added self-contained XDK fixture tagged `P3B-X87MEM-20261018-A`.
+- **Next:** build/run Phase 3B on modified Xbox 360 hardware. SSE/XMM, MMX and
+  REP/string/manual legacy-memory paths remain later Phase 3 slices.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
