@@ -281,3 +281,24 @@ Current behavior:
   longer exists in the selector
 
 Fix commit: `42be8dc0d0b6423104e2b140c6c1330d558c8430`.
+
+## RET marker comment-strip correction
+
+The first rerun after actually removing the stale RET-N rejection produced
+996 `no translated RET` results.
+
+That was another selector-only issue. The lifter intentionally emits translated
+return identity in comments:
+
+```c
+esp += 4; return;     /* ret */
+esp += 8; return;     /* ret 4 */
+```
+
+Helper/runtime/control-flow classification must use comment-stripped source, but
+RET/RET-N classification must use the raw generated source.
+
+Both the member return classifier and root plain-RET check now use raw source.
+Startup assertions verify this invariant before candidate scanning begins.
+
+Fix commit: `fbc90cddf3a187dc9c0b176a646b8ec051c69ade`.
