@@ -171,12 +171,14 @@ uint32_t recomp_guest_read32(uint32_t address);
 uint64_t recomp_guest_read64(uint32_t address);
 float    recomp_guest_readf32(uint32_t address);
 double   recomp_guest_readf64(uint32_t address);
+void recomp_guest_read128(uint32_t address, uint32_t words[4]);
 void recomp_guest_write8(uint32_t address, uint8_t value);
 void recomp_guest_write16(uint32_t address, uint16_t value);
 void recomp_guest_write32(uint32_t address, uint32_t value);
 void recomp_guest_write64(uint32_t address, uint64_t value);
 void recomp_guest_writef32(uint32_t address, float value);
 void recomp_guest_writef64(uint32_t address, double value);
+void recomp_guest_write128(uint32_t address, const uint32_t words[4]);
 
 #define GUEST_READ8(addr)   recomp_guest_read8((uint32_t)(addr))
 #define GUEST_READ16(addr)  recomp_guest_read16((uint32_t)(addr))
@@ -227,10 +229,24 @@ void recomp_guest_writef64(uint32_t address, double value);
 /* Full 128-bit XMM helpers. Scalar SSE instructions use lane zero through
  * the xmmN aliases below; packed instructions use the xmmNv aliases. */
 static __forceinline void recomp_xmm_load(float dst[4], uint32_t addr) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint32_t words[4];
+    recomp_guest_read128(addr, words);
+    for (unsigned i = 0; i < 4; ++i)
+        memcpy(&dst[i], &words[i], 4);
+#else
     memcpy(dst, (const void *)XBOX_PTR(addr), 16);
+#endif
 }
 static __forceinline void recomp_xmm_store(uint32_t addr, const float src[4]) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint32_t words[4];
+    for (unsigned i = 0; i < 4; ++i)
+        memcpy(&words[i], &src[i], 4);
+    recomp_guest_write128(addr, words);
+#else
     memcpy((void *)XBOX_PTR(addr), src, 16);
+#endif
 }
 static __forceinline void recomp_xmm_copy(float dst[4], const float src[4]) {
     memcpy(dst, src, 16);
@@ -239,30 +255,86 @@ static __forceinline void recomp_xmm_zero(float dst[4]) {
     memset(dst, 0, 16);
 }
 static __forceinline void recomp_xmm_loadss(float dst[4], uint32_t addr) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint32_t bits = GUEST_READ32(addr);
+    memcpy(&dst[0], &bits, 4);
+#else
     memcpy(&dst[0], (const void *)XBOX_PTR(addr), 4);
+#endif
     dst[1] = dst[2] = dst[3] = 0.0f;
 }
 static __forceinline void recomp_xmm_loadsd(float dst[4], uint32_t addr) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint64_t bits = GUEST_READ64(addr);
+    uint32_t lo = (uint32_t)bits;
+    uint32_t hi = (uint32_t)(bits >> 32);
+    memcpy(&dst[0], &lo, 4);
+    memcpy(&dst[1], &hi, 4);
+#else
     memcpy(&dst[0], (const void *)XBOX_PTR(addr), 8);
+#endif
     dst[2] = dst[3] = 0.0f;
 }
 static __forceinline void recomp_xmm_copysd(float dst[4], const float src[4]) {
     memcpy(&dst[0], &src[0], 8);
 }
 static __forceinline void recomp_xmm_storesd(uint32_t addr, const float src[4]) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint32_t lo, hi;
+    uint64_t bits;
+    memcpy(&lo, &src[0], 4);
+    memcpy(&hi, &src[1], 4);
+    bits = (uint64_t)lo | ((uint64_t)hi << 32);
+    GUEST_WRITE64(addr, bits);
+#else
     memcpy((void *)XBOX_PTR(addr), &src[0], 8);
+#endif
 }
 static __forceinline void recomp_xmm_movlps_load(float dst[4], uint32_t addr) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint64_t bits = GUEST_READ64(addr);
+    uint32_t lo = (uint32_t)bits;
+    uint32_t hi = (uint32_t)(bits >> 32);
+    memcpy(&dst[0], &lo, 4);
+    memcpy(&dst[1], &hi, 4);
+#else
     memcpy(&dst[0], (const void *)XBOX_PTR(addr), 8);
+#endif
 }
 static __forceinline void recomp_xmm_movlps_store(uint32_t addr, const float src[4]) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint32_t lo, hi;
+    uint64_t bits;
+    memcpy(&lo, &src[0], 4);
+    memcpy(&hi, &src[1], 4);
+    bits = (uint64_t)lo | ((uint64_t)hi << 32);
+    GUEST_WRITE64(addr, bits);
+#else
     memcpy((void *)XBOX_PTR(addr), &src[0], 8);
+#endif
 }
 static __forceinline void recomp_xmm_movhps_load(float dst[4], uint32_t addr) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint64_t bits = GUEST_READ64(addr);
+    uint32_t lo = (uint32_t)bits;
+    uint32_t hi = (uint32_t)(bits >> 32);
+    memcpy(&dst[2], &lo, 4);
+    memcpy(&dst[3], &hi, 4);
+#else
     memcpy(&dst[2], (const void *)XBOX_PTR(addr), 8);
+#endif
 }
 static __forceinline void recomp_xmm_movhps_store(uint32_t addr, const float src[4]) {
+#if defined(RECOMP_EXPLICIT_GUEST_MEMORY_ABI)
+    uint32_t lo, hi;
+    uint64_t bits;
+    memcpy(&lo, &src[2], 4);
+    memcpy(&hi, &src[3], 4);
+    bits = (uint64_t)lo | ((uint64_t)hi << 32);
+    GUEST_WRITE64(addr, bits);
+#else
     memcpy((void *)XBOX_PTR(addr), &src[2], 8);
+#endif
 }
 static __forceinline void recomp_xmm_movlhps(float dst[4], const float src[4]) {
     float s0 = src[0], s1 = src[1]; dst[2] = s0; dst[3] = s1;

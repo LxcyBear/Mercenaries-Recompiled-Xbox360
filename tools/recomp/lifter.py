@@ -1825,7 +1825,10 @@ class Lifter:
             if reg is not None:
                 return reg
             if op.type == "mem":
-                return f"MEM64({_fmt_mem(op)})"
+                addr = _fmt_mem(op)
+                if _EXPLICIT_GUEST_MEMORY_ABI:
+                    return f"GUEST_READ64({addr})"
+                return f"MEM64({addr})"
             return _fmt_operand_read(op)
 
         def _mmx_write(op, val):
@@ -1833,7 +1836,10 @@ class Lifter:
             if reg is not None:
                 return f"{reg} = (uint64_t)({val});"
             if op.type == "mem":
-                return f"MEM64({_fmt_mem(op)}) = (uint64_t)({val});"
+                addr = _fmt_mem(op)
+                if _EXPLICIT_GUEST_MEMORY_ABI:
+                    return f"GUEST_WRITE64({addr}, (uint64_t)({val}));"
+                return f"MEM64({addr}) = (uint64_t)({val});"
             return _fmt_operand_write(op, f"(uint32_t)({val})")
 
         # SSE register names map to shared architectural runtime state
@@ -1841,9 +1847,7 @@ class Lifter:
             if op.type == "reg":
                 return op.reg  # xmm0, xmm1, etc.
             elif op.type == "mem":
-                if op.mem_size == 8:
-                    return f"MEMD({_fmt_mem(op)})"
-                return f"MEMF({_fmt_mem(op)})"
+                return _fmt_float_mem_read(op)
             elif op.type == "imm":
                 return _fmt_imm(op.imm)
             return f"/* sse_read? */"
@@ -1852,9 +1856,7 @@ class Lifter:
             if op.type == "reg":
                 return f"{op.reg} = {val};"
             elif op.type == "mem":
-                if op.mem_size == 8:
-                    return f"MEMD({_fmt_mem(op)}) = {val};"
-                return f"MEMF({_fmt_mem(op)}) = {val};"
+                return _fmt_float_mem_write(op, val)
             return f"/* sse_write? */;"
 
         def _sse_vec_reg(op):
@@ -1912,7 +1914,8 @@ class Lifter:
             if dst is not None and src is not None:
                 return [f"{ops[0].reg} = {ops[1].reg}; /* movss */"]
             if ops[0].type == "mem" and src is not None:
-                return [f"MEMF({_fmt_mem(ops[0])}) = {ops[1].reg}; /* movss */"]
+                return [_fmt_float_mem_write(ops[0], ops[1].reg)
+                        + " /* movss */"]
             return [f"/* movss {insn.op_str}: unsupported operands */"]
 
         if m == "movsd" and nops >= 2:
