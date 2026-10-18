@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G hardware PASS; 3H ICALL dispatch next** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G hardware PASS; 3H ICALL selector/harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -1046,6 +1046,34 @@ unexecuted test PASS.**
 - **Next:** Phase 3H — bounded real translated indirect-call dispatch /
   `RECOMP_ICALL_SAFE`, with the earlier `0x00034AE0` virtual-call path as a
   strong candidate.
+
+### 2026-10-18 — Phase 3H translated ICALL gate prepared
+
+- Created `xbox360/phase3h-translated-icall-dispatch` from completed Phase 3G.
+- Phase 3H scans real mechanically translated Mercenaries functions for one
+  bounded `RECOMP_ICALL_SAFE` site; earlier candidate `0x00034AE0` is
+  preferred but not forced.
+- The first ICALL fixture is deliberately linear and stack-simple: no guest
+  arguments before the dummy return slot, no unrelated PUSH/POP, no direct
+  translated calls, no SEH/x87/SSE/MMX/flag dependency, and one plain RET.
+- The resolved dispatch target is the already hardware-proven translated
+  `0x0004CFF0`.
+- Resolved mode verifies manual miss -> generated lookup hit, synthetic zero
+  return slot, target entry, and runtime restoration of deliberately clobbered
+  `EBX/ESI/EDI`.
+- Unresolved mode keeps target `0x0004CFF0` but disables generated lookup,
+  requiring manual/generated/kernel misses, saved-ESP restoration and
+  `EAX=0`.
+- Range-reject mode uses `0x00400000`, requiring rejection before any lookup,
+  saved-ESP restoration and `EAX=0`.
+- A transformed local reference caller replaces only the ICALL operation with
+  an independent explicit-stack/direct-target helper.
+- Three deterministic inputs run through all three modes and compare
+  architectural results, target/trace observations, fault state and complete
+  64 MiB guest-RAM digest.
+- Build tag: `P3H-ICALL-20261018-A`.
+- **Next:** run `Prepare-Phase3H.ps1`, compile the generated local
+  `build\phase3h_translated_icall\main.cpp`, and capture xbWatson.
 
 ### How future updates are recorded
 
