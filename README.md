@@ -910,6 +910,24 @@ unexecuted test PASS.**
   RAM after both paths.
 - **Next:** update the local branch and rerun `Prepare-Phase3F.ps1`.
 
+### 2026-10-18 — Phase 3F Candidate B callee stack-MOVSS shape confirmed
+
+- Candidate B's generated callee was confirmed to perform its own scalar
+  XMM0 load from guest stack before the setter store.
+- The earlier guard that rejected any callee-side `recomp_xmm_loadss` was
+  therefore too strict and has been corrected.
+- Phase 3F now requires the callee shape:
+  `MOVSS [ESP+4] -> XMM0`, then
+  `GUEST_WRITEF32(ECX+0xDC, XMM0)`, then translated `ret 4`.
+- The Xenon harness poisons all four XMM0 lanes before entry, places the scalar
+  argument only in guest `[ESP+4]`, and requires lane 0 to equal the exact
+  guest argument while lanes 1-3 are zeroed according to the Phase 3C-proven
+  memory-form MOVSS semantics.
+- Direct-callee and real wrapper-tail-call paths still begin from otherwise
+  identical state and are compared across registers, XMM0, ESP, store bits,
+  trace order and complete 64 MiB guest-RAM digest.
+- **Next:** update the local Phase 3F branch and rerun the prep workflow.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
