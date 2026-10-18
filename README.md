@@ -1357,6 +1357,29 @@ unexecuted test PASS.**
 - **Next:** run `Prepare-Phase3J.ps1`; if no cluster survives, use the printed
   rejection histogram to make the narrowest justified relaxation.
 
+### 2026-10-18 — Phase 3J first selector pass exposes comment-scan false positives
+
+- The first local Phase 3J prep verified the exact retail XBE and reused the
+  reviewed Phase 3E disassembly.
+- 2,200 real candidate roots were considered; none passed the initial
+  branchless/statistically closed gate.
+- Initial rejection histogram was dominated by:
+  - 1,144 branch/loop-control candidates deferred by the initial 3J-A policy
+  - 640 dynamic/SIMD/FPU/runtime-surface candidates
+  - 246 apparent `self` helper dependencies
+  - 86 RET-N members
+- Investigation proved the `self` class was a selector bug: generated comments
+  such as `/* sbb self (CF extend) */` were being parsed by the generic
+  helper-call regex as if `self(...)` were executable C.
+- The selector now strips generated C comments before dependency, helper, and
+  control-flow surface classification.
+- Real `movzx` helpers `ZX8` / `ZX16` are now explicitly supported by the
+  selector and XDK harness instead of being reported as unknown helpers.
+- The exact retail hash pin and all dependency-closure bounds remain unchanged.
+- **No XDK compile or hardware run occurred in this first selector attempt.**
+- **Next:** rerun the same Phase 3J selector before considering any branch/flags
+  relaxation.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
