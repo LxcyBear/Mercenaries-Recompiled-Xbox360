@@ -130,6 +130,20 @@ def _guest_write_accessor(size):
     }.get(size, "GUEST_WRITE32")
 
 
+def _raw_mem_read(size, address_expr):
+    """Format a scalar guest-memory read from an already-formatted address."""
+    if _EXPLICIT_GUEST_MEMORY_ABI:
+        return f"{_guest_read_accessor(size)}({address_expr})"
+    return f"{_mem_accessor(size)}({address_expr})"
+
+
+def _raw_mem_write(size, address_expr, value_expr):
+    """Format a scalar guest-memory write to an already-formatted address."""
+    if _EXPLICIT_GUEST_MEMORY_ABI:
+        return f"{_guest_write_accessor(size)}({address_expr}, {value_expr});"
+    return f"{_mem_accessor(size)}({address_expr}) = {value_expr};"
+
+
 def _smem_accessor(size):
     """Return the signed scalar memory read helper for the selected ABI."""
     if _EXPLICIT_GUEST_MEMORY_ABI:
@@ -1706,7 +1720,9 @@ class Lifter:
         if "movsb" in m:
             if self._direction_step < 0:
                 return [
-                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); }",
+                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
+                    + _raw_mem_write(1, "edi - _i",
+                                     _raw_mem_read(1, "esi - _i")) + " }",
                     "esi -= ecx; edi -= ecx; ecx = 0; /* rep movsb */",
                 ]
             return ["XBOX_REP_MOVS(edi, esi, ecx, 1u);",
@@ -1714,7 +1730,9 @@ class Lifter:
         if "movsd" in m:
             if self._direction_step < 0:
                 return [
-                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); }",
+                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
+                    + _raw_mem_write(4, "edi - _i*4",
+                                     _raw_mem_read(4, "esi - _i*4")) + " }",
                     "esi -= ecx * 4; edi -= ecx * 4; ecx = 0; /* rep movsd */",
                 ]
             return ["XBOX_REP_MOVS(edi, esi, ecx, 4u);",
@@ -1722,47 +1740,47 @@ class Lifter:
         if "movsw" in m:
             if self._direction_step < 0:
                 return [
-                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM16(edi - _i*2) = MEM16(esi - _i*2); }",
+                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
+                    + _raw_mem_write(2, "edi - _i*2",
+                                     _raw_mem_read(2, "esi - _i*2")) + " }",
                     "esi -= ecx * 2; edi -= ecx * 2; ecx = 0; /* rep movsw */",
                 ]
             return ["XBOX_REP_MOVS(edi, esi, ecx, 2u);",
                     "esi += ecx * 2; edi += ecx * 2; ecx = 0; /* rep movsw */"]
         if "stosb" in m:
-            if self._direction_step < 0:
-                return [
-                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); }",
-                    "edi -= ecx; ecx = 0; /* rep stosb */",
-                ]
-            return ["memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx);",
-                    "edi += ecx; ecx = 0; /* rep stosb */"]
-        if "stosd" in m:
-            if self._direction_step < 0:
-                return [
-                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = eax; }",
-                    "edi -= ecx * 4; ecx = 0; /* rep stosd */",
-                ]
+            step = "edi - _i" if self._direction_step < 0 else "edi + _i"
             return [
-                "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = eax; }",
-                "edi += ecx * 4; ecx = 0; /* rep stosd */"
+                "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
+                + _raw_mem_write(1, step, "LO8(eax)") + " }",
+                ("edi -= ecx; ecx = 0; /* rep stosb */"
+                 if self._direction_step < 0 else
+                 "edi += ecx; ecx = 0; /* rep stosb */"),
+            ]
+        if "stosd" in m:
+            step = "edi - _i*4" if self._direction_step < 0 else "edi + _i*4"
+            return [
+                "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
+                + _raw_mem_write(4, step, "eax") + " }",
+                ("edi -= ecx * 4; ecx = 0; /* rep stosd */"
+                 if self._direction_step < 0 else
+                 "edi += ecx * 4; ecx = 0; /* rep stosd */"),
             ]
         if "stosw" in m:
-            if self._direction_step < 0:
-                return [
-                    "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM16(edi - _i*2) = LO16(eax); }",
-                    "edi -= ecx * 2; ecx = 0; /* rep stosw */",
-                ]
+            step = "edi - _i*2" if self._direction_step < 0 else "edi + _i*2"
             return [
-                "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM16(edi + _i*2) = LO16(eax); }",
-                "edi += ecx * 2; ecx = 0; /* rep stosw */"
+                "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
+                + _raw_mem_write(2, step, "LO16(eax)") + " }",
+                ("edi -= ecx * 2; ecx = 0; /* rep stosw */"
+                 if self._direction_step < 0 else
+                 "edi += ecx * 2; ecx = 0; /* rep stosw */"),
             ]
         if "cmpsb" in m or "cmpsw" in m or "cmpsd" in m:
             width = 1 if "cmpsb" in m else (2 if "cmpsw" in m else 4)
-            mem = {1: "MEM8", 2: "MEM16", 4: "MEM32"}[width]
             stop = "_flags != 0" if m.startswith("repne ") else "_flags == 0"
             return [
                 "while (ecx != 0u) {",
-                f"    uint32_t _cmps_lhs = {mem}(esi);",
-                f"    uint32_t _cmps_rhs = {mem}(edi);",
+                f"    uint32_t _cmps_lhs = {_raw_mem_read(width, 'esi')};",
+                f"    uint32_t _cmps_rhs = {_raw_mem_read(width, 'edi')};",
                 "    _flags = (_cmps_lhs == _cmps_rhs);",
                 f"    esi {advance} {width}u; edi {advance} {width}u; --ecx;",
                 f"    if ({stop}) break;",
@@ -1770,13 +1788,12 @@ class Lifter:
             ]
         if "scasb" in m or "scasw" in m or "scasd" in m:
             width = 1 if "scasb" in m else (2 if "scasw" in m else 4)
-            mem = {1: "MEM8", 2: "MEM16", 4: "MEM32"}[width]
             acc = {1: "LO8(eax)", 2: "LO16(eax)", 4: "eax"}[width]
             stop = "_flags != 0" if m.startswith("repne ") else "_flags == 0"
             return [
                 "while (ecx != 0u) {",
                 f"    uint32_t _scas_lhs = {acc};",
-                f"    uint32_t _scas_rhs = {mem}(edi);",
+                f"    uint32_t _scas_rhs = {_raw_mem_read(width, 'edi')};",
                 "    _flags = (_scas_lhs == _scas_rhs);",
                 f"    edi {advance} {width}u; --ecx;",
                 f"    if ({stop}) break;",
@@ -1786,23 +1803,29 @@ class Lifter:
 
     def _lift_string_op(self, insn, m):
         if m == "movsb":
-            return ["MEM8(edi) = MEM8(esi); esi++; edi++; /* movsb */"]
+            return [_raw_mem_write(1, "edi", _raw_mem_read(1, "esi"))
+                    + " esi++; edi++; /* movsb */"]
         if m == "movsd":
-            return ["MEM32(edi) = MEM32(esi); esi += 4; edi += 4; /* movsd */"]
+            return [_raw_mem_write(4, "edi", _raw_mem_read(4, "esi"))
+                    + " esi += 4; edi += 4; /* movsd */"]
         if m == "stosb":
-            return ["MEM8(edi) = LO8(eax); edi++; /* stosb */"]
+            return [_raw_mem_write(1, "edi", "LO8(eax)")
+                    + " edi++; /* stosb */"]
         if m == "stosd":
-            return ["MEM32(edi) = eax; edi += 4; /* stosd */"]
+            return [_raw_mem_write(4, "edi", "eax")
+                    + " edi += 4; /* stosd */"]
         if m == "lodsb":
-            return ["SET_LO8(eax, MEM8(esi)); esi++; /* lodsb */"]
+            return [f"SET_LO8(eax, {_raw_mem_read(1, 'esi')}); esi++; /* lodsb */"]
         if m == "lodsd":
-            return ["eax = MEM32(esi); esi += 4; /* lodsd */"]
+            return [f"eax = {_raw_mem_read(4, 'esi')}; esi += 4; /* lodsd */"]
         if m == "movsw":
-            return ["MEM16(edi) = MEM16(esi); esi += 2; edi += 2; /* movsw */"]
+            return [_raw_mem_write(2, "edi", _raw_mem_read(2, "esi"))
+                    + " esi += 2; edi += 2; /* movsw */"]
         if m == "stosw":
-            return ["MEM16(edi) = LO16(eax); edi += 2; /* stosw */"]
+            return [_raw_mem_write(2, "edi", "LO16(eax)")
+                    + " edi += 2; /* stosw */"]
         if m == "lodsw":
-            return ["SET_LO16(eax, MEM16(esi)); esi += 2; /* lodsw */"]
+            return [f"SET_LO16(eax, {_raw_mem_read(2, 'esi')}); esi += 2; /* lodsw */"]
         return [f"/* {m} */"]
 
     # ── FPU (x87) ──
