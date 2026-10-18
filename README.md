@@ -1453,6 +1453,21 @@ unexecuted test PASS.**
 - **No compile or hardware run occurred in this selector attempt.**
 - **Next:** rerun Phase 3J with bounded nested RET-N support.
 
+### 2026-10-18 — Phase 3J RET-N relaxation correction
+
+- The first rerun after documenting bounded nested RET-N support still printed
+  `ret-N member deferred from first closed cluster` 380 times.
+- Inspection showed the previous patch had updated the root-return rule but left
+  the generic per-member surface filter's old unconditional RET-N rejection in
+  place.
+- That stale member filter is now removed.
+- Nested members now genuinely accept parsed RET-N cleanup <= 64 bytes.
+- The root still requires exactly one plain RET and no RET-N.
+- Verified the stale rejection string no longer exists in the selector.
+- Fix commit: `42be8dc0d0b6423104e2b140c6c1330d558c8430`.
+- The preceding rerun therefore did **not** test the intended RET-N relaxation;
+  no conclusion should be drawn from its unchanged 380-entry RET-N count.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
