@@ -127,6 +127,10 @@ try {
         throw "Candidate no longer has the reviewed one-byte explicit read shape. Stop for re-audit."
     }
 
+    if ($generated -match 'GUEST_READ(?:16|32|64|F32|F64|128)\s*\(') {
+        throw "Candidate unexpectedly uses a guest read wider than 8 bits. Stop for re-audit."
+    }
+
     if ($generated -match 'GUEST_WRITE(?:8|16|32|64|F32|F64|128)\s*\(') {
         throw "Candidate unexpectedly writes guest memory. Stop for re-audit."
     }
