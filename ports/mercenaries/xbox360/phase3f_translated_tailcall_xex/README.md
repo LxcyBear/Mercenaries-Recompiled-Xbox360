@@ -232,3 +232,34 @@ The prep checker had expected `g_xmm0` directly, but generated code uses the
 runtime's canonical vector alias `xmm0v`. The checker now requires `xmm0v`,
 and the Phase 3F XDK harness defines `xmm0v` as `g_xmm0` just like the real
 runtime.
+
+## Hardware result — PASS
+
+Build tag `P3F-TAILCALL-20261018-B` executed the real translated chain
+`0x001EF850 -> 0x0021AB90` on modified Xbox 360 hardware.
+
+Observed cases:
+- `1.0f` bits `0x3F800000`
+- `-2.5f` bits `0xC0200000`
+- `~1/3` bits `0x3EAAAAAB`
+
+For all three cases:
+- direct translated callee and translated wrapper-tail-call paths completed
+  without guest-memory faults
+- wrapper `ECX += 0x28` produced the same effective object
+- trace order was direct `[callee]` versus real `[wrapper, callee]`
+- callee loaded the exact guest `[ESP+4]` scalar into XMM0 lane 0
+- memory-form MOVSS zeroed XMM0 lanes 1-3
+- the scalar was stored at effective `this + 0xDC`
+- translated `ret 4` restored ESP to `0x008BFFF0`
+- all integer state and all four XMM0 lanes matched
+- complete 64 MiB guest-RAM hashes matched
+
+Observed final functional marker:
+`[Merc360:P3F] PHASE 3F TRANSLATED TAIL-CALL RESULT: PASS`
+
+The supplied excerpt ends during post-test heartbeats, so no unshown final XAPI
+exit line is claimed.
+
+**Phase 3F is complete.** The next bounded escalation is a real translated
+normal CALL chain with the synthetic guest return-address push.
