@@ -999,6 +999,21 @@ unexecuted test PASS.**
 - **Next:** run `Prepare-Phase3G.ps1`, compile the generated local
   `build\phase3g_translated_direct_call\main.cpp`, and capture xbWatson.
 
+### 2026-10-18 — Phase 3G selector standalone-import fix
+
+- First local Phase 3G prep verified the exact retail XBE and reused the Phase
+  3E reviewed-seed disassembly, but the standalone selector failed before
+  candidate selection with `ModuleNotFoundError: No module named 'tools'`.
+- Cause: launching the nested selector file directly placed only its own
+  directory on Python `sys.path`, not the repository root.
+- The selector now derives the repository root from `__file__` and inserts it
+  before importing `tools.recomp`.
+- While auditing the rerun path, the first normal-CALL selector was also
+  tightened to prefer linear, flag-free caller/callee pairs so the 3G hardware
+  fixture isolates CALL-stack behavior rather than mixing in branch/flag state.
+- **No candidate selection or hardware execution occurred in this failed
+  attempt.**
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
