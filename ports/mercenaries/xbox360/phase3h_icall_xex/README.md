@@ -315,3 +315,54 @@ instruction that computes it. The harness then:
 
 The discovery caller is also run through the explicit guest-memory audit before
 XDK compilation.
+
+## Hardware result — Phase 3H-B PASS / Phase 3H COMPLETE
+
+Build tag `P3H-ICALL-20261018-B` executed successfully on modified Xbox 360
+hardware.
+
+Real translated caller:
+- `0x0008DE60`
+
+Real discovered guest function-pointer slot:
+- `0x00000034`
+
+Seeded nonzero translated code VA:
+- `0x0004CFF0`
+
+The unchanged translated caller read `0x0004CFF0` from its own discovered
+guest slot and passed that nonzero VA through the real
+`RECOMP_ICALL_SAFE` path.
+
+Resolved mode passed:
+- no guest-memory faults
+- nonzero ICALL target reproduced exactly
+- translated target entered once
+- zero synthetic guest return slot
+- manual miss -> generated lookup hit
+- EBX/ESI/EDI restored after deliberate target clobber
+- final ESP correct
+- translated trace matched the independent reference
+- complete 64 MiB RAM hash matched
+
+Unresolved mode passed:
+- same unchanged caller read the same nonzero `0x0004CFF0`
+- target not entered
+- immediate saved-ESP restoration
+- immediate EAX=0
+- manual/generated/kernel lookup chain exhausted
+- final state, translated trace and complete RAM hash matched
+
+The independent `0x00400000` range-guard test also passed with no lookup,
+saved-ESP restoration, EAX=0 and full RAM equality.
+
+Observed hashes:
+- case 0: `5FEC0A1C02F3BEE5`
+- case 1: `BB6103599BF3BEE5`
+- case 2: `64F113F868F3BEE5`
+
+Observed final markers:
+`[Merc360:P3H] PHASE 3H TRANSLATED INDIRECT-CALL RESULT: PASS`
+`[XAPI RETURN VALUE] 0`
+
+**Phase 3H is complete.**
