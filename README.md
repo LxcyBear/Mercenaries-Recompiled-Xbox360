@@ -53,7 +53,7 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| 2 — Guest memory + retail XBE loading | Not started | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A host contract PASS** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
@@ -154,19 +154,23 @@ and shutdown evidence. A black screen from this diagnostic is expected;
 **Purpose:** safely reproduce original Xbox 32-bit guest addresses in
 Xbox 360 native memory.
 
-- [ ] Allocate/measure a bounded guest RAM arena, starting with the original
-      title's normal 64 MiB guest RAM requirement where feasible.
+- [x] Implement a bounded 64 MiB low guest-RAM arena and host contract test on
+      the `xbox360/phase2-guest-memory` branch. GCC 14.2, Clang 17 and
+      Clang ASan+UBSan all PASS; real Xenon allocation is still pending.
 - [ ] Implement checked guest VA routing: RAM, mirrors, aliases, synthetic
       kernel area and GPU/APU MMIO regions.
-- [ ] Implement endian-correct, alignment-safe guest 8/16/32/64-bit reads
-      and writes, including floating-point bit representations.
+- [x] Implement explicit endian-correct, alignment-safe guest 8/16/32/64-bit
+      and float reads/writes for the bounded low-RAM arena; host tests PASS.
+- [ ] Verify those accessors on real Xenon hardware (Phase 2A diagnostic).
 - [ ] Replace direct native pointer semantics with explicit checked access;
       reject unsupported regions instead of corrupting unrelated memory.
 - [ ] Load a verified retail XBE: validate hash/header, copy sections,
       zero-fill virtual tails, initialize stack/heap and section protections
       where applicable.
 - [ ] Compare original-Xbox guest memory fixtures and address alias behavior.
-- [ ] Stress-test fragmentation, out-of-range pointers and low-memory paths.
+- [ ] Stress-test fragmentation and low-memory paths.
+- [x] Host-test upper-bound crossing, first-out-of-range and wrapped/high
+      addresses; all are rejected without sanitizer findings.
 
 **Gate 2:** exact guest byte/alias/section fixtures PASS on a real Xbox 360.
 
@@ -307,6 +311,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | VS17 + Xbox 360 XDK diagnostic compile | **BUILD SUCCEEDED** | Xbox 360 toolchain |
 | 2026-10-18 | First real-console bootstrap run: startup, repeated heartbeats, controller 0, A-button exit | **PASS** | RGH/JTAG Xbox 360; xbWatson; `[XAPI RETURN VALUE] 0` |
 | 2026-10-18 | Independent 15-second safety-timeout run | **PASS** | RGH/JTAG Xbox 360; timeout log + `[XAPI RETURN VALUE] 0` |
+| 2026-10-18 | Phase 2A bounded 64 MiB guest-RAM host contract | **PASS (GCC / Clang / ASan+UBSan)** | Linux x86-64; real Xenon test pending |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -355,6 +360,22 @@ unexecuted test PASS.**
   or Mercenaries game code.
 - **Next:** Phase 2 guest-memory arena, endian-correct access, address routing
   and bounded XBE-section loading.
+
+### 2026-10-18 — Phase 2A guest-memory work starts
+
+- Created branch `xbox360/phase2-guest-memory` from the completed Phase 1
+  hardware branch.
+- Added a bounded **64 MiB low guest-RAM arena** with explicit guest-address
+  bounds checks and little-endian 8/16/32/64-bit + float accessors.
+- Added a separate Phase 2 Xbox 360 diagnostic that measures native host byte
+  order, allocates/clears the arena, tests XBE-base address `0x00010000`,
+  unaligned operations, top-of-RAM accesses and out-of-range rejection.
+- Host contract initially exposed warning-clean header linkage work; helpers
+  were changed to inline and all access widths were added to the test.
+- Final host result: **PASS** under GCC 14.2.0, Clang 17.0.0, and Clang
+  AddressSanitizer + UndefinedBehaviorSanitizer.
+- **Next:** build the Phase 2A XEX in the same VS17/XDK project and send the
+  complete xbWatson transcript. No retail XBE is loaded yet.
 
 ### How future updates are recorded
 
