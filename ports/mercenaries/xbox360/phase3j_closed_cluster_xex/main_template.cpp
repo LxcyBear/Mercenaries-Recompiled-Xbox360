@@ -51,6 +51,7 @@ typedef __int64            int64_t;
 #define CANARY_COUNT       8u
 
 #define TRACE_CAPACITY     256u
+#define PROFILE_COUNT      12u
 
 static BYTE* g_ram = NULL;
 static HANDLE s_logFile = INVALID_HANDLE_VALUE;
@@ -398,9 +399,9 @@ static unsigned __int64 hash_guest_ram(void)
     return hash;
 }
 
-static DWORD canary_value(DWORD caseIndex, DWORD index)
+static DWORD canary_value(DWORD profileIndex, DWORD index)
 {
-    return 0x3A4A0000u ^ (caseIndex << 12) ^ (index * 0x01010101u);
+    return 0x3A4A0000u ^ (profileIndex << 12) ^ (index * 0x01010101u);
 }
 
 static void reset_trace(void)
@@ -409,49 +410,112 @@ static void reset_trace(void)
     memset(s_trace, 0, sizeof(s_trace));
 }
 
-static void seed_pointer_region(DWORD base, DWORD caseIndex)
+static DWORD profile_value(
+    DWORD profileIndex,
+    DWORD base,
+    DWORD slot)
+{
+    DWORD offset = ((slot * 0x20u) & 0x3E0u);
+
+    switch (profileIndex % PROFILE_COUNT)
+    {
+    case 0u:
+        return 0u;
+    case 1u:
+        return (slot & 1u) ? 1u : 0u;
+    case 2u:
+        return (slot & 1u) ? 0u : 1u;
+    case 3u:
+        return base + offset;
+    case 4u:
+        return (slot % 3u) ? (base + offset) : 0u;
+    case 5u:
+        return (slot & 3u) + 1u;
+    case 6u:
+        return (slot & 1u)
+            ? (0x84010000u + offset)
+            : 0u;
+    case 7u:
+        return (slot & 1u)
+            ? 0u
+            : (0x84010000u + offset);
+    case 8u:
+        return 0x00010000u + offset;
+    case 9u:
+        return 0x03F00000u + offset;
+    case 10u:
+        return (slot & 1u) ? 2u : 3u;
+    default:
+        return (slot & 3u) == 0u
+            ? base
+            : ((slot & 3u) == 1u
+                ? 1u
+                : ((slot & 3u) == 2u
+                    ? 0x84010000u + offset
+                    : 0u));
+    }
+}
+
+static void seed_pointer_region(
+    DWORD base,
+    DWORD profileIndex)
 {
     DWORD i;
 
     /*
-     * Zero-filled object regions are deliberate. If translated code follows a
-     * pointer loaded from a field, zero remains a mapped guest address rather
-     * than becoming a random host-invalid value. A few low fields point back
-     * into mapped deterministic pools to exercise nonzero pointer loads too.
+     * Every profile uses values that are also valid guest addresses when a
+     * field is unexpectedly consumed as a pointer. This lets the suite drive
+     * zero/nonzero/equality/signed branch conditions without introducing
+     * random host-invalid addresses.
      */
     for (i = 0u; i < 0x400u; ++i)
         GUEST_WRITE8(base + i, 0u);
 
-    GUEST_WRITE32(base + 0x00u, base);
-    GUEST_WRITE32(base + 0x04u, base + 0x80u);
-    GUEST_WRITE32(base + 0x08u, 0u);
-    GUEST_WRITE32(base + 0x0Cu, caseIndex);
-    GUEST_WRITE32(base + 0x10u, base + 0x100u);
-    GUEST_WRITE32(base + 0x14u, 0u);
-    GUEST_WRITE32(base + 0x18u, base + 0x180u);
-    GUEST_WRITE32(base + 0x1Cu, 0u);
+    for (i = 0u; i < 0x100u / 4u; ++i)
+        GUEST_WRITE32(
+            base + i * 4u,
+            profile_value(profileIndex, base, i));
+
+    /* Profile 0 preserves the original conservative seed exactly. */
+    if ((profileIndex % PROFILE_COUNT) == 0u)
+    {
+        GUEST_WRITE32(base + 0x00u, base);
+        GUEST_WRITE32(base + 0x04u, base + 0x80u);
+        GUEST_WRITE32(base + 0x08u, 0u);
+        GUEST_WRITE32(base + 0x0Cu, profileIndex);
+        GUEST_WRITE32(base + 0x10u, base + 0x100u);
+        GUEST_WRITE32(base + 0x14u, 0u);
+        GUEST_WRITE32(base + 0x18u, base + 0x180u);
+        GUEST_WRITE32(base + 0x1Cu, 0u);
+    }
 }
 
-static void seed_case(DWORD caseIndex)
+static void seed_case(DWORD profileIndex)
 {
     DWORD i;
     DWORD safeArgs[6];
 
     memset(g_ram, 0, RAM_SIZE);
 
-    seed_pointer_region(SAFE_EAX_BASE + caseIndex * 0x1000u, caseIndex);
-    seed_pointer_region(SAFE_ECX_BASE + caseIndex * 0x1000u, caseIndex);
-    seed_pointer_region(SAFE_EDX_BASE + caseIndex * 0x1000u, caseIndex);
-    seed_pointer_region(SAFE_EBX_BASE + caseIndex * 0x1000u, caseIndex);
-    seed_pointer_region(SAFE_ESI_BASE + caseIndex * 0x1000u, caseIndex);
-    seed_pointer_region(SAFE_EDI_BASE + caseIndex * 0x1000u, caseIndex);
+    seed_pointer_region(
+        SAFE_EAX_BASE + profileIndex * 0x1000u, profileIndex);
+    seed_pointer_region(
+        SAFE_ECX_BASE + profileIndex * 0x1000u, profileIndex);
+    seed_pointer_region(
+        SAFE_EDX_BASE + profileIndex * 0x1000u, profileIndex);
+    seed_pointer_region(
+        SAFE_EBX_BASE + profileIndex * 0x1000u, profileIndex);
+    seed_pointer_region(
+        SAFE_ESI_BASE + profileIndex * 0x1000u, profileIndex);
+    seed_pointer_region(
+        SAFE_EDI_BASE + profileIndex * 0x1000u, profileIndex);
 
-    safeArgs[0] = SAFE_EAX_BASE + caseIndex * 0x1000u;
-    safeArgs[1] = SAFE_ECX_BASE + caseIndex * 0x1000u;
-    safeArgs[2] = SAFE_EDX_BASE + caseIndex * 0x1000u;
-    safeArgs[3] = SAFE_EBX_BASE + caseIndex * 0x1000u;
-    safeArgs[4] = SAFE_ESI_BASE + caseIndex * 0x1000u;
-    safeArgs[5] = SAFE_EDI_BASE + caseIndex * 0x1000u;
+    safeArgs[0] = SAFE_EAX_BASE + profileIndex * 0x1000u;
+    safeArgs[1] = SAFE_ECX_BASE + profileIndex * 0x1000u;
+    safeArgs[2] = SAFE_EDX_BASE + profileIndex * 0x1000u;
+    safeArgs[3] = SAFE_EBX_BASE + profileIndex * 0x1000u;
+    safeArgs[4] = SAFE_ESI_BASE + profileIndex * 0x1000u;
+    safeArgs[5] = SAFE_EDI_BASE + profileIndex * 0x1000u;
 
     g_eax = safeArgs[0];
     g_ecx = safeArgs[1];
@@ -459,39 +523,61 @@ static void seed_case(DWORD caseIndex)
     g_ebx = safeArgs[3];
     g_esi = safeArgs[4];
     g_edi = safeArgs[5];
-    g_seh_ebp = 0x00160000u + caseIndex * 0x1000u;
+    g_seh_ebp = 0x00160000u + profileIndex * 0x1000u;
     g_eflags = 0u;
 
     g_esp = ROOT_STACK;
-    GUEST_WRITE32(g_esp, 0x3A4A0000u ^ caseIndex);
+    GUEST_WRITE32(g_esp, 0x3A4A0000u ^ profileIndex);
 
     for (i = 1u; i <= ARG_COUNT; ++i)
     {
-        DWORD value = safeArgs[(i - 1u) % 6u];
+        DWORD value;
 
-        if ((i & 7u) == 0u)
-            value = caseIndex;
-        else if ((i & 7u) == 4u)
-            value = 0u;
+        if ((profileIndex % PROFILE_COUNT) == 0u)
+        {
+            value = safeArgs[(i - 1u) % 6u];
+
+            if ((i & 7u) == 0u)
+                value = profileIndex;
+            else if ((i & 7u) == 4u)
+                value = 0u;
+        }
+        else
+        {
+            value = profile_value(
+                profileIndex,
+                safeArgs[(i - 1u) % 6u],
+                i);
+
+            /*
+             * Keep a regular stream of unquestionably mapped nonzero pointers
+             * in the argument area in case a branch-selected path dereferences
+             * an argument rather than treating it as a scalar.
+             */
+            if ((i % 6u) == 0u)
+                value = safeArgs[(i - 1u) % 6u];
+        }
 
         GUEST_WRITE32(g_esp + i * 4u, value);
     }
 
     for (i = 0u; i < CANARY_COUNT; ++i)
-        GUEST_WRITE32(CANARY_BASE + i * 4u, canary_value(caseIndex, i));
+        GUEST_WRITE32(
+            CANARY_BASE + i * 4u,
+            canary_value(profileIndex, i));
 
     s_accessFault = 0;
     reset_trace();
 }
 
-static int canaries_ok(DWORD caseIndex)
+static int canaries_ok(DWORD profileIndex)
 {
     DWORD i;
 
     for (i = 0u; i < CANARY_COUNT; ++i)
     {
         if (GUEST_READ32(CANARY_BASE + i * 4u) !=
-            canary_value(caseIndex, i))
+            canary_value(profileIndex, i))
             return 0;
     }
 
@@ -514,18 +600,92 @@ static DWORD trace_occurrences(DWORD va)
     return count;
 }
 
-static DWORD covered_member_count(void)
+static DWORD coverage_mask(void)
+{
+    DWORD i;
+    DWORD mask = 0u;
+
+    for (i = 0u; i < CLUSTER_MEMBERS; ++i)
+    {
+        if (trace_occurrences(s_clusterVas[i]) > 0u)
+            mask |= (1u << i);
+    }
+
+    return mask;
+}
+
+static DWORD covered_member_count_from_mask(DWORD mask)
 {
     DWORD i;
     DWORD count = 0u;
 
     for (i = 0u; i < CLUSTER_MEMBERS; ++i)
     {
-        if (trace_occurrences(s_clusterVas[i]) > 0u)
+        if ((mask & (1u << i)) != 0u)
             ++count;
     }
 
     return count;
+}
+
+static void log_member_table(void)
+{
+    DWORD i;
+    char line[160];
+
+    trace("Selected dependency-closed member VAs:");
+    for (i = 0u; i < CLUSTER_MEMBERS; ++i)
+    {
+        sprintf(
+            line,
+            "  member[%u]=%08X%s",
+            (unsigned int)i,
+            (unsigned int)s_clusterVas[i],
+            s_clusterVas[i] == ROOT_VA ? " ROOT" : "");
+        trace(line);
+    }
+}
+
+static void log_run_trace(
+    DWORD profileIndex,
+    const char* label,
+    const DWORD* values,
+    DWORD count)
+{
+    DWORD i;
+    DWORD limit = count < TRACE_CAPACITY ? count : TRACE_CAPACITY;
+    char line[192];
+
+    for (i = 0u; i < limit; ++i)
+    {
+        sprintf(
+            line,
+            "PROFILE %u %s trace[%u]=%08X",
+            (unsigned int)profileIndex,
+            label,
+            (unsigned int)i,
+            (unsigned int)values[i]);
+        trace(line);
+    }
+}
+
+static void log_missing_members(DWORD mask)
+{
+    DWORD i;
+    char line[160];
+
+    for (i = 0u; i < CLUSTER_MEMBERS; ++i)
+    {
+        if ((mask & (1u << i)) == 0u)
+        {
+            sprintf(
+                line,
+                "MISSING member[%u]=%08X",
+                (unsigned int)i,
+                (unsigned int)s_clusterVas[i]);
+            trace(line);
+        }
+    }
 }
 
 typedef struct RunResult
@@ -545,6 +705,7 @@ typedef struct RunResult
 
     DWORD traceCount;
     DWORD trace[TRACE_CAPACITY];
+    DWORD coverageMask;
     DWORD coveredMembers;
 
     unsigned __int64 memoryHash;
@@ -568,7 +729,9 @@ static void capture_result(DWORD caseIndex, RunResult* result)
     result->canaryOk = canaries_ok(caseIndex);
 
     result->traceCount = s_traceCount;
-    result->coveredMembers = covered_member_count();
+    result->coverageMask = coverage_mask();
+    result->coveredMembers =
+        covered_member_count_from_mask(result->coverageMask);
 
     for (i = 0u; i < TRACE_CAPACITY; ++i)
         result->trace[i] = s_trace[i];
@@ -610,6 +773,7 @@ static int architecture_matches(const RunResult* a, const RunResult* b)
         a->eflags == b->eflags &&
         a->accessFault == b->accessFault &&
         a->canaryOk == b->canaryOk &&
+        a->coverageMask == b->coverageMask &&
         a->coveredMembers == b->coveredMembers &&
         a->memoryHash == b->memoryHash;
 }
@@ -622,53 +786,59 @@ static int run_once(DWORD caseIndex, RunResult* result)
     return 1;
 }
 
-static int run_case(DWORD caseIndex)
+static int run_case(
+    DWORD profileIndex,
+    DWORD* suiteCoverage)
 {
     RunResult a;
     RunResult b;
     char line[384];
     int ok = 1;
 
-    run_once(caseIndex, &a);
-    run_once(caseIndex, &b);
+    run_once(profileIndex, &a);
+    run_once(profileIndex, &b);
 
     sprintf(
         line,
-        "CASE %u A eax=%08X ecx=%08X esp=%08X trace=%u coverage=%u/%u hash=%08X%08X",
-        (unsigned int)caseIndex,
+        "PROFILE %u A eax=%08X ecx=%08X esp=%08X trace=%u coverage=%u/%u mask=%08X hash=%08X%08X",
+        (unsigned int)profileIndex,
         (unsigned int)a.eax,
         (unsigned int)a.ecx,
         (unsigned int)a.esp,
         (unsigned int)a.traceCount,
         (unsigned int)a.coveredMembers,
         (unsigned int)CLUSTER_MEMBERS,
+        (unsigned int)a.coverageMask,
         (unsigned int)(a.memoryHash >> 32),
         (unsigned int)a.memoryHash);
     trace(line);
 
     sprintf(
         line,
-        "CASE %u B eax=%08X ecx=%08X esp=%08X trace=%u coverage=%u/%u hash=%08X%08X",
-        (unsigned int)caseIndex,
+        "PROFILE %u B eax=%08X ecx=%08X esp=%08X trace=%u coverage=%u/%u mask=%08X hash=%08X%08X",
+        (unsigned int)profileIndex,
         (unsigned int)b.eax,
         (unsigned int)b.ecx,
         (unsigned int)b.esp,
         (unsigned int)b.traceCount,
         (unsigned int)b.coveredMembers,
         (unsigned int)CLUSTER_MEMBERS,
+        (unsigned int)b.coverageMask,
         (unsigned int)(b.memoryHash >> 32),
         (unsigned int)b.memoryHash);
     trace(line);
 
+    log_run_trace(profileIndex, "A", a.trace, a.traceCount);
+
     ok &= check(
         a.accessFault == 0 && b.accessFault == 0,
-        "PASS: both dependency-closed cluster runs complete without guest-memory faults",
-        "FAIL: dependency-closed cluster triggered guest-memory fault");
+        "PASS: both profile runs complete without guest-memory faults",
+        "FAIL: profile triggered guest-memory fault");
 
     ok &= check(
         a.canaryOk && b.canaryOk,
-        "PASS: unrelated high-RAM canaries survive both cluster runs",
-        "FAIL: dependency-closed cluster corrupted high-RAM canary");
+        "PASS: unrelated high-RAM canaries survive both profile runs",
+        "FAIL: profile corrupted high-RAM canary");
 
     ok &= check(
         a.traceCount > 0u &&
@@ -679,10 +849,9 @@ static int run_case(DWORD caseIndex)
         "FAIL: cluster trace does not begin at selected root");
 
     ok &= check(
-        a.coveredMembers == CLUSTER_MEMBERS &&
-        b.coveredMembers == CLUSTER_MEMBERS,
-        "PASS: every statically closed cluster member executes on both runs",
-        "FAIL: one or more selected dependency members were not executed");
+        a.coverageMask == b.coverageMask,
+        "PASS: profile member coverage is deterministic across A/B",
+        "FAIL: profile member coverage diverges across A/B");
 
     ok &= check(
         a.esp == ROOT_STACK + 4u &&
@@ -700,16 +869,48 @@ static int run_case(DWORD caseIndex)
         "PASS: repeated cluster runs match architecture and complete 64 MiB guest RAM",
         "FAIL: repeated cluster architecture/full-RAM state diverges");
 
+    if (suiteCoverage)
+        *suiteCoverage |= a.coverageMask;
+
     return ok;
 }
 
 static int run_fixture(void)
 {
+    DWORD profileIndex;
+    DWORD suiteCoverage = 0u;
+    DWORD covered;
+    DWORD fullMask = (1u << CLUSTER_MEMBERS) - 1u;
+    char line[256];
     int ok = 1;
 
-    ok &= run_case(0u);
-    ok &= run_case(1u);
-    ok &= run_case(2u);
+    log_member_table();
+
+    for (profileIndex = 0u;
+         profileIndex < PROFILE_COUNT;
+         ++profileIndex)
+    {
+        ok &= run_case(profileIndex, &suiteCoverage);
+    }
+
+    covered = covered_member_count_from_mask(suiteCoverage);
+
+    sprintf(
+        line,
+        "SUITE COVERAGE: %u/%u mask=%08X expected=%08X",
+        (unsigned int)covered,
+        (unsigned int)CLUSTER_MEMBERS,
+        (unsigned int)suiteCoverage,
+        (unsigned int)fullMask);
+    trace(line);
+
+    if (suiteCoverage != fullMask)
+        log_missing_members(suiteCoverage);
+
+    ok &= check(
+        suiteCoverage == fullMask,
+        "PASS: deterministic profile suite executes every statically closed cluster member",
+        "FAIL: deterministic profile suite did not execute every selected cluster member");
 
     return ok;
 }
@@ -731,7 +932,8 @@ VOID __cdecl main()
         NULL);
 
     trace("PHASE 3J DEPENDENCY-CLOSED TRANSLATED CLUSTER START");
-    trace("BUILD TAG: P3J-CLOSURE-20261018-A");
+    trace("BUILD TAG: P3J-CLOSURE-20261018-B");
+    trace("Coverage policy: deterministic A/B per profile, 12-profile union must execute every selected member");
 
     sprintf(
         line,
