@@ -91,11 +91,31 @@ function Assert-No-UnsafeDependency {
         [string]$Label
     )
 
-    if ($Source -match '\b(?:RECOMP_ICALL_SAFE|RECOMP_ITAIL|RECOMP_RDTSC|XBOX_MEMCPY|XBOX_REP_MOVS|xbox_[A-Za-z0-9_]+|__debugbreak)\b') {
+    $dependencyPattern = '\b(?:RECOMP_ICALL_SAFE|RECOMP_ITAIL|RECOMP_RDTSC|XBOX_MEMCPY|XBOX_REP_MOVS|xbox_[A-Za-z0-9_]+|__debugbreak)\b'
+    $dependencyLines = @(
+        $Source -split [Environment]::NewLine |
+            Where-Object { $_ -match $dependencyPattern }
+    )
+
+    if ($dependencyLines.Count -ne 0) {
+        Write-Host "[Phase3F] $Label dependency audit hit(s):" -ForegroundColor Yellow
+        foreach ($line in $dependencyLines) {
+            Write-Host "  $($line.Trim())" -ForegroundColor Yellow
+        }
         throw "$Label unexpectedly depends on ICALL/kernel/runtime-copy services. Stop for re-audit."
     }
 
-    if ($Source -match '\b(?:fp_push|fp_pop|fp_top|fp_st|xmm[0-7]|g_xmm[0-7]|g_mm[0-7]|GUEST_READF32|GUEST_READF64|GUEST_WRITEF32|GUEST_WRITEF64)\b') {
+    $simdPattern = '\b(?:fp_push|fp_pop|fp_top|fp_st|xmm[0-7]|g_xmm[0-7]|g_mm[0-7]|GUEST_READF32|GUEST_READF64|GUEST_WRITEF32|GUEST_WRITEF64)\b'
+    $simdLines = @(
+        $Source -split [Environment]::NewLine |
+            Where-Object { $_ -match $simdPattern }
+    )
+
+    if ($simdLines.Count -ne 0) {
+        Write-Host "[Phase3F] $Label x87/SSE/MMX audit hit(s):" -ForegroundColor Yellow
+        foreach ($line in $simdLines) {
+            Write-Host "  $($line.Trim())" -ForegroundColor Yellow
+        }
         throw "$Label unexpectedly requires x87/SSE/MMX state. Stop for a narrower Phase 3F candidate."
     }
 }
