@@ -183,3 +183,23 @@ Candidate B is now accepted only if the generated shape contains:
 Every broader SIMD/x87 form remains rejected. The hardware harness also seeds,
 captures and compares all four XMM0 lanes between the differential reference
 and the unmodified translated tail-call chain.
+
+## Candidate B wrapper shape — confirmed from local generated output
+
+The local lift showed the complete wrapper body is only:
+
+`ecx = ecx + 0x28;`
+
+followed by the generated direct tail invocation of `sub_0021AB90()`.
+
+There is no wrapper-side MOVSS load. XMM0 is already live at wrapper entry.
+The prep workflow and Xenon harness were simplified accordingly.
+
+The differential is now:
+- direct translated `0x0021AB90` with `ECX = BASE + 0x28`
+- translated `0x001EF850` with `ECX = BASE`, which performs the real
+  `+0x28` adjustment and tail call
+
+Both receive identical live XMM0 state and identical guest stack contents.
+The harness also explicitly checks that the XMM0 lane-0 bits are stored at the
+common effective `this + 0xDC` address and that `ret 4` restores guest ESP.
