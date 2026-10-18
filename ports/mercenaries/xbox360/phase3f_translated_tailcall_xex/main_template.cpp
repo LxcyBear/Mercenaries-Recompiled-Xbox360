@@ -330,7 +330,7 @@ typedef struct RunResult
 
 static unsigned __int64 hash_guest_ram(void)
 {
-    const unsigned __int64 kOffset = 1469598103934665603ui64;
+    const unsigned __int64 kOffset = 14695981039346656037ui64;
     const unsigned __int64 kPrime = 1099511628211ui64;
     unsigned __int64 hash = kOffset;
     DWORD i;
