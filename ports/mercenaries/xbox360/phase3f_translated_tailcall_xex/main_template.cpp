@@ -66,6 +66,7 @@ volatile uint32_t g_recomp_14fa2b_entry = 0u;
 #define esi g_esi
 #define edi g_edi
 #define xmm0 g_xmm0[0]
+#define xmm0v g_xmm0
 
 #define LO8(r)   ((uint8_t)((r) & 0xFFu))
 #define HI8(r)   ((uint8_t)(((r) >> 8) & 0xFFu))
