@@ -254,3 +254,41 @@ The resolved and unresolved real-caller paths still compare architecture,
 translated trace, immediate ICALL saved/post ESP and EAX observations, target
 entry, callee-saved-register restoration, fault state and the complete 64 MiB
 guest-RAM digest.
+
+## Hardware result — Phase 3H-A dispatcher mechanics PASS
+
+Build tag `P3H-ICALL-20261018-A` executed real translated caller
+`0x0008DE60` on modified Xbox 360 hardware.
+
+The caller's deterministic discovery target was `0x00000000` in all three
+cases. The resolved fixture intentionally mapped that observed guest key to the
+already-proven translated target `0x0004CFF0`.
+
+Every dispatcher-mechanics check passed:
+- resolved target entry
+- zero synthetic return slot
+- generated lookup after manual miss
+- EBX/ESI/EDI restoration after deliberate target clobber
+- unresolved manual/generated/kernel miss chain
+- immediate unresolved saved-ESP restoration and EAX=0
+- independent `0x00400000` range rejection before lookup
+- translated trace equality
+- no guest-memory faults
+- complete 64 MiB RAM-hash equality
+
+Observed per-case RAM hashes:
+- case 0: `C503958C0C6B32E5`
+- case 1: `D5199677916B32E5`
+- case 2: `857097D1B66B32E5`
+
+Observed final marker:
+`[Merc360:P3H] PHASE 3H TRANSLATED INDIRECT-CALL RESULT: PASS`
+
+The supplied log excerpt ends during post-test heartbeats, so no unseen XAPI
+exit status is claimed.
+
+This is recorded as **Phase 3H-A PASS**, not final Phase 3H completion, because
+the real caller's synthetic seed produced a NULL guest function pointer. The
+next refinement will discover the caller's naturally computed guest pointer
+slot and seed that slot with a nonzero translated code VA before rerunning the
+unchanged real caller.
