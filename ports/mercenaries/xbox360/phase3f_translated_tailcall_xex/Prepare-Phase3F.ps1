@@ -106,18 +106,20 @@ function Show-And-Reject-Dependency {
         throw "$Label unexpectedly depends on ICALL/kernel/runtime-copy services. Stop for re-audit."
     }
 
-    $simdPattern = '\b(?:fp_push|fp_pop|fp_top|fp_st|xmm[0-7]|g_xmm[0-7]|g_mm[0-7])\b'
-    $simdLines = @(
+    # Candidate B is intentionally allowed to use only the scalar XMM0 path
+    # already hardware-proven in Phase 3C. Reject every other SIMD/x87 shape.
+    $forbiddenSimdPattern = '\b(?:fp_push|fp_pop|fp_top|fp_st|xmm[1-7]|g_xmm[1-7]|mm[0-7]|g_mm[0-7]|GUEST_READF64|GUEST_WRITEF64|recomp_xmm_(?!loadss\b)[A-Za-z0-9_]+)\b'
+    $forbiddenSimdLines = @(
         $Source -split [Environment]::NewLine |
-            Where-Object { $_ -match $simdPattern }
+            Where-Object { $_ -match $forbiddenSimdPattern }
     )
 
-    if ($simdLines.Count -ne 0) {
-        Write-Host "[Phase3F] $Label x87/SSE/MMX audit hit(s):" -ForegroundColor Yellow
-        foreach ($line in $simdLines) {
+    if ($forbiddenSimdLines.Count -ne 0) {
+        Write-Host "[Phase3F] $Label unsupported SIMD/x87 audit hit(s):" -ForegroundColor Yellow
+        foreach ($line in $forbiddenSimdLines) {
             Write-Host "  $($line.Trim())" -ForegroundColor Yellow
         }
-        throw "$Label unexpectedly requires x87/SSE/MMX architectural state. Stop for a narrower Phase 3F candidate."
+        throw "$Label requires SIMD/x87 behavior beyond the Phase 3C-proven scalar XMM0 path."
     }
 }
 
@@ -186,6 +188,27 @@ try {
 
     Show-And-Reject-Dependency -Source $calleeSource -Label "Callee"
     Show-And-Reject-Dependency -Source $wrapperSource -Label "Wrapper"
+
+    $wrapperLoadPattern = 'recomp_xmm_loadss\s*\(\s*g_xmm0\s*,\s*esp\s*\+\s*4\s*\)'
+    if ($wrapperSource -notmatch $wrapperLoadPattern) {
+        Write-Host "[Phase3F] Wrapper source:" -ForegroundColor Yellow
+        Write-Host $wrapperSource
+        throw "Candidate B wrapper no longer has the expected scalar MOVSS argument load into XMM0."
+    }
+
+    $calleeStorePattern = 'GUEST_WRITEF32\s*\(\s*ecx\s*\+\s*0xDC\s*,\s*xmm0\s*\)'
+    if ($calleeSource -notmatch $calleeStorePattern) {
+        Write-Host "[Phase3F] Callee source:" -ForegroundColor Yellow
+        Write-Host $calleeSource
+        throw "Candidate B callee no longer has the expected scalar XMM0 store to this+0xDC."
+    }
+
+    if ($wrapperSource -match 'GUEST_WRITEF32\s*\(') {
+        throw "Candidate B wrapper unexpectedly writes scalar float guest memory before the tail boundary."
+    }
+    if ($calleeSource -match 'recomp_xmm_loadss\s*\(') {
+        throw "Candidate B callee unexpectedly performs its own scalar XMM load."
+    }
 
     $wrapperTargetCalls = [regex]::Matches(
         $wrapperSource,
