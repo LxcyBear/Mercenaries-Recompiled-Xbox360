@@ -101,6 +101,8 @@ static int s_dispatchMode = PHASE3H_RESOLVED;
  * observed guest key to the already-proven translated target 0x0004CFF0.
  */
 static uint32_t s_resolvedGuestVa = 0u;
+static uint32_t s_discoveredPointerSlot = 0u;
+static DWORD s_discoverySlotProbeCount = 0u;
 
 static DWORD s_manualLookupCount = 0u;
 static DWORD s_generatedLookupCount = 0u;
@@ -480,6 +482,22 @@ static void phase3h_reference_icall(uint32_t xbox_va, uint32_t saved_esp)
     s_icallPostEax = g_eax;
 }
 
+static void phase3h_discovery_icall_slot(uint32_t slot_address, uint32_t saved_esp)
+{
+    s_discoveredPointerSlot = slot_address;
+    ++s_discoverySlotProbeCount;
+
+    /*
+     * Preserve the exact unresolved ICALL behavior after observing the slot.
+     * The discovery caller therefore continues exactly as the translated caller
+     * would after a failed indirect dispatch.
+     */
+    phase3h_reference_icall(GUEST_READ32(slot_address), saved_esp);
+}
+
+/* Exact translated caller with ICALL rewritten only to expose pointer-slot address. */
+/*__PHASE3H_DISCOVERY_CALLER__*/
+
 /* Exact translated caller with only ICALL rewritten for differential reference. */
 /*__PHASE3H_REFERENCE_CALLER__*/
 
@@ -565,6 +583,9 @@ static void reset_observers(void)
     s_icallSavedEsp = 0u;
     s_icallPostEsp = 0u;
     s_icallPostEax = 0xFFFFFFFFu;
+
+    s_discoveredPointerSlot = 0u;
+    s_discoverySlotProbeCount = 0u;
 }
 
 static void seed_guest_state(DWORD caseIndex, int mode)
@@ -709,58 +730,56 @@ static const char* mode_name(int mode)
     return "RANGE_REJECT";
 }
 
-static int discover_case_target(DWORD caseIndex, DWORD* outTarget)
+static int discover_case_pointer_slot(DWORD caseIndex, DWORD* outSlot)
 {
     RunResult discovery;
-    char line[256];
+    char line[300];
 
-    if (!outTarget)
+    if (!outSlot)
         return 0;
 
     /*
-     * Run the transformed reference caller in unresolved mode first. This
-     * preserves every translated instruction that computes the function
-     * pointer, but guarantees no dispatch target executes. The resulting ICALL
-     * trace is therefore the exact guest VA computed by the real caller under
-     * this deterministic seed.
+     * Execute an exact translated copy where only the ICALL operation is
+     * replaced by a slot-observer helper. All instructions that compute the
+     * function-pointer slot address remain mechanically translated and intact.
      */
     seed_guest_state(caseIndex, PHASE3H_UNRESOLVED);
     s_resolvedGuestVa = 0u;
-    phase3h_reference_caller();
+    phase3h_discovery_caller();
     capture_result(&discovery);
 
     if (discovery.accessFault != 0 ||
-        discovery.icallTraceIdx != 1u ||
-        discovery.icallCount != 1ui64)
+        s_discoverySlotProbeCount != 1u ||
+        s_discoveredPointerSlot == 0u)
     {
-        trace("FAIL: discovery prepass did not produce one clean ICALL target");
+        trace("FAIL: pointer-slot discovery did not produce one clean nonzero guest slot");
         return 0;
     }
 
-    *outTarget = discovery.icallTarget;
+    if (!guest_ptr(s_discoveredPointerSlot, 4u))
+    {
+        trace("FAIL: discovered function-pointer slot is outside mapped guest RAM");
+        return 0;
+    }
+
+    *outSlot = s_discoveredPointerSlot;
 
     sprintf(
         line,
-        "CASE %u DISCOVERY guest ICALL target=%08X",
+        "CASE %u DISCOVERY guest pointer slot=%08X initial=%08X",
         (unsigned int)caseIndex,
-        (unsigned int)*outTarget);
+        (unsigned int)*outSlot,
+        (unsigned int)GUEST_READ32(*outSlot));
     trace(line);
-
-    /*
-     * A target in the generic runtime's rejected middle range cannot be
-     * resolved through any lookup source. If a future seed lands there, stop
-     * rather than silently weakening the production range guard.
-     */
-    if (*outTarget >= 0x00400000u && *outTarget < 0xFE000000u)
-    {
-        trace("FAIL: discovered target falls inside runtime range-reject window");
-        return 0;
-    }
 
     return 1;
 }
 
-static int run_one_case(DWORD caseIndex, int mode, DWORD expectedTarget)
+static int run_one_case(
+    DWORD caseIndex,
+    int mode,
+    DWORD pointerSlot,
+    DWORD expectedTarget)
 {
     RunResult reference;
     RunResult real;
@@ -771,6 +790,7 @@ static int run_one_case(DWORD caseIndex, int mode, DWORD expectedTarget)
     int ok = 1;
 
     seed_guest_state(caseIndex, mode);
+    GUEST_WRITE32(pointerSlot, expectedTarget);
     s_resolvedGuestVa = expectedTarget;
     expectedEbx = g_ebx;
     expectedEsi = g_esi;
@@ -779,6 +799,7 @@ static int run_one_case(DWORD caseIndex, int mode, DWORD expectedTarget)
     capture_result(&reference);
 
     seed_guest_state(caseIndex, mode);
+    GUEST_WRITE32(pointerSlot, expectedTarget);
     s_resolvedGuestVa = expectedTarget;
     __PHASE3H_CALLER_NAME__();
     capture_result(&real);
@@ -818,14 +839,21 @@ static int run_one_case(DWORD caseIndex, int mode, DWORD expectedTarget)
         "FAIL: reference or real ICALL path triggered guest-memory fault");
 
     ok &= check(
+        expectedTarget == DISPATCH_TARGET_VA &&
+        expectedTarget != 0u &&
+        GUEST_READ32(pointerSlot) == expectedTarget,
+        "PASS: discovered real guest pointer slot is seeded with nonzero translated code VA",
+        "FAIL: guest function-pointer slot seeding is incorrect");
+
+    ok &= check(
         reference.icallTraceIdx == 1u &&
         real.icallTraceIdx == 1u &&
         reference.icallCount == 1ui64 &&
         real.icallCount == 1ui64 &&
         reference.icallTarget == expectedTarget &&
         real.icallTarget == expectedTarget,
-        "PASS: translated caller reproduces the discovered guest ICALL target",
-        "FAIL: translated caller ICALL target changed between deterministic runs");
+        "PASS: unchanged translated caller reads nonzero code VA from its real guest pointer slot",
+        "FAIL: translated caller did not consume the seeded real guest function-pointer slot");
 
     if (mode == PHASE3H_RESOLVED)
     {
@@ -855,7 +883,7 @@ static int run_one_case(DWORD caseIndex, int mode, DWORD expectedTarget)
             real.generatedLookups == 1u &&
             real.kernelLookups == 0u &&
             real.lastLookupVa == expectedTarget,
-            "PASS: real dispatcher resolves discovered guest VA through generated lookup",
+            "PASS: real dispatcher resolves nonzero guest code VA through generated lookup",
             "FAIL: resolved lookup chain is unexpected");
 
         ok &= check(
@@ -1010,18 +1038,20 @@ static int run_fixture(void)
 {
     int ok = 1;
     DWORD caseIndex;
-    DWORD discoveredTarget = 0u;
+    DWORD pointerSlot = 0u;
 
     for (caseIndex = 0u; caseIndex < 3u; ++caseIndex)
     {
-        if (!discover_case_target(caseIndex, &discoveredTarget))
+        if (!discover_case_pointer_slot(caseIndex, &pointerSlot))
         {
             ok = 0;
             continue;
         }
 
-        ok &= run_one_case(caseIndex, PHASE3H_RESOLVED, discoveredTarget);
-        ok &= run_one_case(caseIndex, PHASE3H_UNRESOLVED, discoveredTarget);
+        ok &= run_one_case(
+            caseIndex, PHASE3H_RESOLVED, pointerSlot, DISPATCH_TARGET_VA);
+        ok &= run_one_case(
+            caseIndex, PHASE3H_UNRESOLVED, pointerSlot, DISPATCH_TARGET_VA);
         ok &= run_range_guard_case(caseIndex);
     }
 
@@ -1044,10 +1074,10 @@ VOID __cdecl main()
         NULL);
 
     trace("PHASE 3H TRANSLATED INDIRECT-CALL DISPATCH START");
-    trace("BUILD TAG: P3H-ICALL-20261018-A");
+    trace("BUILD TAG: P3H-ICALL-20261018-B");
     trace("Caller VA: __PHASE3H_CALLER_VA_TEXT__");
     trace("Dispatch target VA: __PHASE3H_TARGET_VA_TEXT__");
-    trace("Modes: discover real caller target / resolved / unresolved + direct range guard");
+    trace("Modes: discover real guest pointer slot / seed 0x0004CFF0 / resolved / unresolved + direct range guard");
 
     g_ram = (BYTE*)malloc(RAM_SIZE);
 
