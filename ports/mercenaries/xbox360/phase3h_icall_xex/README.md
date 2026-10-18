@@ -292,3 +292,26 @@ the real caller's synthetic seed produced a NULL guest function pointer. The
 next refinement will discover the caller's naturally computed guest pointer
 slot and seed that slot with a nonzero translated code VA before rerunning the
 unchanged real caller.
+
+## Phase 3H-B — nonzero real guest function-pointer slot
+
+Build tag: `P3H-ICALL-20261018-B`.
+
+3H-A proved the dispatcher mechanics but its deterministic caller state read a
+NULL guest function pointer. The B fixture removes that caveat without changing
+the real translated caller.
+
+For a `GUEST_READ32(...)` ICALL operand, a local discovery copy exposes only
+the guest slot address while preserving every mechanically translated
+instruction that computes it. The harness then:
+
+1. records the real guest function-pointer slot address
+2. resets identical state
+3. writes `0x0004CFF0` into that exact slot
+4. runs the unchanged translated caller
+5. requires the real ICALL trace itself to equal nonzero `0x0004CFF0`
+6. resolves that VA through generated lookup to translated `sub_0004CFF0`
+7. reruns unresolved mode with the same seeded slot and unchanged caller
+
+The discovery caller is also run through the explicit guest-memory audit before
+XDK compilation.
