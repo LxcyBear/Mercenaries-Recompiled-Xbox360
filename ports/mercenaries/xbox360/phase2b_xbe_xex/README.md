@@ -85,3 +85,23 @@ code is allowed to execute.
 If this phase passes, the next work is Phase 2C: exact retail-XBE verification,
 guest aliases/synthetic kernel data, and load invariants required by the
 translated ABI.
+
+
+## Hardware result — PASS (October 18, 2026)
+
+The real Xbox 360 run succeeded:
+
+- XBE file size: `0x00313000` (3,223,552 bytes)
+- base: `0x00010000`
+- decoded retail entry: `0x0022964A`
+- TLS VA: `0x00302CB4`
+- decoded kernel thunk VA: `0x002DBCE0`
+- section count: 14
+- Title ID: `0x4C410015`
+- all 14 sections loaded
+- initialized bytes copied: `0x0030A5BC` (3,188,156)
+- entry point mapped but **not executed**
+- 10-second post-test timeout completed
+- `[XAPI RETURN VALUE] 0`
+
+**Phase 2B is complete.**
