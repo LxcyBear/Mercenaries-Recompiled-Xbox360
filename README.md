@@ -2,7 +2,7 @@
 
 > **Experimental native Xbox 360 port · Not playable yet**
 >
-> **Platform:** RGH/JTAG Xbox 360 · Xenon PowerPC · Xbox 360 XDK / Visual Studio 2010 · native `default.xex`
+> **Platform:** RGH/JTAG Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
 > **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 0 (translation and memory audit) + Phase 1 (hardware bootstrap).
 >
@@ -78,7 +78,7 @@ host audio dependencies need native replacements.
 1. **Done:** run portable endian tests on a PC (GCC, Clang and UBSan; see
    evidence below).
 2. Build the small XDK diagnostic from the active development branch as an
-   Xbox 360 **game/XEX** target using the user's installed XDK and VS2010.
+   Xbox 360 **game/XEX** target using the user's installed XDK and VS17.
 3. Launch it from an isolated test folder on RGH/JTAG Xbox 360 hardware,
    **never replacing a dashboard or boot XEX**. Verify heartbeat and log path.
 4. Confirm controller A exits, then confirm the 15-second timeout in a separate
@@ -132,7 +132,7 @@ semantics.
 trying to run original Xbox guest game code.
 
 - [x] Add source for a **diagnostic-only** console entry point to Draft PR #1.
-- [ ] Open a VS2010 Xbox 360 XDK **game** project using the user's local SDK;
+- [ ] Open or reuse a VS17 Xbox 360 XDK **game** project using the user's working SDK;
       link only required system libraries and include the bootstrap source.
 - [ ] Produce a real `default.xex`; record toolchain config and build log.
 - [ ] Launch from a new isolated folder; do not edit dashboard boot files.
@@ -292,7 +292,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 - [Active Xbox 360 foundation PR](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1) —
   currently contains the experimental target; review before merging.
 - [Xbox 360-specific working notes on the branch](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/README.md).
-- [Hardware bootstrap on the branch](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex) and its [VS2010/XDK build and safety checklist](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex/BUILD_FIRST_XEX.md).
+- [Hardware bootstrap on the branch](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex) and its [VS17/XDK build and safety checklist](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex/BUILD_FIRST_XEX.md).
 - Upstream Windows build is **not** our Xbox 360 build:
   [`ports/mercenaries/scripts/Build-From-Iso.ps1`](ports/mercenaries/scripts/Build-From-Iso.ps1)
   compiles a Windows x64 game, not an XEX.
@@ -325,12 +325,16 @@ unexecuted test PASS.**
 - Ran the portable byte-order and unaligned-access test successfully under
   GCC 14.2, Clang 17, and Clang UBSan; confirmed exact Git blob identities.
 - Corrected a test diagnostic newline and added
-  [VS2010/XDK XEX build instructions](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex/BUILD_FIRST_XEX.md).
+  [VS17/XDK XEX build instructions](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex/BUILD_FIRST_XEX.md).
 - Replaced the nearly empty fork README with the **phase gates, checklists,
   blockers, test evidence and durable progression log**.
-- **Next gate:** VS2010/XDK diagnostic compile, then real-console logs and
+- **Next gate:** VS17/XDK diagnostic compile, then real-console logs and
   controller/timeout verification. Host endian tests are now passing.
 - **No playable XEX exists.** Phase 1 hardware success is not yet claimed.
+
+- **Build environment decision:** use the user's existing **VS17 + Xbox 360 XDK**
+  configuration instead of older Visual Studio setup. Updated the Phase 1
+  build guide; no actual Xbox 360 compile or console test is claimed.
 
 ### How future updates are recorded
 
