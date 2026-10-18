@@ -96,3 +96,22 @@ Send the full xbWatson trace.
 
 A PASS means the first generated-code memory slice is valid on the actual Xbox
 360 compiler/CPU. It does **not** mean the complete translated ABI is ready yet.
+
+## Hardware result — PASS
+
+Build tag `P3A-SCALAR-20261018-A` passed the complete Phase 3A fixture on
+modified Xbox 360 hardware.
+
+Verified:
+- Xenon big-endian host order
+- explicit 8/16/32/64-bit guest reads/writes
+- generated-style MOV and RMW
+- unaligned scalar accesses
+- little-endian 32/64-bit guest bytes
+- mirror + KSEG0/KSEG1 coherence
+- CMPXCHG-style paths
+- PUSH source evaluation order + POP restoration
+- MMIO/cross-window rejection
+- clean cleanup/timeout + `[XAPI RETURN VALUE] 0`
+
+**Phase 3A is complete.**
