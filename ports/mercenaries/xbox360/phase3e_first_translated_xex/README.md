@@ -136,3 +136,26 @@ succeeds, send the complete xbWatson trace from the XEX.
 A PASS is the first hardware proof that mechanically translated Mercenaries
 x86 game logic itself can execute through the explicit guest-memory ABI on
 Xenon. It still does not authorize broad entry-point execution.
+
+## Local generation result — PASS
+
+The Phase 3E prep workflow completed successfully against the exact supported
+retail XBE.
+
+Observed:
+- Python 3.12.10 environment ready
+- exact SHA-256 verified
+- reviewed-seed disassembly completed
+- 13,346 functions / 16,598 labels loaded for the isolated lift
+- `0x00208F30` lifted with explicit guest memory
+- post-generation legacy-memory audit: PASS
+- `[Phase3E] READY`
+
+Generated local files:
+- `build\phase3e_first_translated\sub_00208F30.c`
+- `build\phase3e_first_translated\main.cpp`
+
+The warnings for missing optional identified-function and ABI databases are not
+blocking for this isolated, dependency-free accessor candidate.
+
+**Local generation is complete; modified Xbox 360 hardware execution is next.**
