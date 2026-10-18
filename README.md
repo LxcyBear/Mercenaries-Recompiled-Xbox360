@@ -874,6 +874,24 @@ unexecuted test PASS.**
 - Build tag: `P3F-TAILCALL-20261018-B`.
 - **Next:** update the local branch and rerun `Prepare-Phase3F.ps1`.
 
+### 2026-10-18 — Phase 3F Candidate B scalar-XMM0 audit refined
+
+- Candidate B local lift found wrapper `0x001EF850` at 8 bytes / 2
+  instructions and callee `0x0021AB90` at 17 bytes / 3 instructions.
+- The first Candidate B prep stopped because its deliberately conservative
+  SIMD guard saw:
+  `GUEST_WRITEF32(ecx + 0xDC, xmm0); /* movss */`.
+- This is not a new unsupported execution class: scalar XMM0 + float guest
+  memory was already hardware-proven in Phase 3C.
+- The Phase 3F guard now permits only the exact scalar XMM0 path required by
+  this candidate: wrapper `recomp_xmm_loadss(g_xmm0, esp + 4)` and callee
+  `GUEST_WRITEF32(ecx + 0xDC, xmm0)`.
+- Packed SSE, XMM1-XMM7, MMX, x87, 64-bit float paths, ICALL/ITAIL,
+  kernel/runtime-copy helpers, RDTSC and debugbreak remain rejected.
+- The Xenon harness now seeds and captures all four XMM0 lanes and includes
+  them in the differential architectural-state comparison.
+- **Next:** update the local branch and rerun Candidate B prep.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
