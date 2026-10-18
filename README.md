@@ -53,7 +53,7 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A + 2B COMPLETE on Xenon** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A + 2B COMPLETE; Phase 2C exact-XBE test ready** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
@@ -441,6 +441,22 @@ unexecuted test PASS.**
 - **Phase 2B: COMPLETE.**
 - **Next:** Phase 2C exact SHA-256 enforcement and stronger post-load
   invariants before any translated guest code can execute.
+
+### 2026-10-18 — Phase 2C exact-XBE verification prepared
+
+- Created `xbox360/phase2c-verified-xbe` from the completed Phase 2B branch.
+- Added a self-contained Xbox 360 diagnostic that computes SHA-256 over the
+  user's complete retail XBE and requires the upstream pinned digest:
+  `AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7`.
+- Added exact supported-build invariants for file/header/image size, TLS VA,
+  kernel thunk VA, title ID, entry point, section count and section order.
+- Added post-load verification: full header byte comparison, per-section
+  initialized-data `memcmp`, zero-fill-tail checks and virtual-overlap rejection.
+- Entry-point execution remains disabled.
+- SHA-256 implementation passed standard empty-string, `abc`, and quick-brown-
+  fox vectors under GCC, Clang, and Clang ASan+UBSan.
+- **Next:** build/run the Phase 2C XEX on the same Xbox 360 and capture the
+  complete `[Merc360:P2C]` xbWatson trace.
 
 ### How future updates are recorded
 
