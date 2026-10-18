@@ -32,9 +32,7 @@ Use a **copy** of the working Phase 1 Xbox 360 project.
    - or otherwise make both \`guest_memory.h\` and \`guest_endian.h\`
      resolvable by the source.
 3. Build with the exact same known-good Xbox 360 / PowerPC XDK configuration.
-4. Important: if `guest_memory.h` cannot be found, all later `MercGuestMemory` / `memory` errors are cascading errors. Fix the include first, rebuild, and only troubleshoot errors that remain.
-
-Send the **entire compiler output** if it still fails. Do not substitute desktop
+4. Send the **entire compiler output** if it still fails. Do not substitute desktop
    Win32 headers/libraries to make an error disappear.
 
 ## Expected real-console output
@@ -102,3 +100,14 @@ contract before we add:
 5. generated x86-to-C code.
 
 Passing this test is Phase 2A, not the whole Phase 2 gate.
+
+
+## First two compile attempts
+
+The first attempts failed before code generation because an older diagnostic
+referenced `../include/guest_memory.h` from a standalone VS project. That
+single missing include caused the large cascade of `MercGuestMemory`,
+`memory`, storage-class and declaration errors.
+
+The hardware diagnostic is now **one self-contained `main.cpp`** to eliminate
+that entire class of setup mistakes.
