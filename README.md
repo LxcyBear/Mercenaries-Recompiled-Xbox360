@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3I — first broader multi-function translated execution slice.
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3J — first dependency-closed translated function cluster.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G/3H hardware PASS; 3I composite slice harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G/3H/3I hardware PASS; 3J dependency-closed cluster next** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -225,8 +225,14 @@ executes as Xbox 360 PowerPC.
       `0x0004CFF0`, and dispatched through `RECOMP_ICALL_SAFE` to translated
       `0x0004CFF0`; resolved, unresolved and range-reject paths all matched the
       independent reference on modified Xbox 360 hardware.
-- [ ] Execute a broader multi-function translated slice, then the game's entry
-      sequence with guardrails and logging.
+- [x] Execute a broader multi-function translated slice: one persistent 64 MiB
+      guest arena ran direct CALL, tail-call/MOVSS, resolved ICALL, unresolved
+      ICALL and a final direct CALL; all three cases repeated deterministically
+      with matching full-RAM checkpoint hashes, intact canaries/markers and no
+      guest-memory faults.
+- [ ] Execute the first dependency-closed translated function cluster selected
+      from a real Mercenaries call graph, then widen toward guarded game-entry
+      execution.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -359,6 +365,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 3F first translated Mercenaries tail-call chain | **PASS** | Modified Xbox 360 Xenon: translated `0x001EF850 -> 0x0021AB90`, scalar MOVSS stack load/store, ret-4 cleanup, XMM0 equality, full 64 MiB RAM-hash equality |
 | 2026-10-18 | Phase 3G first translated Mercenaries normal-CALL chain | **PASS** | Modified Xbox 360 Xenon: translated `0x00050010 -> 0x0004CFF0`, synthetic zero return-slot push, callee RET/caller RET stack restoration, full 64 MiB RAM-hash equality, clean XAPI 0 |
 | 2026-10-18 | Phase 3H first translated Mercenaries indirect-call dispatch | **PASS** | Modified Xbox 360 Xenon: caller `0x0008DE60` discovered real guest pointer slot `0x00000034`, consumed nonzero `0x0004CFF0`, resolved through `RECOMP_ICALL_SAFE`, matched unresolved/range-guard reference, clean XAPI 0 |
+| 2026-10-18 | Phase 3I composite translated execution slice | **PASS** | Modified Xbox 360 Xenon: five-stage direct-CALL → tail/MOVSS → resolved ICALL → unresolved ICALL → direct-CALL sequence in one persistent 64 MiB arena; all 15 A/B full-RAM checkpoints matched with intact canaries/markers |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -1278,6 +1285,51 @@ unexecuted test PASS.**
 - **No translated semantic failure, explicit-memory audit failure, compile, or
   hardware execution occurred in this attempt.**
 - Fix commit on the Phase 3I branch: `c5f3dbb48a84a44e7c22b54ed84194132fc5ce85`.
+
+### 2026-10-18 — Phase 3I composite translated slice passes on Xenon
+
+- Build tag `P3I-SLICE-20261018-A` executed the first five-stage composite
+  translated slice on modified Xbox 360 hardware.
+- Real translated families in one persistent guest arena:
+  - direct CALL `0x00050010 -> 0x0004CFF0`
+  - tail-call/MOVSS `0x001EF850 -> 0x0021AB90`
+  - resolved ICALL from `0x0008DE60` through real guest pointer slot
+    `0x00000034` to nonzero `0x0004CFF0`
+  - unresolved ICALL through the same real nonzero pointer
+  - final direct CALL `0x00050010 -> 0x0004CFF0` after both ICALL outcomes
+- All stages remained guest-memory-fault free.
+- Persistent canaries survived every stage and cumulative stage markers remained
+  intact.
+- The real ICALL pointer slot was deterministic at `0x00000034`.
+- Each of three deterministic cases ran the complete five-stage slice twice
+  from identical initial state.
+- All 15 complete 64 MiB checkpoint hashes matched A vs B:
+  - case 0:
+    `391D8EBE77156185`,
+    `3716FA5917BCAF5C`,
+    `6A725AEF6CDC6739`,
+    `5BC63F5096702E66`,
+    `601DC9E5E9060642`
+  - case 1:
+    `33E99C35E7354685`,
+    `8F5E78AB7F167EA3`,
+    `849845E9665D51DE`,
+    `22C6E2C437FECB71`,
+    `97A3970721A1D89D`
+  - case 2:
+    `DC774012C0D09585`,
+    `F14EAABCAD54286E`,
+    `EDCCAAF0A1CF1A23`,
+    `82B2E33EA043C0F0`,
+    `920E7A6F58C65544`
+- Final observed functional marker:
+  `PHASE 3I COMPOSITE TRANSLATED SLICE RESULT: PASS`.
+- The supplied log excerpt ends during post-test heartbeats, so no unseen XAPI
+  return value is claimed.
+- **Phase 3I: COMPLETE.**
+- **Next:** Phase 3J — select and execute the first dependency-closed translated
+  function cluster from the real Mercenaries call graph, preserving explicit
+  guest memory and bounded runtime dependencies before guarded entry/startup.
 
 ### How future updates are recorded
 
