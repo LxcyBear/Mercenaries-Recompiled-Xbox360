@@ -9,7 +9,7 @@
 
 #define CHECK(expr) do { \
     if (!(expr)) { \
-        fprintf(stderr, "FAIL line %d: %s\\n", __LINE__, #expr); \
+        fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #expr); \
         return 1; \
     } \
 } while (0)
