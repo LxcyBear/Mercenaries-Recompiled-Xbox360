@@ -100,11 +100,11 @@ or the timeout is used.
 
 - [x] VS17 invokes the Xbox 360 XDK toolchain and title compiles successfully. **Confirmed October 18, 2026.**
 - [ ] Actual XEX binary is generated.
-- [ ] XEX launches from an isolated folder on real RGH/JTAG hardware.
-- [ ] Debug output or usable trace is captured.
-- [ ] Startup and 1-second heartbeats seen.
-- [ ] Controller 0 detection and button A exit confirmed.
-- [ ] 15-second timeout exit confirmed in a separate test.
+- [x] XEX launches on real RGH/JTAG hardware. **Confirmed October 18, 2026.**
+- [x] xbWatson debug trace captured.
+- [x] Startup and repeated 1-second heartbeats seen.
+- [x] Controller 0 detection and button A exit confirmed; `[XAPI RETURN VALUE] 0`.
+- [ ] 15-second timeout exit confirmed in a separate test. **Still pending.**
 - [ ] Compiler/XDK build details, console/kernel, commit SHA and
       test logs added to the root README evidence and progress log.
 
