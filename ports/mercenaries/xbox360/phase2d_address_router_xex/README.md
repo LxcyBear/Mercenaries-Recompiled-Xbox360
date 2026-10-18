@@ -76,3 +76,22 @@ Send the entire xbWatson output.
 If this passes, the next bounded memory test will populate the Mercenaries
 guest stack and synthetic low-memory TIB/TLS/KTHREAD/kernel-data fixtures
 through this router. Broad translated game execution is still disabled.
+
+
+## Hardware result — PASS
+
+Build tag `P2D-ROUTER-20261018-A` passed the complete router fixture on a
+real Xbox 360.
+
+Verified:
+- primary + configured mirror RAM classification/coherence
+- deep mirror `0x20000448 == 0x00000448`
+- KSEG0/KSEG1 coherence with low RAM
+- synthetic fence/kernel override priority
+- 64 MiB boundary rejection
+- VRAM/NV2A/kernel-thunk/APU/AC97 classification
+- no RAM pointer leakage from NV2A/APU/kernel-thunk routes
+- unsupported-gap rejection
+- clean cleanup/timeout and `[XAPI RETURN VALUE] 0`
+
+**Phase 2D is complete.**
