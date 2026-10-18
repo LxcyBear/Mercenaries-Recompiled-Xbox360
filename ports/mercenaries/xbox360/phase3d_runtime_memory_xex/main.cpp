@@ -592,15 +592,6 @@ VOID __cdecl main()
     DWORD started;
     DWORD nextHeartbeat = 1000u;
 
-    /*
-     * Earliest possible debugger breadcrumbs.  These intentionally bypass the
-     * normal trace() helper so xbWatson can tell us whether main() is reached
-     * even if file logging or later setup fails.
-     */
-    OutputDebugStringA("[Merc360:P3D] EARLY MAIN ENTRY\r\n");
-    OutputDebugStringA("[Merc360:P3D] BUILD TAG: P3D-RUNTIME-20261018-B\r\n");
-    OutputDebugStringA("[Merc360:P3D] Opening optional game log file\r\n");
-
     s_logFile = CreateFileA(
         "game:\\merc360-phase3d-runtime-memory.log",
         GENERIC_WRITE,
@@ -610,10 +601,8 @@ VOID __cdecl main()
         FILE_ATTRIBUTE_NORMAL,
         NULL);
 
-    OutputDebugStringA("[Merc360:P3D] File-log open returned\r\n");
-
     trace("PHASE 3D EXPLICIT RUNTIME/STRING MEMORY ABI START");
-    trace("BUILD TAG: P3D-RUNTIME-20261018-B");
+    trace("BUILD TAG: P3D-RUNTIME-20261018-A");
     trace("No translated Mercenaries function executes in this fixture");
 
     g_ram = (BYTE*)malloc(RAM_SIZE);
