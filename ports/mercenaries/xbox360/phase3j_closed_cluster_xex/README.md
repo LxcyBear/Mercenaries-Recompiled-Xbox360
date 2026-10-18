@@ -265,3 +265,19 @@ Nested RET-N immediates must be parseable and no larger than 64 bytes.
 
 No loop, dynamic-dispatch, x87/SSE, closure-budget, hash-verification, or
 hardware-pass rule was loosened.
+
+## RET-N relaxation correction
+
+The first rerun after enabling nested RET-N still reported the old rejection
+message. Source inspection showed the previous patch changed the root rule but
+did not replace the generic member-level RET-N rejection.
+
+That stale filter is now removed.
+
+Current behavior:
+- nested members may use parseable RET-N cleanup <= 64 bytes
+- the root still requires exactly one plain RET and no RET-N
+- the legacy `ret-N member deferred from first closed cluster` rejection no
+  longer exists in the selector
+
+Fix commit: `42be8dc0d0b6423104e2b140c6c1330d558c8430`.
