@@ -2,11 +2,11 @@
 
 > **Experimental native Xbox 360 port · Not playable yet**
 >
-> **Platform:** RGH/JTAG Xbox 360 · Xenon PowerPC · Xbox 360 XDK / Visual Studio 2010 · native \`default.xex\`
+> **Platform:** RGH/JTAG Xbox 360 · Xenon PowerPC · Xbox 360 XDK / Visual Studio 2010 · native `default.xex`
 >
 > **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 0 (translation and memory audit) + Phase 1 (hardware bootstrap).
 >
-> **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on \`master\` until reviewed and merged.
+> **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
 ## The mission
 
@@ -28,18 +28,18 @@ unnecessarily, or simply repackage the Windows executable. We do need to adapt
 the translator output and build a real Xbox 360-native host.
 
 This is not the original Xbox backward-compatibility emulator and not an
-emulator running inside an XEX. \`default.xex\` is the intended native output.
+emulator running inside an XEX. `default.xex` is the intended native output.
 
 ### Scope and distribution rules
 
 - Supported original Xbox game input must come from the user's own legal retail
   copy. The upstream project identifies the supported USA retail XBE with
-  SHA-256 \`AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7\`.
+  SHA-256 `AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7`.
 - Do not commit or distribute a game ISO, extracted game files, the retail XBE,
   copyrighted generated game code, XDK headers/libraries, or Microsoft SDK assets.
 - Preserve upstream attribution and the applicable **per-file licenses**; the
   root MIT license does not supersede LGPL and third-party components.
-- A successful \`default.xex\` build is **not** evidence of gameplay. Real-hardware
+- A successful `default.xex` build is **not** evidence of gameplay. Real-hardware
   startup, graphics, input and asset loading must be verified separately.
 
 ---
@@ -66,7 +66,7 @@ helpers, a host-side test source, a platform architecture note, and an initial
 executed Xbox 360 build or hardware test yet.**
 
 **Present blockers:** no verified Xbox 360 executable; original Xbox guest data
-is little-endian while Xbox 360 PowerPC is big-endian; generated \`MEM16/32/64\`
+is little-endian while Xbox 360 PowerPC is big-endian; generated `MEM16/32/64`
 expressions are assignable native-pointer lvalues; Windows x64 guest-memory
 aperture and mapped aliases are unavailable as-is; D3D11, Win32, DXGI, and
 host audio dependencies need native replacements.
@@ -85,8 +85,8 @@ host audio dependencies need native replacements.
 
 ### Evidence policy
 
-\`[x]\` = source/analysis task confirmed as **done**; it does **not** indicate
-hardware validation unless the item explicitly says so. \`[ ]\` = outstanding.
+`[x]` = source/analysis task confirmed as **done**; it does **not** indicate
+hardware validation unless the item explicitly says so. `[ ]` = outstanding.
 Milestones move to **Done** only with test evidence. When a new change lands,
 update the **status table, affected checklist, blockers, evidence table, and
 progress log in the same commit/PR**, so the README stays synchronized with
@@ -102,8 +102,8 @@ actual progress. Failed experiments belong in the log, too.
 guest-memory contract before modifying generated code.
 
 - [x] Confirm static original Xbox x86-to-C translation is reusable.
-- [x] Identify the direct \`MEM8/16/32/64\` macros, shared register globals, and
-      \`g_xbox_mem_offset\` guest-to-host address mapping.
+- [x] Identify the direct `MEM8/16/32/64` macros, shared register globals, and
+      `g_xbox_mem_offset` guest-to-host address mapping.
 - [x] Write explicit little-endian 16/32/64-bit and float access helpers in
       the development branch (not integrated with generated code yet).
 - [x] Write unaligned byte-order tests in the development branch (not yet run).
@@ -129,7 +129,7 @@ trying to run original Xbox guest game code.
 - [x] Add source for a **diagnostic-only** console entry point to Draft PR #1.
 - [ ] Open a VS2010 Xbox 360 XDK **game** project using the user's local SDK;
       link only required system libraries and include the bootstrap source.
-- [ ] Produce a real \`default.xex\`; record toolchain config and build log.
+- [ ] Produce a real `default.xex`; record toolchain config and build log.
 - [ ] Launch from a new isolated folder; do not edit dashboard boot files.
 - [ ] Confirm debugger/Neighborhood output and a useful on-device log.
 - [ ] Confirm 1-second heartbeats and controller 0 detection.
@@ -173,12 +173,12 @@ executes as Xbox 360 PowerPC.
       compiler extensions, native-endian casts, 32/64-bit assumptions and
       Windows/MSVC-specific code.
 - [ ] Update **maintained translator / lifter / patch generator**, not
-      disposable \`ports/mercenaries/src/recomp/gen\` files, for explicit
+      disposable `ports/mercenaries/src/recomp/gen` files, for explicit
       endian-safe guest reads/writes/RMW.
 - [ ] Generate and compile isolated instruction fixtures under the actual
       Xbox 360 compiler before attempting all translated functions.
 - [ ] Validate flags, sign extension, stack/calling convention, frame saving,
-      \`RECOMP_ICALL\` dispatch, direct/tail calls and function returns.
+      `RECOMP_ICALL` dispatch, direct/tail calls and function returns.
 - [ ] Validate x87, MMX and SSE semantics against the original instruction
       results; test rounding, NaN and exceptional paths.
 - [ ] Evaluate Xenon limitations: native stack depth, object/code size,
@@ -259,7 +259,7 @@ build/install process.
 
 ## Architecture in one picture
 
-\`\`\`text
+```text
 User-provided verified Xbox retail XBE + game files
                         |
               xboxrecomp x86 -> C
@@ -275,7 +275,7 @@ User-provided verified Xbox retail XBE + game files
                 native default.xex
                         |
                  RGH/JTAG console
-\`\`\`
+```
 
 The retained C **logic** is the starting point, not a guarantee that
 Windows-hosted dependencies will work unmodified on Xenon.
@@ -289,7 +289,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 - [Xbox 360-specific working notes on the branch](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/README.md).
 - [Hardware bootstrap on the branch](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex).
 - Upstream Windows build is **not** our Xbox 360 build:
-  [\`ports/mercenaries/scripts/Build-From-Iso.ps1\`](ports/mercenaries/scripts/Build-From-Iso.ps1)
+  [`ports/mercenaries/scripts/Build-From-Iso.ps1`](ports/mercenaries/scripts/Build-From-Iso.ps1)
   compiles a Windows x64 game, not an XEX.
 
 ## Verified test evidence
@@ -312,7 +312,7 @@ unexecuted test PASS.**
   360-native platform runtime** rather than reimplementing gameplay or
   attempting a Windows executable conversion.
 - Audited upstream architecture, CMake targets, native memory model,
-  \`recomp_types.h\` and the translated-code interfaces.
+  `recomp_types.h` and the translated-code interfaces.
 - Opened [Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1)
   to isolate portable guest endian helpers, tests, and Xbox 360 target notes.
 - Added source for a minimal **non-game** XDK diagnostic with 15-second safety
