@@ -454,21 +454,19 @@ static void seed_guest_state(DWORD caseIndex, int wrapperRun)
     g_seh_ebp = 0x0EB00000u + caseIndex;
 
     /*
-     * XMM0 is already live when the real wrapper is entered. Lane 0 carries
-     * the scalar setter value; the upper lanes are sentinels so Phase 3F also
-     * proves the tail chain preserves the same SIMD architectural state as the
-     * direct-callee reference.
+     * Poison all XMM0 lanes before entry. The translated callee must execute
+     * memory-form MOVSS from guest [ESP+4], replacing lane 0 with the stack
+     * argument and zeroing lanes 1-3 exactly as the Phase 3C-proven helper does.
      */
-    xmmSeed[0] = argumentBits;
+    xmmSeed[0] = 0xDEAD0000u + caseIndex;
     xmmSeed[1] = 0x11110000u + caseIndex;
     xmmSeed[2] = 0x22220000u + caseIndex;
     xmmSeed[3] = 0x33330000u + caseIndex;
     memcpy(g_xmm0, xmmSeed, sizeof(xmmSeed));
 
     /*
-     * 0x0021AB90 ends with ret 4. The scalar value is live in XMM0, while this
-     * four-byte guest argument remains part of the original x86 stack contract
-     * and must still be cleaned by RET 4.
+     * 0x0021AB90 reads its scalar argument from guest [ESP+4] and ends with
+     * ret 4. Supply exactly one return slot plus that four-byte argument.
      */
     g_esp = STACK_TOP - 8u;
     GUEST_WRITE32(g_esp, 0xC0DEF00Du ^ caseIndex);
@@ -544,6 +542,7 @@ static int run_one_case(DWORD caseIndex)
      * Real translated chain:
      * start ECX at OBJECT_BASE, execute translated 0x001EF850, let it perform
      * ECX += 0x28 and tail-call translated 0x0021AB90 with no synthetic push.
+     * The callee then loads the same guest [ESP+4] scalar into XMM0.
      */
     seed_guest_state(caseIndex, 1);
     sub_001EF850();
@@ -609,6 +608,22 @@ static int run_one_case(DWORD caseIndex)
         "FAIL: scalar setter did not store the expected XMM0 bits");
 
     ok &= check(
+        reference.xmm0Bits[0] == expectedBits &&
+        wrapper.xmm0Bits[0] == expectedBits,
+        "PASS: callee MOVSS loads the exact guest [ESP+4] scalar into XMM0 lane 0",
+        "FAIL: XMM0 lane 0 does not match the guest stack scalar");
+
+    ok &= check(
+        reference.xmm0Bits[1] == 0u &&
+        reference.xmm0Bits[2] == 0u &&
+        reference.xmm0Bits[3] == 0u &&
+        wrapper.xmm0Bits[1] == 0u &&
+        wrapper.xmm0Bits[2] == 0u &&
+        wrapper.xmm0Bits[3] == 0u,
+        "PASS: memory-form MOVSS zeroes XMM0 upper lanes on both paths",
+        "FAIL: XMM0 upper lanes do not match Phase 3C MOVSS semantics");
+
+    ok &= check(
         architectural_results_match(&reference, &wrapper),
         "PASS: real tail-call chain matches direct-callee architectural result",
         "FAIL: real tail-call chain differs from direct-callee result");
@@ -662,7 +677,7 @@ VOID __cdecl main()
     trace("BUILD TAG: P3F-TAILCALL-20261018-B");
     trace("Candidate B wrapper VA: 0x001EF850");
     trace("Candidate B callee VA:  0x0021AB90");
-    trace("Reference: direct translated callee at ECX=BASE+0x28 versus real wrapper tail-call");
+    trace("Reference: direct callee vs wrapper tail-call; callee loads scalar from guest [ESP+4]");
 
     g_ram = (BYTE*)malloc(RAM_SIZE);
 
