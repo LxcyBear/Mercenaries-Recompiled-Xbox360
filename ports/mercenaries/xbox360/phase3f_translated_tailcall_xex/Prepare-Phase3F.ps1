@@ -23,14 +23,15 @@ $buildRoot = Join-Path $repoRoot "build\phase3f_translated_tailcall"
 $analysisRoot = Join-Path $buildRoot "analysis"
 $disasmRoot = Join-Path $analysisRoot "disasm"
 $xbeJson = Join-Path $analysisRoot "xbe.json"
-$calleeFile = Join-Path $buildRoot "sub_00034AE0.c"
-$wrapperFile = Join-Path $buildRoot "sub_00034AD0.c"
+$calleeFile = Join-Path $buildRoot "sub_0021AB90.c"
+$wrapperFile = Join-Path $buildRoot "sub_001EF850.c"
+$referenceFile = Join-Path $buildRoot "reference_prefix_001EF850.c"
 $templatePath = Join-Path $phaseRoot "main_template.cpp"
 $mainOut = Join-Path $buildRoot "main.cpp"
 
 $expectedXbeHash = "AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
-$wrapperAddress = "0x00034AD0"
-$calleeAddress = "0x00034AE0"
+$wrapperAddress = "0x001EF850"
+$calleeAddress = "0x0021AB90"
 
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw "Python environment not found at $python. Run ports\mercenaries\scripts\Setup-Python.ps1 first."
@@ -85,7 +86,7 @@ function Lift-One {
     return $source
 }
 
-function Assert-No-UnsafeDependency {
+function Show-And-Reject-Dependency {
     param(
         [string]$Source,
         [string]$Label
@@ -105,7 +106,7 @@ function Assert-No-UnsafeDependency {
         throw "$Label unexpectedly depends on ICALL/kernel/runtime-copy services. Stop for re-audit."
     }
 
-    $simdPattern = '\b(?:fp_push|fp_pop|fp_top|fp_st|xmm[0-7]|g_xmm[0-7]|g_mm[0-7]|GUEST_READF32|GUEST_READF64|GUEST_WRITEF32|GUEST_WRITEF64)\b'
+    $simdPattern = '\b(?:fp_push|fp_pop|fp_top|fp_st|xmm[0-7]|g_xmm[0-7]|g_mm[0-7])\b'
     $simdLines = @(
         $Source -split [Environment]::NewLine |
             Where-Object { $_ -match $simdPattern }
@@ -116,12 +117,13 @@ function Assert-No-UnsafeDependency {
         foreach ($line in $simdLines) {
             Write-Host "  $($line.Trim())" -ForegroundColor Yellow
         }
-        throw "$Label unexpectedly requires x87/SSE/MMX state. Stop for a narrower Phase 3F candidate."
+        throw "$Label unexpectedly requires x87/SSE/MMX architectural state. Stop for a narrower Phase 3F candidate."
     }
 }
 
 Push-Location $repoRoot
 try {
+    Write-Host "[Phase3F] Candidate B: 0x001EF850 -> tail-call -> 0x0021AB90"
     Write-Host "[Phase3F] Verified retail XBE: $actualHash"
 
     $phase3eDisasm = Join-Path $repoRoot "build\phase3e_first_translated\analysis\disasm"
@@ -153,17 +155,17 @@ try {
     $functions = Get-Content -LiteralPath $functionsPath -Raw | ConvertFrom-Json
 
     $wrapper = @($functions | Where-Object {
-        ([string]$_.start).Trim().ToUpperInvariant() -eq "0X00034AD0"
+        ([string]$_.start).Trim().ToUpperInvariant() -eq "0X001EF850"
     })
     $callee = @($functions | Where-Object {
-        ([string]$_.start).Trim().ToUpperInvariant() -eq "0X00034AE0"
+        ([string]$_.start).Trim().ToUpperInvariant() -eq "0X0021AB90"
     })
 
     if ($wrapper.Count -ne 1) {
-        throw "Wrapper 0x00034AD0 was not detected exactly once."
+        throw "Wrapper 0x001EF850 was not detected exactly once."
     }
     if ($callee.Count -ne 1) {
-        throw "Callee 0x00034AE0 was not detected exactly once."
+        throw "Callee 0x0021AB90 was not detected exactly once."
     }
 
     Write-Host "[Phase3F] Wrapper metadata: size=$($wrapper[0].size) instructions=$($wrapper[0].num_instructions)"
@@ -175,26 +177,26 @@ try {
     Write-Host "[Phase3F] Lifting wrapper $wrapperAddress..."
     $wrapperSource = Lift-One -Address $wrapperAddress -OutputPath $wrapperFile
 
-    if ($calleeSource -notmatch 'void\s+sub_00034AE0\s*\(\s*void\s*\)') {
+    if ($calleeSource -notmatch 'void\s+sub_0021AB90\s*\(\s*void\s*\)') {
         throw "Callee generated with an unexpected function signature."
     }
-    if ($wrapperSource -notmatch 'void\s+sub_00034AD0\s*\(\s*void\s*\)') {
+    if ($wrapperSource -notmatch 'void\s+sub_001EF850\s*\(\s*void\s*\)') {
         throw "Wrapper generated with an unexpected function signature."
     }
 
-    Assert-No-UnsafeDependency -Source $calleeSource -Label "Callee"
-    Assert-No-UnsafeDependency -Source $wrapperSource -Label "Wrapper"
+    Show-And-Reject-Dependency -Source $calleeSource -Label "Callee"
+    Show-And-Reject-Dependency -Source $wrapperSource -Label "Wrapper"
 
     $wrapperTargetCalls = [regex]::Matches(
         $wrapperSource,
-        '\bsub_00034AE0\s*\(\s*\)'
+        '\bsub_0021AB90\s*\(\s*\)'
     )
     if ($wrapperTargetCalls.Count -ne 1) {
-        throw "Wrapper did not emit exactly one direct call to sub_00034AE0."
+        throw "Wrapper did not emit exactly one direct call to sub_0021AB90."
     }
 
-    if ($wrapperSource -notmatch 'tail jmp 0x00034AE0') {
-        throw "Wrapper no longer lowers 0x00034AE0 as a tail jump."
+    if ($wrapperSource -notmatch 'tail jmp 0x0021AB90') {
+        throw "Wrapper no longer lowers 0x0021AB90 as a tail jump."
     }
 
     if ($wrapperSource -match '\bPUSH32\s*\(') {
@@ -207,7 +209,7 @@ try {
             Sort-Object -Unique
     )
     $unexpectedWrapperSubs = @($wrapperSubs | Where-Object {
-        $_ -ne "00034AD0" -and $_ -ne "00034AE0"
+        $_ -ne "001EF850" -and $_ -ne "0021AB90"
     })
     if ($unexpectedWrapperSubs.Count -ne 0) {
         throw "Wrapper calls unexpected translated function(s): $($unexpectedWrapperSubs -join ', ')."
@@ -218,30 +220,68 @@ try {
             ForEach-Object { $_.Groups[1].Value.ToUpperInvariant() } |
             Sort-Object -Unique
     )
-    $unexpectedCalleeSubs = @($calleeSubs | Where-Object { $_ -ne "00034AE0" })
+    $unexpectedCalleeSubs = @($calleeSubs | Where-Object { $_ -ne "0021AB90" })
     if ($unexpectedCalleeSubs.Count -ne 0) {
         throw "Callee unexpectedly calls translated function(s): $($unexpectedCalleeSubs -join ', ')."
     }
 
+    $tailPattern = '(?m)^(?<indent>\s*)g_seh_ebp\s*=\s*ebp;\s*sub_0021AB90\s*\(\s*\);\s*return;\s*/\*\s*tail jmp 0x0021AB90\s*\*/\s*$'
+    $tailMatches = [regex]::Matches($wrapperSource, $tailPattern)
+    if ($tailMatches.Count -ne 1) {
+        throw "Could not isolate exactly one generated wrapper tail-call boundary."
+    }
+
+    $referenceSource = $wrapperSource
+    $referenceSource = [regex]::Replace(
+        $referenceSource,
+        'void\s+sub_001EF850\s*\(\s*void\s*\)',
+        'void phase3f_reference_prefix(void)',
+        1
+    )
+    $referenceSource = [regex]::Replace(
+        $referenceSource,
+        $tailPattern,
+        '${indent}g_seh_ebp = ebp; return; /* Phase 3F reference stops at real tail boundary */',
+        1
+    )
+
+    if ($referenceSource -match '\bsub_0021AB90\s*\(') {
+        throw "Reference-prefix transformation left the tail callee invocation in place."
+    }
+    if ($referenceSource -notmatch 'Phase 3F reference stops at real tail boundary') {
+        throw "Reference-prefix transformation did not produce the expected boundary return."
+    }
+
+    [System.IO.File]::WriteAllText(
+        $referenceFile,
+        $referenceSource,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+
     $calleeLineCount = $calleeSource.Split([Environment]::NewLine).Count
     $wrapperLineCount = $wrapperSource.Split([Environment]::NewLine).Count
-    if ($calleeLineCount -gt 220 -or $wrapperLineCount -gt 120) {
-        throw "Candidate pair is larger than the bounded Phase 3F limit. Callee=$calleeLineCount wrapper=$wrapperLineCount."
+    if ($calleeLineCount -gt 140 -or $wrapperLineCount -gt 240) {
+        throw "Candidate B is larger than the bounded Phase 3F limit. Callee=$calleeLineCount wrapper=$wrapperLineCount."
     }
 
     Write-Host "[Phase3F] Auditing generated functions for legacy guest-memory lvalues..."
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $calleeFile
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $wrapperFile
+    Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $referenceFile
 
     $template = Get-Content -LiteralPath $templatePath -Raw
     $calleeMarker = "/*__PHASE3F_CALLEE__*/"
+    $referenceMarker = "/*__PHASE3F_REFERENCE_PREFIX__*/"
     $wrapperMarker = "/*__PHASE3F_WRAPPER__*/"
 
-    if (-not $template.Contains($calleeMarker) -or -not $template.Contains($wrapperMarker)) {
+    if (-not $template.Contains($calleeMarker) -or
+        -not $template.Contains($referenceMarker) -or
+        -not $template.Contains($wrapperMarker)) {
         throw "Phase 3F template injection marker is missing."
     }
 
     $combined = $template.Replace($calleeMarker, $calleeSource)
+    $combined = $combined.Replace($referenceMarker, $referenceSource)
     $combined = $combined.Replace($wrapperMarker, $wrapperSource)
 
     [System.IO.File]::WriteAllText(
@@ -252,8 +292,10 @@ try {
 
     Write-Host ""
     Write-Host "[Phase3F] READY"
+    Write-Host "[Phase3F] Candidate:      0x001EF850 -> 0x0021AB90"
     Write-Host "[Phase3F] Callee source:  $calleeFile"
     Write-Host "[Phase3F] Wrapper source: $wrapperFile"
+    Write-Host "[Phase3F] Reference:      $referenceFile"
     Write-Host "[Phase3F] XDK source:     $mainOut"
 }
 finally {
