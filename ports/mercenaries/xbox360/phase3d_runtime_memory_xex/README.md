@@ -69,7 +69,7 @@ Use the same VS17 + Xbox 360 XDK diagnostic project.
 4. Require:
 
 ~~~text
-[Merc360:P3D] BUILD TAG: P3D-RUNTIME-20261018-A
+[Merc360:P3D] BUILD TAG: P3D-RUNTIME-20261018-B
 ~~~
 
 ## Hardware fixture
@@ -107,3 +107,20 @@ another synthetic memory fixture: it is selecting one small audited translated
 Mercenaries function, generating it with --explicit-guest-memory, compiling it
 into a bounded XDK harness, and comparing its guest-visible result against a
 reference fixture before allowing broader translated execution.
+
+## Hardware attempt A — no visible P3D trace
+
+The first hardware attempt using `P3D-RUNTIME-20261018-A` produced no visible
+`[Merc360:P3D]` xbWatson output. No Phase 3D test assertion was observed, so
+this is not counted as a functional test failure.
+
+Build B adds raw debugger breadcrumbs before optional file logging:
+
+~~~text
+[Merc360:P3D] EARLY MAIN ENTRY
+[Merc360:P3D] BUILD TAG: P3D-RUNTIME-20261018-B
+[Merc360:P3D] Opening optional game log file
+[Merc360:P3D] File-log open returned
+~~~
+
+Send whatever appears, even if it stops after only one of these lines.
