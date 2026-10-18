@@ -9,16 +9,11 @@ game's own direct tail-call control flow.
 ## Candidate pair
 
 ~~~text
-0x00034AD0  reviewed wrapper
-0x00034AE0  translated callee
+0x001EF850  translated wrapper / tail caller
+0x0021AB90  reviewed scalar transform setter / callee
 ~~~
 
-The reviewed seed documents the wrapper as:
-
-~~~text
-ECX += 0x78
-tail-call 0x00034AE0
-~~~
+The reviewed seed documents `0x0021AB90` as a scalar transform setter that writes the float argument to `this + 0xDC` and returns with `ret 4`. The project also documents it as being tail-called by `sub_001EF850`.
 
 The maintained lifter lowers that external x86 JMP as a direct C call followed
 by return, with **no synthetic guest return-address push**. The existing guest
@@ -32,14 +27,15 @@ harness. Instead it compares two executions from identical guest state:
 
 ~~~text
 Reference path:
-    ECX = BASE + 0x78
-    sub_00034AE0()
+    run a locally derived copy of translated 0x001EF850
+    stop exactly at its real generated tail-call boundary
+    then call translated 0x0021AB90 directly
 
 Tail-call path:
-    ECX = BASE
-    sub_00034AD0()
-      -> adjusts ECX by 0x78
-      -> tail-calls sub_00034AE0()
+    reset identical guest state
+    run unmodified translated 0x001EF850
+      -> real generated tail-call
+      -> translated 0x0021AB90
 ~~~
 
 If wrapper translation and tail-call semantics are correct, the two paths must
@@ -115,9 +111,9 @@ The harness runs three deterministic cases. For each case it:
 
 ~~~text
 [Merc360:P3F] PHASE 3F TRANSLATED TAIL-CALL CHAIN START
-[Merc360:P3F] BUILD TAG: P3F-TAILCALL-20261018-A
-[Merc360:P3F] Wrapper VA: 0x00034AD0
-[Merc360:P3F] Callee VA:  0x00034AE0
+[Merc360:P3F] BUILD TAG: P3F-TAILCALL-20261018-B
+[Merc360:P3F] Candidate B wrapper VA: 0x001EF850
+[Merc360:P3F] Candidate B callee VA:  0x0021AB90
 ~~~
 
 Expected finish:
@@ -147,3 +143,25 @@ class. No Xbox 360 hardware test occurred.
 
 The prep script now prints every exact generated line that triggers this guard.
 Rerun after updating the branch and send those lines.
+
+## Candidate A rejection and Candidate B pivot
+
+Candidate A (`0x00034AD0 -> 0x00034AE0`) was rejected before compilation
+because the callee contains a real guest indirect call:
+
+`PUSH32(esp, 0); RECOMP_ICALL_SAFE(GUEST_READ32(eax), _icall_esp);`
+
+That would combine tail-call validation with indirect-call dispatch, so it is
+intentionally deferred to the later ICALL milestone.
+
+Candidate B uses `0x001EF850 -> 0x0021AB90`. To avoid inventing the wrapper's
+pre-tail behavior, the prep script creates a local reference-prefix copy of the
+exact translated wrapper and replaces only its generated tail-call statement
+with a native return after the generated EBP bridge. Hardware then compares:
+
+- translated wrapper prefix + direct translated callee
+- unmodified translated wrapper + real translated tail call
+
+Both start from identical guest state, use the same retail-derived translated
+code, and are compared across registers, guest ESP, access-fault state, trace
+sequence, and a digest of the complete 64 MiB guest arena.
