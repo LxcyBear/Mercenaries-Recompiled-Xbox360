@@ -167,3 +167,23 @@ A complete clean run should also reach the normal timeout path and:
 
 After Phase 3I passes, the next Phase 3 escalation is a wider translated closure
 and guarded startup/entry work rather than returning to isolated call fixtures.
+
+
+## First local prep attempt — template-token fix
+
+The first local Phase 3I prep verified the exact retail XBE and reused the
+reviewed Phase 3E disassembly, then stopped during template assembly:
+
+```text
+[Phase3I] template token missing: __P3I_TAIL_CALLEE_NAME__
+```
+
+This was a preparer bookkeeping error, not a translated-code failure. The tail
+callee body is injected directly before its wrapper, so the template does not
+need a separate tail-callee-name placeholder.
+
+The unused replacement was removed. A bidirectional audit now confirms:
+- every template token has a replacement
+- every replacement token exists in the template
+
+No XDK source was produced by the failed attempt and no hardware run occurred.
