@@ -1380,6 +1380,30 @@ unexecuted test PASS.**
 - **Next:** rerun the same Phase 3J selector before considering any branch/flags
   relaxation.
 
+### 2026-10-18 — Phase 3J second selector pass proves branchless closure is too artificial
+
+- After the comment-scanner and ZX8/ZX16 fixes, the selector again considered
+  2,200 real candidate roots and still found no cluster under the branchless
+  3J-A policy.
+- The dominant blocker increased to **1,390 branch/loop-control rejections**,
+  confirming that useful real Mercenaries closures overwhelmingly include
+  ordinary control flow.
+- The next relaxation is intentionally narrow:
+  - forward/acyclic guest branches are allowed
+  - SETcc/CMOV-style generated conditional statements are allowed
+  - backward guest branch edges remain rejected
+  - LOOP/LOOPE/LOOPNE remain rejected
+  - generated C while/for/switch surfaces remain rejected
+  - dynamic ICALL/ITAIL, SIMD/FPU/runtime surfaces, RET-N, cycles and all
+    existing closure/member/size/depth bounds remain rejected
+- Runtime condition helpers used by the maintained lifter are now provided by
+  the XDK fixture: CMP_EQ/NE/B/AE/BE/A, signed CMP_L/GE/LE/G, TEST_Z/NZ/S and
+  EVEN_PARITY8.
+- `RECOMP_ICALL_SAFE` / `RECOMP_ITAIL_SAFE` are now classified explicitly
+  as dynamic-dispatch surface instead of appearing as unknown helpers.
+- **No compile or hardware run occurred in this selector attempt.**
+- **Next:** rerun the same Phase 3J selector with bounded acyclic branch support.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
