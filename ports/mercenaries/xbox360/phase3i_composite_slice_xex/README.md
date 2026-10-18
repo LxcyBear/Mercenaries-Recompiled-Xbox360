@@ -187,3 +187,51 @@ The unused replacement was removed. A bidirectional audit now confirms:
 - every replacement token exists in the template
 
 No XDK source was produced by the failed attempt and no hardware run occurred.
+
+## Hardware result — PASS / Phase 3I COMPLETE
+
+Build tag `P3I-SLICE-20261018-A` passed on modified Xbox 360 hardware.
+
+The five-stage persistent-arena slice completed for all three deterministic
+cases:
+
+1. direct CALL `0x00050010 -> 0x0004CFF0`
+2. tail-call/MOVSS `0x001EF850 -> 0x0021AB90`
+3. resolved ICALL from `0x0008DE60` through real guest pointer slot
+   `0x00000034`
+4. unresolved ICALL through the same nonzero pointer
+5. direct CALL `0x00050010 -> 0x0004CFF0` again
+
+Every stage remained fault-free, persistent canaries survived, and cumulative
+stage markers stayed intact.
+
+Each case ran the complete slice twice from identical initial state. All five
+full 64 MiB checkpoint hashes matched A vs B:
+
+- case 0:
+  `391D8EBE77156185`,
+  `3716FA5917BCAF5C`,
+  `6A725AEF6CDC6739`,
+  `5BC63F5096702E66`,
+  `601DC9E5E9060642`
+- case 1:
+  `33E99C35E7354685`,
+  `8F5E78AB7F167EA3`,
+  `849845E9665D51DE`,
+  `22C6E2C437FECB71`,
+  `97A3970721A1D89D`
+- case 2:
+  `DC774012C0D09585`,
+  `F14EAABCAD54286E`,
+  `EDCCAAF0A1CF1A23`,
+  `82B2E33EA043C0F0`,
+  `920E7A6F58C65544`
+
+Observed final functional marker:
+
+`[Merc360:P3I] PHASE 3I COMPOSITE TRANSLATED SLICE RESULT: PASS`
+
+The supplied excerpt ends during post-test heartbeats, so no unseen XAPI return
+value is claimed.
+
+**Phase 3I is complete.**
