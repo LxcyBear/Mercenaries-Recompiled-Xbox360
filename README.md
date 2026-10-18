@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D hardware PASS; 3E first translated function ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D hardware PASS; 3E local generation PASS / hardware pending** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -773,6 +773,25 @@ unexecuted test PASS.**
   object immutability, no guest access fault and exact four-byte RET cleanup.
 - **Next:** run the local prep script, compile the generated
   `build\phase3e_first_translated\main.cpp`, and capture xbWatson.
+
+### 2026-10-18 — Phase 3E local translated-function generation passes
+
+- Local Python environment confirmed at Python 3.12.10 with required packages.
+- User-supplied retail `default.xbe` matched the exact pinned SHA-256.
+- Reviewed-seed disassembly completed in 35.49 seconds.
+- Recompiler loaded 13,346 functions and 16,598 labels for the isolated lift.
+- Missing optional identified-function / ABI databases were warned about but did
+  not block this dependency-free accessor candidate.
+- Function `0x00208F30` lifted successfully with
+  `--explicit-guest-memory`.
+- Post-generation audit reported:
+  `PASS: no legacy guest-memory lvalues in generated C`.
+- Prep script finished with `[Phase3E] READY` and produced local gitignored:
+  `build\phase3e_first_translated\sub_00208F30.c` and
+  `build\phase3e_first_translated\main.cpp`.
+- **Phase 3E local-generation gate: PASS. Hardware execution remains pending.**
+- **Next:** compile the generated local `main.cpp` in VS17/XDK and run the
+  resulting XEX on modified Xbox 360 hardware.
 
 ### How future updates are recorded
 
