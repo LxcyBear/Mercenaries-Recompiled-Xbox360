@@ -53,7 +53,7 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A/2B/2C/2D COMPLETE on Xenon; execution environment next** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **In progress — 2A/2B/2C/2D COMPLETE; Phase 2E environment host PASS / hardware pending** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
@@ -317,6 +317,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 2C exact retail identity + post-load integrity | **PASS** | Real Xbox 360 Xenon: pinned SHA-256 exact match, exact build invariants, 14/14 section/source comparisons, zero-fill invariants, XAPI 0 |
 | 2026-10-18 | Phase 2D checked guest-address router host contract | **PASS (GCC / Clang / ASan+UBSan)** | 64 MiB mirrors, KSEG alias coherence, synthetic-page priority, MMIO/thunk classification |
 | 2026-10-18 | Phase 2D checked guest-address router hardware fixture | **PASS** | Real Xbox 360 Xenon: coherent RAM mirrors + KSEG0/KSEG1, synthetic-page priority, MMIO/thunk isolation, gap rejection, XAPI 0 |
+| 2026-10-18 | Phase 2E guest execution-environment portable contract | **PASS (GCC / Clang / ASan+UBSan)** | TIB/KTHREAD/TLS negative-index math, 256 KiB guest stack, kernel-data mirror/KSEG coherence; hardware pending |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -541,6 +542,25 @@ unexecuted test PASS.**
 - **Phase 2D: COMPLETE.**
 - **Next:** Phase 2E guest stack + low TIB/KTHREAD/TLS + initial kernel-data
   fixtures through the checked router. Translated game execution stays disabled.
+
+### 2026-10-18 — Phase 2E execution-environment fixture prepared
+
+- Created `xbox360/phase2e-execution-environment` from completed Phase 2D.
+- Reuses exact-XBE verification and the proven 14-section loader.
+- Adds the current title-specific low-memory contract: synthetic TLS at
+  `0x00700000`, synthetic KTHREAD at `0x00760000`, kernel data at
+  `0x0087E000`, 256 KiB guest stack at `0x00880000-0x008BFFFF`,
+  initial guest ESP `0x008BFFF0`, and heap base `0x008C0000`.
+- Derives the retail TLS payload from the loaded XBE and validates the negative
+  TLS-index equation through `fs:[4]`.
+- Initializes TIB/KTHREAD/TLS plus initial XboxHardwareInfo,
+  XboxKrnlVersion 1.0.5849.0 and KeTickCount fixtures.
+- Tests kernel-data coherence through a RAM mirror and KSEG0.
+- Tests one guest PUSH32/POP32 round-trip using Xbox-visible stack RAM only.
+- Portable contract: **PASS** under GCC 14.2, Clang 17 and Clang ASan+UBSan.
+- Runtime build tag: `P2E-ENV-20261018-A`.
+- **Next:** build/run Phase 2E on modified Xbox 360 hardware. Translated
+  Mercenaries game execution remains disabled.
 
 ### How future updates are recorded
 
