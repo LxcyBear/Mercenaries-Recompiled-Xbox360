@@ -17,6 +17,8 @@
 int main(void)
 {
     MercGuestMemory memory = { 0 };
+    uint8_t v8 = 0;
+    uint16_t v16 = 0;
     uint32_t v32 = 0;
     uint64_t v64 = 0;
     float vf = 0.0f;
@@ -24,6 +26,14 @@ int main(void)
     CHECK(merc_guest_memory_init(&memory, MERC_GUEST_RAM_SIZE));
     CHECK(memory.base != NULL);
     CHECK(memory.size == MERC_GUEST_RAM_SIZE);
+
+    CHECK(merc_guest_memory_write8(&memory, 0u, 0xA5u));
+    CHECK(merc_guest_memory_read8(&memory, 0u, &v8));
+    CHECK(v8 == 0xA5u);
+
+    CHECK(merc_guest_memory_write16(&memory, 2u, 0xBEEFu));
+    CHECK(merc_guest_memory_read16(&memory, 2u, &v16));
+    CHECK(v16 == 0xBEEFu);
 
     CHECK(merc_guest_memory_write32(&memory, 0x10000u, 0x12345678u));
     CHECK(memory.base[0x10000u] == 0x78u);
