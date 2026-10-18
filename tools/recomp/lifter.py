@@ -131,8 +131,34 @@ def _guest_write_accessor(size):
 
 
 def _smem_accessor(size):
-    """Return the signed MEM macro for a given operand size."""
+    """Return the signed scalar memory read helper for the selected ABI."""
+    if _EXPLICIT_GUEST_MEMORY_ABI:
+        return {
+            1: "GUEST_SREAD8",
+            2: "GUEST_SREAD16",
+            4: "GUEST_SREAD32",
+            8: "GUEST_SREAD64",
+        }.get(size, "GUEST_SREAD32")
     return {1: "SMEM8", 2: "SMEM16", 4: "SMEM32", 8: "SMEM64"}.get(size, "SMEM32")
+
+
+def _fmt_float_mem_read(op):
+    """Format an x87-style float/double guest-memory read."""
+    addr = _fmt_mem(op)
+    if _EXPLICIT_GUEST_MEMORY_ABI:
+        return (f"GUEST_READF64({addr})" if op.mem_size == 8
+                else f"GUEST_READF32({addr})")
+    return (f"MEMD({addr})" if op.mem_size == 8 else f"MEMF({addr})")
+
+
+def _fmt_float_mem_write(op, value_expr):
+    """Format an x87-style float/double guest-memory write."""
+    addr = _fmt_mem(op)
+    if _EXPLICIT_GUEST_MEMORY_ABI:
+        helper = "GUEST_WRITEF64" if op.mem_size == 8 else "GUEST_WRITEF32"
+        return f"{helper}({addr}, {value_expr});"
+    accessor = "MEMD" if op.mem_size == 8 else "MEMF"
+    return f"{accessor}({addr}) = {value_expr};"
 
 
 def _fmt_mem(op):
@@ -2185,10 +2211,10 @@ class Lifter:
             if len(ops) >= 1:
                 if ops[0].type == "mem":
                     if ops[0].mem_size == 4:
-                        return [f"fp_push(MEMF({_fmt_mem(ops[0])})); /* fld float */"]
+                        return [f"fp_push({_fmt_float_mem_read(ops[0])}); /* fld float */"]
                     elif ops[0].mem_size == 8:
-                        return [f"fp_push(MEMD({_fmt_mem(ops[0])})); /* fld double */"]
-                    return [f"fp_push(MEMF({_fmt_mem(ops[0])})); /* fld */"]
+                        return [f"fp_push({_fmt_float_mem_read(ops[0])}); /* fld double */"]
+                    return [f"fp_push({_fmt_float_mem_read(ops[0])}); /* fld */"]
                 reg_index = x87_reg_index(ops[0])
                 if reg_index is not None:
                     # Read before the push changes TOP. This is particularly
@@ -2201,9 +2227,11 @@ class Lifter:
             pop_code = " fp_pop();" if m == "fstp" else ""
             if len(ops) >= 1 and ops[0].type == "mem":
                 if ops[0].mem_size == 4:
-                    return [f"MEMF({_fmt_mem(ops[0])}) = (float)fp_top();{pop_code} /* {m} */"]
+                    return [_fmt_float_mem_write(ops[0], "(float)fp_top()")
+                            + f"{pop_code} /* {m} */"]
                 elif ops[0].mem_size == 8:
-                    return [f"MEMD({_fmt_mem(ops[0])}) = fp_top();{pop_code} /* {m} */"]
+                    return [_fmt_float_mem_write(ops[0], "fp_top()")
+                            + f"{pop_code} /* {m} */"]
             if len(ops) >= 1 and ops[0].type == "reg":
                 reg_index = x87_reg_index(ops[0])
                 if reg_index is not None:
@@ -2223,11 +2251,10 @@ class Lifter:
         if m in ("fist", "fistp"):
             pop_code = " fp_pop();" if m == "fistp" else ""
             if len(ops) >= 1 and ops[0].type == "mem":
-                mem_acc = _mem_accessor(ops[0].mem_size)
                 convert = {2: "X87_FIST16", 4: "X87_FIST32", 8: "X87_FIST64"}.get(
                     ops[0].mem_size, "X87_FIST32")
-                return [f"{mem_acc}({_fmt_mem(ops[0])}) = {convert}(fp_top());"
-                        f"{pop_code} /* {m} */"]
+                return [_fmt_mem_write(ops[0], f"{convert}(fp_top())")
+                        + f"{pop_code} /* {m} */"]
             return [f"/* {m} {insn.op_str} */"]
 
         if (m in ("fiadd", "fisub", "fisubr", "fimul", "fidiv", "fidivr")
@@ -2247,8 +2274,7 @@ class Lifter:
 
         if (m in ("fadd", "fsub", "fsubr", "fmul", "fdiv", "fdivr")
                 and len(ops) >= 1 and ops[0].type == "mem"):
-            mem = (f"MEMD({_fmt_mem(ops[0])})" if ops[0].mem_size == 8
-                   else f"MEMF({_fmt_mem(ops[0])})")
+            mem = _fmt_float_mem_read(ops[0])
             if m == "fadd":
                 return [f"fp_top() += {mem}; /* fadd memory */"]
             if m == "fsub":
@@ -2364,8 +2390,7 @@ class Lifter:
             pop_code = " fp_pop();" * pop_count
             rhs = "fp_st1()"
             if len(ops) >= 1 and ops[0].type == "mem":
-                rhs = (f"MEMD({_fmt_mem(ops[0])})" if ops[0].mem_size == 8
-                       else f"MEMF({_fmt_mem(ops[0])})")
+                rhs = _fmt_float_mem_read(ops[0])
             elif len(ops) >= 1 and ops[-1].type == "reg":
                 reg_index = x87_reg_index(ops[-1])
                 if reg_index is not None:
