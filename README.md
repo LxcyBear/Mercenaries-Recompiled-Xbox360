@@ -928,6 +928,19 @@ unexecuted test PASS.**
   trace order and complete 64 MiB guest-RAM digest.
 - **Next:** update the local Phase 3F branch and rerun the prep workflow.
 
+### 2026-10-18 — Phase 3F generated XMM alias corrected
+
+- Local Candidate B output confirmed the full 3-instruction callee:
+  `recomp_xmm_loadss(xmm0v, esp + 4)`,
+  `GUEST_WRITEF32(ecx + 0xDC, xmm0)`,
+  then translated `ret 4`.
+- The prep gate incorrectly expected the vector form as `g_xmm0`; generated
+  code correctly uses the runtime alias `xmm0v`.
+- Updated the prep audit to require canonical `xmm0v`.
+- Updated the XDK harness with `#define xmm0v g_xmm0` so the generated body
+  matches the maintained runtime ABI.
+- **Candidate B remains valid; no hardware execution occurred in this attempt.**
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
