@@ -61,10 +61,12 @@ Each phase has independently checkable checkpoints below.
 | 7 — Gameplay, stability and release | Not started | Repeated playable scenarios, save/load, mission progression and documented release |
 
 **Verified foundation:** the VS17/XDK bootstrap, 64 MiB guest RAM contract,
-exact retail-XBE identity, and bounded 14-section load have all passed on real
-Xbox 360 hardware. The pinned retail SHA-256 was computed on Xenon itself and
-matched exactly. Translated Mercenaries game code has still **not** been
-executed on Xbox 360.
+exact retail-XBE identity, bounded 14-section load, and the Phase 3A–3D guest
+ABI fixtures have all passed on real Xbox 360 hardware. The pinned retail
+SHA-256 was computed on Xenon itself and matched exactly. On October 18, 2026,
+the first real mechanically translated Mercenaries function (`0x00208F30`)
+also executed successfully on modified Xbox 360 hardware and matched an
+independent reference across six controlled inputs.
 
 **Present blockers:** the explicit PowerPC-safe guest-memory ABI is now proven
 for scalar integer, signed/x87, SSE/XMM/MMX, shared stack and string/copy paths
@@ -180,7 +182,8 @@ Xbox 360 native memory.
 
 **Gate 2: PASS (October 18, 2026).** Exact guest byte/alias/section and
 execution-environment fixtures pass on modified Xbox 360 hardware. Phase 2 is
-complete; no translated Mercenaries game function has executed yet.
+complete. Subsequent Phase 3E testing has now also executed the first bounded
+translated Mercenaries function successfully.
 
 ### Phase 3 — PowerPC-safe generated C and execution ABI
 
