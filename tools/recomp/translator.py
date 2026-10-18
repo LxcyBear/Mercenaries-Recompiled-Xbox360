@@ -29,6 +29,7 @@ from .lifter import (
     _make_condition,
     lift_basic_block,
     detect_seh_helpers,
+    guest_memory_abi_is_explicit,
 )
 
 
@@ -1025,6 +1026,8 @@ class BatchTranslator:
         c_chunks.append(" */")
         c_chunks.append("")
         c_chunks.append('#define RECOMP_GENERATED_CODE')
+        if guest_memory_abi_is_explicit():
+            c_chunks.append('#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI')
         c_chunks.append('#include "recomp_types.h"')
         c_chunks.append('#include <math.h>')
         c_chunks.append("")
@@ -1220,6 +1223,8 @@ class BatchTranslator:
                 " */",
                 "",
                 "#define RECOMP_GENERATED_CODE",
+                *(["#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI"]
+                  if guest_memory_abi_is_explicit() else []),
                 f'#include "{header_name}"',
                 '#include <math.h>',
                 "",
