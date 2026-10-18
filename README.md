@@ -727,17 +727,26 @@ unexecuted test PASS.**
 - **Next:** build/run Phase 3D on modified Xbox 360 hardware. A PASS makes the
   next gate the first small audited translated Mercenaries function.
 
-### 2026-10-18 — Phase 3D first hardware attempt produced no P3D trace
+### 2026-10-18 — Phase 3D explicit runtime/string memory ABI passes on Xenon
 
-- Build tag `P3D-RUNTIME-20261018-A` was compiled/deployed, but xbWatson showed
-  no visible `[Merc360:P3D]` output from the diagnostic.
-- This is treated as an early-startup observability failure, not as a memory-ABI
-  test failure: no Phase 3D assertions were observed running.
-- Added raw `OutputDebugStringA` breadcrumbs at the very start of `main()`,
-  before file logging, allocation or test setup.
-- Moved the visible build tag to `P3D-RUNTIME-20261018-B`.
-- **Next:** run B and report the earliest P3D line observed. That will distinguish
-  "main not entered" from a stall/failure around optional file-log creation.
+- The earlier lack of visible output was an xbWatson connectivity/visibility
+  issue, not a Phase 3D software failure.
+- Tested runtime build tag: `P3D-RUNTIME-20261018-A`.
+- Shared PUSH32 old-ESP evaluation and POP32 restoration passed.
+- XBOX_MEMCPY passed aligned dword+tail and unaligned raw-byte copies.
+- REP MOVSB forward and overlapping x86-order behavior passed.
+- REP MOVSW/MOVSD preserved unaligned element semantics.
+- Generated-style MOVSD, STOSW, LODSB, REP STOSD and backwards REP MOVSD passed.
+- CMPSW/SCASB explicit memory comparison paths passed.
+- Runtime bridge remained coherent through RAM mirrors and KSEG0.
+- One scalar dword crossing a 64 MiB window was rejected.
+- XBOX_MEMCPY correctly advanced element-wise into the next mapped RAM mirror.
+- XBOX_REP_MOVS rejected NV2A MMIO as ordinary RAM.
+- `PHASE 3D RUNTIME MEMORY ABI RESULT: PASS` observed on modified Xbox 360.
+- **Phase 3D: COMPLETE.**
+- **Next:** first small audited mechanically translated Mercenaries function,
+  generated with `--explicit-guest-memory`, compiled into a bounded XDK harness
+  and compared against a reference result before broader translated execution.
 
 ### How future updates are recorded
 
