@@ -37,6 +37,10 @@ typedef __int64            int64_t;
 #define WRAPPER_VA        0x001EF850u
 #define CALLEE_VA         0x0021AB90u
 #define OBJECT_BASE       0x00060000u
+#define WRAPPER_ECX_DELTA 0x00000028u
+#define STORE_OFFSET      0x000000DCu
+#define EFFECTIVE_OBJECT  (OBJECT_BASE + WRAPPER_ECX_DELTA)
+#define STORE_ADDRESS     (EFFECTIVE_OBJECT + STORE_OFFSET)
 #define STACK_TOP         0x008BFFF0u
 
 static BYTE* g_ram = NULL;
@@ -362,12 +366,6 @@ static void recomp_xmm_loadss(float dst[4], uint32_t address)
 /* Callee must precede the generated wrapper's direct C tail invocation. */
 /*__PHASE3F_CALLEE__*/
 
-/*
- * Locally derived from the exact translated wrapper, but its real tail-call
- * statement is replaced with a native return after the generated EBP bridge.
- */
-/*__PHASE3F_REFERENCE_PREFIX__*/
-
 /* Unmodified translated retail wrapper. */
 /*__PHASE3F_WRAPPER__*/
 
@@ -382,6 +380,7 @@ typedef struct RunResult
     DWORD edi;
     DWORD sehEbp;
     DWORD xmm0Bits[4];
+    DWORD storedBits;
     unsigned __int64 memoryHash;
     int accessFault;
     DWORD traceCount;
@@ -417,10 +416,20 @@ static void reset_trace(void)
     memset(s_trace, 0, sizeof(s_trace));
 }
 
-static void seed_guest_state(DWORD caseIndex)
+static DWORD test_argument_bits(DWORD caseIndex)
+{
+    if (caseIndex == 0u)
+        return 0x3F800000u;       /* 1.0f */
+    if (caseIndex == 1u)
+        return 0xC0200000u;       /* -2.5f */
+    return 0x3EAAAAABu;           /* approx 1/3 */
+}
+
+static void seed_guest_state(DWORD caseIndex, int wrapperRun)
 {
     DWORD i;
-    DWORD argumentBits;
+    DWORD argumentBits = test_argument_bits(caseIndex);
+    uint32_t xmmSeed[4];
 
     memset(g_ram, 0, RAM_SIZE);
 
@@ -437,34 +446,30 @@ static void seed_guest_state(DWORD caseIndex)
     }
 
     g_eax = 0xA1000000u | caseIndex;
-    g_ecx = OBJECT_BASE;
+    g_ecx = wrapperRun ? OBJECT_BASE : EFFECTIVE_OBJECT;
     g_edx = 0xD2000100u + caseIndex;
     g_ebx = 0xB3000200u + caseIndex;
     g_esi = 0x51000300u + caseIndex;
     g_edi = 0xD1000400u + caseIndex;
     g_seh_ebp = 0x0EB00000u + caseIndex;
 
-    {
-        uint32_t xmmSeed[4];
-        xmmSeed[0] = 0x7FC00001u ^ caseIndex;
-        xmmSeed[1] = 0x11110000u + caseIndex;
-        xmmSeed[2] = 0x22220000u + caseIndex;
-        xmmSeed[3] = 0x33330000u + caseIndex;
-        memcpy(g_xmm0, xmmSeed, sizeof(xmmSeed));
-    }
+    /*
+     * XMM0 is already live when the real wrapper is entered. Lane 0 carries
+     * the scalar setter value; the upper lanes are sentinels so Phase 3F also
+     * proves the tail chain preserves the same SIMD architectural state as the
+     * direct-callee reference.
+     */
+    xmmSeed[0] = argumentBits;
+    xmmSeed[1] = 0x11110000u + caseIndex;
+    xmmSeed[2] = 0x22220000u + caseIndex;
+    xmmSeed[3] = 0x33330000u + caseIndex;
+    memcpy(g_xmm0, xmmSeed, sizeof(xmmSeed));
 
     /*
-     * Callee is documented as ret 4. Supply exactly one return slot and one
-     * four-byte argument. The argument bits vary across cases and include
-     * ordinary positive, negative, and fractional float encodings.
+     * 0x0021AB90 ends with ret 4. The scalar value is live in XMM0, while this
+     * four-byte guest argument remains part of the original x86 stack contract
+     * and must still be cleaned by RET 4.
      */
-    if (caseIndex == 0u)
-        argumentBits = 0x3F800000u;       /* 1.0f */
-    else if (caseIndex == 1u)
-        argumentBits = 0xC0200000u;       /* -2.5f */
-    else
-        argumentBits = 0x3EAAAAABu;       /* approx 1/3 */
-
     g_esp = STACK_TOP - 8u;
     GUEST_WRITE32(g_esp, 0xC0DEF00Du ^ caseIndex);
     GUEST_WRITE32(g_esp + 4u, argumentBits);
@@ -486,6 +491,7 @@ static void capture_result(RunResult* result)
     result->edi = g_edi;
     result->sehEbp = g_seh_ebp;
     memcpy(result->xmm0Bits, g_xmm0, sizeof(result->xmm0Bits));
+    result->storedBits = GUEST_READ32(STORE_ADDRESS);
     result->memoryHash = hash_guest_ram();
     result->accessFault = s_accessFault;
     result->traceCount = s_traceCount;
@@ -511,6 +517,7 @@ static int architectural_results_match(
         reference->xmm0Bits[1] == wrapper->xmm0Bits[1] &&
         reference->xmm0Bits[2] == wrapper->xmm0Bits[2] &&
         reference->xmm0Bits[3] == wrapper->xmm0Bits[3] &&
+        reference->storedBits == wrapper->storedBits &&
         reference->memoryHash == wrapper->memoryHash &&
         reference->accessFault == wrapper->accessFault;
 }
@@ -519,73 +526,57 @@ static int run_one_case(DWORD caseIndex)
 {
     RunResult reference;
     RunResult wrapper;
-    DWORD prefixTraceCount;
-    DWORD prefixTrace0;
-    char line[256];
+    DWORD expectedBits = test_argument_bits(caseIndex);
+    char line[288];
     int ok = 1;
 
     /*
-     * Reference:
-     * execute the exact translated wrapper prefix up to the real tail boundary,
-     * then invoke the exact translated callee directly from that boundary state.
+     * Differential reference:
+     * enter the exact translated callee with the ECX value that the real
+     * wrapper should produce. XMM0 and the guest stack are otherwise seeded
+     * identically.
      */
-    seed_guest_state(caseIndex);
-    phase3f_reference_prefix();
-
-    prefixTraceCount = s_traceCount;
-    prefixTrace0 = s_trace[0];
-
-    ok &= check(
-        s_accessFault == 0,
-        "PASS: translated reference prefix reached tail boundary without guest-memory fault",
-        "FAIL: translated reference prefix triggered guest-memory fault");
-
-    ok &= check(
-        prefixTraceCount == 1u && prefixTrace0 == WRAPPER_VA,
-        "PASS: reference prefix executes the real translated wrapper body",
-        "FAIL: reference-prefix translated trace is unexpected");
-
-    reset_trace();
+    seed_guest_state(caseIndex, 0);
     sub_0021AB90();
     capture_result(&reference);
 
     /*
-     * Full path:
-     * reset the exact initial state, then run the unmodified translated wrapper
-     * and let its generated direct tail invocation enter the translated callee.
+     * Real translated chain:
+     * start ECX at OBJECT_BASE, execute translated 0x001EF850, let it perform
+     * ECX += 0x28 and tail-call translated 0x0021AB90 with no synthetic push.
      */
-    seed_guest_state(caseIndex);
+    seed_guest_state(caseIndex, 1);
     sub_001EF850();
     capture_result(&wrapper);
 
     sprintf(
         line,
-        "CASE %u reference eax=%08X ecx=%08X esp=%08X xmm0=%08X hash=%08X%08X",
+        "CASE %u reference ecx=%08X esp=%08X xmm0=%08X store=%08X hash=%08X%08X",
         (unsigned int)caseIndex,
-        (unsigned int)reference.eax,
         (unsigned int)reference.ecx,
         (unsigned int)reference.esp,
         (unsigned int)reference.xmm0Bits[0],
+        (unsigned int)reference.storedBits,
         (unsigned int)(reference.memoryHash >> 32),
         (unsigned int)reference.memoryHash);
     trace(line);
 
     sprintf(
         line,
-        "CASE %u wrapper   eax=%08X ecx=%08X esp=%08X xmm0=%08X hash=%08X%08X",
+        "CASE %u wrapper   ecx=%08X esp=%08X xmm0=%08X store=%08X hash=%08X%08X",
         (unsigned int)caseIndex,
-        (unsigned int)wrapper.eax,
         (unsigned int)wrapper.ecx,
         (unsigned int)wrapper.esp,
         (unsigned int)wrapper.xmm0Bits[0],
+        (unsigned int)wrapper.storedBits,
         (unsigned int)(wrapper.memoryHash >> 32),
         (unsigned int)wrapper.memoryHash);
     trace(line);
 
     ok &= check(
         reference.accessFault == 0 && wrapper.accessFault == 0,
-        "PASS: reference and real tail-call paths complete without guest-memory faults",
-        "FAIL: reference or real tail-call path triggered guest-memory fault");
+        "PASS: direct and real tail-call paths complete without guest-memory faults",
+        "FAIL: direct or real tail-call path triggered guest-memory fault");
 
     ok &= check(
         reference.esp == STACK_TOP && wrapper.esp == STACK_TOP,
@@ -595,8 +586,8 @@ static int run_one_case(DWORD caseIndex)
     ok &= check(
         reference.traceCount == 1u &&
         reference.trace[0] == CALLEE_VA,
-        "PASS: differential reference executes only translated callee after boundary",
-        "FAIL: differential reference callee trace is unexpected");
+        "PASS: differential reference executes only translated callee",
+        "FAIL: differential reference translated trace is unexpected");
 
     ok &= check(
         wrapper.traceCount == 2u &&
@@ -606,9 +597,21 @@ static int run_one_case(DWORD caseIndex)
         "FAIL: real translated tail-call trace sequence is unexpected");
 
     ok &= check(
+        reference.ecx == EFFECTIVE_OBJECT &&
+        wrapper.ecx == EFFECTIVE_OBJECT,
+        "PASS: wrapper ECX += 0x28 matches direct-callee effective object",
+        "FAIL: wrapper ECX adjustment does not match direct-callee reference");
+
+    ok &= check(
+        reference.storedBits == expectedBits &&
+        wrapper.storedBits == expectedBits,
+        "PASS: scalar XMM0 value stored exactly at effective this+0xDC",
+        "FAIL: scalar setter did not store the expected XMM0 bits");
+
+    ok &= check(
         architectural_results_match(&reference, &wrapper),
-        "PASS: real tail-call chain matches reference-prefix plus direct callee",
-        "FAIL: real tail-call chain differs from the isolated differential reference");
+        "PASS: real tail-call chain matches direct-callee architectural result",
+        "FAIL: real tail-call chain differs from direct-callee result");
 
     ok &= check(
         reference.xmm0Bits[0] == wrapper.xmm0Bits[0] &&
@@ -659,7 +662,7 @@ VOID __cdecl main()
     trace("BUILD TAG: P3F-TAILCALL-20261018-B");
     trace("Candidate B wrapper VA: 0x001EF850");
     trace("Candidate B callee VA:  0x0021AB90");
-    trace("Reference: translated wrapper prefix to tail boundary, then direct translated callee");
+    trace("Reference: direct translated callee at ECX=BASE+0x28 versus real wrapper tail-call");
 
     g_ram = (BYTE*)malloc(RAM_SIZE);
 
