@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 0 audit + Phase 2 guest-address routing after completing Phase 2C exact-XBE verification.
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3A explicit scalar guest-memory ABI after completing Gate 2.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -186,9 +186,10 @@ executes as Xbox 360 PowerPC.
 - [ ] Audit translated instruction helpers for x86-only intrinsics,
       compiler extensions, native-endian casts, 32/64-bit assumptions and
       Windows/MSVC-specific code.
-- [ ] Update **maintained translator / lifter / patch generator**, not
-      disposable `ports/mercenaries/src/recomp/gen` files, for explicit
-      endian-safe guest reads/writes/RMW.
+- [x] Begin maintained-lifter migration with opt-in Phase 3A scalar integer
+      `GUEST_READ8/16/32/64` + `GUEST_WRITE8/16/32/64` emission. Legacy PC
+      output remains unchanged by default; float/SSE/MMX/string/manual paths
+      remain later Phase 3 work.
 - [ ] Generate and compile isolated instruction fixtures under the actual
       Xbox 360 compiler before attempting all translated functions.
 - [ ] Validate flags, sign extension, stack/calling convention, frame saving,
@@ -590,6 +591,27 @@ unexecuted test PASS.**
 - Generated assignable `MEM16/32/64` lvalues now move to Phase 3 where they
   belong: maintained translator/lifter changes plus real XDK instruction
   fixtures before any bounded translated Mercenaries function executes.
+
+### 2026-10-18 — Phase 3A scalar generated-memory ABI prepared
+
+- Created `xbox360/phase3a-scalar-memory-abi` from completed Phase 2E.
+- Audited the maintained lifter rather than editing disposable generated C.
+- Scalar integer memory operands are centralized through
+  `_fmt_mem_read()` / `_fmt_mem_write()`; Phase 3A adds an opt-in explicit
+  mode while preserving legacy PC output by default.
+- Explicit output shape:
+  `GUEST_WRITE32(addr, GUEST_READ32(addr) + value)` instead of assignable
+  native-pointer `MEM32(addr)` lvalues.
+- Added runtime ABI declarations for
+  `recomp_guest_read/write8/16/32/64`.
+- Added generator regression coverage for legacy and explicit modes plus a
+  scalar RMW emission.
+- Added self-contained XDK fixture tagged `P3A-SCALAR-20261018-A` covering
+  generated-style MOV/RMW, unaligned 8/16/64-bit access, CMPXCHG-style paths,
+  mirror/KSEG coherence, PUSH source evaluation order, POP restoration and
+  rejection of MMIO/cross-window accesses.
+- **Next:** compile/run Phase 3A on modified Xbox 360 hardware. No translated
+  Mercenaries function executes yet.
 
 ### How future updates are recorded
 
