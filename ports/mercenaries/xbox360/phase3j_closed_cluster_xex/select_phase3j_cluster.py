@@ -70,11 +70,11 @@ FORBIDDEN_SOURCE_RE = re.compile(
     r")\b"
 )
 
-# The first 3J cluster is about dependency closure/scale, not loops. Branching
-# flag coverage widens in 3K. Keeping 3J-A acyclic and branch-light guarantees
-# that its static dependency chain is actually exercised by deterministic seed.
+# The first 3J cluster is about dependency closure/scale, not loops. Forward
+# acyclic branch control is allowed because real retail closures overwhelmingly
+# require it. Backward guest edges/loops remain deferred to Phase 3K.
 FORBIDDEN_CONTROL_RE = re.compile(
-    r"\b(?:while|for)\s*\(|\bgoto\s+loc_|\bif\s*\("
+    r"\b(?:while|for|switch)\s*\("
 )
 
 C_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
@@ -89,6 +89,9 @@ ALLOWED_CALLS = {
     "PUSH32", "POP32",
     "LO8", "HI8", "LO16", "SET_LO8", "SET_HI8", "SET_LO16",
     "SX8", "SX16", "ZX8", "ZX16", "BSWAP32",
+    "CMP_EQ", "CMP_NE", "CMP_B", "CMP_AE", "CMP_BE", "CMP_A",
+    "CMP_L", "CMP_GE", "CMP_LE", "CMP_G",
+    "TEST_Z", "TEST_NZ", "TEST_S", "EVEN_PARITY8",
 }
 
 
@@ -127,6 +130,36 @@ def static_dependencies(source, own_name):
     return deps
 
 
+def has_backward_guest_branch(translator, addr, info):
+    """
+    Reject guest loops/back-edges while allowing forward acyclic conditionals.
+    LOOP/LOOPE/LOOPNE are also deferred even if their target is forward.
+    """
+    end = int_field(info, "end", addr + int_field(info, "size"))
+    if end <= addr:
+        end = addr + int_field(info, "size")
+
+    try:
+        raw = translator.translator._read_func_bytes(addr, end)
+        instructions = translator.translator.disasm.disassemble_function(
+            raw, addr, end)
+    except Exception:
+        return True
+
+    for insn in instructions:
+        if insn.mnemonic in ("loop", "loope", "loopne"):
+            return True
+
+        if not insn.is_branch or insn.jump_target is None:
+            continue
+
+        target = int(insn.jump_target)
+        if addr <= target < end and target <= insn.address:
+            return True
+
+    return False
+
+
 def source_surface_ok(source, own_name, dependency_names):
     executable = executable_c(source)
 
@@ -134,7 +167,7 @@ def source_surface_ok(source, own_name, dependency_names):
         return False, "unsupported dynamic/SIMD/FPU/runtime surface"
 
     if FORBIDDEN_CONTROL_RE.search(executable):
-        return False, "branch/loop control flow deferred to Phase 3K"
+        return False, "generated C loop/switch surface deferred to Phase 3K"
 
     defs = FUNC_DEF_RE.findall(executable)
     if defs != [own_name]:
@@ -301,6 +334,9 @@ def main():
             source = lift(addr)
             if not source:
                 return None, "member translation failed"
+
+            if has_backward_guest_branch(translator, addr, info):
+                return None, "backward/loop guest control flow deferred to Phase 3K"
 
             deps = dependencies(addr)
             if deps is None:
