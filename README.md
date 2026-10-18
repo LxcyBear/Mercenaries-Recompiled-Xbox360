@@ -1485,6 +1485,41 @@ unexecuted test PASS.**
 - The preceding 996-entry `no translated RET` histogram was therefore not a
   real retail-code limitation.
 
+### 2026-10-18 — Phase 3J-A first hardware run reaches real 6-function closure
+
+- Build `P3J-CLOSURE-20261018-A` selected and executed a real automatically
+  chosen dependency-closed cluster on modified Xbox 360 hardware.
+- Selected root: `0x000B2080`.
+- Static closure: **6 translated functions**, dependency depth **2**.
+- All three deterministic cases executed fault-free.
+- High-RAM canaries survived every run.
+- Root returned with exact expected guest ESP `0x008B4004`.
+- A/B translated traces matched for all cases.
+- A/B complete 64 MiB guest-RAM hashes matched for all cases:
+  - case 0: `B1BB8502E837B4EF`
+  - case 1: `27269D03DBB0B4EF`
+  - case 2: `E83F01493C3DB4EF`
+- The only failed gate was member execution coverage: each seed executed **2/6**
+  selected members.
+- This is therefore **not** a Phase 3J pass, but it is also not a translated
+  runtime/ABI failure.
+- The original coverage rule came from the earlier branchless design and was
+  too strict once real forward conditional paths were admitted: mutually
+  exclusive dependencies cannot all execute in one branch path.
+- Build B keeps the strong requirement at suite level:
+  - every deterministic profile runs twice and must match trace, architecture,
+    exact root ESP, canaries, fault state and full 64 MiB RAM hash
+  - the union of all deterministic profile coverage must execute **every**
+    selected closure member on hardware
+- Build B expands to 12 safe branch-driving profiles and logs:
+  - exact selected member VA table
+  - per-profile translated trace
+  - per-profile coverage mask
+  - final suite coverage mask
+  - any still-missing member VAs
+- Build B tag: `P3J-CLOSURE-20261018-B`.
+- **Phase 3J remains in progress.**
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
