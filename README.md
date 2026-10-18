@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G/3H hardware PASS; 3I broader translated slice next** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G/3H hardware PASS; 3I composite slice harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -68,13 +68,13 @@ the first real mechanically translated Mercenaries function (`0x00208F30`)
 also executed successfully on modified Xbox 360 hardware and matched an
 independent reference across six controlled inputs.
 
-**Present blockers:** the explicit PowerPC-safe guest-memory ABI is now proven
-for scalar integer, signed/x87, SSE/XMM/MMX, shared stack and string/copy paths
-on modified Xbox 360 hardware. Remaining Phase 3 blockers are execution of a
-real translated function, broader x86 flags/call/ICALL/return behavior, full
-post-patch generated-tree audit, and compiler/linker/runtime scale limits.
-D3D11, Win32, DXGI and host-audio dependencies still need Xbox 360-native
-replacements in later phases.
+**Present blockers:** the explicit PowerPC-safe guest-memory ABI plus bounded
+real translated function, direct-call, tail-call and indirect-call paths are
+now proven on modified Xbox 360 hardware. Remaining Phase 3 blockers are
+broader multi-function state continuity, wider flags/FP and exceptional-path
+coverage, full post-patch generated-tree audit, and compiler/linker/runtime
+scale limits. D3D11, Win32, DXGI and host-audio dependencies still need Xbox
+360-native replacements in later phases.
 
 ### Immediate next tests
 
@@ -86,8 +86,11 @@ replacements in later phases.
 5. **Done:** compile the generated function into the bounded Phase 3E XDK
    harness and match all six controlled inputs against the independent
    `(byte & 1)` reference on modified Xbox 360 hardware.
-6. Expand to a small translated direct-call chain with explicit guest memory,
-   then cover indirect-call dispatch before broader startup execution.
+6. **Done:** execute real translated direct CALL, tail-call and nonzero
+   function-pointer ICALL paths on modified Xbox 360 hardware.
+7. Run the Phase 3I five-stage composite translated slice in one persistent
+   guest arena; require repeated-run trace/state/full-RAM checkpoint equality
+   before widening toward guarded startup execution.
 
 ### Evidence policy
 
@@ -1231,6 +1234,34 @@ unexecuted test PASS.**
 - **Next:** Phase 3I — first broader multi-function translated execution slice
   combining proven scalar/memory, direct CALL, tail-call and ICALL behavior
   before guarded game-entry/startup execution.
+
+### 2026-10-18 — Phase 3I composite translated slice prepared
+
+- Created `xbox360/phase3i-composite-translated-slice` from completed Phase 3H.
+- Phase 3I is a composition gate rather than another isolated semantics proof.
+- One XEX now carries the hardware-proven real translated families:
+  - direct CALL `0x00050010 -> 0x0004CFF0`
+  - tail-call/MOVSS `0x001EF850 -> 0x0021AB90`
+  - ICALL caller `0x0008DE60` using its real guest function-pointer slot and
+    shared translated target `0x0004CFF0`
+- Each case executes five stages without clearing the 64 MiB guest arena:
+  direct CALL, tail/MOVSS, resolved ICALL, unresolved ICALL, then direct CALL
+  again.
+- The final direct call specifically checks that translated execution remains
+  healthy after both successful and failed indirect dispatch.
+- Persistent guest canaries and cumulative stage markers must survive every
+  stage.
+- Every stage records a complete 64 MiB guest-RAM checkpoint hash.
+- The entire five-stage slice runs twice from identical state for each of three
+  input cases; all five checkpoint hashes, final architecture/XMM state,
+  translated trace, pointer slot, canaries and fault state must match.
+- ICALL pointer-slot discovery itself runs twice and must produce the same
+  nonzero mapped guest slot.
+- The preparer revalidates all previously proven retail function shapes and
+  explicit-memory audits every locally generated body before XDK compilation.
+- Build tag: `P3I-SLICE-20261018-A`.
+- **Next:** run `Prepare-Phase3I.ps1`, compile generated
+  `build\phase3i_composite_slice\main.cpp`, and capture xbWatson.
 
 ### How future updates are recorded
 
