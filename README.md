@@ -892,6 +892,24 @@ unexecuted test PASS.**
   them in the differential architectural-state comparison.
 - **Next:** update the local branch and rerun Candidate B prep.
 
+### 2026-10-18 — Phase 3F Candidate B wrapper shape confirmed
+
+- Local generated wrapper `0x001EF850` was observed directly:
+  `ecx = ecx + 0x28;` followed by the generated direct tail invocation of
+  `sub_0021AB90()`.
+- The wrapper is only 8 bytes / 2 x86 instructions and does not load or modify
+  XMM0; the scalar value is already live on entry.
+- The prior prep expectation that the wrapper loaded `[ESP+4]` into XMM0 was
+  therefore incorrect and has been removed.
+- Candidate B is now tested with a simpler differential:
+  direct translated callee at `ECX=BASE+0x28` versus real translated wrapper
+  at `ECX=BASE`, with identical live XMM0 and guest stack state.
+- The harness explicitly requires the scalar XMM0 bits to be written at the
+  common effective `this+0xDC` address, verifies `ret 4` cleanup, compares
+  all integer registers and all four XMM0 lanes, and hashes all 64 MiB of guest
+  RAM after both paths.
+- **Next:** update the local branch and rerun `Prepare-Phase3F.ps1`.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
