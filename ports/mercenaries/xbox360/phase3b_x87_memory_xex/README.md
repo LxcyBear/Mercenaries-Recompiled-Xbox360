@@ -77,3 +77,20 @@ Send the full xbWatson trace.
 A PASS closes signed/x87 guest-memory semantics. SSE/XMM, MMX, string helpers
 and manual legacy-memory sites still remain before translated Mercenaries code
 is allowed to execute.
+
+## Hardware result — PASS
+
+Build tag `P3B-X87MEM-20261018-A` passed the complete Phase 3B fixture on
+modified Xbox 360 hardware.
+
+Verified:
+- signed 8/16/32/64 guest reads + sign extension
+- unaligned signed reads
+- float32/float64 round-trips
+- exact little-endian IEEE-754 guest bytes
+- FILD/FIADD/FLD/FADD/FSTP/FIST/FCOM-style paths
+- RAM-mirror + KSEG0 floating-point coherence
+- MMIO + cross-window failure propagation
+- cleanup/timeout + `[XAPI RETURN VALUE] 0`
+
+**Phase 3B is complete.**
