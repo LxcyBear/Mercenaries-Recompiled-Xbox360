@@ -80,6 +80,7 @@ FORBIDDEN_CONTROL_RE = re.compile(
 C_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 ALLOWED_CALLS = {
+    "if", "while", "for", "switch", "sizeof",
     "RECOMP_TRACE_FUNC",
     "GUEST_READ8", "GUEST_READ16", "GUEST_READ32", "GUEST_READ64",
     "GUEST_SREAD8", "GUEST_SREAD16", "GUEST_SREAD32", "GUEST_SREAD64",
@@ -163,8 +164,12 @@ def has_backward_guest_branch(translator, addr, info):
 def source_surface_ok(source, own_name, dependency_names):
     executable = executable_c(source)
 
-    if FORBIDDEN_SOURCE_RE.search(executable):
-        return False, "unsupported dynamic/SIMD/FPU/runtime surface"
+    forbidden_match = FORBIDDEN_SOURCE_RE.search(executable)
+    if forbidden_match:
+        return False, (
+            "unsupported dynamic/SIMD/FPU/runtime surface: " +
+            forbidden_match.group(0)
+        )
 
     if FORBIDDEN_CONTROL_RE.search(executable):
         return False, "generated C loop/switch surface deferred to Phase 3K"
