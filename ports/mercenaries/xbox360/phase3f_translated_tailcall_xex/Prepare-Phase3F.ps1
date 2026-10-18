@@ -25,7 +25,6 @@ $disasmRoot = Join-Path $analysisRoot "disasm"
 $xbeJson = Join-Path $analysisRoot "xbe.json"
 $calleeFile = Join-Path $buildRoot "sub_0021AB90.c"
 $wrapperFile = Join-Path $buildRoot "sub_001EF850.c"
-$referenceFile = Join-Path $buildRoot "reference_prefix_001EF850.c"
 $templatePath = Join-Path $phaseRoot "main_template.cpp"
 $mainOut = Join-Path $buildRoot "main.cpp"
 
@@ -189,11 +188,17 @@ try {
     Show-And-Reject-Dependency -Source $calleeSource -Label "Callee"
     Show-And-Reject-Dependency -Source $wrapperSource -Label "Wrapper"
 
-    $wrapperLoadPattern = 'recomp_xmm_loadss\s*\(\s*g_xmm0\s*,\s*esp\s*\+\s*4\s*\)'
-    if ($wrapperSource -notmatch $wrapperLoadPattern) {
+    $wrapperAdjustPattern = 'ecx\s*=\s*ecx\s*\+\s*0x28\s*;'
+    if ($wrapperSource -notmatch $wrapperAdjustPattern) {
         Write-Host "[Phase3F] Wrapper source:" -ForegroundColor Yellow
         Write-Host $wrapperSource
-        throw "Candidate B wrapper no longer has the expected scalar MOVSS argument load into XMM0."
+        throw "Candidate B wrapper no longer has the expected ECX += 0x28 adjustment."
+    }
+
+    if ($wrapperSource -match '\b(?:GUEST_|RECOMP_READ|RECOMP_WRITE|xmm0|g_xmm0)\b') {
+        Write-Host "[Phase3F] Wrapper source:" -ForegroundColor Yellow
+        Write-Host $wrapperSource
+        throw "Candidate B wrapper unexpectedly touches guest memory or XMM state before the tail call."
     }
 
     $calleeStorePattern = 'GUEST_WRITEF32\s*\(\s*ecx\s*\+\s*0xDC\s*,\s*xmm0\s*\)'
@@ -208,6 +213,12 @@ try {
     }
     if ($calleeSource -match 'recomp_xmm_loadss\s*\(') {
         throw "Candidate B callee unexpectedly performs its own scalar XMM load."
+    }
+
+    if ($calleeSource -notmatch 'esp\s*\+=\s*8\s*;\s*return\s*;\s*/\*\s*ret 4\s*\*/') {
+        Write-Host "[Phase3F] Callee source:" -ForegroundColor Yellow
+        Write-Host $calleeSource
+        throw "Candidate B callee no longer has the expected ret 4 guest-stack cleanup."
     }
 
     $wrapperTargetCalls = [regex]::Matches(
@@ -248,63 +259,26 @@ try {
         throw "Callee unexpectedly calls translated function(s): $($unexpectedCalleeSubs -join ', ')."
     }
 
-    $tailPattern = '(?m)^(?<indent>\s*)g_seh_ebp\s*=\s*ebp;\s*sub_0021AB90\s*\(\s*\);\s*return;\s*/\*\s*tail jmp 0x0021AB90\s*\*/\s*$'
-    $tailMatches = [regex]::Matches($wrapperSource, $tailPattern)
-    if ($tailMatches.Count -ne 1) {
-        throw "Could not isolate exactly one generated wrapper tail-call boundary."
-    }
-
-    $referenceSource = $wrapperSource
-    $referenceSource = [regex]::Replace(
-        $referenceSource,
-        'void\s+sub_001EF850\s*\(\s*void\s*\)',
-        'void phase3f_reference_prefix(void)',
-        1
-    )
-    $referenceSource = [regex]::Replace(
-        $referenceSource,
-        $tailPattern,
-        '${indent}g_seh_ebp = ebp; return; /* Phase 3F reference stops at real tail boundary */',
-        1
-    )
-
-    if ($referenceSource -match '\bsub_0021AB90\s*\(') {
-        throw "Reference-prefix transformation left the tail callee invocation in place."
-    }
-    if ($referenceSource -notmatch 'Phase 3F reference stops at real tail boundary') {
-        throw "Reference-prefix transformation did not produce the expected boundary return."
-    }
-
-    [System.IO.File]::WriteAllText(
-        $referenceFile,
-        $referenceSource,
-        [System.Text.UTF8Encoding]::new($false)
-    )
-
     $calleeLineCount = $calleeSource.Split([Environment]::NewLine).Count
     $wrapperLineCount = $wrapperSource.Split([Environment]::NewLine).Count
-    if ($calleeLineCount -gt 140 -or $wrapperLineCount -gt 240) {
+    if ($calleeLineCount -gt 140 -or $wrapperLineCount -gt 120) {
         throw "Candidate B is larger than the bounded Phase 3F limit. Callee=$calleeLineCount wrapper=$wrapperLineCount."
     }
 
     Write-Host "[Phase3F] Auditing generated functions for legacy guest-memory lvalues..."
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $calleeFile
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $wrapperFile
-    Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $referenceFile
 
     $template = Get-Content -LiteralPath $templatePath -Raw
     $calleeMarker = "/*__PHASE3F_CALLEE__*/"
-    $referenceMarker = "/*__PHASE3F_REFERENCE_PREFIX__*/"
     $wrapperMarker = "/*__PHASE3F_WRAPPER__*/"
 
     if (-not $template.Contains($calleeMarker) -or
-        -not $template.Contains($referenceMarker) -or
         -not $template.Contains($wrapperMarker)) {
         throw "Phase 3F template injection marker is missing."
     }
 
     $combined = $template.Replace($calleeMarker, $calleeSource)
-    $combined = $combined.Replace($referenceMarker, $referenceSource)
     $combined = $combined.Replace($wrapperMarker, $wrapperSource)
 
     [System.IO.File]::WriteAllText(
@@ -316,9 +290,10 @@ try {
     Write-Host ""
     Write-Host "[Phase3F] READY"
     Write-Host "[Phase3F] Candidate:      0x001EF850 -> 0x0021AB90"
+    Write-Host "[Phase3F] Wrapper shape:  ECX += 0x28, direct tail JMP, no PUSH32"
+    Write-Host "[Phase3F] Callee shape:   store XMM0 scalar to ECX+0xDC, RET 4"
     Write-Host "[Phase3F] Callee source:  $calleeFile"
     Write-Host "[Phase3F] Wrapper source: $wrapperFile"
-    Write-Host "[Phase3F] Reference:      $referenceFile"
     Write-Host "[Phase3F] XDK source:     $mainOut"
 }
 finally {
