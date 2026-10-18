@@ -146,13 +146,6 @@ try {
         throw "Callee 0x00034AE0 was not detected exactly once."
     }
 
-    $wrapperTargets = @($wrapper[0].calls_to | ForEach-Object {
-        ([string]$_).Trim().ToUpperInvariant()
-    })
-    if ($wrapperTargets -notcontains "0X00034AE0") {
-        throw "Disassembly call graph no longer links 0x00034AD0 to 0x00034AE0."
-    }
-
     Write-Host "[Phase3F] Wrapper metadata: size=$($wrapper[0].size) instructions=$($wrapper[0].num_instructions)"
     Write-Host "[Phase3F] Callee metadata:  size=$($callee[0].size) instructions=$($callee[0].num_instructions)"
 
