@@ -1404,6 +1404,31 @@ unexecuted test PASS.**
 - **No compile or hardware run occurred in this selector attempt.**
 - **Next:** rerun the same Phase 3J selector with bounded acyclic branch support.
 
+### 2026-10-18 — Phase 3J third selector pass exposes C-keyword helper false positive
+
+- With bounded acyclic branches enabled, the selector again considered 2,200
+  real candidate roots and found no closure yet.
+- New top rejection classes:
+  - 799 unsupported dynamic/SIMD/FPU/runtime surface
+  - 518 apparent unknown helper `if`
+  - 442 backward/loop guest control flow
+  - 341 RET-N members
+- The `if` class is another selector-only false positive: the generic
+  `name(...)` helper scanner was treating ordinary generated C
+  `if (...)` syntax as a function call after conditional control flow became
+  legal.
+- C control/operator tokens `if`, `while`, `for`, `switch`, and
+  `sizeof` are now ignored by helper-call classification.
+- Unsupported-surface diagnostics now report the first actual matched token
+  (for example a specific RECOMP_ICALL/SIMD/FPU/runtime symbol) rather than one
+  799-entry aggregate reason.
+- **No closure bound, SHA check, runtime rule, compile rule, or hardware pass
+  criterion was weakened.**
+- **No compile or hardware run occurred in this selector attempt.**
+- **Next:** rerun the same Phase 3J selector; if no closure survives, the new
+  token-specific unsupported-surface histogram will identify the next real
+  blocker.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
