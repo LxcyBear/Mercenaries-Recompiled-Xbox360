@@ -458,9 +458,7 @@ def _make_condition(jcc, flag_setter, flag_ops):
             if op.type == "reg":
                 return op.reg
             elif op.type == "mem":
-                if op.mem_size == 8:
-                    return f"MEMD({_fmt_mem(op)})"
-                return f"MEMF({_fmt_mem(op)})"
+                return _fmt_float_mem_read(op)
             return _fmt_operand_read(op)
         a = _sse_op(flag_ops[0]) if len(flag_ops) >= 1 else "0.0f"
         b = _sse_op(flag_ops[1]) if len(flag_ops) >= 2 else "0.0f"
@@ -761,8 +759,7 @@ def _make_sse_lahf_value(flag_setter, flag_ops):
         if op.type == "reg":
             return op.reg
         if op.type == "mem":
-            accessor = "MEMD" if op.mem_size == 8 else "MEMF"
-            return f"{accessor}({_fmt_mem(op)})"
+            return _fmt_float_mem_read(op)
         return _fmt_operand_read(op)
 
     a = _operand(flag_ops[0])
