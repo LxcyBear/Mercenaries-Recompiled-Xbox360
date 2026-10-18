@@ -10,7 +10,7 @@ contains no guest game code, original Xbox XBE, assets or renderer.
 
 - Working, locally installed Xbox 360 XDK accessible from the user's **VS17**
   environment (confirmed as an existing working setup; not bundled here).
-- An RGH/JTAG Xbox 360 on which you can launch your own `.xex` titles.
+- A modified Xbox 360 capable of launching unsigned/homebrew `.xex` titles.
 - A debugger or Xbox 360 Neighborhood session, if available, to capture
   `OutputDebugStringA` output.
 - Only the source file `main.cpp` in this directory is required for the
@@ -100,7 +100,7 @@ or the timeout is used.
 
 - [x] VS17 invokes the Xbox 360 XDK toolchain and title compiles successfully. **Confirmed October 18, 2026.**
 - [ ] Actual XEX binary is generated.
-- [x] XEX launches on real RGH/JTAG hardware. **Confirmed October 18, 2026.**
+- [x] XEX launches on real modified Xbox 360 hardware. **Confirmed October 18, 2026.**
 - [x] xbWatson debug trace captured.
 - [x] Startup and repeated 1-second heartbeats seen.
 - [x] Controller 0 detection and button A exit confirmed; `[XAPI RETURN VALUE] 0`.
