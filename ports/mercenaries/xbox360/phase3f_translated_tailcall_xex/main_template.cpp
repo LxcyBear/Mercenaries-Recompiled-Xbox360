@@ -1,11 +1,13 @@
 /*
- * Mercenaries Xbox 360 - Phase 3F first bounded translated tail-call chain.
+ * Mercenaries Xbox 360 - Phase 3F translated tail-call chain, candidate B.
  *
- * Prepare-Phase3F.ps1 locally lifts the user's verified retail functions:
- *   0x00034AD0 - reviewed wrapper: ECX += 0x78; tail-call 0x00034AE0
- *   0x00034AE0 - translated callee
+ * Prepare-Phase3F.ps1 locally lifts from the user's verified retail XBE:
+ *   0x001EF850 - translated wrapper / tail caller
+ *   0x0021AB90 - reviewed scalar transform setter, ret 4
  *
- * Retail-derived function bodies are injected into a gitignored local copy.
+ * It also derives a local reference-prefix copy of 0x001EF850 that executes
+ * the real translated wrapper up to, but not through, its tail-call boundary.
+ * No retail-derived generated function body is committed to this repository.
  */
 
 #include <xtl.h>
@@ -32,10 +34,9 @@ typedef __int64            int64_t;
 #define KERNEL_BASE       0x80010000u
 #define KERNEL_END        0x80011000u
 
-#define WRAPPER_VA        0x00034AD0u
-#define CALLEE_VA         0x00034AE0u
-#define WRAPPER_ECX_DELTA 0x00000078u
-#define OBJECT_BASE       0x00040000u
+#define WRAPPER_VA        0x001EF850u
+#define CALLEE_VA         0x0021AB90u
+#define OBJECT_BASE       0x00060000u
 #define STACK_TOP         0x008BFFF0u
 
 static BYTE* g_ram = NULL;
@@ -225,6 +226,22 @@ uint64_t recomp_guest_read64(uint32_t address)
     return lo | (hi << 32);
 }
 
+float recomp_guest_readf32(uint32_t address)
+{
+    uint32_t bits = recomp_guest_read32(address);
+    float value = 0.0f;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+double recomp_guest_readf64(uint32_t address)
+{
+    uint64_t bits = recomp_guest_read64(address);
+    double value = 0.0;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
 void recomp_guest_write8(uint32_t address, uint8_t value)
 {
     BYTE* p = guest_ptr((DWORD)address, 1u);
@@ -280,6 +297,20 @@ void recomp_guest_write64(uint32_t address, uint64_t value)
     p[7] = (BYTE)(value >> 56);
 }
 
+void recomp_guest_writef32(uint32_t address, float value)
+{
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    recomp_guest_write32(address, bits);
+}
+
+void recomp_guest_writef64(uint32_t address, double value)
+{
+    uint64_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    recomp_guest_write64(address, bits);
+}
+
 #define GUEST_READ8(addr)   recomp_guest_read8((uint32_t)(addr))
 #define GUEST_READ16(addr)  recomp_guest_read16((uint32_t)(addr))
 #define GUEST_READ32(addr)  recomp_guest_read32((uint32_t)(addr))
@@ -288,10 +319,23 @@ void recomp_guest_write64(uint32_t address, uint64_t value)
 #define GUEST_SREAD16(addr) ((int16_t)GUEST_READ16(addr))
 #define GUEST_SREAD32(addr) ((int32_t)GUEST_READ32(addr))
 #define GUEST_SREAD64(addr) ((int64_t)GUEST_READ64(addr))
-#define GUEST_WRITE8(addr, value)  recomp_guest_write8((uint32_t)(addr), (uint8_t)(value))
-#define GUEST_WRITE16(addr, value) recomp_guest_write16((uint32_t)(addr), (uint16_t)(value))
-#define GUEST_WRITE32(addr, value) recomp_guest_write32((uint32_t)(addr), (uint32_t)(value))
-#define GUEST_WRITE64(addr, value) recomp_guest_write64((uint32_t)(addr), (uint64_t)(value))
+#define GUEST_READF32(addr) recomp_guest_readf32((uint32_t)(addr))
+#define GUEST_READF64(addr) recomp_guest_readf64((uint32_t)(addr))
+#define GUEST_WRITE8(addr, value)   recomp_guest_write8((uint32_t)(addr), (uint8_t)(value))
+#define GUEST_WRITE16(addr, value)  recomp_guest_write16((uint32_t)(addr), (uint16_t)(value))
+#define GUEST_WRITE32(addr, value)  recomp_guest_write32((uint32_t)(addr), (uint32_t)(value))
+#define GUEST_WRITE64(addr, value)  recomp_guest_write64((uint32_t)(addr), (uint64_t)(value))
+#define GUEST_WRITEF32(addr, value) recomp_guest_writef32((uint32_t)(addr), (float)(value))
+#define GUEST_WRITEF64(addr, value) recomp_guest_writef64((uint32_t)(addr), (double)(value))
+
+#define RECOMP_READ8(addr)         GUEST_READ8(addr)
+#define RECOMP_READ16(addr)        GUEST_READ16(addr)
+#define RECOMP_READ32(addr)        GUEST_READ32(addr)
+#define RECOMP_READ64(addr)        GUEST_READ64(addr)
+#define RECOMP_WRITE8(addr, v)     GUEST_WRITE8((addr), (v))
+#define RECOMP_WRITE16(addr, v)    GUEST_WRITE16((addr), (v))
+#define RECOMP_WRITE32(addr, v)    GUEST_WRITE32((addr), (v))
+#define RECOMP_WRITE64(addr, v)    GUEST_WRITE64((addr), (v))
 
 #define PUSH32(sp, val) do { \
     uint32_t _pv = (uint32_t)(val); \
@@ -304,12 +348,16 @@ void recomp_guest_write64(uint32_t address, uint64_t value)
     (sp) += 4u; \
 } while (0)
 
-/*
- * The callee is injected first so the generated wrapper's direct C call has a
- * declaration/definition available under the old XDK C++ compiler.
- */
+/* Callee must precede the generated wrapper's direct C tail invocation. */
 /*__PHASE3F_CALLEE__*/
 
+/*
+ * Locally derived from the exact translated wrapper, but its real tail-call
+ * statement is replaced with a native return after the generated EBP bridge.
+ */
+/*__PHASE3F_REFERENCE_PREFIX__*/
+
+/* Unmodified translated retail wrapper. */
 /*__PHASE3F_WRAPPER__*/
 
 typedef struct RunResult
@@ -332,60 +380,76 @@ static unsigned __int64 hash_guest_ram(void)
 {
     const unsigned __int64 kOffset = 14695981039346656037ui64;
     const unsigned __int64 kPrime = 1099511628211ui64;
+    const DWORD* words = (const DWORD*)g_ram;
+    const DWORD count = RAM_SIZE / sizeof(DWORD);
     unsigned __int64 hash = kOffset;
     DWORD i;
 
-    for (i = 0u; i < RAM_SIZE; ++i)
+    /*
+     * Comparison-only digest. Host DWORD order is irrelevant because both runs
+     * execute on the same Xenon host; using dwords makes the full-arena check
+     * much cheaper than a byte-at-a-time pass.
+     */
+    for (i = 0u; i < count; ++i)
     {
-        hash ^= (unsigned __int64)g_ram[i];
+        hash ^= (unsigned __int64)words[i];
         hash *= kPrime;
     }
 
     return hash;
 }
 
-static void seed_guest_state(DWORD caseIndex, int wrapperRun)
+static void reset_trace(void)
+{
+    s_traceCount = 0u;
+    memset(s_trace, 0, sizeof(s_trace));
+}
+
+static void seed_guest_state(DWORD caseIndex)
 {
     DWORD i;
-    DWORD effectiveObject = OBJECT_BASE + WRAPPER_ECX_DELTA;
+    DWORD argumentBits;
 
     memset(g_ram, 0, RAM_SIZE);
 
-    /*
-     * Seed the effective object and nearby bytes identically for direct-callee
-     * and wrapper runs. The wrapper begins 0x78 bytes earlier, then adjusts ECX
-     * before its tail jump.
-     */
-    for (i = 0u; i < 0x400u; ++i)
+    for (i = 0u; i < 0x500u; ++i)
     {
         BYTE value = (BYTE)((i * 37u + caseIndex * 53u + 0x21u) & 0xFFu);
-        GUEST_WRITE8(effectiveObject + i, value);
+        GUEST_WRITE8(OBJECT_BASE + i, value);
     }
 
-    /*
-     * Add a second deterministic area so accidental writes through unrelated
-     * register state also affect the whole-RAM hash.
-     */
     for (i = 0u; i < 0x100u; ++i)
     {
         BYTE value = (BYTE)((i * 11u + caseIndex * 29u + 0x80u) & 0xFFu);
-        GUEST_WRITE8(0x00052000u + i, value);
+        GUEST_WRITE8(0x00072000u + i, value);
     }
 
     g_eax = 0xA1000000u | caseIndex;
-    g_ecx = wrapperRun ? OBJECT_BASE : effectiveObject;
+    g_ecx = OBJECT_BASE;
     g_edx = 0xD2000100u + caseIndex;
     g_ebx = 0xB3000200u + caseIndex;
     g_esi = 0x51000300u + caseIndex;
     g_edi = 0xD1000400u + caseIndex;
     g_seh_ebp = 0x0EB00000u + caseIndex;
 
-    g_esp = STACK_TOP - 4u;
+    /*
+     * Callee is documented as ret 4. Supply exactly one return slot and one
+     * four-byte argument. The argument bits vary across cases and include
+     * ordinary positive, negative, and fractional float encodings.
+     */
+    if (caseIndex == 0u)
+        argumentBits = 0x3F800000u;       /* 1.0f */
+    else if (caseIndex == 1u)
+        argumentBits = 0xC0200000u;       /* -2.5f */
+    else
+        argumentBits = 0x3EAAAAABu;       /* approx 1/3 */
+
+    g_esp = STACK_TOP - 8u;
     GUEST_WRITE32(g_esp, 0xC0DEF00Du ^ caseIndex);
+    GUEST_WRITE32(g_esp + 4u, argumentBits);
 
     s_accessFault = 0;
-    s_traceCount = 0u;
-    memset(s_trace, 0, sizeof(s_trace));
+    reset_trace();
 }
 
 static void capture_result(RunResult* result)
@@ -408,52 +472,80 @@ static void capture_result(RunResult* result)
         result->trace[i] = s_trace[i];
 }
 
-static int results_match(const RunResult* direct, const RunResult* wrapper)
+static int architectural_results_match(
+    const RunResult* reference,
+    const RunResult* wrapper)
 {
-    if (direct->eax != wrapper->eax ||
-        direct->ecx != wrapper->ecx ||
-        direct->edx != wrapper->edx ||
-        direct->esp != wrapper->esp ||
-        direct->ebx != wrapper->ebx ||
-        direct->esi != wrapper->esi ||
-        direct->edi != wrapper->edi ||
-        direct->sehEbp != wrapper->sehEbp ||
-        direct->memoryHash != wrapper->memoryHash ||
-        direct->accessFault != wrapper->accessFault)
-        return 0;
-
-    return 1;
+    return
+        reference->eax == wrapper->eax &&
+        reference->ecx == wrapper->ecx &&
+        reference->edx == wrapper->edx &&
+        reference->esp == wrapper->esp &&
+        reference->ebx == wrapper->ebx &&
+        reference->esi == wrapper->esi &&
+        reference->edi == wrapper->edi &&
+        reference->sehEbp == wrapper->sehEbp &&
+        reference->memoryHash == wrapper->memoryHash &&
+        reference->accessFault == wrapper->accessFault;
 }
 
 static int run_one_case(DWORD caseIndex)
 {
-    RunResult direct;
+    RunResult reference;
     RunResult wrapper;
+    DWORD prefixTraceCount;
+    DWORD prefixTrace0;
     char line[256];
     int ok = 1;
 
-    seed_guest_state(caseIndex, 0);
-    sub_00034AE0();
-    capture_result(&direct);
+    /*
+     * Reference:
+     * execute the exact translated wrapper prefix up to the real tail boundary,
+     * then invoke the exact translated callee directly from that boundary state.
+     */
+    seed_guest_state(caseIndex);
+    phase3f_reference_prefix();
 
-    seed_guest_state(caseIndex, 1);
-    sub_00034AD0();
+    prefixTraceCount = s_traceCount;
+    prefixTrace0 = s_trace[0];
+
+    ok &= check(
+        s_accessFault == 0,
+        "PASS: translated reference prefix reached tail boundary without guest-memory fault",
+        "FAIL: translated reference prefix triggered guest-memory fault");
+
+    ok &= check(
+        prefixTraceCount == 1u && prefixTrace0 == WRAPPER_VA,
+        "PASS: reference prefix executes the real translated wrapper body",
+        "FAIL: reference-prefix translated trace is unexpected");
+
+    reset_trace();
+    sub_0021AB90();
+    capture_result(&reference);
+
+    /*
+     * Full path:
+     * reset the exact initial state, then run the unmodified translated wrapper
+     * and let its generated direct tail invocation enter the translated callee.
+     */
+    seed_guest_state(caseIndex);
+    sub_001EF850();
     capture_result(&wrapper);
 
     sprintf(
         line,
-        "CASE %u direct eax=%08X ecx=%08X esp=%08X hash=%08X%08X",
+        "CASE %u reference eax=%08X ecx=%08X esp=%08X hash=%08X%08X",
         (unsigned int)caseIndex,
-        (unsigned int)direct.eax,
-        (unsigned int)direct.ecx,
-        (unsigned int)direct.esp,
-        (unsigned int)(direct.memoryHash >> 32),
-        (unsigned int)direct.memoryHash);
+        (unsigned int)reference.eax,
+        (unsigned int)reference.ecx,
+        (unsigned int)reference.esp,
+        (unsigned int)(reference.memoryHash >> 32),
+        (unsigned int)reference.memoryHash);
     trace(line);
 
     sprintf(
         line,
-        "CASE %u wrapper eax=%08X ecx=%08X esp=%08X hash=%08X%08X",
+        "CASE %u wrapper   eax=%08X ecx=%08X esp=%08X hash=%08X%08X",
         (unsigned int)caseIndex,
         (unsigned int)wrapper.eax,
         (unsigned int)wrapper.ecx,
@@ -463,34 +555,34 @@ static int run_one_case(DWORD caseIndex)
     trace(line);
 
     ok &= check(
-        direct.accessFault == 0 && wrapper.accessFault == 0,
-        "PASS: direct and wrapper paths completed without guest-memory faults",
-        "FAIL: direct or wrapper path triggered guest-memory fault");
+        reference.accessFault == 0 && wrapper.accessFault == 0,
+        "PASS: reference and real tail-call paths complete without guest-memory faults",
+        "FAIL: reference or real tail-call path triggered guest-memory fault");
 
     ok &= check(
-        direct.esp == STACK_TOP && wrapper.esp == STACK_TOP,
-        "PASS: direct and tail-call paths consume exactly one guest return slot",
-        "FAIL: direct/tail-call guest ESP cleanup differs");
+        reference.esp == STACK_TOP && wrapper.esp == STACK_TOP,
+        "PASS: ret 4 consumes one return slot plus one argument on both paths",
+        "FAIL: guest ESP cleanup differs from the expected ret-4 result");
 
     ok &= check(
-        direct.traceCount == 1u &&
-        direct.trace[0] == CALLEE_VA,
-        "PASS: direct reference executes only translated callee",
-        "FAIL: direct reference trace sequence unexpected");
+        reference.traceCount == 1u &&
+        reference.trace[0] == CALLEE_VA,
+        "PASS: differential reference executes only translated callee after boundary",
+        "FAIL: differential reference callee trace is unexpected");
 
     ok &= check(
         wrapper.traceCount == 2u &&
         wrapper.trace[0] == WRAPPER_VA &&
         wrapper.trace[1] == CALLEE_VA,
-        "PASS: wrapper trace is translated caller then translated callee",
-        "FAIL: translated tail-call trace sequence unexpected");
+        "PASS: real translated trace is wrapper then tail-called callee",
+        "FAIL: real translated tail-call trace sequence is unexpected");
 
     ok &= check(
-        results_match(&direct, &wrapper),
-        "PASS: tail-call chain matches direct-callee architectural result",
-        "FAIL: wrapper/callee chain differs from direct-callee result");
+        architectural_results_match(&reference, &wrapper),
+        "PASS: real tail-call chain matches reference-prefix plus direct callee",
+        "FAIL: real tail-call chain differs from the isolated differential reference");
 
-    if (direct.memoryHash == wrapper.memoryHash)
+    if (reference.memoryHash == wrapper.memoryHash)
         trace("PASS: full 64 MiB guest-RAM hashes match");
     else
     {
@@ -528,10 +620,10 @@ VOID __cdecl main()
         NULL);
 
     trace("PHASE 3F TRANSLATED TAIL-CALL CHAIN START");
-    trace("BUILD TAG: P3F-TAILCALL-20261018-A");
-    trace("Wrapper VA: 0x00034AD0");
-    trace("Callee VA:  0x00034AE0");
-    trace("Reference: direct callee at ECX+0x78 versus translated wrapper tail-call");
+    trace("BUILD TAG: P3F-TAILCALL-20261018-B");
+    trace("Candidate B wrapper VA: 0x001EF850");
+    trace("Candidate B callee VA:  0x0021AB90");
+    trace("Reference: translated wrapper prefix to tail boundary, then direct translated callee");
 
     g_ram = (BYTE*)malloc(RAM_SIZE);
 
