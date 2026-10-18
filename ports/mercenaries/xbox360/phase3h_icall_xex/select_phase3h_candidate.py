@@ -35,6 +35,13 @@ ICALL_RE = re.compile(
     r"/\*\s*indirect call\s*\*/"
 )
 
+DIRECT_CALL_RE = re.compile(
+    r"PUSH32\(esp,\s*0\);\s*"
+    r"(?P<name>sub_(?P<addr>[0-9A-Fa-f]{8}))\(\);\s*"
+    r"/\*\s*call 0x(?P=addr)\s*\*/",
+    re.IGNORECASE,
+)
+
 PLAIN_RET_RE = re.compile(
     r"\besp\s*\+=\s*4\s*;\s*return\s*;\s*/\*\s*ret\s*\*/"
 )
@@ -84,13 +91,14 @@ def parse_addr(value):
     return int(value, 16)
 
 
-def helper_surface_ok(source, own_name):
+def helper_surface_ok(source, own_name, extra_allowed=()):
     if FORBIDDEN.search(source):
         return False, "forbidden SIMD/flags/runtime dependency"
 
     unknown = []
     allowed = set(ALLOWED_CALLS)
     allowed.add(own_name)
+    allowed.update(extra_allowed)
     for name in CALL_TOKEN.findall(source):
         if name not in allowed:
             unknown.append(name)
@@ -147,10 +155,29 @@ def linear_icall_candidate(source, own_name):
     if re.search(r"\bif\s*\(|\bgoto\s+loc_", source):
         return None, "branching control flow present"
 
-    if TRANSLATED_CALL.search(source):
-        return None, "direct translated call present"
+    direct_calls = list(DIRECT_CALL_RE.finditer(source))
+    if len(direct_calls) > 1:
+        return None, "more than one direct translated call present"
 
-    ok, why = helper_surface_ok(source, own_name)
+    direct_helper_name = direct_calls[0].group("name") if direct_calls else None
+    direct_helper_addr = (
+        int(direct_calls[0].group("addr"), 16) if direct_calls else None)
+
+    # Any translated call token not accounted for by the optional single helper
+    # is still outside this bounded fixture.
+    translated_names = set(
+        m.group(0).split("(")[0].strip()
+        for m in TRANSLATED_CALL.finditer(source)
+    )
+    translated_names.discard(own_name)
+    if direct_helper_name:
+        translated_names.discard(direct_helper_name)
+    if translated_names:
+        return None, "additional translated call dependency present"
+
+    ok, why = helper_surface_ok(
+        source, own_name,
+        (direct_helper_name,) if direct_helper_name else ())
     if not ok:
         return None, why
 
@@ -175,6 +202,8 @@ def linear_icall_candidate(source, own_name):
 
     # Keep all other stack behavior out of this first ICALL fixture.
     without_icall = source[:match.start()] + source[match.end():]
+    if direct_calls:
+        without_icall = DIRECT_CALL_RE.sub("", without_icall, count=1)
     if "PUSH32(" in without_icall or "POP32(" in without_icall:
         return None, "other PUSH32/POP32 stack traffic present"
 
@@ -186,6 +215,8 @@ def linear_icall_candidate(source, own_name):
     # No ESP mutation besides the generated call push (inside matched text)
     # and the final plain RET.
     scrubbed = source[:match.start()] + source[match.end():]
+    if direct_calls:
+        scrubbed = DIRECT_CALL_RE.sub("", scrubbed, count=1)
     scrubbed = PLAIN_RET_RE.sub("", scrubbed)
     if re.search(r"\besp\s*(?:=|\+=|-=)", scrubbed):
         return None, "unexpected caller ESP mutation"
@@ -210,6 +241,8 @@ def linear_icall_candidate(source, own_name):
         "expr": match.group("expr").strip(),
         "seed_code": seed,
         "match": match,
+        "direct_helper_name": direct_helper_name,
+        "direct_helper_addr": direct_helper_addr,
     }, ""
 
 
@@ -323,7 +356,77 @@ def main():
             rejected[why] += 1
             continue
 
-        selected = (caller_addr, info, src, details)
+        helper_src = None
+        helper_info = None
+        helper_addr = details["direct_helper_addr"]
+        helper_name = details["direct_helper_name"]
+
+        if helper_addr is not None:
+            helper_info = funcs.get(helper_addr)
+            if not helper_info or helper_info.get("name") != helper_name:
+                rejected["direct helper boundary missing"] += 1
+                continue
+
+            try:
+                helper_src = translator.translate_single(helper_addr)
+            except Exception:
+                rejected["direct helper lift exception"] += 1
+                continue
+
+            if not helper_src:
+                rejected["direct helper lift failed"] += 1
+                continue
+
+            if ("RECOMP_ICALL" in helper_src or "RECOMP_ITAIL" in helper_src or
+                    "tail jmp" in helper_src or DIRECT_CALL_RE.search(helper_src)):
+                rejected["direct helper has call dependency"] += 1
+                continue
+
+            if re.search(r"\bif\s*\(|\bgoto\s+loc_", helper_src):
+                rejected["direct helper branches"] += 1
+                continue
+
+            helper_ok, helper_why = helper_surface_ok(helper_src, helper_name)
+            if not helper_ok:
+                rejected["direct helper " + helper_why] += 1
+                continue
+
+            if ("PUSH32(" in helper_src or "POP32(" in helper_src or
+                    len(PLAIN_RET_RE.findall(helper_src)) != 1):
+                rejected["direct helper stack shape"] += 1
+                continue
+
+            helper_ret_comments = re.findall(
+                r"/\*\s*ret(?:\s+\d+)?\s*\*/", helper_src)
+            if len(helper_ret_comments) != 1:
+                rejected["direct helper RET N/shape"] += 1
+                continue
+
+            if "g_seh_ebp" in helper_src:
+                rejected["direct helper SEH bridge"] += 1
+                continue
+
+            # Keep helper from obscuring the ICALL callee-saved-register proof.
+            helper_mutates_nonvolatile = False
+            for nonvolatile in ("ebx", "esi", "edi"):
+                if (re.search(rf"\b{nonvolatile}\s*=", helper_src) or
+                        re.search(
+                            rf"\bSET_(?:LO8|HI8|LO16)\s*\(\s*{nonvolatile}\b",
+                            helper_src)):
+                    helper_mutates_nonvolatile = True
+                    break
+            if helper_mutates_nonvolatile:
+                rejected["direct helper modifies callee-saved register"] += 1
+                continue
+
+            if len(helper_src.splitlines()) > 140:
+                rejected["direct helper too large"] += 1
+                continue
+
+        selected = (
+            caller_addr, info, src, details,
+            helper_addr, helper_info, helper_src,
+        )
         break
 
     if selected is None:
@@ -333,7 +436,8 @@ def main():
             print(f"[Phase3H] reject {count:3d}: {reason}")
         raise SystemExit(2)
 
-    caller_addr, caller_info, caller_src, details = selected
+    (caller_addr, caller_info, caller_src, details,
+     helper_addr, helper_info, helper_src) = selected
     caller_name = caller_info["name"]
 
     # Build the reference caller from the exact translated caller, replacing
@@ -363,10 +467,14 @@ def main():
         "target": out_dir / f"{target_name}.c",
         "target_impl": out_dir / "target_impl.c",
     }
+    if helper_src is not None:
+        paths["helper"] = out_dir / f"{helper_info['name']}.c"
     paths["caller"].write_text(caller_src + "\n", encoding="utf-8")
     paths["reference"].write_text(reference_src + "\n", encoding="utf-8")
     paths["target"].write_text(target_src + "\n", encoding="utf-8")
     paths["target_impl"].write_text(target_impl_src + "\n", encoding="utf-8")
+    if helper_src is not None:
+        paths["helper"].write_text(helper_src + "\n", encoding="utf-8")
 
     selection = {
         "caller": f"0x{caller_addr:08X}",
@@ -379,12 +487,19 @@ def main():
         "dispatch_target_size": int(target_info.get("size", 0)),
         "dispatch_target_instructions": int(
             target_info.get("num_instructions", 0) or 0),
+        "direct_helper": (
+            f"0x{helper_addr:08X}" if helper_addr is not None else None),
+        "direct_helper_name": (
+            helper_info["name"] if helper_info is not None else None),
     }
     (out_dir / "selection.json").write_text(
         json.dumps(selection, indent=2) + "\n", encoding="utf-8")
 
     template = Path(args.template).read_text(encoding="utf-8")
     replacements = {
+        "/*__PHASE3H_DIRECT_HELPER__*/": (
+            helper_src if helper_src is not None
+            else "/* no direct translated helper selected */"),
         "/*__PHASE3H_TARGET_IMPL__*/": target_impl_src,
         "/*__PHASE3H_REFERENCE_CALLER__*/": reference_src,
         "/*__PHASE3H_REAL_CALLER__*/": caller_src,
@@ -409,6 +524,13 @@ def main():
         f"({caller_info.get('size')} bytes / "
         f"{caller_info.get('num_instructions')} insns)")
     print(f"[Phase3H] ICALL expression: {details['expr']}")
+    if helper_addr is not None:
+        print(
+            f"[Phase3H] Direct helper: {helper_info['name']} @ "
+            f"0x{helper_addr:08X} ({helper_info.get('size')} bytes / "
+            f"{helper_info.get('num_instructions')} insns)")
+    else:
+        print("[Phase3H] Direct helper: none")
     print(
         f"[Phase3H] Dispatch target: {target_name} @ 0x{TARGET_VA:08X} "
         f"({target_info.get('size')} bytes / "
