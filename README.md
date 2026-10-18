@@ -842,6 +842,21 @@ unexecuted test PASS.**
 - **Next:** run Phase 3F prep locally, compile the generated
   `build\phase3f_translated_tailcall\main.cpp`, and capture xbWatson.
 
+### 2026-10-18 — Phase 3F first candidate rejected by dependency audit
+
+- Local prep reused the Phase 3E reviewed-seed disassembly successfully.
+- Wrapper `0x00034AD0`: 12 bytes / 3 instructions.
+- Callee `0x00034AE0`: 108 bytes / 36 instructions.
+- Both functions lifted successfully with the explicit guest-memory mode.
+- Before XDK compilation, the strict Phase 3F dependency gate rejected the
+  callee because generated output matched the guarded ICALL/kernel/runtime-copy
+  dependency class.
+- **No hardware run occurred and this is not a translated-execution failure.**
+- Updated the prep script to print the exact generated dependency line(s) on
+  the next run so the candidate can be re-audited precisely.
+- A reviewed backup tail-call family around `0x001EF850 -> 0x0021AB90` is
+  available if the current callee proves too broad for the first chain.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
