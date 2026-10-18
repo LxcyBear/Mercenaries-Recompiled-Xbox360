@@ -105,7 +105,7 @@ def parse_seed(expr, pre_call_source):
     m = DIRECT_REG_RE.fullmatch(expr)
     if m:
         reg = m.group(1)
-        seed = f"g_{reg} = DISPATCH_TARGET_VA;"
+        seed = f"g_{reg} = s_seedTargetVa;"
     else:
         m = READ32_REG_RE.fullmatch(expr)
         if not m:
