@@ -385,10 +385,13 @@ def main():
         if total_insns > MAX_TOTAL_INSNS:
             return None, "closure instruction budget exceeded"
 
-        # The root must return normally to the harness.
-        root_source = lift(root)
-        if len(PLAIN_RET_RE.findall(root_source)) != 1:
-            return None, "root must have exactly one plain RET"
+        # The root must return normally to the harness with exactly one
+        # ordinary return slot. Nested dependencies may use bounded RET-N, but
+        # the root remains plain-RET so final ESP has one exact expectation.
+        root_source = executable_c(lift(root))
+        if (len(PLAIN_RET_RE.findall(root_source)) != 1 or
+                RET_N_RE.search(root_source)):
+            return None, "root must have exactly one plain RET and no RET-N"
 
         return {
             "root": root,
