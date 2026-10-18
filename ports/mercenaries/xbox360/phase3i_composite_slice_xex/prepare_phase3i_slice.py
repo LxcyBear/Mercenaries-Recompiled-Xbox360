@@ -294,7 +294,6 @@ def main():
         "__P3I_SHARED_TARGET_NAME__": names[SHARED_TARGET],
         "__P3I_DIRECT_CALLER_NAME__": names[DIRECT_CALLER],
         "__P3I_TAIL_WRAPPER_NAME__": names[TAIL_WRAPPER],
-        "__P3I_TAIL_CALLEE_NAME__": names[TAIL_CALLEE],
         "__P3I_ICALL_CALLER_NAME__": names[ICALL_CALLER],
     }
 
