@@ -53,7 +53,7 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A host contract PASS** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A COMPLETE on Xenon** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
@@ -161,7 +161,7 @@ Xbox 360 native memory.
       kernel area and GPU/APU MMIO regions.
 - [x] Implement explicit endian-correct, alignment-safe guest 8/16/32/64-bit
       and float reads/writes for the bounded low-RAM arena; host tests PASS.
-- [ ] Verify those accessors on real Xenon hardware (Phase 2A diagnostic).
+- [x] Verify those accessors on real Xenon hardware: **Phase 2A PASS**. Xenon reported big-endian host order; every low/high/unaligned/endian/bounds test passed and the XEX returned 0.
 - [ ] Replace direct native pointer semantics with explicit checked access;
       reject unsupported regions instead of corrupting unrelated memory.
 - [ ] Load a verified retail XBE: validate hash/header, copy sections,
@@ -311,7 +311,8 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | VS17 + Xbox 360 XDK diagnostic compile | **BUILD SUCCEEDED** | Xbox 360 toolchain |
 | 2026-10-18 | First real-console bootstrap run: startup, repeated heartbeats, controller 0, A-button exit | **PASS** | RGH/JTAG Xbox 360; xbWatson; `[XAPI RETURN VALUE] 0` |
 | 2026-10-18 | Independent 15-second safety-timeout run | **PASS** | RGH/JTAG Xbox 360; timeout log + `[XAPI RETURN VALUE] 0` |
-| 2026-10-18 | Phase 2A bounded 64 MiB guest-RAM host contract | **PASS (GCC / Clang / ASan+UBSan)** | Linux x86-64; real Xenon test pending |
+| 2026-10-18 | Phase 2A bounded 64 MiB guest-RAM host contract | **PASS (GCC / Clang / ASan+UBSan)** | Linux x86-64; host preflight |
+| 2026-10-18 | Phase 2A 64 MiB guest-RAM hardware diagnostic | **PASS** | Real Xbox 360 Xenon: big-endian host, LE guest bytes, unaligned access, high-bound rejection, clean timeout / XAPI 0 |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -381,8 +382,24 @@ unexecuted test PASS.**
 - To remove this friction entirely, the Phase 2A hardware diagnostic is now a
   **single self-contained `main.cpp`** with the guest-memory/endian helpers
   embedded. No auxiliary headers or Additional Include Directories are needed.
-- **Next:** build the Phase 2A XEX in the same VS17/XDK project and send the
-  complete xbWatson transcript. No retail XBE is loaded yet.
+- **Hardware result:** **PASS**. All Phase 2A memory checks succeeded on Xenon,
+  followed by the 10-second timeout and clean XAPI return value 0.
+- **Next:** Phase 2B — read a user-supplied supported retail `default.xbe`,
+  validate its header/section table safely, and copy sections into the guest
+  arena without executing them.
+
+### 2026-10-18 — Phase 2A passes on real Xenon hardware
+
+- Xbox 360 reports **BIG-ENDIAN**, exactly as required for the test.
+- 64 MiB low guest arena allocation/zeroing passed.
+- Original-Xbox little-endian byte representation passed at `0x00010000`.
+- Aligned/unaligned 8/16/32/64-bit and float accesses passed.
+- Last-valid-word/qword accesses passed.
+- Crossing-bound, first-out-of-range and wrapped/high addresses were rejected.
+- Guest arena freed successfully; post-test timeout completed and
+  `[XAPI RETURN VALUE] 0` confirmed.
+- **Phase 2A: COMPLETE.**
+- **Next:** Phase 2B XBE header/section parsing and non-executing section load.
 
 ### How future updates are recorded
 
