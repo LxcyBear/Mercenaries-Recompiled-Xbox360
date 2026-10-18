@@ -85,9 +85,49 @@ def _fmt_imm(val):
     return f"0x{val:X}"
 
 
+_EXPLICIT_GUEST_MEMORY_ABI = False
+
+
+def configure_guest_memory_abi(explicit=False):
+    """Select the generated scalar guest-memory ABI for this process.
+
+    False preserves the historical assignable MEM8/16/32/64 lvalue output.
+    True emits explicit GUEST_READ*/GUEST_WRITE* calls for scalar integer
+    operands. Translation already treats one XBE layout as process-global, so
+    the memory ABI follows that same one-configuration-per-process contract.
+    """
+    global _EXPLICIT_GUEST_MEMORY_ABI
+    _EXPLICIT_GUEST_MEMORY_ABI = bool(explicit)
+
+
+def guest_memory_abi_is_explicit():
+    """Return whether scalar integer operands use explicit read/write calls."""
+    return _EXPLICIT_GUEST_MEMORY_ABI
+
+
 def _mem_accessor(size):
-    """Return the MEM macro name for a given operand size."""
+    """Return the legacy MEM macro name for a given operand size."""
     return {1: "MEM8", 2: "MEM16", 4: "MEM32", 8: "MEM64"}.get(size, "MEM32")
+
+
+def _guest_read_accessor(size):
+    """Return the explicit scalar integer guest-read helper name."""
+    return {
+        1: "GUEST_READ8",
+        2: "GUEST_READ16",
+        4: "GUEST_READ32",
+        8: "GUEST_READ64",
+    }.get(size, "GUEST_READ32")
+
+
+def _guest_write_accessor(size):
+    """Return the explicit scalar integer guest-write helper name."""
+    return {
+        1: "GUEST_WRITE8",
+        2: "GUEST_WRITE16",
+        4: "GUEST_WRITE32",
+        8: "GUEST_WRITE64",
+    }.get(size, "GUEST_WRITE32")
 
 
 def _smem_accessor(size):
@@ -126,17 +166,19 @@ def _fmt_mem(op):
 
 
 def _fmt_mem_read(op):
-    """Format reading from a memory operand."""
-    accessor = _mem_accessor(op.mem_size)
+    """Format reading from a scalar integer memory operand."""
     addr = _fmt_mem(op)
-    return f"{accessor}({addr})"
+    if _EXPLICIT_GUEST_MEMORY_ABI:
+        return f"{_guest_read_accessor(op.mem_size)}({addr})"
+    return f"{_mem_accessor(op.mem_size)}({addr})"
 
 
 def _fmt_mem_write(op, value_expr):
-    """Format writing to a memory operand."""
-    accessor = _mem_accessor(op.mem_size)
+    """Format writing to a scalar integer memory operand."""
     addr = _fmt_mem(op)
-    return f"{accessor}({addr}) = {value_expr};"
+    if _EXPLICIT_GUEST_MEMORY_ABI:
+        return f"{_guest_write_accessor(op.mem_size)}({addr}, {value_expr});"
+    return f"{_mem_accessor(op.mem_size)}({addr}) = {value_expr};"
 
 
 def _fmt_operand_read(op):
