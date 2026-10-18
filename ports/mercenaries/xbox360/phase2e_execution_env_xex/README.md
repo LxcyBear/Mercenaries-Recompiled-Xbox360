@@ -95,3 +95,22 @@ code expects. The next gate is the generated-memory ABI itself: audit and
 replace assignable native-endian \`MEM16/32/64\` lvalues with explicit
 endian-safe read/write/RMW operations before executing a bounded translated
 function.
+
+
+## Hardware result — PASS
+
+Build tag `P2E-ENV-20261018-A` passed the complete Phase 2E fixture on
+modified Xbox 360 hardware.
+
+Notable observed retail TLS values:
+- raw start/end: `0`
+- TLS index address: `0x00869118`
+- zero-fill: 8 bytes
+- synthetic TLS block: 20 bytes
+
+The TIB/KTHREAD/TLS chain, negative-index equation, kernel-data aliases,
+256 KiB guest stack, initial ESP and PUSH32/POP32 fixture all passed.
+
+Cleanup and the 10-second timeout completed with `[XAPI RETURN VALUE] 0`.
+
+**Phase 2E and Gate 2 are complete.**
