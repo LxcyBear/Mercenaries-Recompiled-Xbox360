@@ -260,10 +260,15 @@ def main():
 
     selection = {
         "direct_caller": f"0x{DIRECT_CALLER:08X}",
+        "direct_caller_name": names[DIRECT_CALLER],
         "shared_target": f"0x{SHARED_TARGET:08X}",
+        "shared_target_name": names[SHARED_TARGET],
         "tail_wrapper": f"0x{TAIL_WRAPPER:08X}",
+        "tail_wrapper_name": names[TAIL_WRAPPER],
         "tail_callee": f"0x{TAIL_CALLEE:08X}",
+        "tail_callee_name": names[TAIL_CALLEE],
         "icall_caller": f"0x{ICALL_CALLER:08X}",
+        "icall_caller_name": names[ICALL_CALLER],
         "icall_expression": expr,
         "pointer_slot_expression": slot_expr,
         "icall_direct_helper": (
