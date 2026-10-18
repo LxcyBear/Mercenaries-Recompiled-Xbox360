@@ -829,8 +829,8 @@ unexecuted test PASS.**
   `0x00034AE0`. The seed documents the wrapper as `ECX += 0x78` followed
   by a direct tail jump to the callee.
 - The prep workflow verifies the exact retail XBE, reuses Phase 3E analysis when
-  available, confirms the call-graph edge, lifts both functions with
-  `--explicit-guest-memory`, and rejects unexpected third-function calls,
+  available, confirms both reviewed function boundaries, lifts both functions
+  with `--explicit-guest-memory`, and rejects unexpected third-function calls,
   ICALL/ITAIL, runtime-copy/kernel dependencies, debug/RDTSC, or SIMD/x87 state.
 - It also requires the generated wrapper tail-jump marker and rejects any
   synthetic `PUSH32` in that tail-call path.
