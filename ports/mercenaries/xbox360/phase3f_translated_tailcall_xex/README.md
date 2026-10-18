@@ -63,7 +63,7 @@ It then:
 
 1. verifies the pinned retail SHA-256,
 2. confirms both 0x00034AD0 and 0x00034AE0 are detected,
-3. confirms the call graph links the wrapper to the callee,
+3. confirms both reviewed function boundaries are present,
 4. lifts both functions with `--explicit-guest-memory`,
 5. requires exactly one direct wrapper -> callee call,
 6. requires the generated tail-jump marker,
