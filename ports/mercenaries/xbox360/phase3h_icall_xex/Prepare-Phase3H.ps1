@@ -107,12 +107,20 @@ try {
     $referenceCaller = Join-Path $buildRoot "reference_caller.c"
     $targetFile = Join-Path $buildRoot "$($selection.dispatch_target_name).c"
     $targetImpl = Join-Path $buildRoot "target_impl.c"
+    $helperFile = $null
+    if ($null -ne $selection.direct_helper_name -and
+        -not [string]::IsNullOrWhiteSpace([string]$selection.direct_helper_name)) {
+        $helperFile = Join-Path $buildRoot "$($selection.direct_helper_name).c"
+    }
 
     Write-Host "[Phase3H] Auditing generated sources for legacy guest-memory lvalues..."
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $callerFile
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $referenceCaller
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $targetFile
     Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $targetImpl
+    if ($null -ne $helperFile) {
+        Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $helperFile
+    }
 
     if (-not (Test-Path -LiteralPath $mainOut -PathType Leaf)) {
         throw "Phase 3H selector did not produce the XDK main.cpp."
@@ -123,6 +131,13 @@ try {
     Write-Host "[Phase3H] Caller:          $($selection.caller_name) @ $($selection.caller)"
     Write-Host "[Phase3H] Caller size:     $($selection.caller_size) bytes / $($selection.caller_instructions) instructions"
     Write-Host "[Phase3H] ICALL expression:$($selection.icall_expression)"
+    if ($null -ne $selection.direct_helper_name -and
+        -not [string]::IsNullOrWhiteSpace([string]$selection.direct_helper_name)) {
+        Write-Host "[Phase3H] Direct helper:   $($selection.direct_helper_name) @ $($selection.direct_helper)"
+    }
+    else {
+        Write-Host "[Phase3H] Direct helper:   none"
+    }
     Write-Host "[Phase3H] Dispatch target: $($selection.dispatch_target_name) @ $($selection.dispatch_target)"
     Write-Host "[Phase3H] Target size:     $($selection.dispatch_target_size) bytes / $($selection.dispatch_target_instructions) instructions"
     Write-Host "[Phase3H] Modes:           resolved / unresolved / range reject"
