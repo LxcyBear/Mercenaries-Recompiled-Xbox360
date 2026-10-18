@@ -663,6 +663,25 @@ unexecuted test PASS.**
 - **Next:** Phase 3C SSE/XMM + MMX guest-memory helpers, still without
   translated Mercenaries function execution.
 
+### 2026-10-18 — Phase 3C SSE/XMM + MMX memory ABI prepared
+
+- Created `xbox360/phase3c-sse-mmx-memory-abi` from completed Phase 3B.
+- MMX memory operands now use explicit 64-bit guest reads/writes in explicit mode.
+- Scalar SSE memory operands route through explicit float/double helpers.
+- Packed XMM runtime helpers gain an explicit-memory branch selected by
+  `RECOMP_EXPLICIT_GUEST_MEMORY_ABI`.
+- Full XMM transfers use a checked 128-bit guest operation; low/high 64-bit
+  moves use one checked 64-bit guest operation. This prevents SIMD accesses at
+  a 64 MiB boundary from wrapping lane-by-lane into a mirror window.
+- Added generator regression coverage for MOVQ/MMX, MOVSS/ADDSS/ADDSD and
+  packed XMM helper emission.
+- Added self-contained XDK fixture tagged `P3C-SIMD-20261018-A` covering
+  packed lane reconstruction, raw-bit moves, MMX payloads, arithmetic/bitwise
+  memory operands, alias coherence and boundary/MMIO rejection.
+- Shared PUSH/POP macros, REP/string helpers and remaining manual legacy
+  memory sites are explicitly deferred to the next cleanup slice.
+- **Next:** build/run Phase 3C on modified Xbox 360 hardware.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
