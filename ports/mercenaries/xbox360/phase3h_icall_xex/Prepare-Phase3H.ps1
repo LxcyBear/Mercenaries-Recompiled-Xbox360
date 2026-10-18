@@ -140,7 +140,7 @@ try {
     }
     Write-Host "[Phase3H] Dispatch target: $($selection.dispatch_target_name) @ $($selection.dispatch_target)"
     Write-Host "[Phase3H] Target size:     $($selection.dispatch_target_size) bytes / $($selection.dispatch_target_instructions) instructions"
-    Write-Host "[Phase3H] Modes:           resolved / unresolved / range reject"
+    Write-Host "[Phase3H] Modes:           discover caller target -> resolved / unresolved; direct range guard"
     Write-Host "[Phase3H] XDK source:      $mainOut"
 }
 finally {
