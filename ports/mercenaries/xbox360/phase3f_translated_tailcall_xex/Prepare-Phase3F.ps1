@@ -211,8 +211,11 @@ try {
     if ($wrapperSource -match 'GUEST_WRITEF32\s*\(') {
         throw "Candidate B wrapper unexpectedly writes scalar float guest memory before the tail boundary."
     }
-    if ($calleeSource -match 'recomp_xmm_loadss\s*\(') {
-        throw "Candidate B callee unexpectedly performs its own scalar XMM load."
+    $calleeLoadPattern = 'recomp_xmm_loadss\s*\(\s*g_xmm0\s*,\s*esp\s*\+\s*4\s*\)'
+    if ($calleeSource -notmatch $calleeLoadPattern) {
+        Write-Host "[Phase3F] Callee source:" -ForegroundColor Yellow
+        Write-Host $calleeSource
+        throw "Candidate B callee no longer has the expected MOVSS load from guest [ESP+4] into XMM0."
     }
 
     if ($calleeSource -notmatch 'esp\s*\+=\s*8\s*;\s*return\s*;\s*/\*\s*ret 4\s*\*/') {
@@ -291,7 +294,7 @@ try {
     Write-Host "[Phase3F] READY"
     Write-Host "[Phase3F] Candidate:      0x001EF850 -> 0x0021AB90"
     Write-Host "[Phase3F] Wrapper shape:  ECX += 0x28, direct tail JMP, no PUSH32"
-    Write-Host "[Phase3F] Callee shape:   store XMM0 scalar to ECX+0xDC, RET 4"
+    Write-Host "[Phase3F] Callee shape:   MOVSS [ESP+4] -> XMM0 -> ECX+0xDC, RET 4"
     Write-Host "[Phase3F] Callee source:  $calleeFile"
     Write-Host "[Phase3F] Wrapper source: $wrapperFile"
     Write-Host "[Phase3F] XDK source:     $mainOut"
