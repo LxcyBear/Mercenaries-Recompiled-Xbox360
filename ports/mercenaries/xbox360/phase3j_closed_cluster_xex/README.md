@@ -46,7 +46,8 @@ The first hardware cluster is deliberately bounded:
   are excluded
 - each member has a plain translated RET
 - RET-N members are deferred
-- branch/loop control flow is deferred to Phase 3K
+- forward/acyclic conditional control flow is allowed
+- backward guest branch edges, LOOP/LOOPE/LOOPNE and generated C while/for/switch surfaces are deferred to Phase 3K
 
 The branchless requirement is intentional for 3J-A. It makes the first closure
 test about automatic dependency selection and execution rather than branch-path
@@ -189,3 +190,31 @@ The real zero-extension helpers emitted by `movzx`, `ZX8` and `ZX16`,
 are also now accepted and implemented by the Phase 3J XDK harness.
 
 No closure bounds, retail hash checks, or hardware pass criteria were weakened.
+
+## Second local selector pass — acyclic branch relaxation
+
+After removing the comment-scanner false positives, the selector again
+considered 2,200 real roots. The dominant rejection class became:
+
+```text
+1390: branch/loop control flow deferred to Phase 3K
+```
+
+That is strong evidence that a completely branchless 4–8 function retail
+closure is not representative of Mercenaries.
+
+Phase 3J has therefore been relaxed in one bounded direction:
+
+- forward guest conditional branches are allowed
+- generated SETcc/CMOV-style `if (...)` is allowed
+- statically named external conditional transfers still participate in closure
+- backward guest branch edges are rejected
+- LOOP/LOOPE/LOOPNE are rejected
+- generated C while/for/switch surfaces are rejected
+
+The XDK fixture now carries the maintained integer branch-condition helpers:
+`CMP_EQ`, `CMP_NE`, `CMP_B`, `CMP_AE`, `CMP_BE`, `CMP_A`,
+`CMP_L`, `CMP_GE`, `CMP_LE`, `CMP_G`, `TEST_Z`, `TEST_NZ`,
+`TEST_S`, and `EVEN_PARITY8`.
+
+All dependency closure bounds and the exact retail SHA remain unchanged.
