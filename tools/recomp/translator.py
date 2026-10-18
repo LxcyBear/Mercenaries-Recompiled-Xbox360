@@ -816,12 +816,12 @@ class FunctionTranslator:
             def _blank_block_comment(match):
                 return "\n" * match.group(0).count("\n")
 
-            audited = re.sub(r"/\\*.*?\\*/", _blank_block_comment,
+            audited = re.sub(r"/\*.*?\*/", _blank_block_comment,
                              source, flags=re.S)
-            audited = re.sub(r"//[^\\n]*", "", audited)
+            audited = re.sub(r"//[^\n]*", "", audited)
             legacy = re.compile(
-                r"\\b(?:MEM8|MEM16|MEM32|MEM64|"
-                r"SMEM8|SMEM16|SMEM32|SMEM64|MEMF|MEMD|XBOX_PTR)\\s*\\(")
+                r"\b(?:MEM8|MEM16|MEM32|MEM64|"
+                r"SMEM8|SMEM16|SMEM32|SMEM64|MEMF|MEMD|XBOX_PTR)\s*\(")
             hits = []
             for line_number, line_text in enumerate(audited.splitlines(), 1):
                 if legacy.search(line_text):
