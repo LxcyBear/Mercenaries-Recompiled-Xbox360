@@ -51,6 +51,7 @@ uint32_t g_ebx = 0u;
 uint32_t g_esi = 0u;
 uint32_t g_edi = 0u;
 uint32_t g_seh_ebp = 0u;
+float g_xmm0[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 volatile uint32_t g_recomp_14fa2b_entry = 0u;
 
 #define eax g_eax
@@ -60,6 +61,7 @@ volatile uint32_t g_recomp_14fa2b_entry = 0u;
 #define ebx g_ebx
 #define esi g_esi
 #define edi g_edi
+#define xmm0 g_xmm0[0]
 
 #define LO8(r)   ((uint8_t)((r) & 0xFFu))
 #define HI8(r)   ((uint8_t)(((r) >> 8) & 0xFFu))
@@ -328,6 +330,15 @@ void recomp_guest_writef64(uint32_t address, double value)
 #define GUEST_WRITEF32(addr, value) recomp_guest_writef32((uint32_t)(addr), (float)(value))
 #define GUEST_WRITEF64(addr, value) recomp_guest_writef64((uint32_t)(addr), (double)(value))
 
+static void recomp_xmm_loadss(float dst[4], uint32_t address)
+{
+    uint32_t bits = GUEST_READ32(address);
+    memcpy(&dst[0], &bits, sizeof(bits));
+    dst[1] = 0.0f;
+    dst[2] = 0.0f;
+    dst[3] = 0.0f;
+}
+
 #define RECOMP_READ8(addr)         GUEST_READ8(addr)
 #define RECOMP_READ16(addr)        GUEST_READ16(addr)
 #define RECOMP_READ32(addr)        GUEST_READ32(addr)
@@ -370,6 +381,7 @@ typedef struct RunResult
     DWORD esi;
     DWORD edi;
     DWORD sehEbp;
+    DWORD xmm0Bits[4];
     unsigned __int64 memoryHash;
     int accessFault;
     DWORD traceCount;
@@ -432,6 +444,15 @@ static void seed_guest_state(DWORD caseIndex)
     g_edi = 0xD1000400u + caseIndex;
     g_seh_ebp = 0x0EB00000u + caseIndex;
 
+    {
+        uint32_t xmmSeed[4];
+        xmmSeed[0] = 0x7FC00001u ^ caseIndex;
+        xmmSeed[1] = 0x11110000u + caseIndex;
+        xmmSeed[2] = 0x22220000u + caseIndex;
+        xmmSeed[3] = 0x33330000u + caseIndex;
+        memcpy(g_xmm0, xmmSeed, sizeof(xmmSeed));
+    }
+
     /*
      * Callee is documented as ret 4. Supply exactly one return slot and one
      * four-byte argument. The argument bits vary across cases and include
@@ -464,6 +485,7 @@ static void capture_result(RunResult* result)
     result->esi = g_esi;
     result->edi = g_edi;
     result->sehEbp = g_seh_ebp;
+    memcpy(result->xmm0Bits, g_xmm0, sizeof(result->xmm0Bits));
     result->memoryHash = hash_guest_ram();
     result->accessFault = s_accessFault;
     result->traceCount = s_traceCount;
@@ -485,6 +507,10 @@ static int architectural_results_match(
         reference->esi == wrapper->esi &&
         reference->edi == wrapper->edi &&
         reference->sehEbp == wrapper->sehEbp &&
+        reference->xmm0Bits[0] == wrapper->xmm0Bits[0] &&
+        reference->xmm0Bits[1] == wrapper->xmm0Bits[1] &&
+        reference->xmm0Bits[2] == wrapper->xmm0Bits[2] &&
+        reference->xmm0Bits[3] == wrapper->xmm0Bits[3] &&
         reference->memoryHash == wrapper->memoryHash &&
         reference->accessFault == wrapper->accessFault;
 }
@@ -534,22 +560,24 @@ static int run_one_case(DWORD caseIndex)
 
     sprintf(
         line,
-        "CASE %u reference eax=%08X ecx=%08X esp=%08X hash=%08X%08X",
+        "CASE %u reference eax=%08X ecx=%08X esp=%08X xmm0=%08X hash=%08X%08X",
         (unsigned int)caseIndex,
         (unsigned int)reference.eax,
         (unsigned int)reference.ecx,
         (unsigned int)reference.esp,
+        (unsigned int)reference.xmm0Bits[0],
         (unsigned int)(reference.memoryHash >> 32),
         (unsigned int)reference.memoryHash);
     trace(line);
 
     sprintf(
         line,
-        "CASE %u wrapper   eax=%08X ecx=%08X esp=%08X hash=%08X%08X",
+        "CASE %u wrapper   eax=%08X ecx=%08X esp=%08X xmm0=%08X hash=%08X%08X",
         (unsigned int)caseIndex,
         (unsigned int)wrapper.eax,
         (unsigned int)wrapper.ecx,
         (unsigned int)wrapper.esp,
+        (unsigned int)wrapper.xmm0Bits[0],
         (unsigned int)(wrapper.memoryHash >> 32),
         (unsigned int)wrapper.memoryHash);
     trace(line);
@@ -581,6 +609,14 @@ static int run_one_case(DWORD caseIndex)
         architectural_results_match(&reference, &wrapper),
         "PASS: real tail-call chain matches reference-prefix plus direct callee",
         "FAIL: real tail-call chain differs from the isolated differential reference");
+
+    ok &= check(
+        reference.xmm0Bits[0] == wrapper.xmm0Bits[0] &&
+        reference.xmm0Bits[1] == wrapper.xmm0Bits[1] &&
+        reference.xmm0Bits[2] == wrapper.xmm0Bits[2] &&
+        reference.xmm0Bits[3] == wrapper.xmm0Bits[3],
+        "PASS: all four XMM0 lanes match the differential reference",
+        "FAIL: XMM0 architectural state differs between reference and tail-call path");
 
     if (reference.memoryHash == wrapper.memoryHash)
         trace("PASS: full 64 MiB guest-RAM hashes match");
