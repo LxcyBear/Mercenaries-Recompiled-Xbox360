@@ -23,6 +23,7 @@ import sys
 import time
 
 from . import config
+from .lifter import configure_guest_memory_abi
 from .translator import BatchTranslator
 from .output import write_summary, print_stats, generate_header
 
@@ -167,7 +168,16 @@ def main():
                         help="Declare and dispatch ADDR, but omit its generated "
                              "body so the port can provide a manual implementation "
                              "(repeatable)")
+    parser.add_argument(
+        "--explicit-guest-memory",
+        action="store_true",
+        help="Emit explicit GUEST_READ*/GUEST_WRITE* memory ABI and mark "
+             "generated C with RECOMP_EXPLICIT_GUEST_MEMORY_ABI")
     args = parser.parse_args()
+
+    # One memory ABI is active per translation process, just like the XBE
+    # section layout.  The default remains the historical PC MEM-lvalue ABI.
+    configure_guest_memory_abi(args.explicit_guest_memory)
 
     # Find data files
     data_files = find_data_files(
