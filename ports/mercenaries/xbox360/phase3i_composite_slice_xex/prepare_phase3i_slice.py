@@ -216,8 +216,14 @@ def main():
             require(
                 "RECOMP_ICALL" not in helper_source and
                 "RECOMP_ITAIL" not in helper_source and
-                "tail jmp" not in helper_source,
-                "ICALL direct helper acquired an indirect/tail dependency",
+                "tail jmp" not in helper_source and
+                DIRECT_CALL_RE.search(helper_source) is None,
+                "ICALL direct helper acquired another call dependency",
+            )
+            require(
+                re.search(r"\bif\s*\(|\bgoto\s+loc_", helper_source)
+                is None,
+                "ICALL direct helper acquired branching control flow",
             )
 
     # Shared target must have one plain return and no additional call closure.
