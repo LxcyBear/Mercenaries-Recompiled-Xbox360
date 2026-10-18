@@ -52,7 +52,7 @@ Each phase has independently checkable checkpoints below.
 | Phase | State | Exit criterion |
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
-| **1 — Native XDK bootstrap** | **In progress — hardware launch/input/clean exit verified** | Diagnostic XEX builds, runs on a real 360, logs heartbeats and exits cleanly |
+| **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | 2 — Guest memory + retail XBE loading | Not started | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
@@ -134,12 +134,12 @@ trying to run original Xbox guest game code.
 - [x] Add source for a **diagnostic-only** console entry point to Draft PR #1.
 - [x] Open or reuse a VS17 Xbox 360 XDK **game** project using the user's working SDK; **build succeeded on October 18, 2026**.
       link only required system libraries and include the bootstrap source.
-- [ ] Confirm the produced Xbox 360 XEX filename/path and record the VS17/XDK build output. **Compilation succeeded; deployment artifact path has not yet been recorded here.**
+- [x] Produce and deploy an Xbox 360 XEX from VS17/XDK. Build and hardware execution both succeeded; exact local artifact path remains environment-specific.
 - [x] Launch from a new isolated folder; real RGH/JTAG hardware execution confirmed October 18, 2026.
 - [x] Confirm debug output: xbWatson captured `[Merc360]` startup, heartbeat, controller and shutdown messages.
 - [x] Confirm 1-second heartbeats and controller 0 detection on real hardware.
 - [x] Confirm A-button exit and clean XAPI return value 0.
-- [ ] Confirm the independent 15-second automatic timeout in a separate run.
+- [x] Confirm the independent 15-second automatic timeout in a separate run; clean `[XAPI RETURN VALUE] 0` verified.
 - [ ] Record console model, kernel, build flavor, XEX size, debugger/xbWatson
       transcript and any failed test cases.
 - [ ] Add a small probe for CPU endian, available memory, file access,
@@ -306,6 +306,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Little-endian memory and float tests: GCC 14.2.0, Clang 17.0.0, Clang UBSan | **PASS (3/3)** | Linux x86-64; branch blobs `289c8792`, `00149528`; no console run |
 | 2026-10-18 | VS17 + Xbox 360 XDK diagnostic compile | **BUILD SUCCEEDED** | Xbox 360 toolchain |
 | 2026-10-18 | First real-console bootstrap run: startup, repeated heartbeats, controller 0, A-button exit | **PASS** | RGH/JTAG Xbox 360; xbWatson; `[XAPI RETURN VALUE] 0` |
+| 2026-10-18 | Independent 15-second safety-timeout run | **PASS** | RGH/JTAG Xbox 360; timeout log + `[XAPI RETURN VALUE] 0` |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -330,7 +331,7 @@ unexecuted test PASS.**
   [VS17/XDK XEX build instructions](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/blob/xbox360/bootstrap-guest-memory/ports/mercenaries/xbox360/bootstrap_xex/BUILD_FIRST_XEX.md).
 - Replaced the nearly empty fork README with the **phase gates, checklists,
   blockers, test evidence and durable progression log**.
-- **Next gate:** run the same diagnostic once without pressing A to prove the 15-second safety timeout, then close Phase 1 and begin guest-memory integration.
+- **Phase 1 gate: COMPLETE. Next:** begin Phase 2 guest-memory integration and bounded retail-XBE section loading.
 - **No playable XEX exists.** Phase 1 hardware success is not yet claimed.
 
 - **Build environment decision:** use the user's existing **VS17 + Xbox 360 XDK**
@@ -344,12 +345,16 @@ unexecuted test PASS.**
 - xbWatson captured the complete diagnostic lifecycle: bootstrap start,
   repeated one-second heartbeats, controller 0 detection, A-button detection,
   clean diagnostic shutdown and **`[XAPI RETURN VALUE] 0`**.
-- codxe printed an "unknown executable Title ID" message for the test title;
-  this did **not** prevent the diagnostic from running or exiting cleanly.
-- **Not yet proven:** unattended 15-second timeout, guest memory, original-Xbox
-  XBE loading, graphics/audio, or Mercenaries game code.
-- **Next:** run once without pressing A. If the 15-second timeout exits cleanly,
-  Phase 1's hardware gate is complete and Phase 2 guest-memory work begins.
+- A second real-hardware run intentionally received no input. It logged the
+  **15-second safety exit**, reported timeout as the exit reason, and returned
+  **`[XAPI RETURN VALUE] 0`**.
+- External codxe plugin-manager lines are intentionally ignored for this project;
+  they come from a separately resident console plugin and are not part of the XEX.
+- **Phase 1 is complete.**
+- **Not yet proven:** guest memory, original-Xbox XBE loading, graphics/audio,
+  or Mercenaries game code.
+- **Next:** Phase 2 guest-memory arena, endian-correct access, address routing
+  and bounded XBE-section loading.
 
 ### How future updates are recorded
 
