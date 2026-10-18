@@ -857,6 +857,23 @@ unexecuted test PASS.**
 - A reviewed backup tail-call family around `0x001EF850 -> 0x0021AB90` is
   available if the current callee proves too broad for the first chain.
 
+### 2026-10-18 — Phase 3F pivots to isolated setter tail-call candidate B
+
+- Candidate A's exact dependency was identified:
+  `RECOMP_ICALL_SAFE(GUEST_READ32(eax), _icall_esp)`.
+- Candidate A is therefore deferred because it would test tail-call semantics
+  and guest indirect-call dispatch simultaneously.
+- Candidate B is `0x001EF850 -> 0x0021AB90`; the callee is the reviewed
+  scalar transform setter documented as writing its float argument to
+  `this + 0xDC` and returning with `ret 4`.
+- The local prep workflow now derives a reference-prefix copy from the exact
+  translated wrapper and stops it at its real generated tail boundary.
+- Hardware will compare reference-prefix + direct translated callee against the
+  unmodified translated wrapper + real tail-called callee from identical guest
+  state.
+- Build tag: `P3F-TAILCALL-20261018-B`.
+- **Next:** update the local branch and rerun `Prepare-Phase3F.ps1`.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
