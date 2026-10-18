@@ -2,7 +2,7 @@
 
 > **Experimental native Xbox 360 port · Not playable yet**
 >
-> **Platform:** RGH/JTAG Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
+> **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
 > **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 0 audit + Phase 2 guest-address routing after completing Phase 2C exact-XBE verification.
 >
@@ -132,7 +132,7 @@ trying to run original Xbox guest game code.
 - [x] Open or reuse a VS17 Xbox 360 XDK **game** project using the user's working SDK; **build succeeded on October 18, 2026**.
       link only required system libraries and include the bootstrap source.
 - [x] Produce and deploy an Xbox 360 XEX from VS17/XDK. Build and hardware execution both succeeded; exact local artifact path remains environment-specific.
-- [x] Launch from a new isolated folder; real RGH/JTAG hardware execution confirmed October 18, 2026.
+- [x] Launch from a new isolated folder; real modified Xbox 360 hardware execution confirmed October 18, 2026.
 - [x] Confirm debug output: xbWatson captured `[Merc360]` startup, heartbeat, controller and shutdown messages.
 - [x] Confirm 1-second heartbeats and controller 0 detection on real hardware.
 - [x] Confirm A-button exit and clean XAPI return value 0.
@@ -142,7 +142,7 @@ trying to run original Xbox guest game code.
 - [ ] Add a small probe for CPU endian, available memory, file access,
       high-resolution timing and allocation failures.
 
-**Gate 1:** real RGH/JTAG hardware produces consistent startup, log, input
+**Gate 1:** real modified Xbox 360 hardware produces consistent startup, log, input
 and shutdown evidence. A black screen from this diagnostic is expected;
 **it has no renderer**.
 
@@ -284,7 +284,7 @@ User-provided verified Xbox retail XBE + game files
            \         |           |         /
                 native default.xex
                         |
-                 RGH/JTAG console
+                 modified Xbox 360 console
 ```
 
 The retained C **logic** is the starting point, not a guarantee that
@@ -309,8 +309,8 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Source inspection: Windows host and direct guest memory macros | Confirmed in source | No console run |
 | 2026-10-18 | Little-endian memory and float tests: GCC 14.2.0, Clang 17.0.0, Clang UBSan | **PASS (3/3)** | Linux x86-64; branch blobs `289c8792`, `00149528`; no console run |
 | 2026-10-18 | VS17 + Xbox 360 XDK diagnostic compile | **BUILD SUCCEEDED** | Xbox 360 toolchain |
-| 2026-10-18 | First real-console bootstrap run: startup, repeated heartbeats, controller 0, A-button exit | **PASS** | RGH/JTAG Xbox 360; xbWatson; `[XAPI RETURN VALUE] 0` |
-| 2026-10-18 | Independent 15-second safety-timeout run | **PASS** | RGH/JTAG Xbox 360; timeout log + `[XAPI RETURN VALUE] 0` |
+| 2026-10-18 | First real-console bootstrap run: startup, repeated heartbeats, controller 0, A-button exit | **PASS** | modified Xbox 360; xbWatson; `[XAPI RETURN VALUE] 0` |
+| 2026-10-18 | Independent 15-second safety-timeout run | **PASS** | modified Xbox 360; timeout log + `[XAPI RETURN VALUE] 0` |
 | 2026-10-18 | Phase 2A bounded 64 MiB guest-RAM host contract | **PASS (GCC / Clang / ASan+UBSan)** | Linux x86-64; host preflight |
 | 2026-10-18 | Phase 2A 64 MiB guest-RAM hardware diagnostic | **PASS** | Real Xbox 360 Xenon: big-endian host, LE guest bytes, unaligned access, high-bound rejection, clean timeout / XAPI 0 |
 | 2026-10-18 | Phase 2B retail XBE parse + bounded section load | **PASS** | Real Xbox 360 Xenon: 3,223,552-byte XBE, Title ID 0x4C410015, entry 0x0022964A, 14/14 sections, 3,188,156 initialized bytes, XAPI 0 |
