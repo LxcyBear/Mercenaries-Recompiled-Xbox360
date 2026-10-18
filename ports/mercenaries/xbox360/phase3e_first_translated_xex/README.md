@@ -159,3 +159,27 @@ The warnings for missing optional identified-function and ABI databases are not
 blocking for this isolated, dependency-free accessor candidate.
 
 **Local generation is complete; modified Xbox 360 hardware execution is next.**
+
+## Hardware result — PASS
+
+Build tag `P3E-FIRSTFUNC-20261018-A` executed the locally generated
+`sub_00208F30` on modified Xbox 360 hardware.
+
+Observed cases:
+- `00 -> 0`
+- `01 -> 1`
+- `02 -> 0`
+- `03 -> 1`
+- `FE -> 0`
+- `FF -> 1`
+
+Every translated result matched the independent `input & 1` reference.
+The guest object remained unchanged, no guest-memory fault occurred, the trace
+VA matched `0x00208F30`, and translated RET restored guest ESP to
+`0x008BFFF0`.
+
+Observed final functional marker:
+`[Merc360:P3E] PHASE 3E FIRST TRANSLATED FUNCTION RESULT: PASS`
+
+**Phase 3E is complete. This is the first verified execution of mechanically
+translated Mercenaries game logic on Xenon.**
