@@ -1,6 +1,6 @@
 # Phase 1 — Build the first Mercenaries Xbox 360 diagnostics XEX
 
-**Status: source committed, Xbox 360 compile / real-hardware test not yet verified.**
+**Status: VS17 + Xbox 360 XDK compile succeeded; real-hardware test not yet verified.**
 
 This phase tests that an isolated Xbox 360 game/title can start, log,
 read controller input, and quit. **This is NOT a Mercenaries build.** It
@@ -41,8 +41,8 @@ contains no guest game code, original Xbox XBE, assets or renderer.
    an ordinary Windows `.exe` and call it an XEX.
 
 **The XDK toolchain is not available to the development environment here.**
-This procedure is intentionally source-level and does not claim any successful
-VS17/XDK compile or hardware proof.
+The user has now reported a successful VS17/XDK compile of this diagnostic.
+Real-hardware execution is still pending and is tracked separately.
 
 
 ### VS17 compatibility checkpoint
@@ -98,7 +98,7 @@ or the timeout is used.
 
 ## Completion / reporting checklist
 
-- [ ] VS17 invokes the Xbox 360 XDK toolchain and title compiles successfully.
+- [x] VS17 invokes the Xbox 360 XDK toolchain and title compiles successfully. **Confirmed October 18, 2026.**
 - [ ] Actual XEX binary is generated.
 - [ ] XEX launches from an isolated folder on real RGH/JTAG hardware.
 - [ ] Debug output or usable trace is captured.
