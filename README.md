@@ -1468,6 +1468,23 @@ unexecuted test PASS.**
 - The preceding rerun therefore did **not** test the intended RET-N relaxation;
   no conclusion should be drawn from its unchanged 380-entry RET-N count.
 
+### 2026-10-18 — Phase 3J RET marker comment-strip correction
+
+- The first rerun with the stale RET-N filter removed produced 996
+  `no translated RET` rejections.
+- Inspection confirmed another selector-only bug: translated RET identity is
+  emitted by the lifter in generated comments (`/* ret */`, `/* ret N */`),
+  but the new return classifier was searching the comment-stripped executable
+  copy.
+- RET classification now reads the raw generated source while helper/runtime
+  and control-flow scans continue using the comment-stripped copy.
+- The root plain-RET check was corrected the same way.
+- Added selector startup invariants proving the RET/RET-N regexes match raw
+  lifter output and intentionally do not survive comment stripping.
+- Fix commit: `fbc90cddf3a187dc9c0b176a646b8ec051c69ade`.
+- The preceding 996-entry `no translated RET` histogram was therefore not a
+  real retail-code limitation.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
