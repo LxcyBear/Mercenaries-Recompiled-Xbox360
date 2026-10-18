@@ -57,7 +57,7 @@ CALL_TOKEN_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 FORBIDDEN_SOURCE_RE = re.compile(
     r"\b(?:"
-    r"RECOMP_ICALL|RECOMP_ITAIL|"
+    r"RECOMP_ICALL(?:_SAFE)?|RECOMP_ITAIL(?:_SAFE)?|"
     r"recomp_xmm_[A-Za-z0-9_]+|"
     r"xmm[0-7]|xmm[0-7]v|g_xmm[0-7]|"
     r"mm[0-7]|g_mm[0-7]|"
