@@ -545,13 +545,35 @@ static int run_fixture(void)
                 "PASS: runtime memory bridge coherent through KSEG0",
                 "FAIL: runtime KSEG0 coherence");
 
-    /* Copy helper must surface a checked boundary failure. */
+    /* One scalar-width access still may not cross a 64 MiB window. */
     s_fault = 0;
-    XBOX_MEMCPY(0x0002D000u, 0x03FFFFFEu, 4u);
+    (void)RECOMP_READ32(0x03FFFFFFu);
 
     ok &= check(s_fault != 0,
-                "PASS: XBOX_MEMCPY surfaces cross-64MiB source failure",
-                "FAIL: XBOX_MEMCPY crossed RAM window");
+                "PASS: runtime scalar bridge rejects cross-64MiB dword",
+                "FAIL: runtime scalar bridge crossed RAM window");
+
+    /*
+     * String/copy helpers are sequences of individual x86 memory accesses.
+     * Advancing into the next mapped mirror is therefore valid.
+     */
+    RECOMP_WRITE8(0x03FFFFFEu, 0xA1u);
+    RECOMP_WRITE8(0x03FFFFFFu, 0xB2u);
+    RECOMP_WRITE8(0x00000000u, 0xC3u);
+    RECOMP_WRITE8(0x00000001u, 0xD4u);
+    s_fault = 0;
+
+    XBOX_MEMCPY(0x0002D000u, 0x03FFFFFEu, 4u);
+
+    expected[0] = 0xA1u;
+    expected[1] = 0xB2u;
+    expected[2] = 0xC3u;
+    expected[3] = 0xD4u;
+
+    ok &= check(!s_fault &&
+                bytes_equal(0x0002D000u, expected, 4u),
+                "PASS: XBOX_MEMCPY advances element-wise into mapped RAM mirror",
+                "FAIL: XBOX_MEMCPY mirror-boundary sequence");
 
     s_fault = 0;
     XBOX_REP_MOVS(0x0002E000u, 0xFD001000u, 1u, 4u);
