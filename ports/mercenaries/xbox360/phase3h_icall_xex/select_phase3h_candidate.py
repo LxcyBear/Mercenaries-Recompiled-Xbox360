@@ -332,6 +332,7 @@ def main():
             ordered.append(addr)
 
     rejected = Counter()
+    rejection_details = []
     selected = None
     scanned = 0
 
@@ -354,6 +355,8 @@ def main():
         details, why = linear_icall_candidate(src, name)
         if not details:
             rejected[why] += 1
+            if len(rejection_details) < 24:
+                rejection_details.append((caller_addr, why))
             continue
 
         helper_src = None
@@ -365,45 +368,64 @@ def main():
             helper_info = funcs.get(helper_addr)
             if not helper_info or helper_info.get("name") != helper_name:
                 rejected["direct helper boundary missing"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper boundary missing"))
                 continue
 
             try:
                 helper_src = translator.translate_single(helper_addr)
             except Exception:
                 rejected["direct helper lift exception"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper lift exception"))
                 continue
 
             if not helper_src:
                 rejected["direct helper lift failed"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper lift failed"))
                 continue
 
             if ("RECOMP_ICALL" in helper_src or "RECOMP_ITAIL" in helper_src or
                     "tail jmp" in helper_src or DIRECT_CALL_RE.search(helper_src)):
                 rejected["direct helper has call dependency"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper has call dependency"))
                 continue
 
             if re.search(r"\bif\s*\(|\bgoto\s+loc_", helper_src):
                 rejected["direct helper branches"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper branches"))
                 continue
 
             helper_ok, helper_why = helper_surface_ok(helper_src, helper_name)
             if not helper_ok:
                 rejected["direct helper " + helper_why] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append(
+                        (caller_addr, "direct helper " + helper_why))
                 continue
 
             if ("PUSH32(" in helper_src or "POP32(" in helper_src or
                     len(PLAIN_RET_RE.findall(helper_src)) != 1):
                 rejected["direct helper stack shape"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper stack shape"))
                 continue
 
             helper_ret_comments = re.findall(
                 r"/\*\s*ret(?:\s+\d+)?\s*\*/", helper_src)
             if len(helper_ret_comments) != 1:
                 rejected["direct helper RET N/shape"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper RET N/shape"))
                 continue
 
             if "g_seh_ebp" in helper_src:
                 rejected["direct helper SEH bridge"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper SEH bridge"))
                 continue
 
             # Keep helper from obscuring the ICALL callee-saved-register proof.
@@ -417,10 +439,14 @@ def main():
                     break
             if helper_mutates_nonvolatile:
                 rejected["direct helper modifies callee-saved register"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper modifies callee-saved register"))
                 continue
 
             if len(helper_src.splitlines()) > 140:
                 rejected["direct helper too large"] += 1
+                if len(rejection_details) < 24:
+                    rejection_details.append((caller_addr, "direct helper too large"))
                 continue
 
         selected = (
@@ -434,6 +460,10 @@ def main():
         print(f"[Phase3H] Lifted/scanned functions: {scanned}")
         for reason, count in rejected.most_common(14):
             print(f"[Phase3H] reject {count:3d}: {reason}")
+        if rejection_details:
+            print("[Phase3H] First ICALL candidate rejection details:")
+            for addr, reason in rejection_details:
+                print(f"[Phase3H]   0x{addr:08X}: {reason}")
         raise SystemExit(2)
 
     (caller_addr, caller_info, caller_src, details,
