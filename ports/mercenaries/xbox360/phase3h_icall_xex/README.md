@@ -191,3 +191,32 @@ A complete clean run should also reach the normal timeout/exit path and
 
 After Phase 3H, the next step is a broader translated execution slice before
 attempting guarded game-entry/startup execution.
+
+
+## First local selector pass — 11 real ICALL functions found
+
+The first local prep scanned 1,600 compact translated functions and found 11
+real `RECOMP_ICALL_SAFE` callers. None passed the original gate because:
+
+- 7 also contained a direct translated call
+- 2 contained branching control flow
+- 2 contained a tail jump
+
+The selector has therefore been loosened in one narrow direction: it may now
+carry exactly one small ordinary translated helper call alongside the ICALL.
+
+That helper must itself be linear, plain-RET, stack-simple, free of ICALL/ITAIL
+and other runtime dependencies, and must not modify EBX/ESI/EDI. Its generated
+body is injected locally and explicit-memory audited before XDK compilation.
+
+The hardware fixture was also strengthened:
+- full reference/real translated traces are compared, so an optional direct
+  helper does not invalidate the fixture
+- the indirect target must still appear exactly once only in resolved mode
+- saved ESP, immediate post-ICALL ESP and immediate post-ICALL EAX are recorded
+  at the dispatch boundary
+- unresolved and range-rejected modes therefore prove saved-ESP restoration and
+  EAX=0 at the ICALL itself, independent of later caller instructions
+
+If no candidate survives the relaxed gate, the selector now prints each early
+ICALL caller VA with its exact rejection reason.
