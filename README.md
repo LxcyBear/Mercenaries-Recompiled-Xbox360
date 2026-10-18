@@ -1429,6 +1429,30 @@ unexecuted test PASS.**
   token-specific unsupported-surface histogram will identify the next real
   blocker.
 
+### 2026-10-18 — Phase 3J fourth selector pass isolates RET-N as next safe relaxation
+
+- After scanner fixes, the selector's rejection profile now reflects real retail
+  code shape rather than parser noise.
+- Dominant classes:
+  - 799 backward/loop guest control flow
+  - 381 dynamic `RECOMP_ICALL_SAFE`
+  - 380 RET-N members
+  - 281 x87 `fp_push`
+  - 80 scalar/SSE `recomp_xmm_loadss`
+  - 50 `recomp_xmm_zero`
+- The next relaxation is limited to **nested translated RET-N dependencies**.
+- Phase 3F already hardware-proved translated callee-cleanup return behavior
+  (`ret 4`), so rejecting every RET-N dependency is no longer justified.
+- The selected **root still must have exactly one plain RET and no RET-N**, so
+  the harness retains the exact final `ROOT_STACK + 4` expectation.
+- Nested members may use RET-N only when the immediate cleanup is parseable and
+  <= 64 bytes.
+- Loops/back-edges, dynamic ICALL/ITAIL, x87/SSE/runtime expansion, closure
+  budgets, exact retail hash pin, and all hardware pass criteria remain
+  unchanged.
+- **No compile or hardware run occurred in this selector attempt.**
+- **Next:** rerun Phase 3J with bounded nested RET-N support.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
