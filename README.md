@@ -682,6 +682,27 @@ unexecuted test PASS.**
   memory sites are explicitly deferred to the next cleanup slice.
 - **Next:** build/run Phase 3C on modified Xbox 360 hardware.
 
+### 2026-10-18 — Phase 3C SSE/XMM + MMX memory ABI passes on Xenon
+
+- Runtime build tag `P3C-SIMD-20261018-A` confirmed the intended XEX.
+- Unaligned 128-bit XMM load reconstructed all four float lanes correctly.
+- 128-bit XMM store preserved raw lane bits and lane order.
+- MOVSS low-lane load + upper-lane zeroing passed.
+- MOVSD raw low-64 load/store preservation passed.
+- MOVLPS/MOVHPS low/high lane replacement and raw stores passed.
+- ADDPS-style packed memory arithmetic and XORPS-style raw lane-bit behavior passed.
+- MMX MOVQ/PAND-style 64-bit memory paths passed.
+- 128-bit XMM mirror coherence and MMX-width KSEG0 coherence passed.
+- Checked 128-bit and 64-bit transfers rejected cross-64MiB accesses.
+- 128-bit XMM helper rejected NV2A MMIO as ordinary RAM.
+- `PHASE 3C SIMD MEMORY ABI RESULT: PASS` was observed on hardware.
+- The pasted trace ended during the post-test heartbeat tail, so no unshown
+  final XAPI return value is recorded here.
+- **Phase 3C: COMPLETE.**
+- **Next:** Phase 3D shared PUSH/POP, REP/string helpers, XBOX_MEMCPY and
+  remaining maintained/manual legacy `MEM*` sites before first bounded
+  translated-function execution.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
