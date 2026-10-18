@@ -220,3 +220,15 @@ The hardware harness poisons XMM0 before entry and places the real scalar only
 on the guest stack. A PASS therefore proves the translated callee really loads
 the stack scalar, applies the already-proven memory-form MOVSS lane semantics,
 stores it at the correct effective object field, and cleans the guest stack.
+
+## Generated XMM alias correction
+
+Local output confirmed the callee exactly as:
+- `recomp_xmm_loadss(xmm0v, esp + 4)`
+- `GUEST_WRITEF32(ecx + 0xDC, xmm0)`
+- translated `ret 4`
+
+The prep checker had expected `g_xmm0` directly, but generated code uses the
+runtime's canonical vector alias `xmm0v`. The checker now requires `xmm0v`,
+and the Phase 3F XDK harness defines `xmm0v` as `g_xmm0` just like the real
+runtime.
