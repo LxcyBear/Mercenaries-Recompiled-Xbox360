@@ -178,11 +178,22 @@ def source_surface_ok(source, own_name, dependency_names):
     if defs != [own_name]:
         return False, "function signature is not one exact void sub_XXXXXXXX(void)"
 
-    if RET_N_RE.search(source):
-        return False, "ret-N member deferred from first closed cluster"
+    ret_n_matches = list(RET_N_RE.finditer(executable))
+    plain_ret_matches = list(PLAIN_RET_RE.finditer(executable))
 
-    if not PLAIN_RET_RE.search(source):
-        return False, "no plain translated RET"
+    if not ret_n_matches and not plain_ret_matches:
+        return False, "no translated RET"
+
+    # Nested translated callees may use callee-cleanup RET-N. Phase 3F already
+    # proved this behavior on modified Xbox 360 hardware. Keep the first
+    # dependency-closed cluster bounded by rejecting unusually large cleanups.
+    for match in ret_n_matches:
+        imm_match = re.search(
+            r"ret\s+(\d+)", match.group(0), re.IGNORECASE)
+        if not imm_match:
+            return False, "unparseable ret-N member"
+        if int(imm_match.group(1), 10) > 64:
+            return False, "ret-N cleanup exceeds first-cluster bound"
 
     allowed = set(ALLOWED_CALLS)
     allowed.add(own_name)
