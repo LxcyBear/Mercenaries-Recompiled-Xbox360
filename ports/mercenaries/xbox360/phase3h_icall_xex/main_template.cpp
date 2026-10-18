@@ -95,7 +95,12 @@ volatile uint32_t g_icall_trace_idx = 0u;
 volatile uint64_t g_icall_count = 0ui64;
 
 static int s_dispatchMode = PHASE3H_RESOLVED;
-static uint32_t s_seedTargetVa = DISPATCH_TARGET_VA;
+/*
+ * Exact guest VA computed by the selected translated caller under the current
+ * deterministic seed. Discovery runs first; resolved lookup then maps this
+ * observed guest key to the already-proven translated target 0x0004CFF0.
+ */
+static uint32_t s_resolvedGuestVa = 0u;
 
 static DWORD s_manualLookupCount = 0u;
 static DWORD s_generatedLookupCount = 0u;
@@ -358,7 +363,7 @@ recomp_func_t recomp_lookup(uint32_t xbox_va)
     s_lastLookupVa = xbox_va;
 
     if (s_dispatchMode == PHASE3H_RESOLVED &&
-        xbox_va == DISPATCH_TARGET_VA)
+        xbox_va == s_resolvedGuestVa)
         return (recomp_func_t)__PHASE3H_TARGET_NAME__;
 
     return NULL;
@@ -458,7 +463,7 @@ static void phase3h_reference_icall(uint32_t xbox_va, uint32_t saved_esp)
     }
 
     if (s_dispatchMode == PHASE3H_RESOLVED &&
-        xbox_va == DISPATCH_TARGET_VA)
+        xbox_va == s_resolvedGuestVa)
     {
         __PHASE3H_TARGET_NAME__();
         g_ebx = savedEbx;
@@ -585,11 +590,11 @@ static void seed_guest_state(DWORD caseIndex, int mode)
     GUEST_WRITE32(g_esp - 4u, 0xA5A50000u | caseIndex);
 
     s_dispatchMode = mode;
-    s_seedTargetVa = (mode == PHASE3H_RANGE_REJECT)
-        ? RANGE_REJECT_VA
-        : DISPATCH_TARGET_VA;
 
-    /* Candidate-specific deterministic guest target seeding. */
+    /*
+     * Do not force the call operand. The exact translated caller is allowed to
+     * compute its real deterministic guest target from this seeded state.
+     */
     /*__PHASE3H_TARGET_SEED__*/
 
     reset_observers();
@@ -704,26 +709,77 @@ static const char* mode_name(int mode)
     return "RANGE_REJECT";
 }
 
-static int run_one_case(DWORD caseIndex, int mode)
+static int discover_case_target(DWORD caseIndex, DWORD* outTarget)
+{
+    RunResult discovery;
+    char line[256];
+
+    if (!outTarget)
+        return 0;
+
+    /*
+     * Run the transformed reference caller in unresolved mode first. This
+     * preserves every translated instruction that computes the function
+     * pointer, but guarantees no dispatch target executes. The resulting ICALL
+     * trace is therefore the exact guest VA computed by the real caller under
+     * this deterministic seed.
+     */
+    seed_guest_state(caseIndex, PHASE3H_UNRESOLVED);
+    s_resolvedGuestVa = 0u;
+    phase3h_reference_caller();
+    capture_result(&discovery);
+
+    if (discovery.accessFault != 0 ||
+        discovery.icallTraceIdx != 1u ||
+        discovery.icallCount != 1ui64)
+    {
+        trace("FAIL: discovery prepass did not produce one clean ICALL target");
+        return 0;
+    }
+
+    *outTarget = discovery.icallTarget;
+
+    sprintf(
+        line,
+        "CASE %u DISCOVERY guest ICALL target=%08X",
+        (unsigned int)caseIndex,
+        (unsigned int)*outTarget);
+    trace(line);
+
+    /*
+     * A target in the generic runtime's rejected middle range cannot be
+     * resolved through any lookup source. If a future seed lands there, stop
+     * rather than silently weakening the production range guard.
+     */
+    if (*outTarget >= 0x00400000u && *outTarget < 0xFE000000u)
+    {
+        trace("FAIL: discovered target falls inside runtime range-reject window");
+        return 0;
+    }
+
+    return 1;
+}
+
+static int run_one_case(DWORD caseIndex, int mode, DWORD expectedTarget)
 {
     RunResult reference;
     RunResult real;
     DWORD expectedEbx;
     DWORD expectedEsi;
     DWORD expectedEdi;
-    DWORD expectedTarget;
-    char line[360];
+    char line[384];
     int ok = 1;
 
     seed_guest_state(caseIndex, mode);
+    s_resolvedGuestVa = expectedTarget;
     expectedEbx = g_ebx;
     expectedEsi = g_esi;
     expectedEdi = g_edi;
-    expectedTarget = s_seedTargetVa;
     phase3h_reference_caller();
     capture_result(&reference);
 
     seed_guest_state(caseIndex, mode);
+    s_resolvedGuestVa = expectedTarget;
     __PHASE3H_CALLER_NAME__();
     capture_result(&real);
 
@@ -768,8 +824,8 @@ static int run_one_case(DWORD caseIndex, int mode)
         real.icallCount == 1ui64 &&
         reference.icallTarget == expectedTarget &&
         real.icallTarget == expectedTarget,
-        "PASS: indirect-call trace records exactly one expected guest target",
-        "FAIL: indirect-call trace/count/target is unexpected");
+        "PASS: translated caller reproduces the discovered guest ICALL target",
+        "FAIL: translated caller ICALL target changed between deterministic runs");
 
     if (mode == PHASE3H_RESOLVED)
     {
@@ -798,8 +854,8 @@ static int run_one_case(DWORD caseIndex, int mode)
             real.manualLookups == 1u &&
             real.generatedLookups == 1u &&
             real.kernelLookups == 0u &&
-            real.lastLookupVa == DISPATCH_TARGET_VA,
-            "PASS: real dispatcher resolves through generated lookup after manual miss",
+            real.lastLookupVa == expectedTarget,
+            "PASS: real dispatcher resolves discovered guest VA through generated lookup",
             "FAIL: resolved lookup chain is unexpected");
 
         ok &= check(
@@ -823,44 +879,32 @@ static int run_one_case(DWORD caseIndex, int mode)
         ok &= check(
             reference.targetProbeCount == 0u &&
             real.targetProbeCount == 0u,
-            "PASS: failed ICALL does not enter translated dispatch target",
-            "FAIL: failed ICALL unexpectedly entered dispatch target");
+            "PASS: unresolved ICALL does not enter translated dispatch target",
+            "FAIL: unresolved ICALL unexpectedly entered dispatch target");
 
         ok &= check(
             reference.icallPostEax == 0u &&
             real.icallPostEax == 0u &&
             reference.icallPostEsp == reference.icallSavedEsp &&
             real.icallPostEsp == real.icallSavedEsp,
-            "PASS: failed ICALL immediately restores saved ESP and forces EAX=0",
-            "FAIL: failed ICALL immediate safe-failure contract is incorrect");
+            "PASS: unresolved ICALL immediately restores saved ESP and forces EAX=0",
+            "FAIL: unresolved ICALL immediate safe-failure contract is incorrect");
 
         ok &= check(
             traces_match(&reference, &real) &&
             real.traceCount >= 1u &&
             real.trace[0] == CALLER_VA &&
             trace_occurrences(&real, DISPATCH_TARGET_VA) == 0u,
-            "PASS: failed translated trace matches reference and never enters indirect target",
-            "FAIL: failed translated trace is unexpected");
+            "PASS: unresolved translated trace matches reference and never enters target",
+            "FAIL: unresolved translated trace is unexpected");
 
-        if (mode == PHASE3H_UNRESOLVED)
-        {
-            ok &= check(
-                real.manualLookups == 1u &&
-                real.generatedLookups == 1u &&
-                real.kernelLookups == 1u &&
-                real.lastLookupVa == DISPATCH_TARGET_VA,
-                "PASS: unresolved ICALL exhausts manual/generated/kernel lookup chain",
-                "FAIL: unresolved lookup chain is unexpected");
-        }
-        else
-        {
-            ok &= check(
-                real.manualLookups == 0u &&
-                real.generatedLookups == 0u &&
-                real.kernelLookups == 0u,
-                "PASS: middle-range garbage VA is rejected before lookup",
-                "FAIL: range-rejected ICALL unexpectedly entered lookup chain");
-        }
+        ok &= check(
+            real.manualLookups == 1u &&
+            real.generatedLookups == 1u &&
+            real.kernelLookups == 1u &&
+            real.lastLookupVa == expectedTarget,
+            "PASS: unresolved ICALL exhausts manual/generated/kernel lookup chain",
+            "FAIL: unresolved lookup chain is unexpected");
     }
 
     ok &= check(
@@ -885,16 +929,100 @@ static int run_one_case(DWORD caseIndex, int mode)
     return ok;
 }
 
+static int run_range_guard_case(DWORD caseIndex)
+{
+    RunResult reference;
+    RunResult real;
+    DWORD savedEsp;
+    int ok = 1;
+
+    /*
+     * The selected real caller is intentionally not rewritten to fabricate a
+     * garbage target. Test the production range guard independently with the
+     * exact same macro and explicit-stack reference.
+     */
+    seed_guest_state(caseIndex, PHASE3H_RANGE_REJECT);
+    s_resolvedGuestVa = 0u;
+    savedEsp = g_esp;
+    phase3h_reference_icall(RANGE_REJECT_VA, savedEsp);
+    capture_result(&reference);
+
+    seed_guest_state(caseIndex, PHASE3H_RANGE_REJECT);
+    s_resolvedGuestVa = 0u;
+    savedEsp = g_esp;
+    PUSH32(g_esp, 0u);
+    RECOMP_ICALL_SAFE(RANGE_REJECT_VA, savedEsp);
+    capture_result(&real);
+
+    ok &= check(
+        reference.accessFault == 0 && real.accessFault == 0,
+        "PASS: direct range-guard reference and real macro complete without faults",
+        "FAIL: direct range-guard path triggered guest-memory fault");
+
+    ok &= check(
+        reference.icallTarget == RANGE_REJECT_VA &&
+        real.icallTarget == RANGE_REJECT_VA &&
+        reference.icallTraceIdx == 1u &&
+        real.icallTraceIdx == 1u,
+        "PASS: range guard records exactly the rejected guest VA",
+        "FAIL: range-guard ICALL trace is unexpected");
+
+    ok &= check(
+        real.manualLookups == 0u &&
+        real.generatedLookups == 0u &&
+        real.kernelLookups == 0u,
+        "PASS: middle-range garbage VA is rejected before any lookup",
+        "FAIL: range-rejected VA unexpectedly entered lookup chain");
+
+    ok &= check(
+        reference.icallPostEsp == savedEsp &&
+        real.icallPostEsp == savedEsp &&
+        reference.icallPostEax == 0u &&
+        real.icallPostEax == 0u &&
+        reference.esp == savedEsp &&
+        real.esp == savedEsp,
+        "PASS: range reject restores saved ESP and forces EAX=0 immediately",
+        "FAIL: range-reject safe-failure state is incorrect");
+
+    ok &= check(
+        reference.targetProbeCount == 0u &&
+        real.targetProbeCount == 0u,
+        "PASS: range-rejected VA never enters translated target",
+        "FAIL: range-rejected VA unexpectedly entered translated target");
+
+    ok &= check(
+        architectural_results_match(&reference, &real),
+        "PASS: real range guard matches independent explicit-stack reference",
+        "FAIL: real range guard differs from independent reference");
+
+    if (reference.memoryHash == real.memoryHash)
+        trace("PASS: range-guard full 64 MiB guest-RAM hashes match");
+    else
+    {
+        trace("FAIL: range-guard full 64 MiB guest-RAM hashes differ");
+        ok = 0;
+    }
+
+    return ok;
+}
+
 static int run_fixture(void)
 {
     int ok = 1;
     DWORD caseIndex;
+    DWORD discoveredTarget = 0u;
 
     for (caseIndex = 0u; caseIndex < 3u; ++caseIndex)
     {
-        ok &= run_one_case(caseIndex, PHASE3H_RESOLVED);
-        ok &= run_one_case(caseIndex, PHASE3H_UNRESOLVED);
-        ok &= run_one_case(caseIndex, PHASE3H_RANGE_REJECT);
+        if (!discover_case_target(caseIndex, &discoveredTarget))
+        {
+            ok = 0;
+            continue;
+        }
+
+        ok &= run_one_case(caseIndex, PHASE3H_RESOLVED, discoveredTarget);
+        ok &= run_one_case(caseIndex, PHASE3H_UNRESOLVED, discoveredTarget);
+        ok &= run_range_guard_case(caseIndex);
     }
 
     return ok;
@@ -919,7 +1047,7 @@ VOID __cdecl main()
     trace("BUILD TAG: P3H-ICALL-20261018-A");
     trace("Caller VA: __PHASE3H_CALLER_VA_TEXT__");
     trace("Dispatch target VA: __PHASE3H_TARGET_VA_TEXT__");
-    trace("Modes: resolved generated lookup / unresolved / range reject");
+    trace("Modes: discover real caller target / resolved / unresolved + direct range guard");
 
     g_ram = (BYTE*)malloc(RAM_SIZE);
 
