@@ -107,39 +107,32 @@ def helper_surface_ok(source, own_name, extra_allowed=()):
     return True, ""
 
 
-def parse_seed(expr, pre_call_source):
+def classify_target_expression(expr):
+    """
+    Keep the first ICALL target expression simple enough to observe safely, but
+    do not require its base register to remain unchanged. The exact translated
+    caller is allowed to compute the pointer. Hardware first discovers that
+    deterministic guest VA, then the generated lookup fixture resolves the
+    same observed VA on the real resolved run.
+    """
     expr = expr.strip()
 
     m = DIRECT_REG_RE.fullmatch(expr)
     if m:
-        reg = m.group(1)
-        seed = f"g_{reg} = s_seedTargetVa;"
-    else:
-        m = READ32_REG_RE.fullmatch(expr)
-        if not m:
-            return None, "ICALL target expression is not a simple seedable register/read32"
+        return {
+            "kind": "register",
+            "base_register": m.group(1),
+        }, ""
 
-        reg = m.group(1)
-        offset_text = m.group(2)
-        offset = int(offset_text, 0) if offset_text else 0
-        seed = (
-            f"g_{reg} = ICALL_TARGET_SLOT_BASE;\n"
-            f"    GUEST_WRITE32(ICALL_TARGET_SLOT_BASE + 0x{offset:X}u, "
-            f"DISPATCH_TARGET_VA);"
-        )
+    m = READ32_REG_RE.fullmatch(expr)
+    if m:
+        return {
+            "kind": "guest_read32",
+            "base_register": m.group(1),
+            "offset": int(m.group(2), 0) if m.group(2) else 0,
+        }, ""
 
-    # The seeded register must reach the ICALL unchanged. This first 3H proof
-    # deliberately avoids symbolic execution of a pointer-building prefix.
-    assign_patterns = [
-        rf"\b{reg}\s*=",
-        rf"\bSET_(?:LO8|HI8|LO16)\s*\(\s*{reg}\b",
-        rf"\bPOP32\s*\(\s*esp\s*,\s*{reg}\s*\)",
-    ]
-    for pat in assign_patterns:
-        if re.search(pat, pre_call_source):
-            return None, f"ICALL target base register {reg} is modified before call"
-
-    return seed, ""
+    return None, "ICALL target expression is not a simple register/read32"
 
 
 def linear_icall_candidate(source, own_name):
@@ -233,13 +226,13 @@ def linear_icall_candidate(source, own_name):
                 re.search(rf"\bPOP32\s*\(\s*esp\s*,\s*{nonvolatile}\s*\)", source)):
             return None, f"caller modifies callee-saved {nonvolatile}"
 
-    seed, why = parse_seed(match.group("expr"), pre)
-    if not seed:
+    target_info, why = classify_target_expression(match.group("expr"))
+    if not target_info:
         return None, why
 
     return {
         "expr": match.group("expr").strip(),
-        "seed_code": seed,
+        "target_expression": target_info,
         "match": match,
         "direct_helper_name": direct_helper_name,
         "direct_helper_addr": direct_helper_addr,
@@ -512,6 +505,8 @@ def main():
         "caller_size": int(caller_info.get("size", 0)),
         "caller_instructions": int(caller_info.get("num_instructions", 0) or 0),
         "icall_expression": details["expr"],
+        "target_strategy": "discover exact deterministic guest VA, then resolve same observed VA",
+        "target_expression": details["target_expression"],
         "dispatch_target": f"0x{TARGET_VA:08X}",
         "dispatch_target_name": target_name,
         "dispatch_target_size": int(target_info.get("size", 0)),
@@ -539,7 +534,8 @@ def main():
         "__PHASE3H_TARGET_VA__": f"0x{TARGET_VA:08X}u",
         "__PHASE3H_CALLER_VA_TEXT__": f"0x{caller_addr:08X}",
         "__PHASE3H_TARGET_VA_TEXT__": f"0x{TARGET_VA:08X}",
-        "/*__PHASE3H_TARGET_SEED__*/": details["seed_code"],
+        "/*__PHASE3H_TARGET_SEED__*/": (
+            "/* target VA intentionally discovered from exact translated caller */"),
     }
     for key, value in replacements.items():
         if key not in template:
