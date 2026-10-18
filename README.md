@@ -473,6 +473,17 @@ unexecuted test PASS.**
   Phase 2B log labels, and added actual-vs-expected mismatch logging.
 - **Phase 2C remains in progress.** Rebuild/run the corrected diagnostic.
 
+### 2026-10-18 — Phase 2C rerun identified as stale binary
+
+- The rerun still emitted the old Phase 2B start/end labels and the old generic
+  section-name mismatch message, proving the console was still running an older
+  Phase 2C XEX/source rather than the corrected section-name build.
+- The XBE itself remains proven correct: exact pinned SHA-256 still PASS.
+- Added runtime build tag `P2C-NAMEFIX-20261018-B` to the corrected source so
+  future xbWatson output proves exactly which binary is executing.
+- **Next:** clean/rebuild the VS17 project from the latest branch source and
+  verify the build tag appears before evaluating section-name results.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
