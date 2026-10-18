@@ -613,6 +613,24 @@ unexecuted test PASS.**
 - **Next:** compile/run Phase 3A on modified Xbox 360 hardware. No translated
   Mercenaries function executes yet.
 
+### 2026-10-18 — Phase 3A explicit scalar memory ABI passes on Xenon
+
+- Runtime build tag `P3A-SCALAR-20261018-A` confirmed the intended XEX.
+- Xenon big-endian host-order probe passed.
+- Explicit generated-style 32-bit MOV round-trip passed with little-endian
+  guest byte layout.
+- Explicit 32-bit ADD RMW, unaligned 16-bit RMW, 8-bit XOR RMW and unaligned
+  64-bit access all passed.
+- 64-bit guest byte layout was verified little-endian.
+- Explicit helpers remained coherent through RAM mirrors, KSEG0 and KSEG1.
+- CMPXCHG-style equal and mismatch paths both passed.
+- PUSH source evaluation happened before ESP decrement; POP restored value/ESP.
+- NV2A MMIO and a cross-64MiB dword access were correctly rejected as RAM.
+- Guest RAM released, timeout completed, and `[XAPI RETURN VALUE] 0`.
+- **Phase 3A: COMPLETE.**
+- **Next:** migrate the remaining non-scalar memory paths, beginning with
+  x87/float/double and signed-memory helpers before SSE/MMX/string helpers.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
