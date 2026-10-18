@@ -195,7 +195,7 @@ try {
         throw "Candidate B wrapper no longer has the expected ECX += 0x28 adjustment."
     }
 
-    if ($wrapperSource -match '\b(?:GUEST_|RECOMP_READ|RECOMP_WRITE|xmm0|g_xmm0)\b') {
+    if ($wrapperSource -match '\b(?:GUEST_[A-Z0-9_]*|RECOMP_(?:READ|WRITE)[A-Z0-9_]*|xmm0|g_xmm0)\b') {
         Write-Host "[Phase3F] Wrapper source:" -ForegroundColor Yellow
         Write-Host $wrapperSource
         throw "Candidate B wrapper unexpectedly touches guest memory or XMM state before the tail call."
