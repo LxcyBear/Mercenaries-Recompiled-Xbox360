@@ -125,12 +125,6 @@ static int check(int condition,
     return 0;
 }
 
-static WORD read_le16(const void* address)
-{
-    const BYTE* p = (const BYTE*)address;
-    return (WORD)((WORD)p[0] | ((WORD)p[1] << 8));
-}
-
 static DWORD read_le32(const void* address)
 {
     const BYTE* p = (const BYTE*)address;
@@ -138,15 +132,6 @@ static DWORD read_le32(const void* address)
            ((DWORD)p[1] << 8) |
            ((DWORD)p[2] << 16) |
            ((DWORD)p[3] << 24);
-}
-
-static void write_le32(void* address, DWORD value)
-{
-    BYTE* p = (BYTE*)address;
-    p[0] = (BYTE)value;
-    p[1] = (BYTE)(value >> 8);
-    p[2] = (BYTE)(value >> 16);
-    p[3] = (BYTE)(value >> 24);
 }
 
 static int range_ok(DWORD offset, DWORD length, DWORD total)
