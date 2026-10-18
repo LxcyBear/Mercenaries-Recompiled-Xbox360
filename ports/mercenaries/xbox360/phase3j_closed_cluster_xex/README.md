@@ -218,3 +218,27 @@ The XDK fixture now carries the maintained integer branch-condition helpers:
 `TEST_S`, and `EVEN_PARITY8`.
 
 All dependency closure bounds and the exact retail SHA remain unchanged.
+
+## Third local selector pass — C keyword scanner fix
+
+With forward acyclic branches enabled, the next local selector pass produced:
+
+```text
+799 unsupported dynamic/SIMD/FPU/runtime surface
+518 unknown helper(s): if
+442 backward/loop guest control flow
+341 ret-N member
+```
+
+The 518 `if` rejections were not real helper dependencies. The generic helper
+scanner was interpreting normal generated C `if (...)` syntax as a function
+call.
+
+Helper classification now ignores C control/operator tokens including
+`if`, `while`, `for`, `switch`, and `sizeof`.
+
+The unsupported-surface rejection now includes the first actual matched symbol,
+so a subsequent failure will separate dynamic dispatch, SIMD, FPU, runtime-copy,
+RDTSC, and other real surfaces instead of aggregating all of them.
+
+No Phase 3J closure bound or hardware criterion was relaxed.
