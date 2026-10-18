@@ -78,9 +78,10 @@ against, including under intentionally unaligned addresses.
 
 ## First Xbox 360 hardware test
 
-Follow [bootstrap_xex/BUILD_FIRST_XEX.md](bootstrap_xex/BUILD_FIRST_XEX.md).
+Follow [bootstrap_xex/BUILD_FIRST_XEX.md](bootstrap_xex/BUILD_FIRST_XEX.md)
+using the user's already-working VS17 + Xbox 360 XDK project configuration.
 The diagnostic XDK `main.cpp` exists, but has **not** yet been built with
-VS2010/XDK or tested on an Xbox 360; do not mistake host-side memory
+the user's working VS17 + XDK setup or tested on an Xbox 360; do not mistake host-side memory
 tests for a successful XEX build.
 
 ## Milestones / required proof
