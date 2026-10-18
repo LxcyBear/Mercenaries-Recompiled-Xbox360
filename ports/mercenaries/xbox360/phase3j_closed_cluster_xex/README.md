@@ -302,3 +302,46 @@ Both the member return classifier and root plain-RET check now use raw source.
 Startup assertions verify this invariant before candidate scanning begins.
 
 Fix commit: `fbc90cddf3a187dc9c0b176a646b8ec051c69ade`.
+
+## First hardware result — functional PASS, closure coverage 2/6
+
+Build `P3J-CLOSURE-20261018-A` selected:
+
+- root `0x000B2080`
+- 6 real translated members
+- dependency depth 2
+
+On modified Xbox 360 hardware all three seed cases:
+- completed without guest-memory faults
+- preserved unrelated high-RAM canaries
+- began at the selected real root
+- returned with exact guest ESP `0x008B4004`
+- produced deterministic A/B translated traces
+- produced matching complete 64 MiB A/B RAM hashes
+
+Hashes:
+- case 0: `B1BB8502E837B4EF`
+- case 1: `27269D03DBB0B4EF`
+- case 2: `E83F01493C3DB4EF`
+
+The only failed condition was execution coverage: each case reached 2 of the 6
+selected static members.
+
+This does **not** complete Phase 3J.
+
+### Build B coverage model
+
+Once forward conditional paths were admitted, requiring every static dependency
+to execute in one run became inappropriate for mutually exclusive branches.
+
+Build B keeps the full execution requirement at suite level:
+- 12 deterministic safe profiles
+- each profile executes A and B from identical state
+- A/B must match coverage, trace, final architecture and full 64 MiB RAM hash
+- each run must remain fault-free, preserve canaries and return with exact ESP
+- the **union** of profile coverage must equal every selected cluster member
+
+Build B also logs the selected member table, profile traces, coverage masks and
+specific missing member VAs.
+
+Build tag: `P3J-CLOSURE-20261018-B`.
