@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3F — first bounded translated Mercenaries tail-call chain.
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3G — first bounded translated normal-CALL chain.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E hardware PASS; 3F tail-call chain ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F hardware PASS; 3G normal-CALL chain next** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -209,8 +209,13 @@ executes as Xbox 360 PowerPC.
 - [x] Execute one bounded real translated Mercenaries function on hardware:
       `sub_00208F30` matched the independent reference for six inputs, preserved
       guest state, and returned with correct guest ESP cleanup.
-- [ ] Execute a small translated call chain, then indirect-call dispatch, then
-      the game's entry sequence with guardrails and logging.
+- [x] Execute a small real translated tail-call chain on hardware: translated
+      `0x001EF850` adjusted ECX by 0x28 and tail-called translated `0x0021AB90`,
+      matching a direct translated-callee differential across registers, XMM0,
+      ret-4 stack cleanup and the complete 64 MiB guest-RAM digest.
+- [ ] Execute a normal translated CALL chain with synthetic guest return-address
+      push, then indirect-call dispatch, then the game's entry sequence with
+      guardrails and logging.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -340,6 +345,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 3C SSE/XMM + MMX guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: 128-bit lanes, MOVSS/MOVSD/MOVLPS/MOVHPS, packed arithmetic/bitwise, MMX, alias + boundary/MMIO rejection |
 | 2026-10-18 | Phase 3D runtime/string guest-memory ABI hardware fixture | **PASS** | Modified Xbox 360 Xenon: shared PUSH/POP, XBOX_MEMCPY, REP MOVS overlap/order, MOVS/STOS/LODS, CMPS/SCAS, alias + MMIO/boundary semantics |
 | 2026-10-18 | Phase 3E first bounded translated Mercenaries function | **PASS** | Modified Xbox 360 Xenon: real translated retail function `0x00208F30`, six reference-matched inputs, guest object preserved, translated RET restored ESP |
+| 2026-10-18 | Phase 3F first translated Mercenaries tail-call chain | **PASS** | Modified Xbox 360 Xenon: translated `0x001EF850 -> 0x0021AB90`, scalar MOVSS stack load/store, ret-4 cleanup, XMM0 equality, full 64 MiB RAM-hash equality |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -940,6 +946,34 @@ unexecuted test PASS.**
 - Updated the XDK harness with `#define xmm0v g_xmm0` so the generated body
   matches the maintained runtime ABI.
 - **Candidate B remains valid; no hardware execution occurred in this attempt.**
+
+### 2026-10-18 — Phase 3F translated tail-call chain passes on Xenon
+
+- Runtime build tag `P3F-TAILCALL-20261018-B` confirmed the intended XEX.
+- Real mechanically translated wrapper `0x001EF850` executed on modified Xbox
+  360 hardware and tail-called real translated callee `0x0021AB90`.
+- Wrapper behavior `ECX += 0x28` matched the direct translated-callee
+  differential in all three cases.
+- Callee loaded the exact scalar argument from guest `[ESP+4]` into XMM0 lane
+  0 for `1.0f`, `-2.5f`, and `~1/3`.
+- Memory-form MOVSS zeroed XMM0 lanes 1-3 on both direct and real-chain paths.
+- The scalar bits were stored exactly at effective `this + 0xDC`.
+- Translated `ret 4` restored ESP to `0x008BFFF0` in every case.
+- Direct trace was exactly `[0x0021AB90]`; real-chain trace was exactly
+  `[0x001EF850, 0x0021AB90]`.
+- No guest-memory access faults were observed.
+- All integer architectural results and all four XMM0 lanes matched the
+  differential reference.
+- Complete 64 MiB guest-RAM digests matched for all three cases:
+  `F47312746CCBB4D1`, `69F1610204AF5DE6`, and `4160C21D46EE4A6B`.
+- `PHASE 3F TRANSLATED TAIL-CALL RESULT: PASS` observed on hardware.
+- The supplied log excerpt ends during post-test heartbeats; no final timeout
+  or XAPI exit-status line was supplied, so only the observed functional PASS
+  is recorded.
+- **Phase 3F: COMPLETE.**
+- **Next:** Phase 3G — first bounded real translated normal-CALL chain, proving
+  the synthetic guest return-address push + callee RET interaction before
+  indirect-call dispatch.
 
 ### How future updates are recorded
 
