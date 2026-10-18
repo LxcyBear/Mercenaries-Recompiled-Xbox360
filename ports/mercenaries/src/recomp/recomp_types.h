@@ -858,6 +858,35 @@ void recomp_func_trace(uint32_t xbox_va);
     RECOMP_TRACE_RECENT(xbox_va)
 #endif
 
+
+/* ================================================================
+ * Explicit scalar guest-memory ABI
+ * ================================================================
+ *
+ * The maintained lifter can opt into GUEST_READ*/GUEST_WRITE* emission for
+ * scalar integer operands. Existing PC generation remains on legacy MEM
+ * lvalues by default. A target enabling explicit generation supplies these
+ * functions with the target's checked address routing and little-endian
+ * semantics.
+ */
+uint8_t  recomp_guest_read8(uint32_t address);
+uint16_t recomp_guest_read16(uint32_t address);
+uint32_t recomp_guest_read32(uint32_t address);
+uint64_t recomp_guest_read64(uint32_t address);
+void recomp_guest_write8(uint32_t address, uint8_t value);
+void recomp_guest_write16(uint32_t address, uint16_t value);
+void recomp_guest_write32(uint32_t address, uint32_t value);
+void recomp_guest_write64(uint32_t address, uint64_t value);
+
+#define GUEST_READ8(addr)   recomp_guest_read8((uint32_t)(addr))
+#define GUEST_READ16(addr)  recomp_guest_read16((uint32_t)(addr))
+#define GUEST_READ32(addr)  recomp_guest_read32((uint32_t)(addr))
+#define GUEST_READ64(addr)  recomp_guest_read64((uint32_t)(addr))
+#define GUEST_WRITE8(addr, value)  recomp_guest_write8((uint32_t)(addr), (uint8_t)(value))
+#define GUEST_WRITE16(addr, value) recomp_guest_write16((uint32_t)(addr), (uint16_t)(value))
+#define GUEST_WRITE32(addr, value) recomp_guest_write32((uint32_t)(addr), (uint32_t)(value))
+#define GUEST_WRITE64(addr, value) recomp_guest_write64((uint32_t)(addr), (uint64_t)(value))
+
 /* ================================================================
  * Memory access helpers
  * ================================================================ */
