@@ -4,7 +4,7 @@
 >
 > **Platform:** RGH/JTAG Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 0 (translation and memory audit) + Phase 1 (hardware bootstrap).
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 0 audit + Phase 2 guest-address routing after completing Phase 2C exact-XBE verification.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -53,38 +53,35 @@ Each phase has independently checkable checkpoints below.
 | --- | --- | --- |
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
-| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A + 2B COMPLETE; Phase 2C exact-XBE test ready** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
+| **2 — Guest memory + retail XBE loading** | **In progress — Phase 2A/2B/2C COMPLETE on Xenon; address routing next** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | 3 — PPC recompilation + x86 guest ABI | Not started | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
 | 7 — Gameplay, stability and release | Not started | Repeated playable scenarios, save/load, mission progression and documented release |
 
-**Already written in Draft PR #1:** portable little-endian guest-memory
-helpers, a host-side test source, a platform architecture note, and an initial
-15-second **diagnostic-only** XDK entry point. The portable guest-memory tests
-**pass GCC 14.2.0, Clang 17.0.0 and Clang UndefinedBehaviorSanitizer** on a
-Linux x86-64 host, with exact Git blob SHA checks. **No Xbox 360 XEX build or
-hardware test has been performed.**
+**Verified foundation:** the VS17/XDK bootstrap, 64 MiB guest RAM contract,
+exact retail-XBE identity, and bounded 14-section load have all passed on real
+Xbox 360 hardware. The pinned retail SHA-256 was computed on Xenon itself and
+matched exactly. Translated Mercenaries game code has still **not** been
+executed on Xbox 360.
 
-**Present blockers:** no verified Xbox 360 executable; original Xbox guest data
-is little-endian while Xbox 360 PowerPC is big-endian; generated `MEM16/32/64`
-expressions are assignable native-pointer lvalues; Windows x64 guest-memory
-aperture and mapped aliases are unavailable as-is; D3D11, Win32, DXGI, and
-host audio dependencies need native replacements.
+**Present blockers:** generated `MEM16/32/64` expressions are assignable
+native-pointer lvalues and still require a coordinated lifter/runtime refactor;
+the Windows mapped-alias model cannot be carried directly to the 32-bit Xbox
+360 process; guest RAM mirrors/KSEG/synthetic kernel/MMIO routing still need
+native checked dispatch; D3D11, Win32, DXGI and host-audio dependencies still
+need Xbox 360-native replacements.
 
 ### Immediate next tests
 
-1. **Done:** run portable endian tests on a PC (GCC, Clang and UBSan; see
-   evidence below).
-2. Build the small XDK diagnostic from the active development branch as an
-   Xbox 360 **game/XEX** target using the user's installed XDK and VS17.
-3. Launch it from an isolated test folder on RGH/JTAG Xbox 360 hardware,
-   **never replacing a dashboard or boot XEX**. Verify heartbeat and log path.
-4. Confirm controller A exits, then confirm the 15-second timeout in a separate
-   run. Capture any debugger/xbWatson output.
-5. Feed real results back into this README, including failed tests, before
-   beginning guest-memory integration.
+1. **Done:** native XEX bootstrap, input, heartbeat and clean timeout.
+2. **Done:** 64 MiB guest RAM + little-endian access contract on Xenon.
+3. **Done:** bounded retail XBE parse/load and exact on-console SHA-256.
+4. Implement a checked guest-address router for low RAM mirrors, KSEG0/KSEG1
+   aliases, synthetic kernel/fence pages, and explicit MMIO classification.
+5. Validate alias coherence and low-memory/TIB fixtures on real hardware before
+   any translated Mercenaries function is permitted to execute.
 
 ### Evidence policy
 
@@ -164,9 +161,10 @@ Xbox 360 native memory.
 - [x] Verify those accessors on real Xenon hardware: **Phase 2A PASS**. Xenon reported big-endian host order; every low/high/unaligned/endian/bounds test passed and the XEX returned 0.
 - [ ] Replace direct native pointer semantics with explicit checked access;
       reject unsupported regions instead of corrupting unrelated memory.
-- [ ] Load a verified retail XBE: validate hash/header, copy sections,
-      zero-fill virtual tails, initialize stack/heap and section protections
-      where applicable.
+- [x] Load the exact supported retail XBE on Xenon: on-console SHA-256 matched
+      the pinned digest, 14/14 sections loaded, initialized bytes matched the
+      source, and every virtual/BSS tail remained zero. Stack/heap initialization
+      remains a later Phase 2 item.
 - [ ] Compare original-Xbox guest memory fixtures and address alias behavior.
 - [ ] Stress-test fragmentation and low-memory paths.
 - [x] Host-test upper-bound crossing, first-out-of-range and wrapped/high
@@ -314,6 +312,7 @@ Windows-hosted dependencies will work unmodified on Xenon.
 | 2026-10-18 | Phase 2A bounded 64 MiB guest-RAM host contract | **PASS (GCC / Clang / ASan+UBSan)** | Linux x86-64; host preflight |
 | 2026-10-18 | Phase 2A 64 MiB guest-RAM hardware diagnostic | **PASS** | Real Xbox 360 Xenon: big-endian host, LE guest bytes, unaligned access, high-bound rejection, clean timeout / XAPI 0 |
 | 2026-10-18 | Phase 2B retail XBE parse + bounded section load | **PASS** | Real Xbox 360 Xenon: 3,223,552-byte XBE, Title ID 0x4C410015, entry 0x0022964A, 14/14 sections, 3,188,156 initialized bytes, XAPI 0 |
+| 2026-10-18 | Phase 2C exact retail identity + post-load integrity | **PASS** | Real Xbox 360 Xenon: pinned SHA-256 exact match, exact build invariants, 14/14 section/source comparisons, zero-fill invariants, XAPI 0 |
 
 Add future evidence here: command, exact commit, hardware, compiler/toolchain,
 log or artifact path, pass/fail and remaining questions. **Do not mark an
@@ -483,6 +482,25 @@ unexecuted test PASS.**
   future xbWatson output proves exactly which binary is executing.
 - **Next:** clean/rebuild the VS17 project from the latest branch source and
   verify the build tag appears before evaluating section-name results.
+
+### 2026-10-18 — Phase 2C exact-XBE + load-integrity gate passes
+
+- Corrected build tag `P2C-NAMEFIX-20261018-B` appeared, proving the intended
+  fixed XEX was running.
+- Xbox 360 computed the complete retail XBE SHA-256 and matched the upstream
+  pinned digest exactly:
+  `AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7`.
+- Exact file size, header size, image size, base, entry point, TLS VA, kernel
+  thunk VA, Title ID, section count, names and order all passed.
+- Complete XBE header copy compared byte-for-byte successfully.
+- All **14/14 sections** loaded; **3,188,156 initialized bytes** copied.
+- Every loaded initialized range matched its XBE source bytes and every
+  virtual/BSS tail remained zero.
+- Entry-point execution stayed disabled by design.
+- Guest arena cleanup, post-test timeout and `[XAPI RETURN VALUE] 0` passed.
+- **Phase 2C: COMPLETE.**
+- **Next:** Phase 2D checked address routing, RAM mirrors/KSEG aliases and
+  synthetic low/kernel-memory fixtures. No broad translated game execution yet.
 
 ### How future updates are recorded
 
