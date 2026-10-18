@@ -1164,6 +1164,26 @@ unexecuted test PASS.**
   nonzero valid translated code VA and proves the same path without mapping
   NULL as the resolved key.
 
+### 2026-10-18 — Phase 3H-B nonzero guest pointer-slot proof prepared
+
+- Follow-up build tag: `P3H-ICALL-20261018-B`.
+- The selector now requires a real `GUEST_READ32(...)` ICALL operand so the
+  guest function-pointer **slot address** can be observed directly.
+- A local discovery caller preserves every translated instruction that computes
+  that slot and replaces only the ICALL operation with a probe.
+- Hardware discovery records the real guest slot address, resets identical
+  state, writes nonzero translated code VA `0x0004CFF0` into that exact slot,
+  then runs the unchanged translated caller.
+- The actual ICALL trace must then be exactly `0x0004CFF0`; resolved mode maps
+  that real nonzero guest code VA to translated `sub_0004CFF0`.
+- Unresolved mode uses the same seeded slot and same unchanged caller but
+  disables generated lookup, preserving the 3H-A failure-contract checks.
+- The separate production `0x00400000` range-guard proof remains unchanged.
+- The new generated discovery caller is explicit-memory audited alongside the
+  real caller, reference caller, optional direct helper, and translated target.
+- **Next:** rerun Phase 3H prep, compile generated `main.cpp`, and capture the
+  B-build xbWatson log.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
