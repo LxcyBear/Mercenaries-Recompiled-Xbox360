@@ -14,6 +14,7 @@ Options:
     -v, --verbose           Verbose output
     --list-categories       List available function categories and counts
     --header                Generate C header with forward declarations
+    --explicit-guest-memory Emit checked explicit guest-memory ABI
 """
 
 import argparse
