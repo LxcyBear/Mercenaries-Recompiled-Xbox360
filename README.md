@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F hardware PASS; 3G normal-CALL chain next** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F hardware PASS; 3G normal-CALL selector/harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -974,6 +974,30 @@ unexecuted test PASS.**
 - **Next:** Phase 3G — first bounded real translated normal-CALL chain, proving
   the synthetic guest return-address push + callee RET interaction before
   indirect-call dispatch.
+
+### 2026-10-18 — Phase 3G translated normal-CALL gate prepared
+
+- Created `xbox360/phase3g-translated-direct-call-chain` from completed Phase
+  3F.
+- Phase 3G selects its candidate from the actual reviewed disassembler
+  `calls_to` graph, which records real x86 CALL targets.
+- The selector searches compact anonymous caller/callee pairs and requires
+  exactly one generated `PUSH32(esp, 0); callee();` normal-CALL lowering.
+- The first gate rejects tail jumps, ICALL/ITAIL, kernel/runtime-copy helpers,
+  RDTSC/debugbreak, SEH bridging, x87/SSE/MMX, third translated calls, RET N,
+  and unrelated stack mutation.
+- A local reference copy of the selected translated caller replaces only the
+  generated PUSH32 CALL with an independent explicit
+  `GUEST_WRITE32(ESP-4, 0)` + ESP update before entering the same translated
+  callee.
+- A non-semantic callee wrapper records entry ESP and guest `[ESP]`, proving
+  the real generated CALL creates one zero-valued 4-byte synthetic return slot.
+- Three deterministic hardware cases compare final integer architecture,
+  guest ESP, trace order, probe data, access-fault state and complete 64 MiB
+  guest-RAM digest.
+- Build tag: `P3G-CALL-20261018-A`.
+- **Next:** run `Prepare-Phase3G.ps1`, compile the generated local
+  `build\phase3g_translated_direct_call\main.cpp`, and capture xbWatson.
 
 ### How future updates are recorded
 
