@@ -90,3 +90,17 @@ If this passes, exact executable identity and low-RAM section loading are no
 longer open questions. The remaining Phase 2 work moves to original-Xbox
 address aliases, synthetic low-memory/TIB/kernel structures and MMIO routing
 needed by the translated ABI — still before broad game execution.
+
+
+## First hardware attempt — partial PASS / diagnostic fix
+
+The first real-console run successfully computed the exact pinned SHA-256 and
+passed all exact XBE identity checks. It then stopped at section 11,
+`$$XTIMAGE`, because the test's expected-name table accidentally stored only
+one leading `$`.
+
+This was a test-harness bug, not a retail-XBE failure. The expected names are
+now encoded as `\x24\x24XTIMAGE` and `\x24\x24XSIMAGE`, and mismatch
+logs now print both actual and expected names.
+
+Rebuild the latest `main.cpp` and rerun Phase 2C.
