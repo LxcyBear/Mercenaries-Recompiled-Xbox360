@@ -80,9 +80,10 @@ against, including under intentionally unaligned addresses.
 
 Follow [bootstrap_xex/BUILD_FIRST_XEX.md](bootstrap_xex/BUILD_FIRST_XEX.md)
 using the user's already-working VS17 + Xbox 360 XDK project configuration.
-The diagnostic XDK `main.cpp` exists, but has **not** yet been built with
-the user's working VS17 + XDK setup or tested on an Xbox 360; do not mistake host-side memory
-tests for a successful XEX build.
+The diagnostic XDK `main.cpp` has now been **built and verified on real Xbox 360
+hardware** using the user's VS17 + XDK setup. Startup, heartbeats, controller
+detection, A-button exit, independent 15-second timeout, and clean XAPI return
+value 0 are all confirmed. Phase 1 is complete.
 
 ## Milestones / required proof
 
