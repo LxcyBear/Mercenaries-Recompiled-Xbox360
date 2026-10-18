@@ -83,6 +83,8 @@ volatile uint32_t g_recomp_14fa2b_entry = 0u;
 #define SET_LO16(r, v) ((r) = ((r) & 0xFFFF0000u) | ((uint32_t)(uint16_t)(v)))
 #define SX8(v)  ((uint32_t)(int32_t)(int8_t)(v))
 #define SX16(v) ((uint32_t)(int32_t)(int16_t)(v))
+#define ZX8(v)  ((uint32_t)(uint8_t)(v))
+#define ZX16(v) ((uint32_t)(uint16_t)(v))
 
 static uint32_t bswap32_local(uint32_t value)
 {
