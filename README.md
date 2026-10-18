@@ -1075,6 +1075,32 @@ unexecuted test PASS.**
 - **Next:** run `Prepare-Phase3H.ps1`, compile the generated local
   `build\phase3h_translated_icall\main.cpp`, and capture xbWatson.
 
+### 2026-10-18 — Phase 3H first selector pass finds real ICALL population
+
+- First local Phase 3H prep verified the exact retail XBE and reused the Phase
+  3E reviewed-seed disassembly.
+- The first 1,600 compact candidates contained 11 real
+  `RECOMP_ICALL_SAFE` functions.
+- Initial strict-gate rejection histogram:
+  - 7 contained one or more direct translated calls
+  - 2 contained branching control flow
+  - 2 contained a tail jump
+- Therefore the first gate was too strict rather than lacking real ICALL sites.
+- Phase 3H now permits exactly one additional tiny direct translated helper
+  call, provided that helper is linear, plain-RET, dependency-free,
+  stack-simple and does not modify EBX/ESI/EDI.
+- The optional helper is lifted locally, injected ahead of the caller, and
+  audited with the same explicit guest-memory scanner.
+- Hardware trace checks now compare the complete reference/real trace instead
+  of assuming exactly two entries, while still requiring the indirect target
+  exactly once only in resolved mode.
+- The ICALL harness now records saved ESP, post-dispatch ESP and post-dispatch
+  EAX immediately at the dispatcher so safe-failure behavior is proven at the
+  ICALL boundary rather than inferred after later caller instructions.
+- If selection still fails, the selector now prints caller VA + exact rejection
+  reason for the first real ICALL candidates.
+- **No hardware run occurred in the first selector attempt.**
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
