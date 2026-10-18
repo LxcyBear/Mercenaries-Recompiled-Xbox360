@@ -9,7 +9,7 @@
 
 #include <xtl.h>
 #include <string.h>
-#include "../include/guest_memory.h"
+#include "guest_memory.h"
 
 static HANDLE s_logFile = INVALID_HANDLE_VALUE;
 
