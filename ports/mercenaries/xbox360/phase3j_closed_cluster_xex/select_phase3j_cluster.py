@@ -477,6 +477,8 @@ def main():
         "__P3J_ROOT_VA__": f"0x{root:08X}u",
         "__P3J_MEMBER_COUNT__": str(len(chosen["closure"])),
         "__P3J_DEPTH__": str(chosen["depth"]),
+        "/*__P3J_MEMBER_VAS__*/": ", ".join(
+            f"0x{a:08X}u" for a in sorted(chosen["closure"])),
     }
 
     for token, value in replacements.items():
