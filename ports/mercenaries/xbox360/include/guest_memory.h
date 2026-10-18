@@ -16,13 +16,19 @@
 
 #define MERC_GUEST_RAM_SIZE (64u * 1024u * 1024u)
 
+#if defined(_MSC_VER)
+#define MERC_GUEST_MEMORY_INLINE static __inline
+#else
+#define MERC_GUEST_MEMORY_INLINE static inline
+#endif
+
 typedef struct MercGuestMemory
 {
     uint8_t* base;
     uint32_t size;
 } MercGuestMemory;
 
-static int merc_guest_memory_init(MercGuestMemory* memory, uint32_t size)
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_init(MercGuestMemory* memory, uint32_t size)
 {
     if (!memory || size == 0u)
         return 0;
@@ -39,7 +45,7 @@ static int merc_guest_memory_init(MercGuestMemory* memory, uint32_t size)
     return 1;
 }
 
-static void merc_guest_memory_shutdown(MercGuestMemory* memory)
+MERC_GUEST_MEMORY_INLINE void merc_guest_memory_shutdown(MercGuestMemory* memory)
 {
     if (!memory)
         return;
@@ -49,7 +55,7 @@ static void merc_guest_memory_shutdown(MercGuestMemory* memory)
     memory->size = 0u;
 }
 
-static void* merc_guest_memory_ptr(MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE void* merc_guest_memory_ptr(MercGuestMemory* memory,
                                    uint32_t address,
                                    uint32_t width)
 {
@@ -62,7 +68,7 @@ static void* merc_guest_memory_ptr(MercGuestMemory* memory,
     return memory->base + address;
 }
 
-static const void* merc_guest_memory_cptr(const MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE const void* merc_guest_memory_cptr(const MercGuestMemory* memory,
                                           uint32_t address,
                                           uint32_t width)
 {
@@ -75,7 +81,7 @@ static const void* merc_guest_memory_cptr(const MercGuestMemory* memory,
     return memory->base + address;
 }
 
-static int merc_guest_memory_read8(const MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_read8(const MercGuestMemory* memory,
                                    uint32_t address,
                                    uint8_t* value)
 {
@@ -86,7 +92,7 @@ static int merc_guest_memory_read8(const MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_read16(const MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_read16(const MercGuestMemory* memory,
                                     uint32_t address,
                                     uint16_t* value)
 {
@@ -97,7 +103,7 @@ static int merc_guest_memory_read16(const MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_read32(const MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_read32(const MercGuestMemory* memory,
                                     uint32_t address,
                                     uint32_t* value)
 {
@@ -108,7 +114,7 @@ static int merc_guest_memory_read32(const MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_read64(const MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_read64(const MercGuestMemory* memory,
                                     uint32_t address,
                                     uint64_t* value)
 {
@@ -119,7 +125,7 @@ static int merc_guest_memory_read64(const MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_read_float32(const MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_read_float32(const MercGuestMemory* memory,
                                           uint32_t address,
                                           float* value)
 {
@@ -130,7 +136,7 @@ static int merc_guest_memory_read_float32(const MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_write8(MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_write8(MercGuestMemory* memory,
                                     uint32_t address,
                                     uint8_t value)
 {
@@ -141,7 +147,7 @@ static int merc_guest_memory_write8(MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_write16(MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_write16(MercGuestMemory* memory,
                                      uint32_t address,
                                      uint16_t value)
 {
@@ -152,7 +158,7 @@ static int merc_guest_memory_write16(MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_write32(MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_write32(MercGuestMemory* memory,
                                      uint32_t address,
                                      uint32_t value)
 {
@@ -163,7 +169,7 @@ static int merc_guest_memory_write32(MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_write64(MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_write64(MercGuestMemory* memory,
                                      uint32_t address,
                                      uint64_t value)
 {
@@ -174,7 +180,7 @@ static int merc_guest_memory_write64(MercGuestMemory* memory,
     return 1;
 }
 
-static int merc_guest_memory_write_float32(MercGuestMemory* memory,
+MERC_GUEST_MEMORY_INLINE int merc_guest_memory_write_float32(MercGuestMemory* memory,
                                            uint32_t address,
                                            float value)
 {
@@ -184,5 +190,7 @@ static int merc_guest_memory_write_float32(MercGuestMemory* memory,
     merc_guest_write_le_float32(p, value);
     return 1;
 }
+
+#undef MERC_GUEST_MEMORY_INLINE
 
 #endif /* MERC_XBOX360_GUEST_MEMORY_H */
