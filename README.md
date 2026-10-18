@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G/3H/3I hardware PASS; 3J dependency-closed cluster next** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G/3H/3I hardware PASS; 3J closure selector/harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -1330,6 +1330,32 @@ unexecuted test PASS.**
 - **Next:** Phase 3J — select and execute the first dependency-closed translated
   function cluster from the real Mercenaries call graph, preserving explicit
   guest memory and bounded runtime dependencies before guarded entry/startup.
+
+### 2026-10-18 — Phase 3J dependency-closed cluster gate prepared
+
+- Created `xbox360/phase3j-dependency-closed-cluster` from completed Phase 3I.
+- Unlike Phase 3I, no translated root/member VA is hand-picked.
+- The selector starts from real retail function metadata and recursively follows
+  every statically named translated `sub_XXXXXXXX()` dependency.
+- Direct CALL, tail-jump and other statically named translated external
+  transfers therefore participate in closure.
+- The first accepted closure must contain 4–8 entirely new translated functions,
+  reach dependency depth >= 2, and stay within bounded byte/instruction budgets.
+- Previously hand-selected Phase 3E–3I VAs are excluded from the entire cluster.
+- 3J-A requires a statically closed, branch/loop-free integer/memory surface;
+  dynamic ICALL/ITAIL, x87/SSE/MMX and unsupported runtime helpers are rejected.
+  Branch/flags widening remains Phase 3K.
+- Every selected retail-derived body is emitted only beneath gitignored
+  `build/phase3j_closed_cluster` and explicit-memory audited before compile.
+- The XDK fixture runs the selected root twice for each of three deterministic
+  safe-pointer seeds.
+- Hardware PASS requires every selected closure member to appear in the trace,
+  no guest-memory faults, exact root-return ESP, intact high-RAM canaries,
+  identical A/B traces, matching final architecture and complete 64 MiB
+  guest-RAM hashes.
+- Build tag: `P3J-CLOSURE-20261018-A`.
+- **Next:** run `Prepare-Phase3J.ps1`; if no cluster survives, use the printed
+  rejection histogram to make the narrowest justified relaxation.
 
 ### How future updates are recorded
 
