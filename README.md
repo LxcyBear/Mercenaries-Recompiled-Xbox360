@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 5A — capture the first live storage/content request at ordinal 202 NtOpenFile after Phase 4 hardware completion.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 5B — service the captured ordinal-202 NtOpenFile request through native Xenon storage and continue the real boot path.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A storage/content capture active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A storage capture PASS; Phase 5B native NtOpenFile active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,12 +75,13 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 is complete. The real retail-derived startup
-path now reaches a live storage/content request: ordinal 202 `NtOpenFile`
-from translated caller `0x0022BD2D`, with a 28-byte full frame and
-`fault=0`. Phase 5A captures the exact guest path/access/share/options
-without fabricating I/O; that evidence will drive the first native Xbox 360
-storage implementation. Graphics, input, audio/movie and async/runtime
+**Present blockers:** Phase 4 is complete and Phase 5A has passed on hardware.
+The first live storage request is ordinal 202 `NtOpenFile` for
+`\\Device\\Harddisk0\\partition1\\` from translated caller `0x0022BD2D`,
+with access `0x00100001`, share `0x3`, options `0x00800021`, a correct 28-byte
+frame, and `fault=0`. Phase 5B now services that request using native Xenon/XDK
+file primitives with a deterministic Partition1 backing directory and resumes
+the translated boot path. Graphics, input, audio/movie and async/runtime
 dependencies remain later Phase-5 blockers discovered by continued live
 execution.
 
@@ -224,12 +225,15 @@ execution.
     Target `0x800000CA` is ordinal 202 `NtOpenFile`; its observed
     28-byte full frame matches six stdcall arguments plus the synthetic return.
     **Phase 4 / Gate 4 is complete.**
-45. **Phase 5A:** capture the live ordinal-202 `NtOpenFile` request,
-    including guest `OBJECT_ATTRIBUTES`, `ANSI_STRING` path,
-    access/share/options, handle pointer and I/O-status pointer, then stop at
-    the explicit `STORAGE_OPEN` boundary without fabricating I/O. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5A.ps1`.
-    Build tag: `P5A-NTOPEN202-CAPTURE-20261019-A`.
+45. **Done:** Phase 5A captured ordinal 202 `NtOpenFile` on hardware with
+    `path=\\Device\\Harddisk0\\partition1\\`, access `0x00100001`, share
+    `0x3`, options `0x00800021`, exact 28-byte frame and `fault=0`.
+46. **Phase 5B:** map the observed Partition1 tree to
+    `game:\\merc360-partition1`, perform native Xenon/XDK `CreateFileA`,
+    return a tagged 32-bit guest handle plus `IO_STATUS_BLOCK`, and resume the
+    translated boot path. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5B.ps1`.
+    Build tag: `P5B-NTOPEN202-NATIVE-20261019-A`.
 
 ### Evidence policy
 
@@ -2455,6 +2459,19 @@ unexecuted test PASS.**
 - New active branch: `xbox360/phase5-native-subsystems`.
 - **Phase 5A:** capture the exact live storage/content path and open flags before implementing native I/O.
 - Build tag: `P5A-NTOPEN202-CAPTURE-20261019-A`.
+
+### 2026-10-19 — Phase 5A storage capture PASS
+
+- Build `P5A-NTOPEN202-CAPTURE-20261019-A` passed on real Xbox 360 hardware.
+- First live storage request: ordinal 202 `NtOpenFile`.
+- Caller: `0x0022BD2D`.
+- Path: `\\Device\\Harddisk0\\partition1\\`.
+- Access/share/options: `0x00100001 / 0x00000003 / 0x00800021`.
+- Exact 28-byte full frame; guest OBJECT_ATTRIBUTES / ANSI_STRING decoded cleanly.
+- Explicit `STORAGE_OPEN` boundary reached with `fault=0`.
+- **Phase 5A: PASS.**
+- **Next:** Phase 5B native Xenon `NtOpenFile` continuation.
+- Build tag: `P5B-NTOPEN202-NATIVE-20261019-A`.
 
 ### How future updates are recorded
 
