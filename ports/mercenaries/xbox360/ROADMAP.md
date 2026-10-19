@@ -1145,8 +1145,7 @@ Gate:
 `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-X.ps1`
 
 4C-X preserves all W continuations, retains the proven `0x0022F0FB`
-closure, and adds a bounded depth-2 translated direct closure rooted at
-`0x0022D980`, capped at 16 members. Deeper direct, dynamic, kernel, timer-DPC,
-and guest-fault boundaries remain fenced.
+closure, and promotes only the hardware-observed translated root `0x0022D980`.
+Deeper direct, dynamic, kernel, timer-DPC, and guest-fault boundaries remain fenced.
 
 Build tag: `P4C-D980-CLOSURE-20261019-A`.
