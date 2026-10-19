@@ -1078,3 +1078,53 @@ frontier is explicitly forbidden from counting as progress; deeper calls remain
 evidence boundaries.
 
 Build tag: `P4C-DIRECTC5A4-20261019-A`.
+
+
+#### Phase 4C-R — promoted 0x0022C5A4
+**Status: HARDWARE PASS.**
+
+Build `P4C-DIRECTC5A4-20261019-A` executed `0x0022C5A4` and advanced
+with `fault=0` to `DIRECT_FRONTIER 0x00230060`.
+
+#### Phase 4C-S — promoted 0x00230060
+**Status: HARDWARE PASS.**
+
+Build `P4C-DIRECT30060-20261019-A` executed `0x00230060` and advanced
+with `fault=0` to `ITAIL 0x80000018`, kernel ordinal 24
+`ExQueryNonVolatileSetting`.
+
+#### Phase 4C-T — ExQueryNonVolatileSetting continuation
+**Status: HARDWARE PASS.**
+
+Build `P4C-NV24-20261019-A` captured `XC_MISC` with a four-byte value
+buffer, returned STATUS_SUCCESS using the guest EEPROM/XConfig semantics, and
+advanced to `ICALL_SAFE 0x8000012D`, ordinal 301
+`RtlNtStatusToDosError`.
+
+#### Phase 4C-U — RtlNtStatusToDosError continuation
+**Status: HARDWARE PASS.**
+
+Build `P4C-RTL301-20261019-A` mapped STATUS_SUCCESS to DOS error 0,
+restored the expected 8-byte frame, and advanced with `fault=0` to
+`DIRECT_FRONTIER 0x0022F0FB`.
+
+#### Phase 4C-V — bounded direct closure rooted at 0x0022F0FB
+**Status: HARDWARE PASS.**
+
+Build `P4C-F0FB-CLOSURE-20261019-A` executed `0x0022F0FB`, extending
+the hardware trace to 13 translated functions, and advanced with `fault=0`
+to `ICALL_SAFE 0x80000095`, kernel ordinal 149 `KeSetTimer`.
+
+#### Phase 4C-W — KeSetTimer continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-W.ps1`
+
+4C-W validates the live 20-byte frame (dummy return + 16 argument bytes),
+uses the Phase-4B-proven Xbox 360 system-time path, reproduces the production
+guest KTIMER fields and prior-active return value, and continues to the next
+real boundary. An already-due DPC is surfaced explicitly instead of being
+silently skipped.
+
+Build tag: `P4C-TIMER149-20261019-A`.
