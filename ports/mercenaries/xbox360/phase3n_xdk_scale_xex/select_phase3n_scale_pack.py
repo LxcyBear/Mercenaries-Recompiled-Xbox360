@@ -28,7 +28,8 @@ MIN_SCALE_FUNCTIONS = 64
 MIN_SCALE_GUEST_BYTES = 0x4000
 
 FUNC_START_RE = re.compile(
-    r"(?m)^\s*void\s+(sub_([0-9A-Fa-f]{8}))\s*"
+    r"(?m)^\s*(?:static\s+)?(?:__forceinline\s+)?"
+    r"void\s+(sub_([0-9A-Fa-f]{8}))\s*"
     r"\(\s*void\s*\)\s*\{"
 )
 SUB_SYMBOL_RE = re.compile(r"\bsub_[0-9A-Fa-f]{8}\b")
