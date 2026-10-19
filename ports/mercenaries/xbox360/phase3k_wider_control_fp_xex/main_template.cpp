@@ -1548,7 +1548,7 @@ VOID __cdecl main()
     char line[256];
 
     s_logFile = CreateFileA(
-        "game:\\merc360-phase3k-closed-cluster.log",
+        "game:\\merc360-phase3k-wider-control-fp.log",
         GENERIC_WRITE,
         FILE_SHARE_READ,
         NULL,
@@ -1556,7 +1556,7 @@ VOID __cdecl main()
         FILE_ATTRIBUTE_NORMAL,
         NULL);
 
-    trace("PHASE 3J DEPENDENCY-CLOSED TRANSLATED CLUSTER START");
+    trace("PHASE 3K WIDER CONTROL + MIXED FP CLUSTER START");
     trace("BUILD TAG: P3K-MIXEDFP-20261018-A");
     trace("Coverage policy: deterministic integer/x87/XMM A/B per profile, 16-profile union must execute every selected member");
 
@@ -1579,9 +1579,9 @@ VOID __cdecl main()
     result = run_fixture();
 
     if (result)
-        trace("PHASE 3J DEPENDENCY-CLOSED TRANSLATED CLUSTER RESULT: PASS");
+        trace("PHASE 3K WIDER CONTROL + MIXED FP CLUSTER RESULT: PASS");
     else
-        trace("PHASE 3J DEPENDENCY-CLOSED TRANSLATED CLUSTER RESULT: FAIL");
+        trace("PHASE 3K WIDER CONTROL + MIXED FP CLUSTER RESULT: FAIL");
 
     free(g_ram);
     g_ram = NULL;
@@ -1620,7 +1620,7 @@ wait_for_exit:
         Sleep(33);
     }
 
-    trace("PHASE 3J DEPENDENCY-CLOSED TRANSLATED CLUSTER END");
+    trace("PHASE 3K WIDER CONTROL + MIXED FP CLUSTER END");
 
     if (s_logFile != INVALID_HANDLE_VALUE)
     {
