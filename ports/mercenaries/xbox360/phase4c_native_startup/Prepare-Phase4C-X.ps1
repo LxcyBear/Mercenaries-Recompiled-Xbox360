@@ -25,15 +25,15 @@ foreach ($required in @($python,$generatedRoot,$functionsPath,$entryReport,$thre
 if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-Write-Host "[Phase4C-X] BOUNDED D980 DIRECT-CLOSURE PACKAGE"
+Write-Host "[Phase4C-X] D980 SAFE-ROOT PACKAGE"
 Write-Host "[Phase4C-X] Phase 4C-W hardware PASS continued ordinal 149 and reached DIRECT_FRONTIER 0x0022D980 with fault=0."
-Write-Host "[Phase4C-X] Promoting a bounded depth-2 translated closure rooted at 0x0022D980 (cap 16 members), while retaining the proven 0x0022F0FB closure."
+Write-Host "[Phase4C-X] Promoting only translated root 0x0022D980; deeper direct callees stay fenced. The proven 0x0022F0FB closure remains active."
 Write-Host "[Phase4C-X] All previously proven startup invariants and kernel continuations remain active."
 Write-Host "[Phase4C-X] Main/env build cookie is rotated to the X pair."
 Write-Host ""
 
 & $python $emitter "--base-emitter" $baseEmitter "--generated-root" $generatedRoot "--functions" $functionsPath "--entry-report" $entryReport "--thread-report" $threadReport "--phase3n-template" $phase3nTemplate "--phase2e-source" $phase2eSource "--out-dir" $outDir
-if ($LASTEXITCODE -ne 0) { throw "Phase 4C-X bounded D980 direct-closure package emission failed." }
+if ($LASTEXITCODE -ne 0) { throw "Phase 4C-X D980 safe-root package emission failed." }
 
 $main = Join-Path $outDir "main.cpp"
 $env = Join-Path $outDir "phase4c_env.cpp"
@@ -73,16 +73,16 @@ $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($manifestJson.promoted_direct_frontier_target_6 -ne "0x0022D980") {
     throw "Phase 4C-X manifest D980 root mismatch"
 }
-if ([int]$manifestJson.promoted_closure_depth -ne 2) {
-    throw "Phase 4C-X manifest depth mismatch"
+if ([int]$manifestJson.promoted_closure_depth -ne 0) {
+    throw "Phase 4C-X manifest safe-root depth mismatch"
 }
-if ($manifestJson.promoted_closure_members.Count -lt 1 -or $manifestJson.promoted_closure_members.Count -gt 16) {
-    throw "Phase 4C-X promoted D980 closure member count is out of bounds"
+if ($manifestJson.promoted_closure_members.Count -ne 1 -or $manifestJson.promoted_closure_members[0] -ne "0x0022D980") {
+    throw "Phase 4C-X safe-root member set must be exactly 0x0022D980"
 }
 
 Write-Host ""
 Write-Host "[Phase4C-X] READY"
-Write-Host "[Phase4C-X] Promoted D980 closure members: $($manifestJson.promoted_closure_members.Count)"
+Write-Host "[Phase4C-X] Promoted D980 safe-root members: $($manifestJson.promoted_closure_members.Count)"
 Write-Host "[Phase4C-X]   $($manifestJson.promoted_closure_members -join ', ')"
 Write-Host "[Phase4C-X] Build BOTH freshly generated sources in the same XDK project:"
 Write-Host "[Phase4C-X]   $main"
