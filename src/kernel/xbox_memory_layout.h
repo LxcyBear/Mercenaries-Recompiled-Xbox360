@@ -179,6 +179,21 @@ uint32_t xbox_HeapGetAllocationSize(uint32_t xbox_va);
 /** Free a tracked block so a later compatible allocation can reuse it. */
 void xbox_HeapFree(uint32_t xbox_va);
 
+/** Release a complete page-backed guest allocation. Returns FALSE for an
+ * untracked address, a non-page-backed allocation, or a stale/double release.
+ * released_size receives the tracked allocation size when non-NULL. */
+BOOL xbox_HeapReleasePageRounded(uint32_t xbox_va, uint32_t *released_size);
+
+/** Guest-owned page metadata used by virtual-memory/protection kernel calls.
+ * These operations never alter host page permissions. */
+BOOL xbox_GuestMemorySetProtect(
+    uint32_t xbox_va, uint32_t size, uint32_t protect);
+uint32_t xbox_GuestMemoryQueryProtect(uint32_t xbox_va);
+BOOL xbox_GuestMemoryDecommit(uint32_t xbox_va, uint32_t size);
+BOOL xbox_GuestMemoryCommit(
+    uint32_t xbox_va, uint32_t size, uint32_t protect);
+BOOL xbox_GuestMemoryIsCommitted(uint32_t xbox_va);
+
 /**
  * Get the file mapping handle for the Xbox memory region.
  * Used by the VEH handler to map additional mirror views on demand.
