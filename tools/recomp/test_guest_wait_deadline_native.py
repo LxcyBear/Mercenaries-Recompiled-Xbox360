@@ -127,6 +127,36 @@ def _vcvars64():
     return None
 
 
+def _msvc_environment(vcvars: Path, workdir: Path):
+    # Use a temporary .cmd instead of nesting a quoted batch-file path inside
+    # cmd.exe /c. VS2019 Build Tools paths contain spaces and older cmd.exe
+    # quoting rules can otherwise treat the quoted vcvars path as the command.
+    activate = workdir / "activate-msvc.cmd"
+    activate.write_text(
+        '@echo off\r\n'
+        f'call "{vcvars}" >nul\r\n'
+        'if errorlevel 1 exit /b %errorlevel%\r\n'
+        'set\r\n',
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        ["cmd.exe", "/d", "/c", str(activate)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        raise AssertionError(result.stdout + result.stderr)
+
+    env = os.environ.copy()
+    for line in result.stdout.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        env[key] = value
+    return env
+
+
 def compile_c(source: Path, exe: Path, *, winmm=False):
     cc = _gcc_like()
     if cc:
@@ -140,16 +170,22 @@ def compile_c(source: Path, exe: Path, *, winmm=False):
 
     vcvars = _vcvars64()
     if vcvars:
-        libraries = " winmm.lib" if winmm else ""
-        command = (
-            f'call "{vcvars}" >nul && '
-            f'cl /nologo /O2 /W4 /TC "{source}" /Fe:"{exe}"{libraries}'
-        )
+        env = _msvc_environment(vcvars, source.parent)
+        cl = shutil.which("cl.exe", path=env.get("PATH"))
+        if not cl:
+            raise AssertionError(
+                f"vcvars64.bat succeeded but cl.exe was not added to PATH: {vcvars}"
+            )
+        command = [cl, "/nologo", "/O2", "/W4", "/TC", str(source), f"/Fe:{exe}"]
+        if winmm:
+            command.append("winmm.lib")
         result = subprocess.run(
-            ["cmd.exe", "/d", "/c", command],
+            command,
             capture_output=True,
             text=True,
             timeout=90,
+            env=env,
+            cwd=source.parent,
         )
         if result.returncode != 0:
             raise AssertionError(result.stdout + result.stderr)
@@ -157,7 +193,7 @@ def compile_c(source: Path, exe: Path, *, winmm=False):
 
     raise AssertionError(
         "No C compiler found. Install/enable GCC, Clang, or Visual Studio C++ "
-        "Build Tools. The verifier now auto-detects MSVC through vswhere.exe."
+        "Build Tools. The verifier auto-detects MSVC through vswhere.exe."
     )
 
 
