@@ -335,3 +335,62 @@ The preflight analyzes only `0x0022B43F` and reports:
 - non-translated direct helper surface.
 
 No additional retail code is executed by this preflight.
+
+
+## Phase 4C-D result — PASS
+
+The hardware-observed first title-thread routine is a small closure:
+
+```text
+StartRoutine: 0x0022B43F
+Entry resolution: exact_function
+Reachable direct translated bodies: 6
+Maximum direct-call depth: 2
+Reachable retail guest bytes: 460
+Reachable generated source bytes: 8556
+Missing direct translated dependencies: 0
+Dynamic/indirect boundary bodies: 5
+STRUCTURAL RESULT: PASS
+```
+
+Members:
+
+```text
+0x0022B43F
+0x0022B363
+0x0022B403
+0x0022B4D7
+0x00239BE8
+0x0022B1A6
+```
+
+Three of those already exist in the hardware-proven 4C-B entry closure, so the
+continuous entry+thread package contains only 43 unique translated bodies.
+
+## Phase 4C-E — first title-thread execution
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-E.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\thread_run_xdk\main.cpp
+build\phase4c_native_startup\thread_run_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-THREADRUN-20261019-A
+```
+
+This package executes continuously from the genuine retail XBE entry through
+the live ordinal-255 thread handoff into translated `0x0022B43F`, using the
+captured contexts `0x002295D6` and `0x00000000`. It then stops at the first
+subsequent dynamic/kernel boundary. The ctx1 routine itself is deliberately not
+pre-packed; if the title thread invokes it indirectly, that exact target becomes
+the next hardware boundary.
