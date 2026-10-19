@@ -4,9 +4,9 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 3N — final generated-tree audit + XDK/runtime scale gate.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4B-C — remaining native memory/protection service migration after Phase 4B-B2 PASS.
 >
-> **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
+> **Active development:** [Phase 4B-C — native memory/protection](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4b-native-memory-protection). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
 ## The mission
 
@@ -54,28 +54,31 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A through 3M hardware PASS; 3N final audit/scale gate active** | Real-console instruction/call/stack/FP fixtures agree with reference |
-| 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
+| **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
+| **4 — Native platform + kernel services** | **In progress — 4A locked PASS; 4B-A/A2 + 4B-B/B2 complete; 4B-C active** | Required native service slices are hardware-proven and runtime-platformized; 2 direct host-backed paths remain |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
 | 7 — Gameplay, stability and release | Not started | Repeated playable scenarios, save/load, mission progression and documented release |
 
 **Verified foundation:** the VS17/XDK bootstrap, 64 MiB guest RAM contract,
-exact retail-XBE identity, bounded 14-section load, and the Phase 3A–3D guest
-ABI fixtures have all passed on real Xbox 360 hardware. The pinned retail
-SHA-256 was computed on Xenon itself and matched exactly. On October 18, 2026,
-the first real mechanically translated Mercenaries function (`0x00208F30`)
-also executed successfully on modified Xbox 360 hardware and matched an
-independent reference across six controlled inputs.
+exact retail-XBE identity, bounded 14-section load, and the full Phase 3
+PowerPC-safe recompiler ABI path have passed on real Xbox 360 hardware. Phase
+3N-B closed Gate 3 with a 128-function audited translated-code scale pack,
+loaded-XEX anchor checks, maintained x87 rounding/exception checks and six
+independent-reference executions of retail function `0x00208F30`, all with
+clean XAPI return. Phase 4A then locked the exact 111-import guest-kernel/ABI
+surface, and the Phase 4B timing/sync and file/handle slices have both passed
+real-Xenon hardware gates plus runtime verification.
 
-**Present blockers:** the explicit PowerPC-safe guest-memory ABI plus bounded
-real translated function, direct-call, tail-call, indirect-call, composed slice,
-dependency-closed cluster, bounded backward control flow, mixed control/flags +
-x87/XMM state, and real x87 rounding/exceptional conversion paths are now proven
-on modified Xbox 360 hardware. Remaining Phase 3 blockers are the full post-patch
-generated-tree audit and compiler/linker/runtime scale limits.
-D3D11, Win32, DXGI and host-audio dependencies still need Xbox 360-native
-replacements in later phases.
+**Present blockers:** Phase 3 is complete. The Phase 4A baseline identified 17
+semantic host-backed callable paths; six timing/synchronization imports and nine
+file/handle imports are now hardware-proven and routed through native-ready
+platform boundaries. The current audit is down to **2 direct host-backed / 15
+platform-bound** imports with zero ABI metadata errors and zero referenced
+fallbacks. Phase 4B-C must migrate the remaining `NtFreeVirtualMemory` and
+`MmSetAddressProtect` paths before the first real translated-game startup push.
+D3D11, DXGI and host-audio dependencies still need Xbox 360-native replacements
+in later phases.
 
 ### Immediate next tests
 
@@ -91,8 +94,16 @@ replacements in later phases.
    function-pointer ICALL paths on modified Xbox 360 hardware.
 7. **Done:** run the Phase 3I five-stage composite translated slice in one persistent
    guest arena; repeated-run trace/state/full-RAM checkpoint equality passed.
-8. **Phase 3N:** audit the full post-patch generated tree, then compile/link and
-   execute a substantially larger translated-code shard to prove XDK/runtime scale.
+8. **Done:** Phase 3N/3N-B full generated-tree audit and 128-function translated
+   scale gate passed on real Xbox 360 hardware; Gate 3 is complete.
+9. **Done:** Phase 4A locked the exact 111-import guest kernel surface and ABI
+   metadata with 17 semantic host-backed callable paths at baseline.
+10. **Done:** Phase 4B-A/A2 and 4B-B/B2 hardware + runtime verification migrated
+    15 service paths to native-ready platform boundaries; current audit is
+    `host_surface=2`, `platform_bound=15`.
+11. **Phase 4B-C:** migrate and verify the remaining memory/protection pair,
+    `NtFreeVirtualMemory` and `MmSetAddressProtect`, then advance toward the
+    first real translated Mercenaries startup path.
 
 ### Evidence policy
 
@@ -250,26 +261,36 @@ executes as Xbox 360 PowerPC.
       and NaN/Infinity/boundary inputs: Phase 3M hardware build D passed 9/9
       selected-cluster coverage, deterministic A/B state/full-RAM comparison,
       11 real x87 rounding/conversion calls and clean XAPI return.
-- [ ] **Phase 3N final Gate-3 consolidation:** run a full post-patch generated-tree
-      explicit-memory/unsupported-surface audit and prove compiler/linker/runtime
-      scale with a substantially larger translated-code XDK build and hardware run.
+- [x] **Phase 3N final Gate-3 consolidation:** full post-patch generated-tree
+      audit completed; Phase 3N-B compiled/linked and executed a 128-function
+      audited translated-code scale pack on real Xbox 360 hardware, verified
+      loaded-XEX anchors, maintained x87 behavior, six independent-reference
+      runs of retail `0x00208F30`, and clean XAPI return.
 
-**Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
-reference comparisons.
+**Gate 3: PASS (October 19, 2026).** Reproducible real-hardware guest ABI,
+translated-code scale and reference-comparison suite passed on modified Xbox
+360 hardware.
 
 ### Phase 4 — Xbox 360 platform and original Xbox kernel bridge
 
 **Purpose:** provide original Xbox guest services using native Xbox 360 APIs.
 
-- [ ] Inventory original Xbox kernel imports *actually used by Mercenaries*
-      and keep the subset explicit.
-- [ ] Replace Win32 memory, file I/O, event/handle, thread and
-      synchronization implementations without losing guest ordering.
-- [ ] Implement title-owned path mapping for games, saves and logs.
+- [x] Inventory original Xbox kernel imports *actually used by Mercenaries*:
+      exact verified-retail surface is 111 imports — 74 explicit bridges,
+      11 guest data exports and 26 return-zero fallbacks.
+- [x] Hardware-prove and runtime-platformize the six timing/synchronization
+      imports; Phase 4B-A/A2 passes at the real-console and regression layers.
+- [x] Hardware-prove and runtime-platformize the nine file/handle imports;
+      Phase 4B-B/B2 passes at the real-console and regression layers.
+- [ ] Replace the remaining direct memory/protection host surface:
+      `NtFreeVirtualMemory` and `MmSetAddressProtect`.
+- [ ] Complete title-owned path/storage validation with real Mercenaries asset
+      and save traffic on the native startup path.
 - [ ] Support Xbox 360 controller input and original-game button mapping.
-- [ ] Preserve guest timers, callbacks, interrupts, DPC/ISR safe points and
-      thread scheduling expectations.
-- [ ] Validate guest kernel data exports and safe callback delivery.
+- [ ] Preserve remaining guest callbacks, interrupts, DPC/ISR safe points and
+      thread-scheduling expectations under real title startup.
+- [ ] Validate guest kernel data exports and safe callback delivery under real
+      translated execution.
 - [ ] Exercise real asset reads and title shutdown/error cases.
 
 **Gate 4:** startup service requests and title-critical imports have verified
@@ -1682,6 +1703,42 @@ unexecuted test PASS.**
 - **Next:** Phase 3N — final Gate-3 consolidation: full generated-tree audit plus
   compiler/linker/runtime scale proof. If 3N passes, Phase 3 closes and work
   advances to Phase 4 native platform/kernel services.
+
+### 2026-10-19 — Phase 3N-B closes Gate 3
+
+- Final Phase 3 scale proof compiled/linked a **128-function audited translated-code pack**.
+- All translated anchors were present in the loaded XEX.
+- Maintained x87 rounding/exception checks passed.
+- Retail function `0x00208F30` passed six independent-reference executions.
+- Final result: **Phase 3 / Gate 3 PASS**, clean XAPI return value 0.
+
+### 2026-10-19 — Phase 4A + 4B-A/A2 timing/sync migration PASS
+
+- Exact verified-retail kernel surface: **111 imports**.
+- Locked Phase 4A classification: **74 explicit bridges / 11 data exports / 26 fallbacks**.
+- Baseline semantic host surface: **17** direct host-backed callable paths.
+- Build `P4B-TIMESYNC-20261019-B` passed on real Xbox 360 hardware.
+- Six timing/synchronization imports were routed through the shared
+  `merc_platform_*` backend.
+- A2 verifier passed at **11 direct host-backed / 6 platform-bound**, with
+  zero ABI metadata errors and zero referenced fallbacks.
+
+### 2026-10-19 — Phase 4B-B/B2 file-handle migration PASS
+
+- Build `P4B-FILE-20261019-A` passed every bounded file/handle check on real
+  Xbox 360 hardware: create/open, write/flush, size/query, seek/current offset,
+  full and offset reads, truncate/reopen, attributes, directory enumeration,
+  not-found behavior and cleanup.
+- Nine retail file/handle imports were routed through
+  `src/platform/kernel_file_io.*`.
+- Full B2 verification passed: timing/deadline regression, canonical
+  guest-kernel ABI regression, time/sync boundary regression and all four
+  file/handle boundary tests.
+- Current exact service split: **2 direct host-backed / 15 platform-bound**,
+  with zero ABI metadata errors and zero referenced fallbacks.
+- **Next:** Phase 4B-C — migrate `NtFreeVirtualMemory` and
+  `MmSetAddressProtect`, then prepare the first real translated-game startup
+  path.
 
 ### How future updates are recorded
 
