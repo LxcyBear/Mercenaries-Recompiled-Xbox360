@@ -25,7 +25,7 @@ foreach ($required in @($python,$generatedRoot,$functionsPath,$entryReport,$thre
 if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-Write-Host "[Phase4C-S] PROMOTED C5A4 CONTINUATION PACKAGE"
+Write-Host "[Phase4C-S] PROMOTED 30060 CONTINUATION PACKAGE"
 Write-Host "[Phase4C-S] Phase 4C-R hardware PASS executed 0x0022C5A4 and reached DIRECT_FRONTIER 0x00230060 with fault=0."
 Write-Host "[Phase4C-S] Promoting only 0x00230060 beyond the R pack."
 Write-Host "[Phase4C-S] All prior startup invariants and kernel continuations remain active."
