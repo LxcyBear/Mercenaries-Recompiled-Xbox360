@@ -140,11 +140,12 @@ try {
     $total = [int]$summary.total
     $failed = [int]$summary.failed
     $unresolved = [int]$summary.unresolved_stubs
+    $residualUnresolved = [int]$portability.residual_unresolved_stubs
     $fatal = [int]$portability.fatal_count
 
     $gatePass = (
         $failed -eq 0 -and
-        $unresolved -eq 0 -and
+        $residualUnresolved -eq 0 -and
         $fatal -eq 0
     )
 
@@ -156,7 +157,8 @@ try {
             translated = $translated
             total = $total
             failed = $failed
-            unresolved_stubs = $unresolved
+            unresolved_stubs_before_patching = $unresolved
+            residual_unresolved_stubs_after_patching = $residualUnresolved
         }
         lowering = [ordered]@{
             files = [int]$lowering.files
@@ -170,6 +172,7 @@ try {
             function_bodies = [int]$portability.function_bodies
             fatal_count = $fatal
             failed_translation_stubs = [int]$portability.failed_translation_stubs
+            residual_unresolved_stubs = $residualUnresolved
             platform_surfaces = $portability.platform_surfaces
             translated_surfaces = $portability.translated_surfaces
         }
@@ -177,7 +180,7 @@ try {
         next = if ($gatePass) {
             "Select and emit the Phase 3N-B XDK scale-pack harness."
         } else {
-            "Resolve every failed translation, unresolved direct target, or Gate-3-fatal portability leak before scale testing."
+            "Resolve every failed translation, residual post-patch unresolved stub, or Gate-3-fatal portability leak before scale testing."
         }
     }
 
@@ -187,7 +190,7 @@ try {
     Write-Host ""
     Write-Host "[Phase3N] ===== STAGE A SUMMARY ====="
     Write-Host ("[Phase3N] Generated functions: {0}" -f $portability.function_bodies)
-    Write-Host ("[Phase3N] Recompiler: {0}/{1} translated, failures={2}, unresolved={3}" -f $translated, $total, $failed, $unresolved)
+    Write-Host ("[Phase3N] Recompiler: {0}/{1} translated, failures={2}, raw unresolved={3}, residual unresolved={4}" -f $translated, $total, $failed, $unresolved, $residualUnresolved)
     Write-Host ("[Phase3N] Explicit lowering: reads={0}, writes={1}, compound={2}, inc/dec={3}" -f $lowering.reads, $lowering.writes, $lowering.compound_writes, $lowering.incdec_writes)
     Write-Host ("[Phase3N] Gate-3-fatal portability hits: {0}" -f $fatal)
     Write-Host ("[Phase3N] Generated tree SHA256: {0}" -f $treeSha256)
