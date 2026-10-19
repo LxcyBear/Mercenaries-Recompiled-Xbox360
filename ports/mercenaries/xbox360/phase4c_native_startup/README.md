@@ -1136,3 +1136,42 @@ P4C-F0FB-CLOSURE-20261019-A
 ```
 
 The V main/env cookie is `0x50435631` (`PCV1`).
+
+
+## Phase 4C-W — continue ordinal 149 KeSetTimer
+
+Phase 4C-V passed on hardware. The bounded direct closure executed
+`0x0022F0FB`, extending the translated trace to 13 functions, and reached
+`ICALL_SAFE target=0x80000095` with `fault=0`.
+
+`0x80000095` is kernel ordinal 149, `KeSetTimer`. The locked ABI is
+16 bytes of stdcall arguments plus the 4-byte recompiler dummy return slot,
+matching the 20-byte live frame observed on hardware.
+
+W validates that frame, uses the Phase-4B-proven Xbox 360
+`GetSystemTimeAsFileTime` path, applies the production guest-KTIMER fields
+(Inserted, SignalState, absolute DueTime, DPC, Period), returns the prior active
+state, and continues to the next real boundary. An already-due DPC is surfaced
+as an explicit TIMER_DUE boundary rather than silently skipped.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-W.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\timer149_xdk\main.cpp
+build\phase4c_native_startup\timer149_xdk\phase4c_env.cpp
+build\phase4c_native_startup\timer149_xdk\phase4c-w-manifest.json
+```
+
+Build tag:
+
+```text
+P4C-TIMER149-20261019-A
+```
+
+The W main/env cookie is `0x50435731` (`PCW1`).
