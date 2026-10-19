@@ -192,6 +192,22 @@ guest-native + 0 direct host-backed.
 ### Phase 4C — Native translated-game startup path
 Begin linking/executing the real translated Mercenaries startup path with the migrated Xenon service layer.
 
+#### Phase 4C-A — Retail entry-rooted startup preflight
+**Status: ready.**
+
+Entry:
+`0x0022964A`
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Analyze-Phase4C-A.ps1`
+
+The preflight reuses the exact locked Phase-3N-A generated tree and refuses to
+continue unless the Phase-4B final service audit remains
+`0 direct / 15 platform-bound / 2 guest-native`. It walks the full direct
+translated dependency closure from the retail entry, reports missing translated
+dependencies and dynamic/indirect boundaries, and emits the manifest used to
+construct the first native startup XEX. No retail code is executed by 4C-A.
+
 Required evidence:
 - real retail-derived translated entry/startup code executes;
 - required guest-kernel calls resolve through native/platformized paths;
