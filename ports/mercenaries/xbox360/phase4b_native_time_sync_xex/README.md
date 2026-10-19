@@ -1,6 +1,6 @@
 # Phase 4B-A — Native Xenon timing/synchronization gate
 
-**Status: hardware gate ready.**
+**Status: Phase 4B-A hardware PASS; Phase 4B-A2 runtime platformization ready for verification.**
 
 Phase 4A is locked: the verified Mercenaries retail XBE imports 111 kernel
 symbols, the translated guest path exposes 74 explicit bridges and 11 guest
@@ -22,8 +22,10 @@ The first conversion slice covers the native primitives needed by:
 - `KeWaitForSingleObject` (159)
 - `KeStallExecutionProcessor` (151)
 
-This XEX does **not** yet replace the desktop runtime implementations. It first
-proves the candidate Xbox 360/XDK behavior on real Xenon hardware.
+Build `P4B-TIMESYNC-20261019-B` passed on real Xenon hardware. Phase 4B-A2
+now routes the corresponding runtime clock/sleep/stall/event/wait operations
+through `src/platform/kernel_time_sync.*`. The surface audit reports these
+imports as Phase-4B platform-bound rather than direct host-backed calls.
 
 ## Hardware checks
 
@@ -111,3 +113,43 @@ Do not wire these backends into the real bridge if:
 After a hardware PASS, Phase 4B-A2 replaces the six host-backed runtime paths
 behind a platform boundary and runs a focused regression/audit before the
 file/handle slice.
+
+
+## Hardware result — October 19, 2026
+
+Build `P4B-TIMESYNC-20261019-B` passed on modified Xbox 360 hardware.
+
+Observed values:
+
+- QPC frequency: 50,000,000 Hz and monotonic;
+- 20 ms relative delay: 20,304 us;
+- 2 ms processor stall: 2,000 us;
+- 20 ms wait timeout: 20,062 us;
+- one-shot timer request-to-signal: 39,748 us;
+- event set/wait/auto-reset and timer delivery: PASS.
+
+The 39.748 ms one-shot result includes Xenon thread scheduling overhead; the
+bounded semantic gate requires correct signal delivery and a plausible due
+time, not a scheduler benchmark.
+
+## Phase 4B-A2 verification
+
+After updating the branch, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4b_native_time_sync_xex\Verify-Phase4B-A2.ps1"
+```
+
+The verifier reruns the retail import audit and requires:
+
+```text
+host_surface=11
+platform_bound=6
+arg_missing=0
+arg_mismatch=0
+fallback_referenced=0
+fallback_refs=0
+```
+
+It also runs the guest wait-deadline regression, the guest-kernel ABI metadata
+regression, and the Phase-4B time/sync platform-boundary regression.
