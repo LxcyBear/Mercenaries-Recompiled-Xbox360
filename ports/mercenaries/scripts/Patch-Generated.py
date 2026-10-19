@@ -14638,13 +14638,25 @@ PATCHES += (
         "loc_00158390: ;\n    recomp_xmm_loadss(xmm0v, esp + 0x10);",
         "loc_00158390: ;\n"
         "    { void recomp_original_bug_cloud_params(volatile uint32_t *, volatile uint32_t *);\n"
-        "      recomp_original_bug_cloud_params(&MEM32(esp + 4), &MEM32(esp + 8)); }\n"
+        "      const uint32_t _cloud_in_addr = esp + 4u;\n"
+        "      const uint32_t _cloud_out_addr = esp + 8u;\n"
+        "      uint32_t _cloud_in = GUEST_READ32(_cloud_in_addr);\n"
+        "      uint32_t _cloud_out = GUEST_READ32(_cloud_out_addr);\n"
+        "      recomp_original_bug_cloud_params(&_cloud_in, &_cloud_out);\n"
+        "      GUEST_WRITE32(_cloud_in_addr, _cloud_in);\n"
+        "      GUEST_WRITE32(_cloud_out_addr, _cloud_out); }\n"
         "    recomp_xmm_loadss(xmm0v, esp + 0x10);"),
     GeneratedPatch("Optional cloud transition fades layer coverage",
         "    MEM32(esp + 0x130) = eax;\n    PUSH32(esp, 0); sub_00288AF0(); /* call 0x00288AF0 */\n\nloc_00159AE2: ;",
         "    MEM32(esp + 0x130) = eax;\n"
         "    { void recomp_original_bug_cloud_colors(volatile float *);\n"
-        "      recomp_original_bug_cloud_colors(&MEMF(edx)); }\n"
+        "      const uint32_t _cloud_rgba_addr = edx;\n"
+        "      float _cloud_rgba[36]; unsigned _cloud_i;\n"
+        "      for (_cloud_i = 0; _cloud_i < 36u; ++_cloud_i)\n"
+        "          _cloud_rgba[_cloud_i] = GUEST_READF32(_cloud_rgba_addr + _cloud_i * 4u);\n"
+        "      recomp_original_bug_cloud_colors(_cloud_rgba);\n"
+        "      for (_cloud_i = 0; _cloud_i < 36u; ++_cloud_i)\n"
+        "          GUEST_WRITEF32(_cloud_rgba_addr + _cloud_i * 4u, _cloud_rgba[_cloud_i]); }\n"
         "    PUSH32(esp, 0); sub_00288AF0(); /* call 0x00288AF0 */\n\nloc_00159AE2: ;"),
 )
 
