@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-G — continue the real title thread through the first RtlEnter/RtlLeave critical-section pair after Phase 4C-F hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-H — execute the hardware-confirmed startup callback 0x002295D6 through a bounded direct-call frontier after Phase 4C-G hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -137,9 +137,14 @@ phases.
     section `0x00312FC0`, exact 8-byte frame, balanced stack and `fault=0`.
     The next target is `0x80000126` = ordinal 294,
     `RtlLeaveCriticalSection`.
-19. **Phase 4C-G:** route ordinal 294 with the same maintained serialized-guest
-    no-op semantics, require exact 8-byte cleanup, and capture the first live
-    boundary after the enter/leave pair.
+19. **Done:** Phase 4C-G executed the full ordinal 277/294 enter/leave pair on
+    real Xbox 360 hardware with balanced 8-byte frames and `fault=0`.
+    The next live ICALL target is `0x002295D6`, exactly matching the ctx1
+    value captured from `PsCreateSystemThreadEx`; hardware has therefore
+    confirmed ctx1 as executable title-startup code.
+20. **Phase 4C-H:** enter `0x002295D6` with a depth-1 bounded translated
+    frontier so the next live startup dependency is discovered without
+    recursively importing the callback's enormous full static closure.
 
 ### Evidence policy
 
@@ -1962,6 +1967,21 @@ unexecuted test PASS.**
 - **Phase 4C-F hardware result: PASS.**
 - **Next:** Phase 4C-G continues through the matching leave call.
 - Build tag: `P4C-CRITPAIR-20261019-A`.
+
+### 2026-10-19 — Phase 4C-G critical-section pair PASS
+
+- Real Xenon executed both `RtlEnterCriticalSection` and
+  `RtlLeaveCriticalSection` against guest CS `0x00312FC0`.
+- Both calls used exact 8-byte translated frames and balanced the simulated
+  stack correctly.
+- Guest fault state remained 0.
+- Next live ICALL: caller `0x0022B363` -> target `0x002295D6`.
+- `0x002295D6` exactly matches the ctx1 value captured from the real
+  `PsCreateSystemThreadEx` frame, proving it is subsequently invoked as
+  executable startup code.
+- **Phase 4C-G hardware result: PASS.**
+- **Next:** Phase 4C-H enters that callback with a bounded direct-call frontier.
+- Build tag: `P4C-CALLBACK-20261019-A`.
 
 ### How future updates are recorded
 
