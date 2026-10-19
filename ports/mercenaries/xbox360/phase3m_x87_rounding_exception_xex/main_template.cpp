@@ -332,7 +332,8 @@ static int phase3m_budget_tick(DWORD va)
         va == 0x000A5BD2u)
     {
         uint32_t queueCursor = recomp_guest_read32(0x007AC7C4u);
-        recomp_guest_write32(0x007AC7A4u, queueCursor + 0x1000u);
+        /* One 0x18-byte queue slot is enough to exercise the consumer path. */
+        recomp_guest_write32(0x007AC7A4u, queueCursor + 0x18u);
         recomp_guest_write8(0x007AC7A0u, 1u);
         s_phase3mExternalEventInjected = 1;
     }
@@ -1944,8 +1945,8 @@ VOID __cdecl main()
         NULL);
 
     trace("PHASE 3M X87 ROUNDING + EXCEPTION CLUSTER START");
-    trace("BUILD TAG: P3M-X87ROUND-20261019-C");
-    trace("Coverage policy: x87 helper checks + 17-profile deterministic retail closure; profile 16 injects one bounded external queue event at 0x000A5BD2");
+    trace("BUILD TAG: P3M-X87ROUND-20261019-D");
+    trace("Coverage policy: x87 helper checks + 17-profile deterministic retail closure; profile 16 injects one external queue entry at 0x000A5BD2");
 
     sprintf(
         line,
