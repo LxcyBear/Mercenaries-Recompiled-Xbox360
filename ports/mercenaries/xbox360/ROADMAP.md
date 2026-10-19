@@ -82,6 +82,14 @@ Phase 4B-A/A2 is complete.
 ## Active
 
 ### Phase 4B-B — Native file/handle service slice
+**Status: hardware gate A ready for real-Xenon validation.**
+
+Hardware gate:
+`ports/mercenaries/xbox360/phase4b_native_file_handles_xex`
+
+Build marker:
+`P4B-FILE-20261019-A`
+
 Convert and hardware-prove the cohesive file/handle surface, expected to include:
 - `NtCreateFile`
 - `NtOpenFile`
