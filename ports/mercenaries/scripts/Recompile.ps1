@@ -110,6 +110,10 @@ try {
             # The merged file also contains automatic classifier candidates,
             # which must remain rejectable when they overlap real functions.
             "--protected-seed-functions", $manualSeeds,
+            # Phase 3N retail-byte review: XPP+0x? at 0x002DBC98 is the
+            # ASCII string "\Device\MU_0", not executable code. Linear x86
+            # decoding otherwise invents a JBE to 0x002DBD06 from bytes 65 76 69.
+            "--reject-function", "0x002DBC98",
             "--force"
         )
         Invoke-Python @disasmArgs
