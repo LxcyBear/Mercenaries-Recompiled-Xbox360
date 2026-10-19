@@ -683,3 +683,44 @@ PHASE 4C-J DATA-THUNK PREP RESULT: PASS
 
 Only ordinal 322 is relocated in this gate. First-fault provenance remains
 active so any subsequent unresolved data-import token is reported immediately.
+
+
+## Phase 4C-J hardware result — PASS
+
+```text
+[Merc360:P4C] DATA THUNK FIXUP: ordinal=322 XboxHardwareInfo slot=002DBE0C old=80000142 new=0087E000
+[Merc360:P4C] PASS: XboxHardwareInfo thunk points at initialized guest kernel data
+[Merc360:P4C] PHASE 4C-J DATA-THUNK PREP RESULT: PASS
+[Merc360:P4C] FAULT ACCESS IMMEDIATE: READ width=2 guest=80000148
+[Merc360:P4C] BOUNDARY REGISTERS: ... ecx=80000144 ... fault=1
+[Merc360:P4C] PHASE 4C-J XBOXHARDWAREINFO DATA-THUNK RESULT: PASS
+```
+
+ECX=`0x80000144` identifies raw ordinal 324, `XboxKrnlVersion`.
+The rejected READ16 at `0x80000148` is a +4 access into that structure,
+matching its 16-bit Build field.
+
+## Phase 4C-K — initialized startup data-thunk set
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-K.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\startup_data_xdk\main.cpp
+build\phase4c_native_startup\startup_data_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-KDATA3-20261019-A
+```
+
+4C-K relocates exactly ordinals 156, 322, and 324 because those are the
+guest-visible DATA exports explicitly initialized by the current Phase-2E
+environment. It does not preemptively relocate uninitialized data exports.
