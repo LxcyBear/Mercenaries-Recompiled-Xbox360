@@ -138,12 +138,30 @@ Phase 4B-B/B2 is complete.
 ## Active
 
 ### Phase 4B-C — Remaining memory/protection and residual host surface
-Expected focus:
+**Status: hardware gate A ready for real-Xenon validation.**
+
+Hardware gate:
+`ports/mercenaries/xbox360/phase4b_native_memory_protection_xex`
+
+Build marker:
+`P4B-MEMPROT-20261019-A`
+
+Current exact worklist:
 - `NtFreeVirtualMemory`
 - `MmSetAddressProtect`
-- any residual semantic host calls left after the file/handle migration
 
-The exact worklist must come from the current audit after 4B-B; do not assume the baseline list remains unchanged.
+The gate proves guest-owned semantics rather than host page APIs:
+- page-aligned bounded guest allocation;
+- logical page protection metadata;
+- multi-page protection updates;
+- logical decommit/recommit state;
+- whole-allocation release;
+- released-range reuse and zero initialization;
+- invalid-range and double-release rejection.
+
+After hardware PASS, Phase 4B-C2 will wire the real guest bridge to tracked
+guest-heap release and logical guest protection state, then rerun the exact
+111-import audit.
 
 ### Phase 4C — Native translated-game startup path
 Begin linking/executing the real translated Mercenaries startup path with the migrated Xenon service layer.
