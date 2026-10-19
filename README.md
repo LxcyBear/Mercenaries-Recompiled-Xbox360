@@ -29,7 +29,7 @@ Snapshot: 2026-10-19.
 | 4B-A2 | **Complete PASS** | Six timing/sync imports migrated to `merc_platform_*`; 11 direct host-backed + 6 platform-bound; 0 ABI errors; 0 referenced fallbacks; 7,722 deadline cases PASS. |
 | 4B-B | **Hardware PASS** | `P4B-FILE-20261019-A` passed on real Xenon: create/open/read/write, offsets, size/query, truncate, attributes, directory enumeration, missing-file errors, and cleanup all PASS. |
 | 4B-B2 | **Complete PASS** | Nine file/handle imports route through `merc_platform_file_*`; verifier passed at 2 direct host-backed + 15 platform-bound with ABI/fallback checks clean and all regressions green. |
-| 4B-C | **Hardware gate A ready** | Final direct host-backed pair: `NtFreeVirtualMemory` and `MmSetAddressProtect`; Xenon gate proves guest release/reuse plus logical decommit/recommit/protection metadata. |
+| 4B-C | **Hardware gate B ready** | Final direct host-backed pair: `NtFreeVirtualMemory` and `MmSetAddressProtect`; Xenon gate proves guest release/reuse plus logical decommit/recommit/protection metadata. |
 | 4C | Planned | First real translated Mercenaries startup path with the migrated Xenon service layer. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
@@ -44,7 +44,7 @@ P4B-FILE-20261019-A  PASS
 Current hardware gate:
 
 ```text
-P4B-MEMPROT-20261019-A  READY
+P4B-MEMPROT-20261019-B  READY
 ```
 
 Current verified service accounting after the Phase 4B-B2 PASS:
