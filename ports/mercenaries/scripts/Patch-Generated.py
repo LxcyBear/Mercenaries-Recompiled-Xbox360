@@ -13543,9 +13543,13 @@ def patch_generated(    generated_root: Path, *, allow_missing: bool = False
         # correctly disappears; verify the important shared labels and accept
         # the native local-control-flow body instead of re-splicing it.
         if "void sub_00020100(void)" not in projectile_text:
+            # 0x00020100 was a synthetic function boundary in the old
+            # split tree. Once the reviewed 0x1FBB0:0x208D0 range is owned
+            # by one translated function, execution reaches 0x20100 by normal
+            # fall-through, so no C label is required there. Keep strict
+            # verification on every address that is an actual branch target.
             required_labels = (
                 "loc_00020095: ;",
-                "loc_00020100: ;",
                 "loc_00020122: ;",
                 "loc_00020137: ;",
                 "loc_00020154: ;",
