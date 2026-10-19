@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-I — diagnose the first guest-memory fault after real startup callback entry in Phase 4C-H.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-I Build B — hardened first-fault provenance after Probe A exposed a diagnostic harness bug.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -1999,7 +1999,19 @@ unexecuted test PASS.**
 - The current harness did not preserve the rejected guest address itself.
 - **Next:** Phase 4C-I records the first rejected guest address, access width,
   direction, and caller without changing guest-memory validity.
-- Build tag: `P4C-FAULTPROBE-20261019-A`.
+- Build tag: `P4C-FAULTPROBE-20261019-B`.
+
+### 2026-10-19 — Phase 4C-I Build A superseded by hardened probe
+
+- Probe A reached the hardware-confirmed callback `0x002295D6` and then hung
+  before recording fault provenance.
+- Review found the diagnostic transform used loose accessor-name matching and
+  could anchor on earlier helper uses rather than the exact accessor definition.
+- Build B now replaces exact accessor body fragments only.
+- First rejected guest access is logged immediately inside the accessor as
+  `FAULT ACCESS IMMEDIATE: READ|WRITE width=N guest=XXXXXXXX`.
+- Guest mapping/validity semantics are unchanged.
+- Active build tag: `P4C-FAULTPROBE-20261019-B`.
 
 ### How future updates are recorded
 
