@@ -40,6 +40,7 @@ FUNC_START_RE = re.compile(
 )
 SUB_SYMBOL_RE = re.compile(r"\bsub_[0-9A-Fa-f]{8}\b")
 CALL_TOKEN_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+GLOBAL_TOKEN_RE = re.compile(r"\bg_[A-Za-z_][A-Za-z0-9_]*\b")
 LOC_RE = re.compile(r"^(\s*)loc_([0-9A-Fa-f]{8})\s*:\s*;\s*$")
 GOTO_RE = re.compile(r"goto\s+loc_([0-9A-Fa-f]{8})\s*;")
 
@@ -205,6 +206,7 @@ def main() -> int:
     sizes = load_guest_sizes(args.functions)
     template = args.template.read_text(encoding="utf-8")
     supported = template_symbols(template)
+    supported_globals = set(GLOBAL_TOKEN_RE.findall(_mask_noncode(template)))
 
     missing_exec = [va for va in EXEC_MEMBERS if va not in functions]
     if missing_exec:
@@ -228,6 +230,15 @@ def main() -> int:
                 f"[Phase3N-B] execution member {row['name']} uses unsupported "
                 "helper(s): " + ", ".join(unknown[:12])
             )
+        unknown_globals = sorted(
+            set(GLOBAL_TOKEN_RE.findall(_mask_noncode(row["source"]))) -
+            supported_globals
+        )
+        if unknown_globals:
+            raise SystemExit(
+                f"[Phase3N-B] execution member {row['name']} uses unsupported "
+                "global(s): " + ", ".join(unknown_globals[:12])
+            )
 
     rejects = Counter()
     candidates = []
@@ -248,6 +259,12 @@ def main() -> int:
         unknown = unknown_calls(source, row["name"], supported)
         if unknown:
             rejects["helper not provided by XDK harness"] += 1
+            continue
+        unknown_globals = (
+            set(GLOBAL_TOKEN_RE.findall(masked)) - supported_globals
+        )
+        if unknown_globals:
+            rejects["global not provided by XDK harness"] += 1
             continue
 
         guest_bytes = int(sizes.get(va, 0))
