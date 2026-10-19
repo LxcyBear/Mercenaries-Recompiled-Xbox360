@@ -632,12 +632,10 @@ def patch_weapon_fire_continuation(text: str) -> str:
         if parent.count(before) != count:
             raise RuntimeError(f'Weapon fire branch count changed: {address}')
         parent = parent.replace(before, f'goto loc_{address};')
-    seh_fire_tail = 'g_seh_ebp = ebp; sub_000357E4(); return;'
-    if parent.count(seh_fire_tail) != 4:
-        raise RuntimeError(
-            'Weapon fire 0x000357E4 shared-tail call count changed'
-        )
-    parent = parent.replace(seh_fire_tail, 'goto loc_000357E4;')
+    # Calls to 0x000357E4 may belong to separate synthetic interior-entry
+    # fragments, not this C function. Do not rewrite them as local gotos here;
+    # the full-tree unresolved audit classifies those remaining edges so they
+    # can be fixed structurally (reviewed range or explicit shared entry).
     switch = ('    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(eax * 4 + 0x35874)); '
               'return; /* indirect tail jmp */')
     local_switch = '    { const uint32_t _fire_tail = MEM32(eax * 4 + 0x35874);\n'
