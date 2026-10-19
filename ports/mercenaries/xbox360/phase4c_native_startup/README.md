@@ -156,3 +156,32 @@ A successful bounded run is expected to report a line shaped like:
 That PASS means real retail-derived startup executed from the actual XBE entry
 to its first live dynamic dependency without a guest-memory fault or execution
 budget exhaustion. It does not mean full startup or gameplay yet.
+
+
+## 4C-B helper-surface correction
+
+The first 4C-B package emission correctly refused to continue because the
+40-body translated closure directly referenced support outside generated
+translated bodies.
+
+The identified support was not missing retail translation:
+
+- `sub_0022B150` — maintained Xbox `GetLastError` wrapper;
+- `sub_0022B178` — maintained Xbox `SetLastError` wrapper;
+- `sub_0022DDA4` — maintained retail `RtlAllocateHeap` wrapper;
+- `sub_0022E51F` — maintained retail `RtlFreeHeap` wrapper;
+- `XBOX_REP_MOVS` — guest-aware REP MOVS ABI helper;
+- `__debugbreak` — generated INT3/debug-break surface.
+
+The 4C-B emitter now packages those four canonical manual entry points, the
+guest-aware REP MOVS helper, and converts a live debug break into a bounded
+`DEBUGBREAK` diagnostic escape. The bounded heap implementation uses the
+same initial title-heap range as the maintained runtime:
+
+```text
+0x008C1000 .. 0x009C0000
+```
+
+If the first bounded startup run requires more than that initial arena, the
+harness records `HEAP_EXHAUSTED` and fails rather than silently substituting
+different allocator behavior.
