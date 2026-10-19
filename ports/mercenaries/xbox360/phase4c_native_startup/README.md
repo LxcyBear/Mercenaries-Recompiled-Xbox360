@@ -185,3 +185,15 @@ same initial title-heap range as the maintained runtime:
 If the first bounded startup run requires more than that initial arena, the
 harness records `HEAP_EXHAUSTED` and fails rather than silently substituting
 different allocator behavior.
+
+
+### Transformed-helper audit fix
+
+A follow-up 4C-B preparation still reported `__debugbreak` after the runtime
+support had already converted it to the bounded `PHASE4C_DEBUGBREAK` escape.
+The cause was the helper validator inspecting the original generated body while
+the emitter compiled the transformed body.
+
+The validator now checks the exact transformed source that is emitted into
+`main.cpp`. This keeps helper-surface validation and compiled startup code in
+lockstep.
