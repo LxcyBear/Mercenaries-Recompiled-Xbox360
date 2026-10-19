@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-A — retail entry-rooted startup preflight for entry `0x0022964A` after Phase 4B service migration PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-B — first bounded real translated startup execution after Phase 4C-A entry-closure PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -110,13 +110,14 @@ phases.
     `platform_bound=15`, `guest_native=2`, with ABI/fallback, timing,
     file/handle and all six guest-memory ownership regressions green. Phase 4B
     service migration is complete.
-13. **Phase 4C-A:** analyze the locked Phase-3N-A generated tree from retail
-    entry `0x0022964A`, build the complete direct translated dependency
-    closure, and identify dynamic/indirect boundaries before emitting the first
-    native startup XEX.
-14. **Phase 4C-B:** link/execute the first bounded real retail-derived startup
-    slice with deterministic xbWatson checkpoints and capture the first live
-    failure boundary.
+13. **Done:** Phase 4C-A resolved retail entry `0x0022964A` exactly to
+    `xbe_entry_point` and proved a complete direct closure of 40 translated
+    bodies, depth 8, 5,918 guest bytes and 111,376 generated-source bytes, with
+    0 missing direct dependencies and 14 dynamic/indirect-boundary bodies.
+14. **Phase 4C-B:** emit and run the first bounded real retail-derived startup
+    XEX using the exact Phase-2E environment plus the 40-body closure; escape
+    deterministically at the first live ICALL/ITAIL and record target/caller/
+    stack/register state in xbWatson.
 
 ### Evidence policy
 
@@ -1798,6 +1799,21 @@ unexecuted test PASS.**
   retail code.
 - **Next evidence:** use that manifest to build the first bounded native
   startup XEX.
+
+### 2026-10-19 — Phase 4C-A entry-rooted startup closure PASS
+
+- Retail XBE entry `0x0022964A` resolves exactly to translated
+  `xbe_entry_point` (`0x0022964A:0x002296BC`).
+- Direct startup closure: **40 translated bodies**, maximum depth **8**.
+- Reachable retail guest code: **5,918 bytes**.
+- Reachable generated source: **111,376 bytes**.
+- Missing direct translated dependencies: **0**.
+- Dynamic/indirect-boundary bodies: **14**.
+- **Phase 4C-A structural result: PASS.**
+- **Next:** Phase 4C-B emits a two-source XDK package combining the exact
+  Phase-2E retail environment and the 40-body translated closure. Runtime
+  enters the real XBE entry and escapes at the first live ICALL/ITAIL so the
+  next startup dependency is captured deterministically.
 
 ### How future updates are recorded
 
