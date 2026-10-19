@@ -1068,3 +1068,36 @@ P4C-NV24-20261019-A
 ```
 
 The T main/env cookie is `0x50435431` (`PCT1`).
+
+
+## Phase 4C-U — continue ordinal 301 RtlNtStatusToDosError
+
+Phase 4C-T passed on hardware. Ordinal 24 `ExQueryNonVolatileSetting`
+received the live frame `index=0x11 (XC_MISC)`, returned success using the
+guest EEPROM semantics, and startup advanced with `fault=0` to
+`ICALL_SAFE target=0x8000012D`.
+
+`0x8000012D` is kernel ordinal 301, `RtlNtStatusToDosError`. The locked
+bridge ABI is one stdcall argument (4 bytes), giving an 8-byte live call frame
+including the recompiler's dummy return slot.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-U.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\rtl301_xdk\main.cpp
+build\phase4c_native_startup\rtl301_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-RTL301-20261019-A
+```
+
+The U main/env cookie is `0x50435531` (`PCU1`).
