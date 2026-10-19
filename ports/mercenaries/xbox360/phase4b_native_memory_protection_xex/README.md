@@ -1,6 +1,6 @@
 # Phase 4B-C — Guest memory/protection hardware gate
 
-**Status: hardware gate A ready.**
+**Status: hardware gate B ready after correcting a Build-A test-ordering defect.**
 
 Phase 4B-A/A2 and Phase 4B-B/B2 are complete. The exact retail audit now
 reports only two remaining direct semantic host-backed import paths:
@@ -49,7 +49,7 @@ This gate therefore proves the intended native semantics directly on Xenon:
 Build marker:
 
 ```text
-P4B-MEMPROT-20261019-A
+P4B-MEMPROT-20261019-B
 ```
 
 This XEX does **not** execute retail Mercenaries code.
@@ -83,3 +83,18 @@ A successful tail will contain:
 After hardware PASS, Phase 4B-C2 will wire the real guest bridge to tracked
 guest-heap release and logical guest protection metadata, then rerun the exact
 111-import surface audit.
+
+
+## Build A rerun note
+
+Build `P4B-MEMPROT-20261019-A` passed every guest allocation,
+protection, decommit/recommit, release and reuse check except the final
+"double release" assertion.
+
+That assertion was invalid because Build A first released the original VA,
+then immediately reused the same VA for a new live allocation, and only after
+that attempted the supposed double release. Releasing that reused live
+allocation was correct behavior.
+
+Build B moves the stale-VA double-release check before reuse and additionally
+verifies that the reused live allocation can later be released cleanly.
