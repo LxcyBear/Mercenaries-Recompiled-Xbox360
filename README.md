@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AC — execute hardware-observed translated root 0x0022D431 after Phase 4C-AB hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AD — execute hardware-observed translated root 0x0022CA2B after Phase 4C-AC hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -210,10 +210,12 @@ phases.
 40. **Done:** Phase 4C-AB continued ordinal 291
     `RtlInitializeCriticalSection` and advanced with `fault=0` to
     `DIRECT_FRONTIER target=0x0022D431`.
-41. **Phase 4C-AC:** promote only hardware-observed translated root
-    `0x0022D431`, retaining all proven reserve/commit and kernel state. Gate:
-    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AC.ps1`.
-    Build tag: `P4C-DIRECTD431-AC-20261019-A`.
+41. **Done:** Phase 4C-AC executed translated root `0x0022D431` and
+    advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022CA2B`.
+42. **Phase 4C-AD:** promote only hardware-observed translated root
+    `0x0022CA2B`, retaining all proven reserve/commit and kernel state. Gate:
+    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AD.ps1`.
+    Build tag: `P4C-DIRECTCA2B-AD-20261019-A`.
 
 ### Evidence policy
 
@@ -2391,6 +2393,18 @@ unexecuted test PASS.**
 - **Phase 4C-AB hardware result: PASS.**
 - **Next:** Phase 4C-AC promotes only `0x0022D431`.
 - Build tag: `P4C-DIRECTD431-AC-20261019-A`.
+
+### 2026-10-19 — Phase 4C-AC D431 PASS
+
+- AC main/env cookie matched on hardware.
+- All proven startup/kernel/VM continuations remained intact.
+- Translated root `0x0022D431` executed.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x0022D431 target=0x0022CA2B`.
+- The translated trace reached 17 entries with `fault=0`.
+- **Phase 4C-AC hardware result: PASS.**
+- **Next:** Phase 4C-AD promotes only `0x0022CA2B`.
+- Build tag: `P4C-DIRECTCA2B-AD-20261019-A`.
 
 ### How future updates are recorded
 
