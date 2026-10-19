@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-B — first bounded real translated startup execution after Phase 4C-A entry-closure PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-C — follow the first real kernel thread handoff after Phase 4C-B hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -114,10 +114,14 @@ phases.
     `xbe_entry_point` and proved a complete direct closure of 40 translated
     bodies, depth 8, 5,918 guest bytes and 111,376 generated-source bytes, with
     0 missing direct dependencies and 14 dynamic/indirect-boundary bodies.
-14. **Phase 4C-B:** emit and run the first bounded real retail-derived startup
-    XEX using the exact Phase-2E environment plus the 40-body closure; escape
-    deterministically at the first live ICALL/ITAIL and record target/caller/
-    stack/register state in xbWatson.
+14. **Done:** Phase 4C-B executed the genuine translated `xbe_entry_point`
+    on real Xbox 360 hardware and reached the first live dynamic boundary with
+    `fault=0`: caller `0x0022B4D7`, target `0x800000FF`.
+    That target is kernel ordinal 255, `PsCreateSystemThreadEx`; the observed
+    44-byte frame exactly matches ten arguments plus the synthetic return slot.
+15. **Phase 4C-C:** decode the live ordinal-255 frame, verify/log the actual
+    StartRoutine and contexts, follow the first startup-thread handoff
+    synchronously, and capture the next live boundary.
 
 ### Evidence policy
 
@@ -1840,6 +1844,21 @@ unexecuted test PASS.**
   so it falsely rejected `__debugbreak` as unresolved.
 - Validation now runs against the exact transformed source emitted into the XDK
   package. Phase 4C-B package preparation remains active.
+
+### 2026-10-19 — Phase 4C-B first real translated startup execution PASS
+
+- Exact retail XBE verification and Phase-2E guest environment both passed on
+  real Xbox 360 hardware.
+- The XEX entered real translated `xbe_entry_point` at `0x0022964A`.
+- Execution reached the first live indirect boundary after five translated
+  block ticks with `fault=0`.
+- Boundary: caller `0x0022B4D7` -> target `0x800000FF`.
+- `0x800000FF` is kernel ordinal **255**, `PsCreateSystemThreadEx`.
+- Observed `saved_esp - esp = 0x2C`, exactly ten 32-bit arguments plus the
+  four-byte synthetic CALL return slot.
+- **Phase 4C-B hardware result: PASS.**
+- **Next:** Phase 4C-C follows the first startup-thread handoff and captures
+  the next live dependency.
 
 ### How future updates are recorded
 
