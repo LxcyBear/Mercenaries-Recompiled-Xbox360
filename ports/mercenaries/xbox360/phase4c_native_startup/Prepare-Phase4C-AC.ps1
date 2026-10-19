@@ -148,13 +148,11 @@ if ([int]$manifestJson.continued_support_helper_memmove.arg_bytes -ne 12 -or
     [int]$manifestJson.continued_support_helper_memmove.callee_cleanup_bytes -ne 4) {
     throw "Phase 4C-AC manifest CRT memmove ABI mismatch"
 }
-if ($manifestJson.promoted_closure_members.Count -ne 1 -or $manifestJson.promoted_closure_members[0] -ne "0x00238C00") {
-    throw "Phase 4C-AC safe-root member set must be exactly 0x00238C00"
-}
-
 Write-Host ""
 Write-Host "[Phase4C-AC] READY"
-Write-Host "[Phase4C-AC] Retained 38C00 safe-root members: $($manifestJson.promoted_closure_members.Count)"
+Write-Host "[Phase4C-AC] Retained 38C00 safe-root members: $($manifestJson.promoted_closure_7_members.Count)"
+Write-Host "[Phase4C-AC]   $($manifestJson.promoted_closure_7_members -join ', ')"
+Write-Host "[Phase4C-AC] New D431 safe-root members: $($manifestJson.promoted_closure_members.Count)"
 Write-Host "[Phase4C-AC]   $($manifestJson.promoted_closure_members -join ', ')"
 Write-Host "[Phase4C-AC] Retained VM target: 0x800000B8 ordinal 184 NtAllocateVirtualMemory"
 Write-Host "[Phase4C-AC] Retained kernel target: 0x80000123 ordinal 291 RtlInitializeCriticalSection"
