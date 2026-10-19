@@ -251,3 +251,38 @@ runtime does not assume either is the live thread target. It decodes the actual
 `PsCreateSystemThreadEx` argument frame on hardware, logs the StartRoutine and
 contexts, and only enters the target if that exact address exists in the packed
 closure. Otherwise it stops with a `THREAD_TARGET` boundary.
+
+
+## 4C-C scope correction — live target capture first
+
+The first 4C-C preparation attempt intentionally failed its helper audit because
+recursively packing both static startup candidates dragged large renderer,
+audio, XACT, XInput, checkpoint, and runtime-support surfaces into the package.
+
+That was too broad for the next evidence gate. The corrected 4C-C package now
+reuses exactly the hardware-proven 40-body 4C-B entry closure and does **not**
+pack either guessed thread routine.
+
+Runtime behavior:
+
+```text
+xbe_entry_point
+ -> 0x0022B4D7
+ -> 0x800000FF / PsCreateSystemThreadEx
+ -> verify saved_esp - esp == 0x2C
+ -> decode all 10 arguments
+ -> log StartRoutine / ctx1 / ctx2
+ -> THREAD_TARGET
+```
+
+`THREAD_TARGET` is a successful 4C-C evidence boundary when the frame is
+exact and no guest-memory fault occurred.
+
+New build tag:
+
+```text
+P4C-THREAD-20261019-B
+```
+
+After hardware reports the actual StartRoutine, the next phase will package
+only that routine's required execution slice.
