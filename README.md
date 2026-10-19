@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-Y — execute hardware-observed translated root 0x00238C00 after Phase 4C-X hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-Z — continue ordinal 184 NtAllocateVirtualMemory after Phase 4C-Y hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -199,8 +199,11 @@ phases.
 36. **Done:** Phase 4C-X executed translated root `0x0022D980`; startup
     re-entered `0x00239BE8` and advanced with `fault=0` to
     `DIRECT_FRONTIER caller=0x00239BE8 target=0x00238C00`.
-37. **Phase 4C-Y:** promote only hardware-observed translated root
-    `0x00238C00`; deeper direct/dynamic boundaries remain fenced.
+37. **Done:** Phase 4C-Y executed translated root `0x00238C00` with the
+    maintained CRT memmove helper; startup advanced with `fault=0` to
+    `ICALL_SAFE target=0x800000B8`, ordinal 184 `NtAllocateVirtualMemory`.
+38. **Phase 4C-Z:** validate and continue ordinal 184 using the locked 20-byte
+    stdcall ABI / 24-byte full frame and bounded guest virtual-memory semantics.
 
 ### Evidence policy
 
@@ -2306,6 +2309,23 @@ unexecuted test PASS.**
 - **Phase 4C-X hardware result: PASS.**
 - **Next:** Phase 4C-Y promotes only `0x00238C00`.
 - Build tag: `P4C-DIRECT38C00-20261019-A`.
+
+### 2026-10-19 — Phase 4C-Y CRT memmove PASS
+
+- Y main/env cookie matched on hardware.
+- All prior startup continuations remained intact through ordinal 149.
+- Translated root `0x00238C00` executed.
+- Maintained `recomp_crt_memmove` live frame:
+  `dest=0x008BFE70 src=0x008BFF14 len=48`.
+- The helper returned the destination and consumed only the cdecl synthetic
+  return slot as intended.
+- New boundary:
+  `ICALL_SAFE caller=0x00238C00 target=0x800000B8`.
+- `0x800000B8` is ordinal 184 `NtAllocateVirtualMemory`.
+- The hardware trace reached 16 translated entries with `fault=0`.
+- **Phase 4C-Y hardware result: PASS.**
+- **Next:** Phase 4C-Z continues ordinal 184.
+- Build tag: `P4C-NTALLOC184-20261019-A`.
 
 ### How future updates are recorded
 
