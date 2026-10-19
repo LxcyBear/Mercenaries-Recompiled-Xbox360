@@ -138,19 +138,19 @@ Phase 4B-B/B2 is complete.
 ## Active
 
 ### Phase 4B-C — Remaining memory/protection and residual host surface
-**Status: hardware gate A ready for real-Xenon validation.**
+**Status: hardware gate B ready for real-Xenon validation.**
 
 Hardware gate:
 `ports/mercenaries/xbox360/phase4b_native_memory_protection_xex`
 
 Build marker:
-`P4B-MEMPROT-20261019-A`
+`P4B-MEMPROT-20261019-B`
 
 Current exact worklist:
 - `NtFreeVirtualMemory`
 - `MmSetAddressProtect`
 
-The gate proves guest-owned semantics rather than host page APIs:
+Build A passed all substantive guest-owned memory/protection semantics; its lone final failure was a test-ordering bug because the released VA had already been reused. Build B corrects that ordering. The gate proves guest-owned semantics rather than host page APIs:
 - page-aligned bounded guest allocation;
 - logical page protection metadata;
 - multi-page protection updates;
