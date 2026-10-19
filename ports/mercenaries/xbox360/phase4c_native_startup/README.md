@@ -1424,3 +1424,34 @@ build\phase4c_native_startup\direct_d431_ac_xdk\phase4c-ac-manifest.json
 Build tag: `P4C-DIRECTD431-AC-20261019-A`.
 
 The AC main/env cookie is `0x50434143` (`PCAC`).
+
+
+## Phase 4C-AD — hardware-observed direct root 0x0022CA2B
+
+Phase 4C-AC passed on hardware. Translated root `0x0022D431` executed and
+startup advanced with `fault=0` to
+`DIRECT_FRONTIER caller=0x0022D431 target=0x0022CA2B`. The live translated
+trace reached 17 entries.
+
+AD preserves every proven startup/kernel/VM continuation, retains
+`0x0022D431`, and promotes only `0x0022CA2B`. Preparation explicitly
+distinguishes an exact function start from a split/mid-function target before
+emitting; deeper calls remain fenced.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-AD.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\direct_ca2b_ad_xdk\main.cpp
+build\phase4c_native_startup\direct_ca2b_ad_xdk\phase4c_env.cpp
+build\phase4c_native_startup\direct_ca2b_ad_xdk\phase4c-ad-manifest.json
+```
+
+Build tag: `P4C-DIRECTCA2B-AD-20261019-A`.
+
+The AD main/env cookie is `0x50434144` (`PCAD`).
