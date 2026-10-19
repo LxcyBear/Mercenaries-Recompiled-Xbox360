@@ -894,3 +894,42 @@ All prior DATA relocations, the kernel-header model, promoted
 `0x0022C47B`, and first-fault provenance remain active.
 
 Build tag: `P4C-HAL47-20261019-A`.
+
+
+#### Phase 4C-N — HalRegisterShutdownNotification continuation
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+HalRegisterShutdownNotification LIVE FRAME:
+  registration=003134C0
+  register_raw=00000001
+  register=1
+  esp=008BFEFC
+  saved_esp=008BFF08
+
+PASS: ordinal 47 HalRegisterShutdownNotification matched production no-callback semantics
+
+DIRECT FRONTIER:
+  caller=0022C28B
+  target=0022F128
+  esp=008BFF04
+  saved_esp=008BFF04
+  ticks=29
+  fault=0
+```
+
+The live frame exactly matched the production ABI: 8 argument bytes plus the
+translated synthetic return slot. The registration was accepted with
+Register=1, the handler returned `eax=0`, and translated startup resumed.
+
+#### Phase 4C-O — promote live target 0x0022F128
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-O.ps1`
+
+4C-O preserves every N invariant and adds only the exact hardware-observed
+direct target `0x0022F128`. The previous `0x0022F128` boundary is explicitly
+forbidden from counting as progress; deeper calls remain evidence boundaries.
+
+Build tag: `P4C-DIRECTF128-20261019-A`.
