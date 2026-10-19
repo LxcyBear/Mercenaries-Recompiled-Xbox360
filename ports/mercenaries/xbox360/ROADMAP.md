@@ -690,3 +690,54 @@ The J gate performs only the hardware-proven ordinal-322 relocation:
 - retain immediate first-fault provenance for the next unresolved dependency.
 
 Build tag: `P4C-HWINFO-20261019-A`.
+
+
+#### Phase 4C-J — XboxHardwareInfo relocation
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+DATA THUNK FIXUP:
+  ordinal=322
+  XboxHardwareInfo
+  slot=002DBE0C
+  old=80000142
+  new=0087E000
+
+PASS: XboxHardwareInfo thunk points at initialized guest kernel data
+
+FAULT ACCESS IMMEDIATE:
+  READ width=2
+  guest=80000148
+
+BOUNDARY:
+  caller=0022C4DF
+  target=80000148
+  ecx=80000144
+  fault=1
+```
+
+The new fault is not ordinal 328. Register ECX holds raw token
+`0x80000144` = ordinal 324, `XboxKrnlVersion`; the READ16 occurs at
+`ECX + 4`, exactly the Build field of `XBOX_KRNL_VERSION`.
+
+Phase-2E already initializes `XboxKrnlVersion` at `0x0087E010` with
+version 1.0.5849.0.
+
+#### Phase 4C-K — initialized startup kernel-data thunk set
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-K.ps1`
+
+4C-K relocates only DATA exports that the stripped Phase-2E environment
+already constructs:
+- ordinal 156 `KeTickCount` -> `0x0087E020`;
+- ordinal 322 `XboxHardwareInfo` -> `0x0087E000`;
+- ordinal 324 `XboxKrnlVersion` -> `0x0087E010`.
+
+It requires exactly one of each in the exact 111-import table, requires the
+zero terminator, validates the initialized hardware/version bytes, leaves every
+other import token unchanged, and preserves Build-B immediate first-fault
+provenance.
+
+Build tag: `P4C-KDATA3-20261019-A`.
