@@ -1149,3 +1149,24 @@ closure, and promotes only the hardware-observed translated root `0x0022D980`.
 Deeper direct, dynamic, kernel, timer-DPC, and guest-fault boundaries remain fenced.
 
 Build tag: `P4C-D980-CLOSURE-20261019-A`.
+
+
+#### Phase 4C-X — promoted 0x0022D980
+**Status: HARDWARE PASS.**
+
+Build `P4C-D980-CLOSURE-20261019-A` executed translated root
+`0x0022D980`, re-entered `0x00239BE8`, and advanced with `fault=0` to
+`DIRECT_FRONTIER 0x00238C00`. The hardware trace reached 15 translated
+entries.
+
+#### Phase 4C-Y — hardware-observed root 0x00238C00
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-Y.ps1`
+
+4C-Y preserves all prior direct roots and kernel continuations and promotes
+only `0x00238C00`. Deeper direct, dynamic, kernel, timer-DPC, and guest-fault
+boundaries remain fenced.
+
+Build tag: `P4C-DIRECT38C00-20261019-A`.
