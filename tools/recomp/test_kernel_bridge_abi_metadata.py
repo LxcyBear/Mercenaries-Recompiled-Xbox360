@@ -105,8 +105,11 @@ def main() -> None:
             continue
         symbol = symbol_match.group(1)
         signature = prototype_for(header, symbol)
-        if signature is None:
-            # Data exports and arrays intentionally have no callable prototype.
+        if signature is None or "(" not in signature:
+            # Resolver entries include both callable exports and kernel data
+            # exports (for example xbox_ExEventObjectType).  prototype_for()
+            # can still return the declaration for a data symbol, so reject
+            # declarations without a parameter list before ABI calculation.
             continue
         resolved += 1
         expected = expected_cleanup(signature)
