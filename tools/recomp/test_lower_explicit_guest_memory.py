@@ -52,7 +52,7 @@ class LowerExplicitGuestMemoryTests(unittest.TestCase):
             out, "GUEST_WRITE8(eax, GUEST_READ8(eax) - 1);")
 
     def test_comments_and_strings_are_not_rewritten(self):
-        src = '/* MEM32(x) = 1; */\\nconst char *s = "MEM32(y)";\\neax = MEM32(z);'
+        src = '/* MEM32(x) = 1; */\nconst char *s = "MEM32(y)";\neax = MEM32(z);'
         out = self.lower(src)
         self.assertIn("/* MEM32(x) = 1; */", out)
         self.assertIn('"MEM32(y)"', out)
@@ -60,7 +60,7 @@ class LowerExplicitGuestMemoryTests(unittest.TestCase):
 
     def test_explicit_marker_is_added(self):
         out = self.lower(
-            "#define RECOMP_GENERATED_CODE\\n#include \\"recomp_funcs.h\\"\\n")
+            "#define RECOMP_GENERATED_CODE\n#include \"recomp_funcs.h\"\n")
         self.assertIn("#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI", out)
 
     def test_expression_valued_write_is_rejected(self):
