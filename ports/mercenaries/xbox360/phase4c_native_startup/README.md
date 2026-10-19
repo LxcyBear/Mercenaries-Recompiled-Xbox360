@@ -1325,3 +1325,37 @@ reservation/commit state for the ordinal-184 path, preserve the 1 MiB reserved
 VA across the later commit call(s), and continue the real startup path. This is
 platform/runtime behavior required by the observed boot path, not speculative
 subsystem work.
+
+
+### Phase 4C-AA implementation gate
+
+AA is now implemented as a hardware gate, not just a roadmap placeholder.
+
+The focused startup harness now mirrors the production allocator strategy for
+the hardware-observed ordinal-184 path:
+
+- page-backed virtual allocations grow downward from the top of 64 MiB RAM;
+- normal Phase-4C heap allocations remain below;
+- MEM_RESERVE returns a page-rounded VA and marks its pages reserved/no-access;
+- guest accesses to reserved/uncommitted pages are rejected;
+- later MEM_COMMIT preserves that VA, zeroes newly committed pages, and records
+  protection metadata;
+- repeated ordinal-184 calls remain supported.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-AA.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\vmreserve_aa_xdk\main.cpp
+build\phase4c_native_startup\vmreserve_aa_xdk\phase4c_env.cpp
+build\phase4c_native_startup\vmreserve_aa_xdk\phase4c-aa-manifest.json
+```
+
+Build tag: `P4C-VMRESERVE-AA-20261019-A`.
+
+The AA main/env cookie is `0x50434141` (`PCAA`).
