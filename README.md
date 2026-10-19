@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3K — wider real control-flow/flags and mixed ABI coverage.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 3L — bounded real backward-control-flow/loop coverage.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -70,10 +70,10 @@ independent reference across six controlled inputs.
 
 **Present blockers:** the explicit PowerPC-safe guest-memory ABI plus bounded
 real translated function, direct-call, tail-call, indirect-call, composed slice,
-and automatically selected dependency-closed cluster paths are now proven on
-modified Xbox 360 hardware. Remaining Phase 3 blockers are wider real
-control-flow/flags coverage, mixed FP/SIMD/x87 and exceptional-path coverage,
-full post-patch generated-tree audit, and compiler/linker/runtime scale limits.
+dependency-closed cluster, and mixed control/flags + x87/XMM cluster paths are
+now proven on modified Xbox 360 hardware. Remaining Phase 3 blockers are bounded
+backward-control-flow/loop coverage, exceptional/rounding paths, full post-patch
+generated-tree audit, and compiler/linker/runtime scale limits.
 D3D11, Win32, DXGI and host-audio dependencies still need Xbox 360-native
 replacements in later phases.
 
@@ -236,8 +236,11 @@ executes as Xbox 360 PowerPC.
       6 members, dependency depth 2, deterministic 12-profile suite coverage
       `6/6`, exact root-return ESP, no guest-memory faults, matching A/B
       traces/full-RAM hashes, and clean XAPI return on modified Xbox 360 hardware.
-- [ ] Widen to the next real translated cluster with broader control-flow/flags
-      and mixed ABI/FP surfaces, then continue toward guarded game-entry execution.
+- [x] Widen to a new seven-function translated cluster with broader control-flow/flags
+      and mixed x87/XMM state; 16 deterministic hardware profiles passed with 7/7
+      coverage, exact integer/x87/XMM A/B state, full 64 MiB RAM equality and XAPI 0.
+- [ ] Prove a bounded real translated closure containing backward guest control flow
+      under an explicit execution budget before guarded game-entry execution.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -1580,6 +1583,32 @@ unexecuted test PASS.**
 - Build tag: `P3K-MIXEDFP-20261018-A`.
 - **Next:** run `Prepare-Phase3K.ps1`; if no mixed-state closure survives,
   use its concrete rejection histogram for the narrowest next relaxation.
+
+### 2026-10-19 — Phase 3K mixed control/flags + FP hardware gate PASS
+
+- Automatically selected real retail root `0x001F3400` with **7 members** and
+  dependency depth **2**.
+- Selected closure members:
+  `0x001F3400`, `0x0020F910`, `0x0020F920`, `0x0022F31D`,
+  `0x0022F3F3`, `0x0022F49E`, `0x0022F561`.
+- The closure contains both real conditional/flag control flow and mixed
+  x87/XMM/SSE architectural state.
+- The standalone XDK harness was corrected to own and compare x87 control/status
+  words in addition to x87 stack/top and XMM0–XMM7.
+- A Xenon XDK compiler C1001 optimizer crash on the wider generated root was
+  worked around by disabling optimization only around mechanically translated
+  cluster bodies; the harness remains under project-default optimization.
+- All **16/16** deterministic A/B profiles completed without guest-memory faults.
+- Every profile executed **7/7** selected members with identical translated traces.
+- Every repeated pair matched integer registers, x87 stack/top/control/status,
+  all XMM lanes, and the complete **64 MiB guest-RAM hash**.
+- Final markers:
+  - `SUITE COVERAGE: 7/7 mask=0000007F expected=0000007F`
+  - `PHASE 3K WIDER CONTROL + MIXED FP CLUSTER RESULT: PASS`
+  - `[XAPI RETURN VALUE] 0`
+- **Phase 3K is complete.**
+- **Next:** Phase 3L — admit bounded real backward guest control flow / loops
+  under a hard execution budget so no candidate can hang modified hardware.
 
 ### How future updates are recorded
 
