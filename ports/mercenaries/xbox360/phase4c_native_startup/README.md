@@ -1455,3 +1455,34 @@ build\phase4c_native_startup\direct_ca2b_ad_xdk\phase4c-ad-manifest.json
 Build tag: `P4C-DIRECTCA2B-AD-20261019-A`.
 
 The AD main/env cookie is `0x50434144` (`PCAD`).
+
+
+## Phase 4C-AE — hardware-observed direct root 0x0022C8EA
+
+Phase 4C-AD passed on hardware. Translated root `0x0022CA2B` executed and
+startup advanced with `fault=0` to
+`DIRECT_FRONTIER caller=0x0022CA2B target=0x0022C8EA`. The live translated
+trace reached 18 entries.
+
+AE preserves every proven startup/kernel/VM continuation, retains
+`0x0022D431` and `0x0022CA2B`, and promotes only `0x0022C8EA`.
+Preparation explicitly distinguishes an exact function start from a
+split/mid-function target before emitting; deeper calls remain fenced.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-AE.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\direct_c8ea_ae_xdk\main.cpp
+build\phase4c_native_startup\direct_c8ea_ae_xdk\phase4c_env.cpp
+build\phase4c_native_startup\direct_c8ea_ae_xdk\phase4c-ae-manifest.json
+```
+
+Build tag: `P4C-DIRECTC8EA-AE-20261019-A`.
+
+The AE main/env cookie is `0x50434145` (`PCAE`).
