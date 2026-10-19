@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 5B — service the captured ordinal-202 NtOpenFile request through native Xenon storage and continue the real boot path.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 5C — service live ordinal 218 NtQueryVolumeInformationFile through native Xenon storage and continue the real boot path.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A storage capture PASS; Phase 5B native NtOpenFile active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A/5B storage gates PASS; Phase 5C native volume query active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,15 +75,14 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 is complete and Phase 5A has passed on hardware.
-The first live storage request is ordinal 202 `NtOpenFile` for
-`\\Device\\Harddisk0\\partition1\\` from translated caller `0x0022BD2D`,
-with access `0x00100001`, share `0x3`, options `0x00800021`, a correct 28-byte
-frame, and `fault=0`. Phase 5B now services that request using native Xenon/XDK
-file primitives with a deterministic Partition1 backing directory and resumes
-the translated boot path. Graphics, input, audio/movie and async/runtime
-dependencies remain later Phase-5 blockers discovered by continued live
-execution.
+**Present blockers:** Phase 4 is complete and Phase 5A/5B have passed on hardware.
+The first live storage root now opens natively: `\\Device\\Harddisk0\\partition1\\`
+maps to `game:\\merc360-partition1`, returns STATUS_SUCCESS and tagged guest
+handle `0x48000001`, then translated execution immediately reaches ordinal 218
+`NtQueryVolumeInformationFile` with an exact 24-byte full frame and `fault=0`.
+Phase 5C now services that volume-size query from native Xenon storage and arms
+ordinal 187 `NtClose` for the same tagged handle lifecycle. Graphics, input,
+audio/movie and async/runtime dependencies remain later Phase-5 blockers.
 
 ### Immediate next tests
 
@@ -228,12 +227,16 @@ execution.
 45. **Done:** Phase 5A captured ordinal 202 `NtOpenFile` on hardware with
     `path=\\Device\\Harddisk0\\partition1\\`, access `0x00100001`, share
     `0x3`, options `0x00800021`, exact 28-byte frame and `fault=0`.
-46. **Phase 5B:** map the observed Partition1 tree to
-    `game:\\merc360-partition1`, perform native Xenon/XDK `CreateFileA`,
-    return a tagged 32-bit guest handle plus `IO_STATUS_BLOCK`, and resume the
-    translated boot path. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5B.ps1`.
-    Build tag: `P5B-NTOPEN202-NATIVE-20261019-A`.
+46. **Done:** Phase 5B mapped `\\Device\\Harddisk0\\partition1\\` to
+    `game:\\merc360-partition1`, returned STATUS_SUCCESS and tagged guest
+    handle `0x48000001`, then resumed to `ICALL_SAFE target=0x800000DA`
+    (`NtQueryVolumeInformationFile`) with `fault=0`.
+47. **Phase 5C:** resolve the tagged handle, service
+    `XboxFileFsSizeInformation` from native Xenon `game:` free/total space,
+    write the guest FS_SIZE_INFORMATION + IO_STATUS_BLOCK, and resume. Ordinal
+    187 `NtClose` is also armed for the native handle lifecycle. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5C.ps1`.
+    Build tag: `P5C-VOLUME218-NATIVE-20261019-A`.
 
 ### Evidence policy
 
@@ -2472,6 +2475,19 @@ unexecuted test PASS.**
 - **Phase 5A: PASS.**
 - **Next:** Phase 5B native Xenon `NtOpenFile` continuation.
 - Build tag: `P5B-NTOPEN202-NATIVE-20261019-A`.
+
+### 2026-10-19 — Phase 5B native NtOpenFile PASS
+
+- Build `P5B-NTOPEN202-NATIVE-20261019-A` passed on real Xbox 360 hardware.
+- `\\Device\\Harddisk0\\partition1\\` mapped to `game:\\merc360-partition1`.
+- Native `CreateFileA` returned STATUS_SUCCESS.
+- Guest handle token: `0x48000001`.
+- Translated execution resumed with `fault=0`.
+- New live dependency: `0x800000DA` = ordinal 218 `NtQueryVolumeInformationFile`.
+- Observed full frame: 24 bytes = five stdcall arguments + synthetic return.
+- **Phase 5B: PASS.**
+- **Next:** Phase 5C native volume-size query + tagged-handle close support.
+- Build tag: `P5C-VOLUME218-NATIVE-20261019-A`.
 
 ### How future updates are recorded
 
