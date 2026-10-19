@@ -63,6 +63,24 @@ class LowerExplicitGuestMemoryTests(unittest.TestCase):
             "#define RECOMP_GENERATED_CODE\n#include \"recomp_funcs.h\"\n")
         self.assertIn("#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI", out)
 
+    def test_for_body_write(self):
+        out = self.lower(
+            "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
+            "MEM32(edi + _i*4) = eax; }")
+        self.assertEqual(
+            out,
+            "{ uint32_t _i; for (_i = 0; _i < ecx; _i++) "
+            "GUEST_WRITE32(edi + _i*4, eax); }",
+        )
+
+    def test_if_body_write(self):
+        out = self.lower("if (eax) MEM8(edi) = 0;")
+        self.assertEqual(out, "if (eax) GUEST_WRITE8(edi, 0);")
+
+    def test_write_inside_if_condition_is_rejected(self):
+        with self.assertRaises(LoweringError):
+            self.lower("if ((MEM32(eax) = 1) != 0) foo();")
+
     def test_expression_valued_write_is_rejected(self):
         with self.assertRaises(LoweringError):
             self.lower("foo(MEM32(eax) = 1);")
