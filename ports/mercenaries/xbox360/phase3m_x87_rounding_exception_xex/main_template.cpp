@@ -1646,7 +1646,7 @@ static int run_case(
 
     sprintf(
         line,
-        "PROFILE %u B eax=%08X ecx=%08X esp=%08X trace=%u coverage=%u/%u mask=%08X backedges=%u budget=%u/%u fp=%08X%08X ram=%08X%08X",
+        "PROFILE %u B eax=%08X ecx=%08X esp=%08X trace=%u coverage=%u/%u mask=%08X backedges=%u budget=%u/%u x87round=%u invalid=%u fp=%08X%08X ram=%08X%08X",
         (unsigned int)profileIndex,
         (unsigned int)b.eax,
         (unsigned int)b.ecx,
