@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AA — hardware-test explicit reserved/uncommitted guest-page state for the observed 1 MiB NtAllocateVirtualMemory request.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AB — continue ordinal 291 RtlInitializeCriticalSection after Phase 4C-AA hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -204,12 +204,14 @@ phases.
     `ICALL_SAFE target=0x800000B8`, ordinal 184 `NtAllocateVirtualMemory`.
 38. **Done:** Phase 4C-Z validated ordinal 184 and captured the live 1 MiB
     `MEM_RESERVE` / `PAGE_READWRITE` request with `fault=0`.
-39. **Phase 4C-AA:** **package ready** — model reserved/uncommitted guest
-    pages explicitly, allocate page-backed VA downward from the top of 64 MiB
-    RAM, preserve the returned VA across later MEM_COMMIT calls, and continue
-    native startup. Gate:
-    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AA.ps1`.
-    Build tag: `P4C-VMRESERVE-AA-20261019-A`.
+39. **Done:** Phase 4C-AA reserved 1 MiB at `0x03F00000`, committed the
+    first 4 KiB at the same VA, and advanced with `fault=0` to
+    `ICALL_SAFE target=0x80000123`.
+40. **Phase 4C-AB:** continue ordinal 291 `RtlInitializeCriticalSection`
+    using the maintained serialized-guest no-op semantics and the observed
+    8-byte full frame. Gate:
+    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AB.ps1`.
+    Build tag: `P4C-RTL291-AB-20261019-A`.
 
 ### Evidence policy
 
@@ -2359,6 +2361,21 @@ unexecuted test PASS.**
 - Gate:
   `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AA.ps1`
 - Build tag: `P4C-VMRESERVE-AA-20261019-A`.
+
+### 2026-10-19 — Phase 4C-AA reserve/commit PASS
+
+- AA main/env cookie matched on hardware.
+- The title reserved a 1 MiB guest virtual range at `0x03F00000`.
+- A second ordinal-184 call committed the first 4 KiB at the same VA.
+- Both `NtAllocateVirtualMemory` calls returned STATUS_SUCCESS.
+- Reservation identity was preserved across reserve -> commit.
+- New boundary:
+  `ICALL_SAFE caller=0x00238C00 target=0x80000123`.
+- `0x80000123` is ordinal 291 `RtlInitializeCriticalSection`.
+- The boundary remained `fault=0`.
+- **Phase 4C-AA hardware result: PASS.**
+- **Next:** Phase 4C-AB continues ordinal 291.
+- Build tag: `P4C-RTL291-AB-20261019-A`.
 
 ### How future updates are recorded
 
