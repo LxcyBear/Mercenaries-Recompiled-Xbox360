@@ -514,3 +514,42 @@ semantics. Each call must have an exact 8-byte translated frame and restore
 `g_esp == saved_esp` before execution continues.
 
 Build tag: `P4C-CRITPAIR-20261019-A`.
+
+
+#### Phase 4C-G — First critical-section pair
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+RtlEnterCriticalSection  cs=00312FC0  PASS
+RtlLeaveCriticalSection  cs=00312FC0  PASS
+
+BOUNDARY:
+  kind=ICALL_SAFE
+  caller=0022B363
+  target=002295D6
+  esp=008BFF50
+  saved_esp=008BFF58
+  ticks=16
+  trace=5
+  fault=0
+```
+
+The target `0x002295D6` exactly matches the `ctx1` value captured from the
+real `PsCreateSystemThreadEx` frame in Phase 4C-C. Hardware has therefore
+proved that ctx1 is subsequently invoked as executable title-startup code.
+
+The observed callback call frame is 8 bytes: one dword argument plus the
+synthetic translated CALL return.
+
+#### Phase 4C-H — Hardware-confirmed startup callback frontier
+**Status: active.**
+
+The full static closure rooted at `0x002295D6` is intentionally not linked as
+one package: an earlier speculative attempt demonstrated that it recursively
+pulls broad renderer/audio/XACT/XInput/runtime surfaces.
+
+4C-H instead enters the real callback and uses a bounded translated frontier.
+Only a small reviewed direct-call slice is packed. A translated direct call
+outside that slice becomes a deterministic `DIRECT_FRONTIER` evidence
+boundary with its exact target, while ordinary ICALL/ITAIL boundaries remain
+observable as before.
