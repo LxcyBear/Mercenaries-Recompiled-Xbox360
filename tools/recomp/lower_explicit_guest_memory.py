@@ -155,10 +155,27 @@ def _statement_end(mask: str, pos: int) -> int:
 
 
 def _statement_prefix(mask: str, start: int) -> str:
-    """Return text between the previous statement delimiter and this write."""
+    """Return text between the previous top-level delimiter and this write.
+
+    Semicolons inside a control header such as a for-loop header are not
+    statement boundaries.
+    """
     i = start - 1
+    paren_depth = 0
+    bracket_depth = 0
     while i >= 0:
-        if mask[i] in ";{}":
+        ch = mask[i]
+        if ch == ")":
+            paren_depth += 1
+        elif ch == "(":
+            if paren_depth:
+                paren_depth -= 1
+        elif ch == "]":
+            bracket_depth += 1
+        elif ch == "[":
+            if bracket_depth:
+                bracket_depth -= 1
+        elif paren_depth == 0 and bracket_depth == 0 and ch in ";{}":
             break
         i -= 1
     return mask[i + 1:start]
