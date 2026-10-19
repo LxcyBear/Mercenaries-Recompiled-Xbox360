@@ -27,21 +27,21 @@ Snapshot: 2026-10-19.
 | 4A | **Locked PASS** | Exact 111-import guest-kernel/ABI audit; baseline 17 semantic host-backed callable paths. |
 | 4B-A | **Hardware PASS** | Native Xenon timing/synchronization primitive gate. |
 | 4B-A2 | **Complete PASS** | Six timing/sync imports migrated to `merc_platform_*`; 11 direct host-backed + 6 platform-bound; 0 ABI errors; 0 referenced fallbacks; 7,722 deadline cases PASS. |
-| 4B-B | **Hardware gate A ready** | File/handle slice: create/open/read/write, offsets, query, truncate, attributes, directory enumeration, missing-file errors, and close on real Xenon. |
-| 4B-B2 | Next after hardware PASS | Wire the nine proven file/handle imports through the shared native platform boundary. |
+| 4B-B | **Hardware PASS** | `P4B-FILE-20261019-A` passed on real Xenon: create/open/read/write, offsets, size/query, truncate, attributes, directory enumeration, missing-file errors, and cleanup all PASS. |
+| 4B-B2 | **Active verification** | Nine file/handle imports are routed through `merc_platform_file_*`; verifier target is 2 direct host-backed + 15 platform-bound with ABI/fallback checks still clean. |
 | 4B-C | Planned | Remaining memory/protection host surface, expected to include `NtFreeVirtualMemory` and `MmSetAddressProtect`. |
 | 4C | Planned | First real translated Mercenaries startup path with the migrated Xenon service layer. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
 
-Current active hardware gate:
+Latest hardware gate:
 
 ```text
-P4B-FILE-20261019-A
+P4B-FILE-20261019-A  PASS
 ```
 
-Current verified service accounting before Phase 4B-B runtime migration:
+Current verified service accounting before the Phase 4B-B2 audit rerun:
 
 ```text
 imports=111
@@ -56,9 +56,10 @@ fallback_referenced=0
 fallback_refs=0
 ```
 
-A successful Phase 4B-B + B2 is expected to move the service split to roughly
-`2 direct host-backed / 15 platform-bound`, leaving the memory/protection tail
-before native translated-game startup work.
+Phase 4B-B hardware proof is complete. Phase 4B-B2 has landed the nine runtime
+file/handle routes behind the native platform boundary; the verification gate
+now requires `2 direct host-backed / 15 platform-bound`. If that passes, only
+the memory/protection tail remains before native translated-game startup work.
 
 For the detailed evidence gates and next-step requirements, see
 [`ports/mercenaries/xbox360/ROADMAP.md`](ports/mercenaries/xbox360/ROADMAP.md).
