@@ -77,10 +77,13 @@ def _repair_residual_continuations(root: Path) -> tuple[int, int]:
                     f"{path.name}: weapon 0x000357E4 label missing"
                 )
             text = text.replace(OLD_WEAPON_TAIL, NEW_WEAPON_TAIL)
-            weapon += count
+            weapon = 4
             changed = True
-        elif NEW_WEAPON_TAIL in text and "loc_000357E4:" in text:
-            weapon += text.count(NEW_WEAPON_TAIL)
+        elif "loc_000357E4:" in text and OLD_WEAPON_TAIL not in text:
+            # The function already contains other legitimate gotos to this
+            # local tail, so absence of the four old call forms is the
+            # idempotence proof; do not count all goto occurrences.
+            weapon = 4
 
         if changed:
             path.write_text(text, encoding="utf-8", newline="")
