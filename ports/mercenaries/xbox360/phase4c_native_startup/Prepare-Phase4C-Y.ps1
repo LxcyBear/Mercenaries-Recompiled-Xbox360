@@ -79,6 +79,9 @@ foreach ($requiredText in @(
     "PASS: ordinal 149 KeSetTimer continuation armed",
     "PASS: bounded direct closure rooted at 0022D980 is packed for translated execution",
     "PASS: hardware-observed direct root 00238C00 is packed for translated execution",
+    "PASS: maintained recomp_crt_memmove cdecl support armed",
+    "CRT memmove LIVE FRAME",
+    "PASS: recomp_crt_memmove matched maintained cdecl semantics",
     "PASS: Phase 4C-Y main/env build cookie matches",
     "PHASE 4C-Y DIRECT38C00 RESULT"
 )) {
@@ -109,6 +112,13 @@ if ($manifestJson.promoted_direct_frontier_target_7 -ne "0x00238C00") {
 }
 if ([int]$manifestJson.promoted_closure_depth -ne 0) {
     throw "Phase 4C-Y manifest safe-root depth mismatch"
+}
+if ($manifestJson.continued_support_helper_memmove.name -ne "recomp_crt_memmove") {
+    throw "Phase 4C-Y manifest CRT memmove helper mismatch"
+}
+if ([int]$manifestJson.continued_support_helper_memmove.arg_bytes -ne 12 -or
+    [int]$manifestJson.continued_support_helper_memmove.callee_cleanup_bytes -ne 4) {
+    throw "Phase 4C-Y manifest CRT memmove ABI mismatch"
 }
 if ($manifestJson.promoted_closure_members.Count -ne 1 -or $manifestJson.promoted_closure_members[0] -ne "0x00238C00") {
     throw "Phase 4C-Y safe-root member set must be exactly 0x00238C00"
