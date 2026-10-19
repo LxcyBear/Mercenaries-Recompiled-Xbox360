@@ -96,6 +96,10 @@ try {
             throw "Resume requested but generated tree is missing: $generatedRoot"
         }
 
+        Write-Host "[Phase3N] Repairing known native-helper guest-pointer boundaries..."
+        $bridgeRepair = Join-Path $phaseRoot "repair_guest_pointer_bridges.py"
+        Invoke-Python $bridgeRepair $generatedRoot
+
         Write-Host "[Phase3N] Lowering existing patched tree to explicit guest-memory ABI..."
         $lowerer = Join-Path $repoRoot "tools\recomp\lower_explicit_guest_memory.py"
         Invoke-Python $lowerer $generatedRoot "--report" $loweringReport
