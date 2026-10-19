@@ -330,7 +330,11 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
 
     for entry in unresolved_entries:
         symbol = entry["name"]
-        pattern = re.compile(r"\b" + re.escape(symbol) + r"\s*\(")
+        # Count every code identifier reference, not only direct call syntax.
+        # This catches address-taken/table references such as &sub_XXXXXXXX
+        # and prevents a "dead" unresolved stub from being hidden behind a
+        # non-call use. Comments/strings have already been masked above.
+        pattern = re.compile(r"\b" + re.escape(symbol) + r"\b")
         references = []
         for path, code_text in source_code.items():
             path_refs = []
@@ -341,10 +345,10 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
                     line_end = len(code_text)
                 line_text = code_text[line_start:line_end].strip()
 
-                # A replacement implementation is a resolution, not a caller.
+                # A replacement implementation/declaration is not a use-site.
                 if re.match(
-                    r"^void\s+" + re.escape(symbol) +
-                    r"\s*\(\s*void\s*\)",
+                    r"^(?:extern\s+)?void\s+" + re.escape(symbol) +
+                    r"\s*\(\s*void\s*\)\s*[;{]?",
                     line_text,
                 ):
                     continue
