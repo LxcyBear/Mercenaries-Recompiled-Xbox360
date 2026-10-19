@@ -1003,6 +1003,49 @@ def retail_shared_tail_000e1d7a_patch():
     )
 
 
+def phase3n_crt_x87_gap_patches():
+    """Restore two reviewed CRT tail entries hidden in a detector gap."""
+    zero_tail = GeneratedPatch(
+        'CRT x87 gap tail 0023DA9C returns zero',
+        'void sub_0023DA9C(void) { esp += 4; '
+        '/* 0x0023DA9C: not detected; minimal guest ret */ }',
+        '''void sub_0023DA9C(void)
+{
+    /* 0023DA9C: jmp 0023BF56; retail tail = fstp st(0), fldz, ret. */
+    fp_pop();
+    fp_push(0.0);
+    esp += 4; return; /* ret */
+}''',
+    )
+    exception_tail = GeneratedPatch(
+        'CRT x87 gap tail 0023DAA8 preserves FTST exception flow',
+        'void sub_0023DAA8(void) { esp += 4; '
+        '/* 0x0023DAA8: not detected; minimal guest ret */ }',
+        '''void sub_0023DAA8(void)
+{
+    /* Retail 0023DAA8..0023DAD7, including the 0023DACB exception arm. */
+    POP32(esp, eax);
+    x87_set_compare_status(fp_top(), 0.0); /* ftst */
+    MEM16(ebp + -160) = g_x87_status_word; /* fnstsw [ebp-0xA0] */
+
+    if (TEST_NZ(MEM8(ebp + -159), 1)) {
+        /* 0023DACB: status=4; jmp 0023BF56 -> fstp, fldz, ret. */
+        MEM8(ebp + -144) = 4;
+        fp_pop();
+        fp_push(0.0);
+        esp += 4; return; /* ret */
+    }
+
+    fp_pop(); /* fstp st(0) */
+    fp_push(recomp_x87_load_f80(0x00313C14u)); /* fld tword ptr [313C14] */
+    if (HI8(ecx) != 0)
+        fp_top() = -fp_top(); /* fchs */
+    esp += 4; return; /* ret */
+}''',
+    )
+    return (zero_tail, exception_tail)
+
+
 SIMPLE_SHARED_EPILOGUES = (
     ('00040626', '5f5e83c440c20400', ('edi', 'esi'), 0x40, 4),
     ('000D9303', '5f5e5bc20800', ('edi', 'esi', 'ebx'), 0, 8),
@@ -1289,7 +1332,7 @@ PATCHES = tuple(GeneratedPatch(
 ) + tuple(GeneratedPatch(
     f'Retail stack-relative COMISS {site} survives ESP changes', before, after)
     for site, va, raw, delta, before, after in SSE_STACK_COMPARE_REPAIRS
-) + (retail_shared_tail_000e1d7a_patch(),) + tuple(
+) + (retail_shared_tail_000e1d7a_patch(),) + phase3n_crt_x87_gap_patches() + tuple(
     simple_shared_epilogue_patch(*entry) for entry in SIMPLE_SHARED_EPILOGUES
 ) + (
     GeneratedPatch('Optional M1 texture at RedRenderer binding',
