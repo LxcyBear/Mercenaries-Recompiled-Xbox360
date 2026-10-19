@@ -181,6 +181,26 @@ def scan_file(path: Path) -> dict:
     }
 
 
+def _function_spans(code: str) -> list[tuple[int, int, str]]:
+    matches = list(re.finditer(
+        r"(?m)^\s*void\s+(sub_[0-9A-Fa-f]{8}|xbe_entry_point)\s*"
+        r"\(\s*void\s*\)\s*\{",
+        code,
+    ))
+    spans = []
+    for i, match in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(code)
+        spans.append((match.start(), end, match.group(1)))
+    return spans
+
+
+def _caller_function(spans: list[tuple[int, int, str]], offset: int) -> str | None:
+    for start, end, name in spans:
+        if start <= offset < end:
+            return name
+    return None
+
+
 def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
     files = sorted(root.glob("recomp_*.c"))
     if not files:
@@ -213,12 +233,15 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
     live_entries = []
     dead_entries = []
     source_code = {}
+    source_spans = {}
     for path in files:
         if "stubs_unresolved" in path.name:
             continue
-        source_code[path] = _mask_noncode(
+        code_text = _mask_noncode(
             path.read_text(encoding="utf-8", errors="replace")
         )
+        source_code[path] = code_text
+        source_spans[path] = _function_spans(code_text)
 
     for entry in unresolved_entries:
         symbol = entry["name"]
@@ -244,6 +267,9 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
                 path_refs.append({
                     "line": line_number(code_text, match.start()),
                     "text": line_text[:240],
+                    "caller_function": _caller_function(
+                        source_spans[path], match.start()
+                    ),
                 })
             if path_refs:
                 references.append({
@@ -347,8 +373,17 @@ def main(argv=None) -> int:
             )
             for ref in entry.get("references", []):
                 for site in ref.get("sites", []):
+                    caller_name = site.get("caller_function") or "-"
+                    relation = ""
+                    parent_name = entry.get("parent_name")
+                    if parent_name:
+                        relation = (
+                            " same-parent" if caller_name == parent_name
+                            else f" cross-parent->{parent_name}"
+                        )
                     print(
-                        f"    caller {Path(ref['file']).name}:{site['line']}: "
+                        f"    caller {caller_name} "
+                        f"{Path(ref['file']).name}:{site['line']}:{relation} "
                         f"{site['text']}"
                     )
 
