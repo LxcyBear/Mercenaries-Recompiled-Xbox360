@@ -1364,3 +1364,40 @@ explicitly if CEEE is a mid-function/split entry rather than a generated
 function start.
 
 Build tag: `P4C-DIRECTCEEE-AF-20261019-A`.
+
+
+#### Phase 4C-AF — translated startup reaches storage/content
+**Status: HARDWARE PASS — PHASE 4 COMPLETE.**
+
+Build `P4C-DIRECTCEEE-AF-20261019-A` executed translated root
+`0x0022CEEE`, flowed through `0x00239C23`, `0x0022C27A`, and
+`0x0022BD2D`, then reached `ICALL_SAFE target=0x800000CA` with
+`fault=0`. The translated trace reached 23 entries.
+
+`0x800000CA` is ordinal 202 `NtOpenFile`, and the observed 28-byte full
+frame matches six stdcall arguments plus the translated synthetic return.
+
+The live boot path is now demanding storage/content I/O, satisfying the
+Phase-4 exit criterion and entering Phase 5.
+
+
+#### Phase 5A — first live storage/content request capture
+**Status: package preparation ready.**
+
+Branch: `xbox360/phase5-native-subsystems`
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5A.ps1`
+
+5A preserves the complete Phase-4 hardware baseline and intercepts ordinal 202
+`NtOpenFile`. It validates the exact 28-byte frame and captures the guest
+`OBJECT_ATTRIBUTES`, `ANSI_STRING` path, access mask, share access, open
+options, handle pointer, and I/O-status pointer.
+
+5A is capture-only: it stops at `STORAGE_OPEN` without fabricating a handle
+or file status. The captured path and flags drive the first native Xbox 360
+storage/content implementation gate.
+
+Build tag: `P5A-NTOPEN202-CAPTURE-20261019-A`.
+
+Cookie: `P5A1 / 0x50354131`.
