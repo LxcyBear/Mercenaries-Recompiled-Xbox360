@@ -9,7 +9,7 @@ function metadata, recursively follows every statically named translated C call
 a root when the entire reachable translated cluster closes inside a bounded,
 auditable set.
 
-Unlike Phase 3K, an accepted Phase 3K-A closure must also contain both:
+Unlike Phase 3J, an accepted Phase 3K-A closure must also contain both:
   * real conditional/flag control flow
   * a supported x87 or XMM/SSE architectural-state surface.
 
@@ -42,7 +42,7 @@ MAX_FUNC_BYTES = 480
 MAX_FUNC_INSNS = 140
 MAX_ROOTS = 2200
 
-# Do not rediscover prior isolated/composite hardware fixtures or the Phase 3K
+# Do not rediscover prior isolated/composite hardware fixtures or the Phase 3J
 # dependency-closed cluster. Phase 3K must widen into new retail functions.
 PREVIOUSLY_PROVEN = {
     0x00208F30,
@@ -136,6 +136,7 @@ ALLOWED_CALLS = {
     "recomp_xmm_unary_ps", "recomp_xmm_unary_ps_mem",
     "recomp_xmm_cmp_ps", "recomp_xmm_cmp_ps_mem",
     "recomp_xmm_movmskps",
+    "RECOMP_XMM_BINARY_RR", "RECOMP_XMM_BINARY_RM",
     "fp_push", "fp_pop", "fp_popp", "fp_top", "fp_st", "fp_st1",
     "fabs", "sqrt", "sqrtf", "isnan",
 }
@@ -411,7 +412,7 @@ def main():
                 return None, "named/non-anonymous dependency in cluster"
 
             if addr in PREVIOUSLY_PROVEN:
-                return None, "cluster reuses prior hand-selected Phase 3E-I function"
+                return None, "cluster reuses a prior Phase 3E-J hardware-proven function"
 
             size = int_field(info, "size")
             insns = int_field(info, "num_instructions", 999999)
