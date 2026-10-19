@@ -6,7 +6,7 @@ Snapshot: 2026-10-19. Entries are **Verified from current implementation** unles
 
 The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xenon hardware. The final 3N-B gate compiled/linked a 128-function audited translated-code scale pack, verified all anchors live in the loaded XEX, passed maintained x87 rounding/exception checks, passed six independent-reference executions of retail function `0x00208F30`, and exited with XAPI return value 0.
 
-**Phase 4 - Host kernel/platform services is active.** Start with [phase4a_kernel_surface_audit](ports/mercenaries/xbox360/phase4a_kernel_surface_audit): it inventories the exact 111 kernel imports in the supported Mercenaries retail XBE and cross-checks them against the current compatibility layer before selecting the first Xenon-native service batch.
+**Phase 4 - Host kernel/platform services is active. Phase 4A is complete.** The verified retail Mercenaries XBE exposes 111 kernel imports; the guest-path audit passes with 74 explicit bridges, 11 guest data exports, 26 return-zero fallbacks, zero missing or mismatched guest argument-cleanup entries, and zero statically referenced fallbacks in the preserved Phase-3N generated tree. Phase 4B now converts/reviews the startup-critical host-backed bridge services for native Xenon execution. See [phase4a_kernel_surface_audit](ports/mercenaries/xbox360/phase4a_kernel_surface_audit) for the locked audit and ABI regression gate.
 
 
 ## Start with the question
@@ -17,7 +17,7 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 | Runtime startup/memory mapping | [main.c](ports/mercenaries/src/main.c): `WinMain`, `host_graphics_init` | [xbox_memory_layout.c](src/kernel/xbox_memory_layout.c), exception/MMIO setup. |
 | Wrong instruction result/missing call/stack drift | [recomp_types.h](ports/mercenaries/src/recomp/recomp_types.h), [lifter.py](tools/recomp/lifter.py) | [translator.py](tools/recomp/translator.py), discovery, generated body, [Patch-Generated.py](ports/mercenaries/scripts/Patch-Generated.py). |
 | Import arguments/return/callback timing | [kernel_bridge.c](src/kernel/kernel_bridge.c) | [kernel_thunks.c](src/kernel/kernel_thunks.c), lower kernel module. |
-| Xbox 360 Phase 4 / native kernel service conversion | [phase4a_kernel_surface_audit](ports/mercenaries/xbox360/phase4a_kernel_surface_audit) | [kernel_thunks.c](src/kernel/kernel_thunks.c), [kernel_bridge.c](src/kernel/kernel_bridge.c), then the owning `src/kernel/kernel_*.c` service module. |
+| Xbox 360 Phase 4 / native kernel service conversion | [phase4a_kernel_surface_audit](ports/mercenaries/xbox360/phase4a_kernel_surface_audit) (completed gate) | Phase 4B: [kernel_bridge.c](src/kernel/kernel_bridge.c), [kernel_thunks.c](src/kernel/kernel_thunks.c), then the owning `src/kernel/kernel_*.c` service module for native Xenon replacement. |
 | Guest allocation failure | [recomp_manual.c](ports/mercenaries/src/recomp_manual.c) | Layout allocator, title metadata, Lua/XMem fallback ownership. |
 | Missing draw/render state/alias surface | [nv2a_pgraph_d3d11.c](src/nv2a/nv2a_pgraph_d3d11.c) | [nv2a_core.c](src/nv2a/nv2a_core.c), D3D resources/states/shaders. |
 | FPS cap/stutter/adapter selection | [d3d8_device.c](src/d3d/d3d8_device.c) | [d3d8_frame_timing.h](src/d3d/d3d8_frame_timing.h), host service, options, guest clock patches. |
