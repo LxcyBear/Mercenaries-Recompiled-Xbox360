@@ -766,3 +766,43 @@ P4C-DIRECTC47B-20261019-A
 
 Only `0x0022C47B` is added beyond the K pack. Deeper direct dependencies
 remain evidence boundaries.
+
+
+## Phase 4C-L hardware result — PASS
+
+```text
+[Merc360:P4C] PASS: hardware-observed direct target 0022C47B is packed for translated execution
+[Merc360:P4C] FAULT ACCESS IMMEDIATE: READ width=4 guest=8001003C
+[Merc360:P4C] BOUNDARY: kind=GUEST_FAULT caller=0022C47B target=8001003C esp=008BFF40 saved_esp=008BFF40 ticks=25 trace=8
+[Merc360:P4C] ... fault=1
+[Merc360:P4C] trace[7]=0022C47B
+[Merc360:P4C] PHASE 4C-L PROMOTED DIRECT-FRONTIER RESULT: PASS
+```
+
+The promoted translated body executed. The next dependency is the original-Xbox
+kernel image page at `0x80010000`, specifically DWORD `0x8001003C`.
+
+## Phase 4C-M — synthetic xboxkrnl PE header
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-M.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\kernel_header_xdk\main.cpp
+build\phase4c_native_startup\kernel_header_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-KHDR-20261019-A
+```
+
+The kernel page remains separate from title RAM. The synthetic header readback
+must prove MZ, `e_lfanew=0x80`, PE signature, i386 machine, and zero sections
+before translated startup executes.
