@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-X — execute the hardware-observed translated root 0x0022D980 with deeper callees fenced after Phase 4C-W hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-Y — execute hardware-observed translated root 0x00238C00 after Phase 4C-X hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -196,9 +196,11 @@ phases.
     the expected 20-byte full frame armed KTIMER `0x008695A0` with DPC
     `0x00869580`, returned prior-active FALSE, and startup advanced with
     `fault=0` to `DIRECT_FRONTIER caller=0x0022F0FB target=0x0022D980`.
-36. **Phase 4C-X:** promote only the hardware-observed translated root
-    `0x0022D980` while retaining the proven `0x0022F0FB` closure; deeper
-    callees remain explicit boundaries.
+36. **Done:** Phase 4C-X executed translated root `0x0022D980`; startup
+    re-entered `0x00239BE8` and advanced with `fault=0` to
+    `DIRECT_FRONTIER caller=0x00239BE8 target=0x00238C00`.
+37. **Phase 4C-Y:** promote only hardware-observed translated root
+    `0x00238C00`; deeper direct/dynamic boundaries remain fenced.
 
 ### Evidence policy
 
@@ -2290,6 +2292,20 @@ unexecuted test PASS.**
 - **Next:** Phase 4C-X promotes a bounded depth-2 direct closure rooted at
   `0x0022D980`.
 - Build tag: `P4C-D980-CLOSURE-20261019-A`.
+
+### 2026-10-19 — Phase 4C-X D980 PASS
+
+- X main/env build cookie matched on hardware.
+- All proven startup continuations through ordinal 149 `KeSetTimer` remained
+  intact.
+- Translated root `0x0022D980` executed.
+- Control re-entered translated function `0x00239BE8`.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x00239BE8 target=0x00238C00`.
+- The trace reached 15 translated entries with `fault=0`.
+- **Phase 4C-X hardware result: PASS.**
+- **Next:** Phase 4C-Y promotes only `0x00238C00`.
+- Build tag: `P4C-DIRECT38C00-20261019-A`.
 
 ### How future updates are recorded
 
