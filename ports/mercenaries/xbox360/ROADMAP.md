@@ -634,3 +634,19 @@ rejecting accessor before the existing fault path continues. Guest mapping
 semantics are unchanged.
 
 Build tag: `P4C-FAULTPROBE-20261019-B`.
+
+
+### Phase 4C-I revision B
+
+The first I hardware run reached the confirmed callback but stalled before a
+bounded result. This is classified as a diagnostic-harness issue rather than a
+new title-startup result.
+
+Revision B:
+- matches exact guest accessor function bodies;
+- records the first rejected address, width and direction;
+- arms immediate fault escape only after the driver's `setjmp` is active;
+- immediately exits with `GUEST_FAULT` from the failing accessor;
+- does not broaden or alter guest-memory mappings.
+
+Build tag: `P4C-FAULTPROBE-20261019-B`.
