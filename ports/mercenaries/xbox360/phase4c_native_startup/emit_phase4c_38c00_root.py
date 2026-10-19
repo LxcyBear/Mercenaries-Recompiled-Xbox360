@@ -468,8 +468,20 @@ def rewrite_direct_frontier(base, source, generated, packed_vas):
     calls = set(base.CALL_RE.findall(base.mask_noncode(source)))
     for name in sorted(calls):
         va = name_to_va.get(name)
+
+        # Unresolved direct call stubs are intentionally named sub_XXXXXXXX by
+        # the recompiler. They may not exist in the generated-body table, but
+        # the symbol itself still carries the authoritative retail target.
+        # Fence those targets instead of rejecting the entire hardware gate as
+        # an "unknown helper".
+        if va is None:
+            unresolved = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
+            if unresolved:
+                va = int(unresolved.group(1), 16)
+
         if va is None or va in packed_vas:
             continue
+
         pattern = r"\b" + re.escape(name) + r"\(\);"
         replacement = f"phase4c_direct_frontier(0x{va:08X}u);"
         source, count = re.subn(pattern, replacement, source)
@@ -2094,12 +2106,17 @@ def main() -> int:
     )
 
     if unknown:
-        print("[Phase4C-Y] unsupported direct helper calls found:")
+        print("[Phase4C-Y] NON-DIRECT unresolved helper dependencies remain:")
         for owner, names in unknown.items():
             print(f"[Phase4C-Y]   {owner}: {', '.join(names)}")
+        print(
+            "[Phase4C-Y] Direct sub_XXXXXXXX callees have already been converted "
+            "to DIRECT_FRONTIER boundaries; entries listed above are true support "
+            "dependencies and are not safe to guess."
+        )
         raise SystemExit(
             "[Phase4C-Y] refusing to emit first-thread execution XEX with "
-            "unresolved direct helper dependencies"
+            "non-direct unresolved helper dependencies"
         )
 
     env_source = base.build_env_source(
