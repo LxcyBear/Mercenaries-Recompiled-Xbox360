@@ -286,3 +286,52 @@ P4C-THREAD-20261019-B
 
 After hardware reports the actual StartRoutine, the next phase will package
 only that routine's required execution slice.
+
+
+## Phase 4C-C hardware result — PASS
+
+Real Xbox 360 hardware captured the exact live `PsCreateSystemThreadEx` frame:
+
+```text
+handle_ptr=008BFFD0
+extra=0
+kstack=262144
+tls=20
+tid_ptr=00000000
+ctx1=002295D6
+ctx2=00000000
+suspended=0
+debug=0
+routine=0022B43F
+```
+
+The frame delta remained exactly `0x2C` bytes and `fault=0`.
+
+The resulting evidence boundary was:
+
+```text
+BOUNDARY: kind=THREAD_TARGET caller=0022B4D7 target=0022B43F esp=008BFF98 saved_esp=008BFFC4 ticks=5 trace=2
+PHASE 4C-C LIVE THREAD-HANDOFF CAPTURE RESULT: PASS
+```
+
+This confirms the actual first title-thread StartRoutine is `0x0022B43F`.
+The first context is `0x002295D6`; the second is zero.
+
+## Phase 4C-D — first title-thread target preflight
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Analyze-Phase4C-D.ps1"
+```
+
+The preflight analyzes only `0x0022B43F` and reports:
+
+- directly reachable translated bodies;
+- maximum direct-call depth;
+- reachable guest/source bytes;
+- missing translated dependencies;
+- dynamic/indirect boundary bodies;
+- non-translated direct helper surface.
+
+No additional retail code is executed by this preflight.
