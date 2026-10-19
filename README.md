@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-Z — continue ordinal 184 NtAllocateVirtualMemory after Phase 4C-Y hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AA — model the hardware-observed 1 MiB reserved guest-VM region after Phase 4C-Z hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -202,8 +202,10 @@ phases.
 37. **Done:** Phase 4C-Y executed translated root `0x00238C00` with the
     maintained CRT memmove helper; startup advanced with `fault=0` to
     `ICALL_SAFE target=0x800000B8`, ordinal 184 `NtAllocateVirtualMemory`.
-38. **Phase 4C-Z:** validate and continue ordinal 184 using the locked 20-byte
-    stdcall ABI / 24-byte full frame and bounded guest virtual-memory semantics.
+38. **Done:** Phase 4C-Z validated ordinal 184 and captured the live 1 MiB
+    `MEM_RESERVE` / `PAGE_READWRITE` request with `fault=0`.
+39. **Phase 4C-AA:** add reserved/uncommitted guest-page state, preserve the
+    allocated VA through subsequent commit calls, and continue native startup.
 
 ### Evidence policy
 
@@ -2326,6 +2328,18 @@ unexecuted test PASS.**
 - **Phase 4C-Y hardware result: PASS.**
 - **Next:** Phase 4C-Z continues ordinal 184.
 - Build tag: `P4C-NTALLOC184-20261019-A`.
+
+### 2026-10-19 — Phase 4C-Z VM-reserve boundary PASS
+
+- Z main/env cookie matched on hardware.
+- All proven entry/thread/kernel/CRT continuations remained intact.
+- Live ordinal-184 frame matched 24 bytes exactly.
+- Request: `Base=NULL`, `RegionSize=0x00100000`,
+  `AllocationType=MEM_RESERVE (0x2000)`, `Protect=PAGE_READWRITE (0x4)`.
+- The harness stopped deliberately at `VM_UNSUPPORTED`; `fault=0`.
+- **Phase 4C-Z hardware result: PASS.**
+- **Next:** Phase 4C-AA adds explicit reserved/uncommitted guest-page state and
+  continues this exact allocation path.
 
 ### How future updates are recorded
 
