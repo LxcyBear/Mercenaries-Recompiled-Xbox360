@@ -933,3 +933,49 @@ direct target `0x0022F128`. The previous `0x0022F128` boundary is explicitly
 forbidden from counting as progress; deeper calls remain evidence boundaries.
 
 Build tag: `P4C-DIRECTF128-20261019-A`.
+
+
+#### Phase 4C-O — promoted 0x0022F128
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+BOUNDARY:
+  kind=ICALL_SAFE
+  caller=0022F128
+  target=8000006B
+  esp=008BFEE4
+  saved_esp=008BFEF4
+  ticks=30
+  trace=10
+  fault=0
+
+trace[9]=0022F128
+```
+
+The promoted body executed successfully. Kernel target `0x8000006B` is
+ordinal 107, `KeInitializeDpc`. The observed frame delta is 16 bytes:
+12 bytes of arguments plus the translated synthetic CALL return slot.
+
+Production bridge semantics:
+- zero the 32-byte Xbox KDPC;
+- write Type `0x13` at offset 0;
+- write DeferredRoutine at offset +12;
+- write DeferredContext at offset +16;
+- return `eax=0`.
+
+#### Phase 4C-P — KeInitializeDpc continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-P.ps1`
+
+4C-P requires the exact 16-byte live frame, logs all three guest arguments,
+reproduces the production 32-byte KDPC initialization, validates the guest
+readback, performs exact stdcall cleanup, requires ordinal 107 to have been
+handled before later progress can PASS, and preserves all prior Phase 4C
+startup invariants.
+
+The prep wrapper now validates both freshly generated `main.cpp` and
+`phase4c_env.cpp` phase markers to prevent stale-source pairing.
+
+Build tag: `P4C-DPC107-20261019-A`.
