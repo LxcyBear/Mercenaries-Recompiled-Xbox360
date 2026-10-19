@@ -42,7 +42,7 @@ WRITE_HELPERS = {
 }
 
 MACRO_RE = re.compile(
-    r"\\b(MEM8|MEM16|MEM32|MEM64|SMEM8|SMEM16|SMEM32|SMEM64|MEMF|MEMD)\\s*\\("
+    r"\b(MEM8|MEM16|MEM32|MEM64|SMEM8|SMEM16|SMEM32|SMEM64|MEMF|MEMD)\s*\("
 )
 ASSIGN_OPS = ("<<=", ">>=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "=")
 COMPOUND_BINARY = {
@@ -64,7 +64,7 @@ def _mask_noncode(source: str) -> str:
         ch = source[i]
         if ch == "/" and i + 1 < n and source[i + 1] == "/":
             j = i
-            while j < n and source[j] != "\\n":
+            while j < n and source[j] != "\n":
                 out[j] = " "
                 j += 1
             i = j
@@ -77,7 +77,7 @@ def _mask_noncode(source: str) -> str:
                     out[i] = out[i + 1] = " "
                     i += 2
                     break
-                if source[i] != "\\n":
+                if source[i] != "\n":
                     out[i] = " "
                 i += 1
             continue
@@ -86,11 +86,11 @@ def _mask_noncode(source: str) -> str:
             out[i] = " "
             i += 1
             while i < n:
-                if source[i] == "\\\\":
-                    if source[i] != "\\n":
+                if source[i] == "\\":
+                    if source[i] != "\n":
                         out[i] = " "
                     if i + 1 < n:
-                        if source[i + 1] != "\\n":
+                        if source[i + 1] != "\n":
                             out[i + 1] = " "
                         i += 2
                     else:
@@ -100,7 +100,7 @@ def _mask_noncode(source: str) -> str:
                     out[i] = " "
                     i += 1
                     break
-                if source[i] != "\\n":
+                if source[i] != "\n":
                     out[i] = " "
                 i += 1
             continue
@@ -254,7 +254,7 @@ def lower_source(source: str) -> tuple[str, dict]:
         kind, name, start, open_pos, close_pos, op_pos, op = write
         statement_start = start if kind != "prefix" else op_pos
         if not _statement_prefix_is_empty(_mask_noncode(source), statement_start):
-            line = source.count("\\n", 0, start) + 1
+            line = source.count("\n", 0, start) + 1
             raise LoweringError(
                 f"line {line}: legacy write is embedded in a larger expression/control statement")
 
@@ -296,7 +296,7 @@ def lower_source(source: str) -> tuple[str, dict]:
             "#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI" not in source):
         source = source.replace(
             "#define RECOMP_GENERATED_CODE",
-            "#define RECOMP_GENERATED_CODE\\n#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI",
+            "#define RECOMP_GENERATED_CODE\n#define RECOMP_EXPLICIT_GUEST_MEMORY_ABI",
             1,
         )
 
@@ -305,11 +305,11 @@ def lower_source(source: str) -> tuple[str, dict]:
 
 def lower_file(path: Path) -> dict:
     raw = path.read_bytes()
-    newline = "\\r\\n" if b"\\r\\n" in raw else "\\n"
-    source = raw.decode("utf-8").replace("\\r\\n", "\\n")
+    newline = "\r\n" if b"\r\n" in raw else "\n"
+    source = raw.decode("utf-8").replace("\r\n", "\n")
     lowered, stats = lower_source(source)
-    if newline == "\\r\\n":
-        lowered = lowered.replace("\\n", "\\r\\n")
+    if newline == "\r\n":
+        lowered = lowered.replace("\n", "\r\n")
     path.write_bytes(lowered.encode("utf-8"))
     return stats
 
@@ -355,7 +355,7 @@ def main(argv=None):
 
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(report, indent=2) + "\\n",
+        args.report.write_text(json.dumps(report, indent=2) + "\n",
                                encoding="utf-8")
 
     print(
