@@ -303,3 +303,14 @@ stdcall arguments plus the synthetic four-byte CALL return slot.
 write the synthetic thread handle, enter the translated first thread routine
 synchronously using the production bridge model, and stop at the next live
 dynamic/kernel boundary.
+
+
+4C-C preparation gate:
+
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-C.ps1`
+
+The 4C-C emitter preserves the hardware-proven 4C-B package and writes a new
+two-source package under `build/phase4c_native_startup/thread_xdk`. It packs
+the maintained startup roots `0x0022B43F` and `0x002295D6` plus their direct
+generated closures. Runtime still validates the actual ordinal-255 StartRoutine
+before entering it.
