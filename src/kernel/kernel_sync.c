@@ -44,7 +44,7 @@ static DWORD xbox_nt_timeout_to_ms(PLARGE_INTEGER Timeout)
 
     /* Absolute: compute delta from now */
     LARGE_INTEGER now;
-    GetSystemTimeAsFileTime((LPFILETIME)&now);
+    merc_platform_query_system_time(&now);
     LONGLONG diff = Timeout->QuadPart - now.QuadPart;
     if (diff <= 0)
         return 0;
@@ -120,8 +120,8 @@ LONG __stdcall xbox_KeSetEvent(PVOID Event, LONG Increment, BOOLEAN Wait)
     (void)Increment;
     (void)Wait;
 
-    /* We can't easily query previous state, so just set and return 0 */
-    SetEvent(hEvent);
+    /* We can't easily query previous state, so just set and return 0. */
+    merc_platform_set_event(hEvent);
     return 0;
 }
 
@@ -263,7 +263,7 @@ NTSTATUS __stdcall xbox_KeWaitForSingleObject(
 
     HANDLE hObject = (HANDLE)Object;
     DWORD ms = xbox_nt_timeout_to_ms(Timeout);
-    DWORD result = WaitForSingleObjectEx(hObject, ms, Alertable);
+    DWORD result = merc_platform_wait_single(hObject, ms, Alertable);
     return xbox_wait_result_to_ntstatus(result, 1);
 }
 

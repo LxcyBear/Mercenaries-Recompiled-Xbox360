@@ -20,6 +20,7 @@
  * provides the same types natively (see src/platform/xbox_winnt.h).
  */
 #include "platform/xbox_winnt.h"
+#include "platform/kernel_time_sync.h"
 #include <stdint.h>
 #include <stdbool.h>
 

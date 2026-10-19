@@ -5,9 +5,9 @@ project(platform C)
 #   xbox_winnt.h   - Win32 / NT type vocabulary (header only)
 #   win32_compat.* - POSIX implementation of generic Win32 host primitives
 #
-# On Windows the real <windows.h> is used, so this is an INTERFACE library
-# that only contributes the src/ include path. On Linux it is a real static
-# library carrying the POSIX primitive implementations.
+# kernel_time_sync.c is a real platform boundary on every target. Windows/XDK
+# use native SDK primitives; Linux also links win32_compat.c for the generic
+# host-service vocabulary used by the kernel HLE.
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -21,10 +21,13 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 get_filename_component(XBOXRECOMP_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 
 if(WIN32)
-    add_library(platform INTERFACE)
-    target_include_directories(platform INTERFACE ${XBOXRECOMP_SRC_DIR})
+    add_library(platform STATIC kernel_time_sync.c)
+    target_include_directories(platform PUBLIC
+        ${XBOXRECOMP_SRC_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
 else()
-    add_library(platform STATIC win32_compat.c)
+    add_library(platform STATIC win32_compat.c kernel_time_sync.c)
     target_include_directories(platform PUBLIC
         ${XBOXRECOMP_SRC_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}

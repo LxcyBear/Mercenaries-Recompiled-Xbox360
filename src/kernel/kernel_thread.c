@@ -24,9 +24,9 @@ void xbox_kernel_set_host_service_callback(
 static NTSTATUS xbox_host_aware_sleep(DWORD milliseconds, BOOLEAN alertable)
 {
     LARGE_INTEGER frequency = {0}, start = {0}, now = {0};
-    const BOOL precise = QueryPerformanceFrequency(&frequency) &&
-        frequency.QuadPart > 0 && QueryPerformanceCounter(&start);
-    const ULONGLONG coarse_start = precise ? 0u : GetTickCount64();
+    const BOOL precise = merc_platform_query_performance_frequency(&frequency) &&
+        frequency.QuadPart > 0 && merc_platform_query_performance_counter(&start);
+    const DWORD coarse_start = precise ? 0u : merc_platform_get_tick_count();
 
     for (;;) {
         double elapsed_ms, remaining_ms;
@@ -39,18 +39,19 @@ static NTSTATUS xbox_host_aware_sleep(DWORD milliseconds, BOOLEAN alertable)
          * measures actual elapsed time, including host rendering/service.
          * Keep the scheduler yield, alertable APCs and bounded service gaps. */
         if (precise) {
-            QueryPerformanceCounter(&now);
+            merc_platform_query_performance_counter(&now);
             elapsed_ms = (double)(now.QuadPart - start.QuadPart) *
                 1000.0 / (double)frequency.QuadPart;
         } else {
-            elapsed_ms = (double)(GetTickCount64() - coarse_start);
+            elapsed_ms = (double)(DWORD)(
+                merc_platform_get_tick_count() - coarse_start);
         }
         if (elapsed_ms >= (double)milliseconds)
             break;
         remaining_ms = (double)milliseconds - elapsed_ms;
         slice = remaining_ms >= 16.0 ? 16u : (DWORD)remaining_ms;
         if (slice == 0u) slice = 1u;
-        result = alertable ? SleepEx(slice, TRUE) : (Sleep(slice), 0u);
+        result = merc_platform_sleep(slice, alertable);
         if (g_host_service_callback)
             g_host_service_callback();
         if (alertable && result == WAIT_IO_COMPLETION)
@@ -232,7 +233,7 @@ NTSTATUS __stdcall xbox_KeDelayExecutionThread(
     } else {
         /* Positive = absolute time. Calculate relative delay from now. */
         LARGE_INTEGER now;
-        GetSystemTimeAsFileTime((LPFILETIME)&now);
+        merc_platform_query_system_time(&now);
         LONGLONG diff = Interval->QuadPart - now.QuadPart;
         if (diff <= 0)
             return STATUS_SUCCESS; /* Already past */

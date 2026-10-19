@@ -113,8 +113,8 @@ LARGE_INTEGER __stdcall xbox_KeQueryPerformanceCounter(void)
     LONGLONG remainder;
 
     xbox_counter.QuadPart = 0;
-    if (!QueryPerformanceCounter(&host_counter) ||
-        !QueryPerformanceFrequency(&host_frequency) ||
+    if (!merc_platform_query_performance_counter(&host_counter) ||
+        !merc_platform_query_performance_frequency(&host_frequency) ||
         host_frequency.QuadPart <= 0) {
         return xbox_counter;
     }
@@ -150,8 +150,7 @@ LARGE_INTEGER __stdcall xbox_KeQueryPerformanceFrequency(void)
 
 VOID __stdcall xbox_KeQuerySystemTime(PLARGE_INTEGER CurrentTime)
 {
-    if (CurrentTime)
-        GetSystemTimeAsFileTime((LPFILETIME)CurrentTime);
+    merc_platform_query_system_time(CurrentTime);
 }
 
 /* ============================================================================
@@ -163,19 +162,7 @@ VOID __stdcall xbox_KeQuerySystemTime(PLARGE_INTEGER CurrentTime)
 
 VOID __stdcall xbox_KeStallExecutionProcessor(ULONG MicroSeconds)
 {
-    LARGE_INTEGER freq, start, now;
-
-    if (MicroSeconds == 0)
-        return;
-
-    QueryPerformanceFrequency(&freq);
-    QueryPerformanceCounter(&start);
-
-    LONGLONG target_counts = (freq.QuadPart * MicroSeconds) / 1000000;
-
-    do {
-        QueryPerformanceCounter(&now);
-    } while ((now.QuadPart - start.QuadPart) < target_counts);
+    merc_platform_stall_us(MicroSeconds);
 }
 
 /* ============================================================================
@@ -439,7 +426,7 @@ VOID __stdcall xbox_WRITE_PORT_BUFFER_USHORT(PUSHORT Port, PUSHORT Buffer, ULONG
 NTSTATUS __stdcall xbox_NtSetSystemTime(PLARGE_INTEGER SystemTime, PLARGE_INTEGER PreviousTime)
 {
     if (PreviousTime)
-        GetSystemTimeAsFileTime((LPFILETIME)PreviousTime);
+        merc_platform_query_system_time(PreviousTime);
 
     xbox_log(XBOX_LOG_WARN, XBOX_LOG_HAL,
         "NtSetSystemTime: ignored (not setting system clock)");
