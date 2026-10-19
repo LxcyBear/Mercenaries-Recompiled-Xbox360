@@ -107,12 +107,12 @@ foreach ($requiredText in @(
 }
 
 foreach ($requiredText in @(
-    "PHASE 4C-AF RETAIL ENVIRONMENT PREP START",
-    "PHASE 4C-AF EXACT RETAIL VERIFICATION: PASS",
-    "PHASE 4C-AF EXECUTION ENVIRONMENT RESULT: PASS",
+    "PHASE 5A RETAIL ENVIRONMENT PREP START",
+    "PHASE 5A EXACT RETAIL VERIFICATION: PASS",
+    "PHASE 5A EXECUTION ENVIRONMENT RESULT: PASS",
     "phase4c_env_build_cookie",
     "50354131",
-    "PHASE 4C-AF RETAIL ENVIRONMENT PREP END"
+    "PHASE 5A RETAIL ENVIRONMENT PREP END"
 )) {
     if ($envText -notlike "*$requiredText*") {
         throw "Generated Phase 5A phase5_env.cpp is missing marker: $requiredText"
