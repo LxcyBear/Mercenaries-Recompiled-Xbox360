@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-K — relocate the initialized startup DATA-import subset after Phase 4C-J hardware PASS exposed XboxKrnlVersion as the next raw data thunk.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-L — promote the first hardware-observed translated direct frontier target after Phase 4C-K hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -155,10 +155,12 @@ phases.
     The next rejected access is READ16 `0x80000148` with
     `ECX=0x80000144`, identifying ordinal 324 `XboxKrnlVersion` plus
     offset 4 (the Build field).
-23. **Phase 4C-K:** relocate the initialized startup DATA subset:
-    ordinal 156 `KeTickCount` -> `0x0087E020`, ordinal 322
-    `XboxHardwareInfo` -> `0x0087E000`, and ordinal 324
-    `XboxKrnlVersion` -> `0x0087E010`; leave all other imports untouched.
+23. **Done:** Phase 4C-K relocated initialized startup DATA imports 156/322/324
+    on real hardware. The callback advanced with `fault=0` to
+    `DIRECT_FRONTIER caller=0x0022C4DF target=0x0022C47B`.
+24. **Phase 4C-L:** add only hardware-observed direct target `0x0022C47B`
+    to the translated pack and continue until the next dynamic/deeper-direct
+    frontier or first rejected guest access.
 
 ### Evidence policy
 
@@ -2052,6 +2054,20 @@ unexecuted test PASS.**
 - **Next:** Phase 4C-K relocates the three DATA imports explicitly initialized
   by Phase-2E: 156/322/324, while preserving immediate first-fault telemetry.
 - Build tag: `P4C-KDATA3-20261019-A`.
+
+### 2026-10-19 — Phase 4C-K startup DATA relocations PASS
+
+- Real Xbox 360 hardware relocated exact startup DATA imports:
+  - ordinal 156 `KeTickCount`: `0x8000009C -> 0x0087E020`;
+  - ordinal 322 `XboxHardwareInfo`: `0x80000142 -> 0x0087E000`;
+  - ordinal 324 `XboxKrnlVersion`: `0x80000144 -> 0x0087E010`.
+- The callback advanced beyond both previous data-import failures.
+- Next boundary:
+  `DIRECT_FRONTIER caller=0x0022C4DF target=0x0022C47B`.
+- Stack remained balanced and guest fault state was 0.
+- **Phase 4C-K hardware result: PASS.**
+- **Next:** Phase 4C-L promotes only `0x0022C47B` into the translated pack.
+- Build tag: `P4C-DIRECTC47B-20261019-A`.
 
 ### How future updates are recorded
 
