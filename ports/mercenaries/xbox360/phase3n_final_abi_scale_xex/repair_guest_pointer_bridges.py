@@ -37,65 +37,6 @@ NEW_COLORS = """    { void recomp_original_bug_cloud_colors(volatile float *);
 """
 
 
-OLD_PROJECTILE_CALL = "if ((edi != 0)) { sub_00020095(); return; }"
-NEW_PROJECTILE_CALL = "if ((edi != 0)) goto loc_00020095;"
-
-OLD_WEAPON_TAIL = "g_seh_ebp = ebp; sub_000357E4(); return;"
-NEW_WEAPON_TAIL = "goto loc_000357E4;"
-
-
-def _repair_residual_continuations(root: Path) -> tuple[int, int]:
-    projectile = weapon = 0
-    for path in sorted(root.glob("recomp_*.c")):
-        text = path.read_text(encoding="utf-8")
-        changed = False
-
-        count = text.count(OLD_PROJECTILE_CALL)
-        if count:
-            if count != 1:
-                raise RuntimeError(
-                    f"{path.name}: unexpected projectile 0x00020095 call count {count}"
-                )
-            if "loc_00020095:" not in text:
-                raise RuntimeError(
-                    f"{path.name}: projectile 0x00020095 label missing"
-                )
-            text = text.replace(OLD_PROJECTILE_CALL, NEW_PROJECTILE_CALL)
-            projectile += count
-            changed = True
-        elif NEW_PROJECTILE_CALL in text:
-            projectile += text.count(NEW_PROJECTILE_CALL)
-
-        count = text.count(OLD_WEAPON_TAIL)
-        if count:
-            if count != 4:
-                raise RuntimeError(
-                    f"{path.name}: unexpected weapon 0x000357E4 call count {count}"
-                )
-            if "loc_000357E4:" not in text:
-                raise RuntimeError(
-                    f"{path.name}: weapon 0x000357E4 label missing"
-                )
-            text = text.replace(OLD_WEAPON_TAIL, NEW_WEAPON_TAIL)
-            weapon = 4
-            changed = True
-        elif "loc_000357E4:" in text and OLD_WEAPON_TAIL not in text:
-            # The function already contains other legitimate gotos to this
-            # local tail, so absence of the four old call forms is the
-            # idempotence proof; do not count all goto occurrences.
-            weapon = 4
-
-        if changed:
-            path.write_text(text, encoding="utf-8", newline="")
-
-    if projectile != 1 or weapon != 4:
-        raise RuntimeError(
-            "expected repaired continuation counts "
-            f"projectile=1, weapon=4; found projectile={projectile}, weapon={weapon}"
-        )
-    return projectile, weapon
-
-
 def repair(root: Path) -> tuple[int, int]:
     params = colors = 0
     for path in sorted(root.glob("recomp_*.c")):
@@ -128,11 +69,6 @@ def repair(root: Path) -> tuple[int, int]:
             f"expected exactly one cloud params and one cloud colors bridge; "
             f"found params={params}, colors={colors}"
         )
-    projectile, weapon = _repair_residual_continuations(root)
-    print(
-        "PASS: Phase 3N residual continuation repairs ready: "
-        f"projectile={projectile}, weapon={weapon}"
-    )
     return params, colors
 
 
