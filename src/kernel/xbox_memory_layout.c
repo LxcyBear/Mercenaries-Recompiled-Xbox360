@@ -781,6 +781,140 @@ static int g_heap_free_count = 0;
 static uint32_t g_heap_oom_count = 0u;
 static xbox_heap_allocation g_heap_allocations[XBOX_HEAP_MAX_ALLOCS];
 
+#define XBOX_GUEST_PAGE_SIZE 4096u
+#define XBOX_GUEST_MAX_PAGES ((XBOX_TOTAL_RAM * 2u) / XBOX_GUEST_PAGE_SIZE)
+#define XBOX_GUEST_PROTECT_NOACCESS 0x01u
+#define XBOX_GUEST_PROTECT_READWRITE 0x04u
+
+static uint32_t g_guest_page_protect[XBOX_GUEST_MAX_PAGES];
+static uint8_t g_guest_page_committed[XBOX_GUEST_MAX_PAGES];
+
+static uint32_t xbox_NormalizeGuestRamVa(uint32_t xbox_va)
+{
+    if (xbox_va >= XBOX_CPU_ALIAS_BASE && xbox_va < XBOX_CPU_ALIAS_END)
+        xbox_va &= xbox_GetGraphicsMemorySize() - 1u;
+    return xbox_va;
+}
+
+static BOOL xbox_GuestPageRange(
+    uint32_t xbox_va,
+    uint32_t size,
+    uint32_t *first_page,
+    uint32_t *last_page)
+{
+    uint32_t normalized;
+    uint32_t memory_size;
+    uint32_t end;
+
+    if (size == 0u)
+        return FALSE;
+
+    normalized = xbox_NormalizeGuestRamVa(xbox_va);
+    memory_size = xbox_GetGraphicsMemorySize();
+
+    if (normalized >= memory_size || size > memory_size - normalized)
+        return FALSE;
+
+    end = normalized + size - 1u;
+    if (first_page)
+        *first_page = normalized / XBOX_GUEST_PAGE_SIZE;
+    if (last_page)
+        *last_page = end / XBOX_GUEST_PAGE_SIZE;
+    return TRUE;
+}
+
+BOOL xbox_GuestMemorySetProtect(
+    uint32_t xbox_va,
+    uint32_t size,
+    uint32_t protect)
+{
+    uint32_t first_page, last_page, page;
+
+    if (!xbox_GuestPageRange(
+            xbox_va, size, &first_page, &last_page))
+        return FALSE;
+
+    for (page = first_page; page <= last_page; ++page)
+        g_guest_page_protect[page] = protect;
+
+    return TRUE;
+}
+
+uint32_t xbox_GuestMemoryQueryProtect(uint32_t xbox_va)
+{
+    uint32_t page;
+
+    if (!xbox_GuestPageRange(xbox_va, 1u, &page, NULL))
+        return XBOX_GUEST_PROTECT_NOACCESS;
+
+    return g_guest_page_protect[page];
+}
+
+BOOL xbox_GuestMemoryIsCommitted(uint32_t xbox_va)
+{
+    uint32_t page;
+
+    if (!xbox_GuestPageRange(xbox_va, 1u, &page, NULL))
+        return FALSE;
+
+    return g_guest_page_committed[page] != 0u;
+}
+
+BOOL xbox_GuestMemoryDecommit(uint32_t xbox_va, uint32_t size)
+{
+    uint32_t normalized;
+    uint32_t first_page, last_page, page;
+
+    if (!xbox_GuestPageRange(
+            xbox_va, size, &first_page, &last_page))
+        return FALSE;
+
+    normalized = xbox_NormalizeGuestRamVa(xbox_va);
+
+    for (page = first_page; page <= last_page; ++page) {
+        const uint32_t page_va = page * XBOX_GUEST_PAGE_SIZE;
+        g_guest_page_committed[page] = 0u;
+        g_guest_page_protect[page] = XBOX_GUEST_PROTECT_NOACCESS;
+        if (g_memory_base && page_va < g_memory_size) {
+            memset(
+                (void *)((uintptr_t)page_va + g_memory_offset),
+                0,
+                XBOX_GUEST_PAGE_SIZE);
+        }
+    }
+
+    (void)normalized;
+    return TRUE;
+}
+
+BOOL xbox_GuestMemoryCommit(
+    uint32_t xbox_va,
+    uint32_t size,
+    uint32_t protect)
+{
+    uint32_t first_page, last_page, page;
+
+    if (!xbox_GuestPageRange(
+            xbox_va, size, &first_page, &last_page))
+        return FALSE;
+
+    for (page = first_page; page <= last_page; ++page) {
+        if (!g_guest_page_committed[page] &&
+            g_memory_base &&
+            page * XBOX_GUEST_PAGE_SIZE < g_memory_size) {
+            memset(
+                (void *)((uintptr_t)(page * XBOX_GUEST_PAGE_SIZE) +
+                         g_memory_offset),
+                0,
+                XBOX_GUEST_PAGE_SIZE);
+        }
+        g_guest_page_committed[page] = 1u;
+        g_guest_page_protect[page] = protect;
+    }
+
+    return TRUE;
+}
+
 static void xbox_HeapCaptureOwner(xbox_heap_allocation *allocation)
 {
     const uint32_t end = g_recomp_recent_game_func_idx;
@@ -1005,12 +1139,19 @@ static void xbox_HeapTrimTail(void)
 
 static void xbox_HeapReset(void)
 {
+    uint32_t page;
+
     g_heap_next = XBOX_HEAP_BASE;
     g_heap_page_next = XBOX_HEAP_BASE + XBOX_HEAP_SIZE;
     g_heap_alloc_count = 0;
     g_heap_free_count = 0;
     g_heap_oom_count = 0u;
     memset(g_heap_allocations, 0, sizeof(g_heap_allocations));
+
+    for (page = 0u; page < XBOX_GUEST_MAX_PAGES; ++page) {
+        g_guest_page_committed[page] = 1u;
+        g_guest_page_protect[page] = XBOX_GUEST_PROTECT_READWRITE;
+    }
 }
 
 static uint32_t xbox_HeapTryReuse(
@@ -1232,12 +1373,23 @@ uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment)
 uint32_t xbox_HeapAllocPageRounded(uint32_t size, uint32_t alignment)
 {
     uint32_t allocation_size;
+    uint32_t xbox_va;
 
     if (size == 0u || size > UINT32_MAX - 4095u)
         return 0u;
+
     allocation_size = (size + 4095u) & ~4095u;
-    return xbox_HeapAllocClass(
+    xbox_va = xbox_HeapAllocClass(
         allocation_size, alignment, XBOX_HEAP_CLASS_PAGE_BACKED);
+
+    if (xbox_va != 0u) {
+        (void)xbox_GuestMemoryCommit(
+            xbox_va,
+            allocation_size,
+            XBOX_GUEST_PROTECT_READWRITE);
+    }
+
+    return xbox_va;
 }
 
 static const xbox_heap_allocation *xbox_HeapFindAllocation(uint32_t xbox_va)
@@ -1268,38 +1420,76 @@ uint32_t xbox_HeapGetAllocationSize(uint32_t xbox_va)
     return allocation ? allocation->allocation_size : 0;
 }
 
-void xbox_HeapFree(uint32_t xbox_va)
+static BOOL xbox_HeapFreeTracked(
+    uint32_t xbox_va,
+    int require_page_backed,
+    uint32_t *released_size)
 {
     int count = g_heap_alloc_count;
     int i;
 
-    /* KSEG0/KSEG1 pointers name the same 64 MiB physical pages as low RAM
-     * VAs.  Normalize the full direct-mapped CPU aperture, not only its
-     * first 64 MiB repetition: retail pointers such as 0x852D8804 are valid
-     * aliases of 0x012D8804. */
-    if (xbox_va >= XBOX_CPU_ALIAS_BASE && xbox_va < XBOX_CPU_ALIAS_END)
-        xbox_va &= xbox_GetGraphicsMemorySize() - 1u;
+    xbox_va = xbox_NormalizeGuestRamVa(xbox_va);
 
-    if (count > XBOX_HEAP_MAX_ALLOCS) count = XBOX_HEAP_MAX_ALLOCS;
+    if (count > XBOX_HEAP_MAX_ALLOCS)
+        count = XBOX_HEAP_MAX_ALLOCS;
+
     for (i = count - 1; i >= 0; --i) {
-        if (g_heap_allocations[i].in_use &&
-            g_heap_allocations[i].xbox_va == xbox_va) {
-            g_heap_allocations[i].in_use = 0u;
-            g_heap_allocations[i].requested_size = 0u;
-            ++g_heap_free_count;
-            if (xbox_HeapTraceEnabled()) {
-                fprintf(stderr,
-                        "  [HEAP] free: 0x%08X size=%u (slot=%d)\n",
-                        xbox_va, g_heap_allocations[i].allocation_size, i);
-                fflush(stderr);
-            }
-            xbox_HeapCoalesceFree(&g_heap_allocations[i]);
-            xbox_HeapTrimTail();
-            return;
+        xbox_heap_allocation *allocation = &g_heap_allocations[i];
+
+        if (!allocation->in_use ||
+            allocation->xbox_va != xbox_va)
+            continue;
+
+        if (require_page_backed &&
+            allocation->allocation_class != XBOX_HEAP_CLASS_PAGE_BACKED)
+            return FALSE;
+
+        if (released_size)
+            *released_size = allocation->allocation_size;
+
+        allocation->in_use = 0u;
+        allocation->requested_size = 0u;
+        ++g_heap_free_count;
+
+        if (xbox_HeapTraceEnabled()) {
+            fprintf(stderr,
+                    "  [HEAP] free: 0x%08X size=%u class=%u (slot=%d)\n",
+                    xbox_va, allocation->allocation_size,
+                    allocation->allocation_class, i);
+            fflush(stderr);
         }
+
+        xbox_HeapCoalesceFree(allocation);
+        xbox_HeapTrimTail();
+        return TRUE;
     }
-    fprintf(stderr, "  [HEAP] free ignored: untracked 0x%08X\n", xbox_va);
-    fflush(stderr);
+
+    return FALSE;
+}
+
+BOOL xbox_HeapReleasePageRounded(
+    uint32_t xbox_va,
+    uint32_t *released_size)
+{
+    uint32_t size = 0u;
+
+    if (!xbox_HeapFreeTracked(xbox_va, 1, &size))
+        return FALSE;
+
+    (void)xbox_GuestMemoryDecommit(xbox_va, size);
+    if (released_size)
+        *released_size = size;
+    return TRUE;
+}
+
+void xbox_HeapFree(uint32_t xbox_va)
+{
+    if (!xbox_HeapFreeTracked(xbox_va, 0, NULL)) {
+        fprintf(stderr,
+                "  [HEAP] free ignored: untracked 0x%08X\n",
+                xbox_va);
+        fflush(stderr);
+    }
 }
 HANDLE xbox_GetMappingHandle(void)
 {
