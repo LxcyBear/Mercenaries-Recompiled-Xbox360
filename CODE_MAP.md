@@ -51,7 +51,8 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 | 4C-N | **Hardware PASS** | Ordinal 47 returned through the exact live 12-byte frame; startup continued with `fault=0` to `DIRECT_FRONTIER caller=0x0022C28B target=0x0022F128`. |
 | 4C-O | **Hardware PASS** | `0x0022F128` executed; startup reached kernel target `0x8000006B` with `fault=0` and exact 16-byte frame. |
 | 4C-P | **Hardware PASS** | `KeInitializeDpc` guest object initialization succeeded; next boundary is `ICALL_SAFE target=0x80000071` (ordinal 113) from `0x0022F128`, `fault=0`. |
-| 4C-Q | **Package prep ready** | Continue live `KeInitializeTimerEx(PKTIMER, TIMER_TYPE)` with exact guest-visible KTIMER initialization and link-time env source identity enforcement. |
+| 4C-Q | **Hardware PASS** | `KeInitializeTimerEx` guest KTIMER initialization succeeded; Q main/env cookie matched and startup reached `DIRECT_FRONTIER caller=0x0022F128 target=0x0022C5A4`, `fault=0`. |
+| 4C-R | **Package prep ready** | Add only `0x0022C5A4` to the translated pack; the previous C5A4 boundary is forbidden from counting as progress and the R main/env cookie is unique. |
 
 This table is the continuation of the Phase-3 hardware map: later phases should only advance when their stated evidence gate passes.
 
