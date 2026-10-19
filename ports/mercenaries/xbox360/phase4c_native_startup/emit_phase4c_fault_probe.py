@@ -1013,24 +1013,31 @@ def main() -> int:
         "PHASE 4C-B BOUNDED REAL STARTUP RESULT",
         "PHASE 4C-I FIRST-FAULT PROVENANCE RESULT",
     )
+    arm_marker = f"""    if (escaped == 0)
+    {{
+        {root_name}();"""
+    if arm_marker not in driver:
+        raise SystemExit("[Phase4C-I] setjmp execution-arm marker changed")
     driver = driver.replace(
-        "    if (escaped == 0)\n"
-        "    {{\n"
-        "        {root_name}();",
-        "    if (escaped == 0)\n"
-        "    {{\n"
-        "        s_phase4cFaultEscapeArmed = 1;\n"
-        "        {root_name}();",
+        arm_marker,
+        f"""    if (escaped == 0)
+    {{
+        s_phase4cFaultEscapeArmed = 1;
+        {root_name}();""",
         1,
     )
+
+    escape_marker = """    else
+    {
+        sprintf("""
+    if escape_marker not in driver:
+        raise SystemExit("[Phase4C-I] setjmp escape marker changed")
     driver = driver.replace(
-        "    else\n"
-        "    {{\n"
-        "        sprintf(",
-        "    else\n"
-        "    {{\n"
-        "        s_phase4cFaultEscapeArmed = 0;\n"
-        "        sprintf(",
+        escape_marker,
+        """    else
+    {
+        s_phase4cFaultEscapeArmed = 0;
+        sprintf(""",
         1,
     )
 
