@@ -13426,81 +13426,137 @@ def patch_generated(    generated_root: Path, *, allow_missing: bool = False
         parent_start = projectile_text.index("void sub_0001FBB0(void)")
         parent_end = projectile_text.index("\n/**", parent_start + 1)
         parent_body = projectile_text[parent_start:parent_end]
-        continuation_start = projectile_text.index("void sub_00020100(void)")
-        continuation_end = projectile_text.index(
-            "\n/**", continuation_start + 1
-        )
-        continuation_function = projectile_text[
-            continuation_start:continuation_end
-        ]
-        continuation = continuation_function[
-            continuation_function.index("loc_00020100: ;"):
-            continuation_function.index("\n    #undef fp_push")
-        ]
-        continuation = continuation.replace(
-            "    /* comiss xmm1, xmm2 - sets EFLAGS */",
-            "loc_00020122: ;\n"
-            "    /* comiss xmm1, xmm2 - sets EFLAGS */",
-            1,
-        ).replace(
-            "    /* comiss xmm2, xmm0 - sets EFLAGS */",
-            "loc_00020137: ;\n"
-            "    /* comiss xmm2, xmm0 - sets EFLAGS */",
-            1,
-        ).replace(
-            "    recomp_xmm_zero(xmm0v); /* xorps self = zero */\n"
-            "    recomp_xmm_copy(xmm1v, xmm0v); /* movaps */\n"
-            "    recomp_xmm_copy(xmm2v, xmm0v); /* movaps */\n\n"
-            "loc_00020834: ;",
-            "loc_0002082B: ;\n"
-            "    recomp_xmm_zero(xmm0v); /* xorps self = zero */\n"
-            "    recomp_xmm_copy(xmm1v, xmm0v); /* movaps */\n"
-            "    recomp_xmm_copy(xmm2v, xmm0v); /* movaps */\n\n"
-            "loc_00020834: ;",
-            1,
-        ).replace(
-            "{ sub_00020095(); return; }", "goto loc_00020095;"
-        )
-        parent_body = parent_body.replace(
-            "if ((edi != 0)) { sub_00020095(); return; }",
-            "if ((edi != 0)) goto loc_00020095;",
-        )
-        parent_body = parent_body.replace(
-            "loc_00020093: ;\n    edi = eax;\n    PUSH32(esp, 0);",
-            "loc_00020093: ;\n    edi = eax;\n\n"
-            "loc_00020095: ;\n    PUSH32(esp, 0);",
-            1,
-        )
-        branch_replacements = {
-            "{ sub_00020122(); return; }": "goto loc_00020122;",
-            "{ sub_00020137(); return; }": "goto loc_00020137;",
-            "g_seh_ebp = ebp; sub_00020154(); return;":
-                "goto loc_00020154;",
-            "{ sub_00020235(); return; }": "goto loc_00020235;",
-            "{ sub_0002082B(); return; }": "goto loc_0002082B;",
-            "{ sub_00020885(); return; }": "goto loc_00020885;",
-        }
-        for before, after in branch_replacements.items():
-            parent_body = parent_body.replace(before, after)
-        tail = (
-            "    g_seh_ebp = ebp; sub_00020100(); return; "
-            "/* fallthrough 0x00020100 */"
-        )
-        if tail not in parent_body:
-            raise RuntimeError("projectile continuation tail anchor missing")
-        parent_body = parent_body.replace(
-            tail,
-            f"    {projectile_marker}\n\n{continuation}",
-            1,
-        )
-        projectile_text = (
-            projectile_text[:parent_start] + parent_body +
-            projectile_text[parent_end:]
-        )
-        documents[projectile_path] = (
-            projectile_text, projectile_newline
-        )
-        applied.append(("retail projectile continuation repair", projectile_path))
+
+        # A reviewed function range now lets the translator own these retail
+        # interior entries directly. In that form the old sub_00020100 shard
+        # correctly disappears; verify the important shared labels and accept
+        # the native local-control-flow body instead of re-splicing it.
+        if "void sub_00020100(void)" not in projectile_text:
+            required_labels = (
+                "loc_00020095: ;",
+                "loc_00020100: ;",
+                "loc_00020122: ;",
+                "loc_00020137: ;",
+                "loc_00020154: ;",
+                "loc_00020235: ;",
+                "loc_0002082B: ;",
+                "loc_00020885: ;",
+            )
+            missing = [
+                label for label in required_labels if label not in parent_body
+            ]
+            if missing:
+                raise RuntimeError(
+                    "coalesced projectile continuation labels missing: " +
+                    ", ".join(missing)
+                )
+            forbidden = (
+                "sub_00020095();",
+                "sub_00020122();",
+                "sub_00020137();",
+                "sub_00020154();",
+                "sub_00020235();",
+                "sub_0002082B();",
+                "sub_00020885();",
+            )
+            leaked = [call for call in forbidden if call in parent_body]
+            if leaked:
+                raise RuntimeError(
+                    "coalesced projectile still has externalized branches: " +
+                    ", ".join(leaked)
+                )
+            parent_body = parent_body.replace(
+                "\n    #undef fp_push",
+                "\n    " + projectile_marker + "\n    #undef fp_push",
+                1,
+            )
+            projectile_text = (
+                projectile_text[:parent_start] + parent_body +
+                projectile_text[parent_end:]
+            )
+            documents[projectile_path] = (
+                projectile_text, projectile_newline
+            )
+            applied.append((
+                "retail projectile continuation repair (translator-inlined)",
+                projectile_path,
+            ))
+        else:
+            continuation_start = projectile_text.index("void sub_00020100(void)")
+            continuation_end = projectile_text.index(
+                "\n/**", continuation_start + 1
+            )
+            continuation_function = projectile_text[
+                continuation_start:continuation_end
+            ]
+            continuation = continuation_function[
+                continuation_function.index("loc_00020100: ;"):
+                continuation_function.index("\n    #undef fp_push")
+            ]
+            continuation = continuation.replace(
+                "    /* comiss xmm1, xmm2 - sets EFLAGS */",
+                "loc_00020122: ;\n"
+                "    /* comiss xmm1, xmm2 - sets EFLAGS */",
+                1,
+            ).replace(
+                "    /* comiss xmm2, xmm0 - sets EFLAGS */",
+                "loc_00020137: ;\n"
+                "    /* comiss xmm2, xmm0 - sets EFLAGS */",
+                1,
+            ).replace(
+                "    recomp_xmm_zero(xmm0v); /* xorps self = zero */\n"
+                "    recomp_xmm_copy(xmm1v, xmm0v); /* movaps */\n"
+                "    recomp_xmm_copy(xmm2v, xmm0v); /* movaps */\n\n"
+                "loc_00020834: ;",
+                "loc_0002082B: ;\n"
+                "    recomp_xmm_zero(xmm0v); /* xorps self = zero */\n"
+                "    recomp_xmm_copy(xmm1v, xmm0v); /* movaps */\n"
+                "    recomp_xmm_copy(xmm2v, xmm0v); /* movaps */\n\n"
+                "loc_00020834: ;",
+                1,
+            ).replace(
+                "{ sub_00020095(); return; }", "goto loc_00020095;"
+            )
+            parent_body = parent_body.replace(
+                "if ((edi != 0)) { sub_00020095(); return; }",
+                "if ((edi != 0)) goto loc_00020095;",
+            )
+            parent_body = parent_body.replace(
+                "loc_00020093: ;\n    edi = eax;\n    PUSH32(esp, 0);",
+                "loc_00020093: ;\n    edi = eax;\n\n"
+                "loc_00020095: ;\n    PUSH32(esp, 0);",
+                1,
+            )
+            branch_replacements = {
+                "{ sub_00020122(); return; }": "goto loc_00020122;",
+                "{ sub_00020137(); return; }": "goto loc_00020137;",
+                "g_seh_ebp = ebp; sub_00020154(); return;":
+                    "goto loc_00020154;",
+                "{ sub_00020235(); return; }": "goto loc_00020235;",
+                "{ sub_0002082B(); return; }": "goto loc_0002082B;",
+                "{ sub_00020885(); return; }": "goto loc_00020885;",
+            }
+            for before, after in branch_replacements.items():
+                parent_body = parent_body.replace(before, after)
+            tail = (
+                "    g_seh_ebp = ebp; sub_00020100(); return; "
+                "/* fallthrough 0x00020100 */"
+            )
+            if tail not in parent_body:
+                raise RuntimeError("projectile continuation tail anchor missing")
+            parent_body = parent_body.replace(
+                tail,
+                f"    {projectile_marker}\n\n{continuation}",
+                1,
+            )
+            projectile_text = (
+                projectile_text[:parent_start] + parent_body +
+                projectile_text[parent_end:]
+            )
+            documents[projectile_path] = (
+                projectile_text, projectile_newline
+            )
+            applied.append(("retail projectile continuation repair", projectile_path))
     else:
         applied.append((
             "retail projectile continuation repair (already applied)",
