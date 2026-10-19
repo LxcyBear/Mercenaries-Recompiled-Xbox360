@@ -545,22 +545,57 @@ static __forceinline void XBOX_REP_MOVS(uint32_t destination, uint32_t source,
         source += width;
     }
 }
+/** Host-independent x87 finite test used by conversion helpers. */
+static inline int x87_isfinite_value(double value) {
+    uint64_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return ((bits >> 52) & 0x7FFull) != 0x7FFull;
+}
+
+/** Truncate toward zero without depending on the host FP rounding mode. */
+static inline double x87_trunc_value(double value) {
+    if (!x87_isfinite_value(value))
+        return value;
+    return value < 0.0 ? ceil(value) : floor(value);
+}
+
+/** x87 RC=00 round-to-nearest with exact ties-to-even semantics. */
+static inline double x87_nearest_even(double value) {
+    double lower;
+    double fraction;
+    int64_t lower_int;
+
+    if (!x87_isfinite_value(value))
+        return value;
+
+    lower = floor(value);
+    fraction = value - lower;
+    if (fraction < 0.5)
+        return lower;
+    if (fraction > 0.5)
+        return lower + 1.0;
+
+    /* A representable exact .5 tie is safely inside the exact-integer range. */
+    lower_int = (int64_t)lower;
+    return (lower_int & 1ll) == 0ll ? lower : lower + 1.0;
+}
+
 /** Apply the guest x87 rounding-control field for FIST/FISTP. */
 static inline double x87_round_integral(double value) {
     double rounded;
     switch ((g_x87_control_word >> 10) & 3u) {
     case 1u: rounded = floor(value); break;
     case 2u: rounded = ceil(value); break;
-    case 3u: rounded = trunc(value); break;
-    default: rounded = nearbyint(value); break;
+    case 3u: rounded = x87_trunc_value(value); break;
+    default: rounded = x87_nearest_even(value); break;
     }
-    if (isfinite(value) && rounded != value)
+    if (x87_isfinite_value(value) && rounded != value)
         g_x87_status_word |= 0x20u; /* PE: inexact result */
     return rounded;
 }
 static inline int16_t X87_FIST16(double value) {
     double rounded = x87_round_integral(value);
-    if (!isfinite(rounded) || rounded < -32768.0 || rounded >= 32768.0) {
+    if (!x87_isfinite_value(rounded) || rounded < -32768.0 || rounded >= 32768.0) {
         g_x87_status_word |= 0x0001u; /* IE: invalid conversion */
         return INT16_MIN;
     }
@@ -568,7 +603,7 @@ static inline int16_t X87_FIST16(double value) {
 }
 static inline int32_t X87_FIST32(double value) {
     double rounded = x87_round_integral(value);
-    if (!isfinite(rounded) || rounded < -2147483648.0 || rounded >= 2147483648.0) {
+    if (!x87_isfinite_value(rounded) || rounded < -2147483648.0 || rounded >= 2147483648.0) {
         g_x87_status_word |= 0x0001u; /* IE: invalid conversion */
         return INT32_MIN;
     }
@@ -576,7 +611,7 @@ static inline int32_t X87_FIST32(double value) {
 }
 static inline int64_t X87_FIST64(double value) {
     double rounded = x87_round_integral(value);
-    if (!isfinite(rounded) || rounded < -9223372036854775808.0 ||
+    if (!x87_isfinite_value(rounded) || rounded < -9223372036854775808.0 ||
             rounded >= 9223372036854775808.0) {
         g_x87_status_word |= 0x0001u; /* IE: invalid conversion */
         return INT64_MIN;
