@@ -30,14 +30,23 @@ EXPECTED_IMPORT_COUNT = 111
 # an Xbox 360 XDK equivalent. Phase 4B will review/replace them deliberately.
 HOST_SURFACE_TOKENS = (
     "CreateFileW", "CreateFileA", "ReadFile", "WriteFile", "CloseHandle",
-    "CreateThread", "CreateEvent", "CreateSemaphore", "CreateMutex",
-    "WaitForSingleObject", "WaitForMultipleObjects", "VirtualAlloc",
-    "VirtualFree", "VirtualProtect", "GetFileAttributesW", "SetFilePointer",
+    "CreateThread", "ExitThread", "CreateEvent", "CreateEventW", "SetEvent",
+    "ResetEvent", "CreateSemaphore", "CreateSemaphoreW", "ReleaseSemaphore",
+    "CreateMutex", "CreateMutexW", "ReleaseMutex",
+    "WaitForSingleObject", "WaitForSingleObjectEx",
+    "WaitForMultipleObjects", "WaitForMultipleObjectsEx",
+    "CreateTimerQueue", "CreateTimerQueueTimer", "DeleteTimerQueueTimer",
+    "TrySubmitThreadpoolCallback",
+    "VirtualAlloc", "VirtualFree", "VirtualProtect", "VirtualQuery",
+    "GetFileAttributesW", "SetFilePointer", "SetFilePointerEx",
     "GetFileInformationByHandle", "GetDiskFreeSpaceEx", "FindFirstFile",
-    "FindNextFile", "InitializeCriticalSection", "DeleteCriticalSection",
-    "EnterCriticalSection", "LeaveCriticalSection", "QueryPerformanceCounter",
-    "QueryPerformanceFrequency", "GetTickCount", "GetTickCount64",
+    "FindFirstFileW", "FindNextFile", "FindNextFileW", "FindClose",
+    "InitializeCriticalSection", "DeleteCriticalSection",
+    "EnterCriticalSection", "LeaveCriticalSection",
+    "QueryPerformanceCounter", "QueryPerformanceFrequency",
+    "GetSystemTimeAsFileTime", "GetLocalTime", "GetTickCount", "GetTickCount64",
     "Sleep", "WideCharToMultiByte", "MultiByteToWideChar",
+    "GetLastError", "SetLastError",
 )
 
 STUB_HINTS = (
@@ -124,9 +133,12 @@ def resolver_map(thunks_text: str) -> dict[int, str]:
 
 
 def find_function_body(symbol: str, sources: dict[Path, str]):
+    # Function definitions in the kernel layer commonly split their return
+    # type, name, and parameters across several lines. Match across newlines,
+    # but never cross a declaration terminator or another brace.
     pat = re.compile(
-        r"(?m)^[^\n;{}]*\b" + re.escape(symbol) +
-        r"\s*\([^;\n]*\)\s*\{"
+        r"(?ms)^[^;{}]*\b" + re.escape(symbol) +
+        r"\s*\([^;{}]*?\)\s*\{"
     )
     for path, text in sources.items():
         masked = mask_noncode(text)
