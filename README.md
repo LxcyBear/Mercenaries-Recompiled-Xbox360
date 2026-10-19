@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-F — continue the real title thread through its first RtlEnterCriticalSection kernel call after Phase 4C-E hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-G — continue the real title thread through the first RtlEnter/RtlLeave critical-section pair after Phase 4C-F hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -132,9 +132,14 @@ phases.
     Target `0x80000115` is kernel ordinal 277,
     `RtlEnterCriticalSection`; the observed 8-byte frame exactly matches one
     argument plus the synthetic CALL return.
-18. **Phase 4C-F:** validate/log the live critical-section argument, apply the
-    maintained serialized-guest no-op semantics for ordinal 277, restore the
-    stdcall frame exactly, and continue to the next live boundary.
+18. **Done:** Phase 4C-F continued through ordinal 277
+    `RtlEnterCriticalSection` on real hardware with live guest critical
+    section `0x00312FC0`, exact 8-byte frame, balanced stack and `fault=0`.
+    The next target is `0x80000126` = ordinal 294,
+    `RtlLeaveCriticalSection`.
+19. **Phase 4C-G:** route ordinal 294 with the same maintained serialized-guest
+    no-op semantics, require exact 8-byte cleanup, and capture the first live
+    boundary after the enter/leave pair.
 
 ### Evidence policy
 
@@ -1942,6 +1947,21 @@ unexecuted test PASS.**
 - **Next:** Phase 4C-F applies the maintained serialized-guest no-op semantics
   for ordinal 277 and continues to the next live boundary.
 - Build tag: `P4C-CRITCONT-20261019-A`.
+
+### 2026-10-19 — Phase 4C-F critical-section enter PASS
+
+- Real title-thread execution continued through kernel ordinal **277**,
+  `RtlEnterCriticalSection`.
+- Live guest critical-section VA: `0x00312FC0`.
+- Observed frame: `esp=0x008BFF3C`,
+  `saved_esp=0x008BFF44`, exact **8-byte** delta.
+- Maintained serialized-guest no-op semantics completed and stack balance held.
+- Next live target: `0x80000126` = ordinal **294**,
+  `RtlLeaveCriticalSection`.
+- Guest fault state remained 0.
+- **Phase 4C-F hardware result: PASS.**
+- **Next:** Phase 4C-G continues through the matching leave call.
+- Build tag: `P4C-CRITPAIR-20261019-A`.
 
 ### How future updates are recorded
 
