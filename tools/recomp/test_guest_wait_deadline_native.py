@@ -13,13 +13,12 @@ typedef uint64_t ULONGLONG; typedef struct {long long QuadPart;} LARGE_INTEGER;
 #define STATUS_ALERTED 257
 #define STATUS_SUCCESS 0
 static long long us; static int fail_frequency, apc, sleeps, services, cost, max_slice;
-static int QueryPerformanceFrequency(LARGE_INTEGER *v){v->QuadPart=1000000;return !fail_frequency;}
-static int QueryPerformanceCounter(LARGE_INTEGER *v){v->QuadPart=us;return 1;}
-static ULONGLONG GetTickCount64(void){return (ULONGLONG)(us/16000)*16;}
+static int merc_platform_query_performance_frequency(LARGE_INTEGER *v){v->QuadPart=1000000;return !fail_frequency;}
+static int merc_platform_query_performance_counter(LARGE_INTEGER *v){v->QuadPart=us;return 1;}
+static DWORD merc_platform_get_tick_count(void){return (DWORD)((us/16000)*16);}
 static void service(void){services++;us+=cost;}
 static void (*g_host_service_callback)(void)=service;
-static void Sleep(DWORD ms){assert(ms>0 && ms<=16);us+=(long long)ms*1000;sleeps++;if((int)ms>max_slice)max_slice=ms;}
-static DWORD SleepEx(DWORD ms, BOOL alertable){assert(alertable);Sleep(ms);return apc?WAIT_IO_COMPLETION:0;}
+static DWORD merc_platform_sleep(DWORD ms, BOOL alertable){assert(ms>0 && ms<=16);us+=(long long)ms*1000;sleeps++;if((int)ms>max_slice)max_slice=ms;return alertable&&apc?WAIT_IO_COMPLETION:0;}
 '''
 HARNESS=r'''
 static void reset(void){us=0;sleeps=services=cost=max_slice=fail_frequency=apc=0;g_host_service_callback=service;}
@@ -53,11 +52,14 @@ static ULONGLONG test_windows_tick64(void){
  if(!fn) fn=(Fn)GetProcAddress(GetModuleHandleA("kernel32.dll"),"GetTickCount64");
  return fn();
 }
-#define GetTickCount64 test_windows_tick64
 typedef LONG NTSTATUS;
 #define STATUS_SUCCESS 0
 #define STATUS_ALERTED 257
 static void (*g_host_service_callback)(void);
+static BOOL merc_platform_query_performance_frequency(LARGE_INTEGER *v){return QueryPerformanceFrequency(v);}
+static BOOL merc_platform_query_performance_counter(LARGE_INTEGER *v){return QueryPerformanceCounter(v);}
+static DWORD merc_platform_get_tick_count(void){return (DWORD)test_windows_tick64();}
+static DWORD merc_platform_sleep(DWORD ms, BOOL alertable){if(alertable)return SleepEx(ms,TRUE);Sleep(ms);return 0;}
 '''
 BENCH=r'''
 static void old_wait(DWORD ms){ULONGLONG until=GetTickCount64()+ms;while(GetTickCount64()<until)Sleep(1);}

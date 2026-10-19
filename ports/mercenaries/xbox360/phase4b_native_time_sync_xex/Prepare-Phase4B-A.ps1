@@ -25,7 +25,6 @@ $expected = @{
     guest_fallback = 26
     guest_arg_metadata_missing = 0
     guest_arg_metadata_mismatch = 0
-    host_surface_flagged = 17
     fallback_referenced_imports = 0
     fallback_static_refs = 0
 }
@@ -36,6 +35,15 @@ foreach ($name in $expected.Keys) {
     }
 }
 
+$hostSurface = [int]$c.host_surface_flagged
+$platformBound = 0
+if ($c.PSObject.Properties.Name -contains "platform_surface_bound") {
+    $platformBound = [int]$c.platform_surface_bound
+}
+if (($hostSurface + $platformBound) -ne 17) {
+    throw "Phase 4 surface accounting changed: expected host+platform = 17, got $hostSurface+$platformBound."
+}
+
 if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
     throw "Phase 4B-A source missing: $source"
 }
@@ -44,7 +52,8 @@ New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
 Copy-Item -LiteralPath $source -Destination $output -Force
 
 Write-Host "[Phase4B-A] NATIVE XENON TIME/SYNC HARDWARE GATE"
-Write-Host "[Phase4B-A] Phase 4A lock verified: 111 imports / 74 bridges / 11 data / 26 fallbacks / 17 host-backed."
+Write-Host "[Phase4B-A] Phase 4A lock verified: 111 imports / 74 bridges / 11 data / 26 fallbacks."
+Write-Host "[Phase4B-A] Surface accounting: $hostSurface direct host-backed / $platformBound Phase4B platform-bound (17 total)."
 Write-Host "[Phase4B-A] ABI metadata: 0 missing / 0 mismatched."
 Write-Host "[Phase4B-A] Referenced fallbacks: 0."
 Write-Host "[Phase4B-A] No retail code is executed by this gate."

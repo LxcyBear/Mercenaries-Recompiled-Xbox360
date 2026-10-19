@@ -54,6 +54,8 @@ HOST_SURFACE_DIAGNOSTIC_HELPERS = {
     "xbox_log",
 }
 
+PHASE4B_PLATFORM_CALL = re.compile(r"\b(merc_platform_[A-Za-z0-9_]+)\s*\(")
+
 
 def host_api_calls(masked_body: str) -> list[str]:
     """Return actual host API call expressions, not identifier substrings."""
@@ -222,6 +224,7 @@ def runtime_surface_for_bridge(
     visited: set[str] = set()
     host_hits: set[str] = set()
     host_via: list[str] = []
+    platform_hits: set[str] = set()
     root_path = None
 
     while queue:
@@ -244,6 +247,8 @@ def runtime_surface_for_bridge(
             if symbol != runtime_target:
                 host_via.append(symbol)
 
+        platform_hits.update(PHASE4B_PLATFORM_CALL.findall(masked_body))
+
         for match in re.finditer(
             r"\b((?:xbox|bridge)_[A-Za-z0-9_]+)\s*\(", masked_body
         ):
@@ -254,7 +259,12 @@ def runtime_surface_for_bridge(
             ):
                 queue.append(callee)
 
-    return root_path, sorted(host_hits), sorted(set(host_via))
+    return (
+        root_path,
+        sorted(host_hits),
+        sorted(set(host_via)),
+        sorted(platform_hits),
+    )
 
 
 def prototype_for(header: str, symbol: str) -> str | None:
@@ -413,6 +423,7 @@ def main() -> int:
         "guest_arg_metadata_missing": 0,
         "guest_arg_metadata_mismatch": 0,
         "host_surface_flagged": 0,
+        "platform_surface_bound": 0,
         "semantic_review_flagged": 0,
         "fallback_referenced_imports": 0,
         "fallback_static_refs": 0,
@@ -445,6 +456,7 @@ def main() -> int:
         source = None
         host_hits: list[str] = []
         host_via: list[str] = []
+        platform_hits: list[str] = []
         review_hints: list[str] = []
         expected_args = None
         signature = None
@@ -458,7 +470,7 @@ def main() -> int:
                 else:
                     counts["source_definition_missing"] += 1
         elif runtime_kind == "bridge":
-            source_path, host_hits, host_via = runtime_surface_for_bridge(
+            source_path, host_hits, host_via, platform_hits = runtime_surface_for_bridge(
                 runtime_target, sources, masked_sources
             )
             if source_path is not None:
@@ -471,6 +483,8 @@ def main() -> int:
                     review_hints = semantic_review_hints(masked_body)
                 if host_hits:
                     counts["host_surface_flagged"] += 1
+                if platform_hits:
+                    counts["platform_surface_bound"] += 1
                 if review_hints:
                     counts["semantic_review_flagged"] += 1
             else:
@@ -526,6 +540,7 @@ def main() -> int:
             "static_generated_refs": refs,
             "host_surface_tokens": host_hits,
             "host_surface_via": host_via,
+            "platform_surface_calls": platform_hits,
             "review_hints": review_hints,
         })
 
@@ -562,6 +577,7 @@ def main() -> int:
         f"Arg metadata missing:       {counts['guest_arg_metadata_missing']}",
         f"Arg metadata mismatches:    {counts['guest_arg_metadata_mismatch']}",
         f"Host-surface flagged:       {counts['host_surface_flagged']}",
+        f"Phase4B platform-bound:     {counts['platform_surface_bound']}",
         f"Semantic-review flagged:    {counts['semantic_review_flagged']}",
         f"Fallbacks statically used:  {counts['fallback_referenced_imports']}",
         f"Fallback static refs:       {counts['fallback_static_refs']}",
@@ -581,6 +597,8 @@ def main() -> int:
             if row["host_surface_via"]:
                 host_flag += " via " + ",".join(row["host_surface_via"])
             flags.append(host_flag)
+        if row["platform_surface_calls"]:
+            flags.append("PLATFORM=" + ",".join(row["platform_surface_calls"]))
         if row["review_hints"]:
             flags.append("REVIEW=" + ",".join(row["review_hints"]))
         suffix = " {" + "; ".join(flags) + "}" if flags else ""
@@ -614,7 +632,8 @@ def main() -> int:
     print(
         f"[Phase4A] arg_missing={counts['guest_arg_metadata_missing']} "
         f"arg_mismatch={counts['guest_arg_metadata_mismatch']} "
-        f"host_surface={counts['host_surface_flagged']}"
+        f"host_surface={counts['host_surface_flagged']} "
+        f"platform_bound={counts['platform_surface_bound']}"
     )
     if generated_dir and generated_dir.is_dir():
         print(
