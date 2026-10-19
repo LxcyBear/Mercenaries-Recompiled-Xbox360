@@ -1033,3 +1033,48 @@ the Q cookie, so a stale XDK project reference should fail to link instead of
 silently producing mismatched phase labels.
 
 Build tag: `P4C-TIMER113-20261019-A`.
+
+
+#### Phase 4C-Q — KeInitializeTimerEx continuation
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+PASS: Phase 4C-Q main/env build cookie matches
+
+KeInitializeTimerEx LIVE FRAME:
+  timer=008695A0
+  type_raw=00000000
+  type=0
+  esp=008BFEE8
+  saved_esp=008BFEF4
+
+PASS: ordinal 113 KeInitializeTimerEx matched production guest-KTIMER initialization semantics
+
+DIRECT FRONTIER:
+  caller=0022F128
+  target=0022C5A4
+  esp=008BFEDC
+  saved_esp=008BFEDC
+  ticks=33
+  fault=0
+```
+
+The 40-byte guest KTIMER initialization completed with the production
+dispatcher Type value for TimerType 0. The new main/env link-time cookie also
+proved the freshly generated Q source pair was linked together.
+
+The next stop is again a deliberately bounded translated direct target,
+`0x0022C5A4`, not a kernel ABI or guest-memory failure.
+
+#### Phase 4C-R — promote live target 0x0022C5A4
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-R.ps1`
+
+4C-R preserves all Q invariants, rotates the main/env build cookie, and adds
+only the exact hardware-observed direct target `0x0022C5A4`. The prior C5A4
+frontier is explicitly forbidden from counting as progress; deeper calls remain
+evidence boundaries.
+
+Build tag: `P4C-DIRECTC5A4-20261019-A`.
