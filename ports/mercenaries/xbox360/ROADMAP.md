@@ -834,3 +834,63 @@ the promoted `0x0022C47B` body, and immediate first-fault provenance remain
 active.
 
 Build tag: `P4C-KHDR-20261019-A`.
+
+
+#### Phase 4C-M — synthetic xboxkrnl PE-header surface
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+KERNEL HEADER MODEL:
+  base=80010000
+  e_lfanew=00000080
+  sections=0
+  size=4096
+
+PASS: synthetic xboxkrnl PE header is readable through the fenced kernel-image page
+
+BOUNDARY:
+  kind=ICALL_SAFE
+  caller=0022C28B
+  target=8000002F
+  esp=008BFEFC
+  saved_esp=008BFF08
+  ticks=28
+  fault=0
+
+trace[7]=0022C47B
+trace[8]=0022C28B
+```
+
+The `0x8001003C` blocker is gone. Startup advanced through the promoted
+`0x0022C47B` function into another translated function, `0x0022C28B`,
+before reaching a real kernel call.
+
+Target `0x8000002F` is kernel ordinal 47. Production bridge dispatch and ABI
+metadata agree that ordinal 47 is
+`HalRegisterShutdownNotification(PVOID ShutdownRegistration, BOOLEAN Register)`
+with 8 argument bytes. The hardware frame delta is 12 bytes, exactly
+8 argument bytes plus the translated synthetic CALL return slot.
+
+The production host implementation records/logs the shutdown registration but
+never invokes it because the recompiled runtime does not perform an Xbox-style
+shutdown callback sequence.
+
+#### Phase 4C-N — ordinal-47 shutdown-registration continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-N.ps1`
+
+4C-N:
+- requires `savedEsp-callEsp == 12`;
+- reads the registration VA and 32-bit BOOLEAN stack slot;
+- logs the live frame;
+- mirrors production no-callback semantics;
+- returns `eax=0`;
+- performs exact 8-byte stdcall argument cleanup plus synthetic return cleanup;
+- requires ordinal 47 to have been handled before a later boundary can PASS.
+
+All prior DATA relocations, the kernel-header model, promoted
+`0x0022C47B`, and first-fault provenance remain active.
+
+Build tag: `P4C-HAL47-20261019-A`.
