@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-R — promote the next hardware-observed direct target 0x0022C5A4 after Phase 4C-Q hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-S — promote the next hardware-observed direct target 0x00230060 after Phase 4C-R hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -175,7 +175,10 @@ phases.
 29. **Done:** Phase 4C-Q validated and executed live ordinal 113
     `KeInitializeTimerEx`; the Q main/env cookie matched and startup advanced
     with `fault=0` to `DIRECT_FRONTIER 0x0022C5A4`.
-30. **Phase 4C-R:** promote only `0x0022C5A4` into the translated pack,
+30. **Done:** Phase 4C-R promoted and executed `0x0022C5A4`; the R main/env
+    cookie matched and startup advanced with `fault=0` to
+    `DIRECT_FRONTIER caller=0x0022C5A4 target=0x00230060`.
+31. **Phase 4C-S:** promote only `0x00230060` into the translated pack,
     rotate the main/env build cookie, and continue to the next real boundary.
 
 ### Evidence policy
@@ -2170,6 +2173,20 @@ unexecuted test PASS.**
 - **Phase 4C-Q hardware result: PASS.**
 - **Next:** Phase 4C-R promotes only `0x0022C5A4` and rotates the build cookie.
 - Build tag: `P4C-DIRECTC5A4-20261019-A`.
+
+### 2026-10-19 — Phase 4C-R promoted C5A4 PASS
+
+- R main/env link-time build cookie matched on hardware.
+- The entire proven startup chain remained intact through ordinal 113
+  `KeInitializeTimerEx`.
+- Promoted translated target `0x0022C5A4` executed on hardware.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x0022C5A4 target=0x00230060`.
+- Boundary state remained clean: `fault=0`, ESP/saved ESP `0x008BFEC0`.
+- Trace extended to 11 translated functions through `0x0022C5A4`.
+- **Phase 4C-R hardware result: PASS.**
+- **Next:** Phase 4C-S promotes only `0x00230060`.
+- Build tag: `P4C-DIRECT30060-20261019-A`.
 
 ### How future updates are recorded
 
