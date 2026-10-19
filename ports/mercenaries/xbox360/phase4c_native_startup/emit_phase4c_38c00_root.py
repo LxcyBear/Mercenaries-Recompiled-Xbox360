@@ -2114,10 +2114,10 @@ def main() -> int:
             "to DIRECT_FRONTIER boundaries; entries listed above are true support "
             "dependencies and are not safe to guess."
         )
-        raise SystemExit(
-            "[Phase4C-Y] refusing to emit first-thread execution XEX with "
-            "non-direct unresolved helper dependencies"
+        print(
+            "[Phase4C-Y] EMIT RESULT: BLOCKED_BY_SUPPORT_DEPENDENCY"
         )
+        return 3
 
     env_source = base.build_env_source(
         args.phase2e_source.read_text(encoding="utf-8")
