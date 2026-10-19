@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-M — model the original-Xbox kernel PE-header page after Phase 4C-L hardware PASS exposed READ32 0x8001003C.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-N — continue live ordinal 47 HalRegisterShutdownNotification after Phase 4C-M hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -160,9 +160,12 @@ phases.
     `DIRECT_FRONTIER caller=0x0022C4DF target=0x0022C47B`.
 24. **Done:** Phase 4C-L promoted `0x0022C47B`; real hardware executed it
     and exposed READ32 `0x8001003C` from that function with a balanced stack.
-25. **Phase 4C-M:** model the original-Xbox kernel image header page at
-    `0x80010000` as a separate synthetic PE-header surface instead of
-    aliasing it to title RAM.
+25. **Done:** Phase 4C-M modeled the fenced xboxkrnl PE-header page; hardware
+    advanced through `0x0022C47B` into `0x0022C28B`, then stopped at
+    `ICALL_SAFE 0x8000002F` with `fault=0` and a 12-byte frame.
+26. **Phase 4C-N:** continue ordinal 47 `HalRegisterShutdownNotification`
+    using the production 8-byte ABI/no-callback semantics and resume translated
+    startup to the next live boundary.
 
 ### Evidence policy
 
@@ -2084,6 +2087,21 @@ unexecuted test PASS.**
   (MZ, `e_lfanew=0x80`, PE signature, i386, zero sections) while preserving
   all prior startup data relocations and fault telemetry.
 - Build tag: `P4C-KHDR-20261019-A`.
+
+### 2026-10-19 — Phase 4C-M kernel-header model PASS
+
+- Synthetic xboxkrnl PE-header page at `0x80010000` passed readback.
+- The previous READ32 `0x8001003C` blocker disappeared.
+- Startup advanced through translated `0x0022C47B` into `0x0022C28B`.
+- New boundary: `ICALL_SAFE caller=0x0022C28B target=0x8000002F`.
+- Frame: `esp=0x008BFEFC`, `saved_esp=0x008BFF08`, delta 12 bytes.
+- Guest fault state remained 0.
+- Ordinal 47 is `HalRegisterShutdownNotification`; production ABI metadata
+  requires 8 argument bytes, matching the live frame exactly.
+- **Phase 4C-M hardware result: PASS.**
+- **Next:** Phase 4C-N validates/logs the live registration frame, mirrors the
+  production no-callback semantics, returns `eax=0`, and resumes startup.
+- Build tag: `P4C-HAL47-20261019-A`.
 
 ### How future updates are recorded
 
