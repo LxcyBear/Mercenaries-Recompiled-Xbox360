@@ -339,25 +339,6 @@ static BYTE* g_ram = NULL;"""
     if (!g_ram || !guest_offset(address, width, &offset))
         return NULL;
 
-    /*
-     * Most of the Phase-4C arena remains implicitly accessible exactly as in
-     * earlier gates. Only pages explicitly owned by NtAllocateVirtualMemory
-     * reservations acquire VM state. Reserved/uncommitted pages must fault
-     * until a later MEM_COMMIT transitions them to committed.
-     */
-    {
-        DWORD firstPage = offset >> PHASE4C_VM_PAGE_SHIFT;
-        DWORD lastPage =
-            (offset + width - 1u) >> PHASE4C_VM_PAGE_SHIFT;
-        DWORD page;
-        for (page = firstPage; page <= lastPage; ++page)
-        {
-            if (s_phase4cVmPageState[page] ==
-                PHASE4C_VM_PAGE_RESERVED)
-                return NULL;
-        }
-    }
-
     return g_ram + offset;
 }"""
     new_ptr = """static BYTE* guest_ptr(DWORD address, DWORD width)
@@ -381,6 +362,24 @@ static BYTE* g_ram = NULL;"""
 
     if (!g_ram || !guest_offset(address, width, &offset))
         return NULL;
+
+    /*
+     * Only pages explicitly owned by NtAllocateVirtualMemory reservations
+     * acquire Phase-4C VM state. A reserved/uncommitted page behaves as
+     * inaccessible until a later MEM_COMMIT transitions it to committed.
+     */
+    {
+        DWORD firstPage = offset >> PHASE4C_VM_PAGE_SHIFT;
+        DWORD lastPage =
+            (offset + width - 1u) >> PHASE4C_VM_PAGE_SHIFT;
+        DWORD page;
+        for (page = firstPage; page <= lastPage; ++page)
+        {
+            if (s_phase4cVmPageState[page] ==
+                PHASE4C_VM_PAGE_RESERVED)
+                return NULL;
+        }
+    }
 
     return g_ram + offset;
 }"""
