@@ -226,6 +226,23 @@ try {
         "--function-range", "0x00145460:0x001455D2",
         "--function-range", "0x00162610:0x00162652",
         "--function-range", "0x00167E40:0x00168016",
+        # Phase 3N full-tree audit: reviewed fragmented native regions.
+        # Function discovery split these shared-tail/jump-table regions into
+        # tiny synthetic functions whose branches return into interior blocks
+        # of the real owner. Keep each contiguous reviewed region whole so the
+        # lifter emits local labels/gotos and preserves the owner's live frame.
+        "--function-range", "0x000869FC:0x00086AF8",
+        "--function-range", "0x000E8780:0x000E87F8",
+        "--function-range", "0x001B0990:0x001B0FD0",
+        "--function-range", "0x001DE280:0x001DE3B0",
+        "--function-range", "0x001E3FC0:0x001E4260",
+        "--function-range", "0x00238C00:0x00238EF8",
+        "--function-range", "0x0023AD8F:0x0023AEC7",
+        "--function-range", "0x0023BFF6:0x0023C013",
+        "--function-range", "0x0023E664:0x0023E70C",
+        "--function-range", "0x00256B50:0x00256D3B",
+        "--function-range", "0x00256F17:0x00257116",
+        "--function-range", "0x002907E0:0x00290881",
         "--gen-dir", $generatedRoot,
         "--manual-function", "0x000112B0",
         "--manual-function", "0x00178870",
