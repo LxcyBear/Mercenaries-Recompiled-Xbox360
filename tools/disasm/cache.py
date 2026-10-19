@@ -60,7 +60,7 @@ class AnalysisCache:
 
     @staticmethod
     def _opts_key(text_only, extra_sections=None, seed_functions=None,
-                  protected_seed_functions=None):
+                  protected_seed_functions=None, rejected_functions=None):
         """Fingerprint every input that changes the result.
 
         Not just the files: --seed-functions and --extra-sections change what
@@ -74,11 +74,13 @@ class AnalysisCache:
         h.update(repr(sorted(extra_sections or [])).encode())
         h.update(repr(sorted(seed_functions or [])).encode())
         h.update(repr(sorted(protected_seed_functions or [])).encode())
+        h.update(repr(sorted(rejected_functions or [])).encode())
         return h.hexdigest()
 
     def is_valid(self, xbe_path: str, analysis_json_path: str,
                  text_only: bool = False, extra_sections=None,
-                 seed_functions=None, protected_seed_functions=None) -> bool:
+                 seed_functions=None, protected_seed_functions=None,
+                 rejected_functions=None) -> bool:
         """
         Check if cached results are still valid.
 
@@ -100,9 +102,9 @@ class AnalysisCache:
             return False
 
         # Check every option that affects the output, not just text_only
-        if cache.get("opts_key") != self._opts_key(text_only, extra_sections,
-                                                   seed_functions,
-                                                   protected_seed_functions):
+        if cache.get("opts_key") != self._opts_key(
+                text_only, extra_sections, seed_functions,
+                protected_seed_functions, rejected_functions):
             return False
 
         # Verify output files exist
@@ -119,7 +121,7 @@ class AnalysisCache:
     def save(self, xbe_path: str, analysis_json_path: str,
              text_only: bool, elapsed_seconds: float,
              extra_sections=None, seed_functions=None,
-             protected_seed_functions=None) -> None:
+             protected_seed_functions=None, rejected_functions=None) -> None:
         """
         Save cache metadata after a successful analysis run.
         """
@@ -130,9 +132,9 @@ class AnalysisCache:
             "xbe_hash": self._hash_file(xbe_path),
             "json_hash": self._hash_file(analysis_json_path),
             "text_only": text_only,
-            "opts_key": self._opts_key(text_only, extra_sections,
-                                       seed_functions,
-                                       protected_seed_functions),
+            "opts_key": self._opts_key(
+                text_only, extra_sections, seed_functions,
+                protected_seed_functions, rejected_functions),
             "timestamp": time.time(),
             "elapsed_seconds": elapsed_seconds,
         }
