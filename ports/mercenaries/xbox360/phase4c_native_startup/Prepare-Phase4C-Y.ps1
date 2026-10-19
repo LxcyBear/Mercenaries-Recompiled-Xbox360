@@ -34,18 +34,32 @@ Write-Host ""
 
 $emitLog = Join-Path $repoRoot "build\phase4c_native_startup\phase4c-y-emitter.log"
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $emitLog) | Out-Null
-& $python $emitter "--base-emitter" $baseEmitter "--generated-root" $generatedRoot "--functions" $functionsPath "--entry-report" $entryReport "--thread-report" $threadReport "--phase3n-template" $phase3nTemplate "--phase2e-source" $phase2eSource "--out-dir" $outDir 2>&1 | Tee-Object -FilePath $emitLog
-$emitExit = $LASTEXITCODE
+
+# PowerShell 5 treats native stderr as an ErrorRecord when ErrorActionPreference
+# is Stop. Let Python complete so we can inspect its exit code + emitted
+# manifest, then restore strict wrapper behavior.
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    & $python $emitter "--base-emitter" $baseEmitter "--generated-root" $generatedRoot "--functions" $functionsPath "--entry-report" $entryReport "--thread-report" $threadReport "--phase3n-template" $phase3nTemplate "--phase2e-source" $phase2eSource "--out-dir" $outDir 2>&1 | Tee-Object -FilePath $emitLog
+    $emitExit = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+}
+
 if ($emitExit -ne 0) {
     $failedManifest = Join-Path $outDir "phase4c-y-manifest.json"
     if (Test-Path -LiteralPath $failedManifest) {
         try {
             $failedJson = Get-Content -LiteralPath $failedManifest -Raw | ConvertFrom-Json
             if ($failedJson.unknown_direct_helpers) {
+                Write-Host ""
                 Write-Host "[Phase4C-Y] Remaining unresolved helper dependencies:"
                 $failedJson.unknown_direct_helpers.PSObject.Properties | ForEach-Object {
                     Write-Host ("[Phase4C-Y]   {0}: {1}" -f $_.Name, ($_.Value -join ", "))
                 }
+                Write-Host ""
             }
         } catch {
             Write-Host "[Phase4C-Y] Could not decode failure manifest: $($_.Exception.Message)"
