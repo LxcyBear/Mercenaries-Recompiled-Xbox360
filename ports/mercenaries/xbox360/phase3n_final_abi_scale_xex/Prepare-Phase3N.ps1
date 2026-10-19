@@ -76,6 +76,9 @@ try {
     Write-Host "[Phase3N] Running reviewed function-reject preflight..."
     Invoke-Python "-m" "tools.recomp.test_reviewed_function_reject"
 
+    Write-Host "[Phase3N] Running unresolved-reference audit preflight..."
+    Invoke-Python "-m" "tools.recomp.test_phase3n_unresolved_reference_audit"
+
     if (-not $ResumeLowering) {
         Write-Host ""
         Write-Host "[Phase3N] Recompiling the supported retail XBE in an isolated workspace..."
