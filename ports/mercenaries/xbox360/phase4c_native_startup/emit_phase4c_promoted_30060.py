@@ -1509,7 +1509,7 @@ def main() -> int:
         "unknown_direct_helpers": unknown,
         "members": [f"0x{va:08X}" for va in member_vas],
     }
-    (args.out_dir / "phase4c-r-manifest.json").write_text(
+    (args.out_dir / "phase4c-s-manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -1530,6 +1530,7 @@ def main() -> int:
         "PHASE 4C-N",
         "PHASE 4C-O",
         "PHASE 4C-P",
+        "PHASE 4C-R",
     ):
         env_source = env_source.replace(stale_phase, "PHASE 4C-S")
     env_source += """
@@ -1541,6 +1542,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
     for stale_phase in (
         "PHASE 4C-N",
         "PHASE 4C-O",
+        "PHASE 4C-R",
     ):
         env_source = env_source.replace(stale_phase, "PHASE 4C-S")
 
@@ -1551,7 +1553,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
     )
     driver = driver.replace(
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
-        "Policy: preserve proven startup path and execute promoted direct target 0022C5A4",
+        "Policy: preserve proven startup path and execute promoted direct target 00230060",
     )
     driver = driver.replace("PHASE 4C-B", "PHASE 4C-S")
     cookie_decl = 'extern "C" DWORD phase4c_env_entry(void);\n'
