@@ -9,6 +9,31 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 **Phase 4 - Host kernel/platform services is active. Phase 4A is locked PASS; Phase 4B-A hardware proof passed and Phase 4B-A2 runtime platformization is ready for verification.** The verified retail Mercenaries XBE exposes 111 kernel imports; the locked Phase-4A baseline is 74 explicit bridges, 11 guest data exports, 26 return-zero fallbacks, zero missing or mismatched guest argument-cleanup entries, zero statically referenced fallbacks, and 17 genuine semantic host-backed callable paths. Build `P4B-TIMESYNC-20261019-B` passed on real Xenon hardware (50 MHz QPC, 20.304 ms relative delay, 2.000 ms stall, 20.062 ms wait timeout, correct event/timer delivery). Phase 4B-A2 routes six timing/synchronization import paths through `src/platform/kernel_time_sync.*`; the progress audit now distinguishes remaining direct host surface from hardware-proven platform-bound paths. See [phase4a_kernel_surface_audit](ports/mercenaries/xbox360/phase4a_kernel_surface_audit) and [phase4b_native_time_sync_xex](ports/mercenaries/xbox360/phase4b_native_time_sync_xex).
 
 
+### Xbox 360 phase progression map
+
+| Phase | Status | Proof / purpose |
+| --- | --- | --- |
+| 3A | Complete | Scalar guest-memory semantics on Xenon. |
+| 3B | Complete | x87 guest-memory semantics. |
+| 3C | Complete | SSE/MMX guest-memory semantics. |
+| 3D | Complete | Runtime guest-memory execution surface. |
+| 3E | Complete | First real retail translated function executes in the XDK harness. |
+| 3F | Complete | Translated tail-call path. |
+| 3G | Complete | Direct translated-call path. |
+| 3H | Complete | Indirect-call / ICALL path. |
+| 3I | Complete | Composite translated slice. |
+| 3J | Complete | Dependency-closed translated cluster on real hardware. |
+| 3K | Complete | Wider control/flags plus mixed x87/XMM architectural state. |
+| 3L | Complete | Bounded translated loop surface. |
+| 3M | Complete | Maintained x87 rounding/exception behavior. |
+| 3N / 3N-B | **Phase 3 final PASS** | 128-function audited translated-code scale pack; loaded-XEX anchors, x87 checks, six independent-reference runs of retail `0x00208F30`, XAPI return 0. |
+| 4A | **Locked PASS** | Exact 111-import guest kernel surface + ABI audit; 17 semantic host-backed callable paths at baseline. |
+| 4B-A | **Hardware PASS** | Native Xenon timing/synchronization primitive gate. |
+| 4B-A2 | **Active verification** | Six timing/sync paths migrated to `merc_platform_*`; audit target achieved at 11 direct host-backed + 6 platform-bound. |
+| 4B-B | Next | File/handle native-service slice. |
+
+This table is the continuation of the Phase-3 hardware map: later phases should only advance when their stated evidence gate passes.
+
 ## Start with the question
 
 | Need to understand/change | Start here | Then follow |
