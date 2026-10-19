@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-Q — continue live ordinal 113 KeInitializeTimerEx after Phase 4C-P hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-R — promote the next hardware-observed direct target 0x0022C5A4 after Phase 4C-Q hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -172,8 +172,11 @@ phases.
 28. **Done:** Phase 4C-P validated and executed live ordinal 107
     `KeInitializeDpc` with DPC `0x00869580`, routine `0x0022F116`,
     context 0; startup advanced with `fault=0` to `ICALL_SAFE 0x80000071`.
-29. **Phase 4C-Q:** continue ordinal 113 `KeInitializeTimerEx` using exact
-    production guest-KTIMER initialization semantics and a main/env build cookie.
+29. **Done:** Phase 4C-Q validated and executed live ordinal 113
+    `KeInitializeTimerEx`; the Q main/env cookie matched and startup advanced
+    with `fault=0` to `DIRECT_FRONTIER 0x0022C5A4`.
+30. **Phase 4C-R:** promote only `0x0022C5A4` into the translated pack,
+    rotate the main/env build cookie, and continue to the next real boundary.
 
 ### Evidence policy
 
@@ -2153,6 +2156,20 @@ unexecuted test PASS.**
 - **Next:** Phase 4C-Q initializes the 40-byte guest KTIMER exactly as the
   production bridge does and introduces a main/env link-time build cookie.
 - Build tag: `P4C-TIMER113-20261019-A`.
+
+### 2026-10-19 — Phase 4C-Q KeInitializeTimerEx PASS
+
+- Q main/env link-time build cookie matched on hardware.
+- Live timer frame:
+  `timer=0x008695A0`, `type_raw=0`, TimerType=0.
+- Production 40-byte guest KTIMER initialization and readback passed.
+- Startup resumed with guest fault state 0.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x0022F128 target=0x0022C5A4`.
+- Stack remained balanced at `0x008BFEDC`.
+- **Phase 4C-Q hardware result: PASS.**
+- **Next:** Phase 4C-R promotes only `0x0022C5A4` and rotates the build cookie.
+- Build tag: `P4C-DIRECTC5A4-20261019-A`.
 
 ### How future updates are recorded
 
