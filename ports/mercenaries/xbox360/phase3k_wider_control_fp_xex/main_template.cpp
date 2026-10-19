@@ -70,6 +70,8 @@ uint32_t g_seh_ebp = 0u;
 uint32_t g_eflags = 0u;
 double g_fp_stack[8] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 uint32_t g_fp_top = 0u;
+uint16_t g_x87_control_word = 0x037Fu;
+uint16_t g_x87_status_word = 0u;
 
 float g_xmm0[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 float g_xmm1[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -1044,6 +1046,8 @@ static void seed_case(DWORD profileIndex)
     g_eflags = 0u;
 
     g_fp_top = 0u;
+    g_x87_control_word = 0x037Fu;
+    g_x87_status_word = 0u;
     for (i = 0u; i < 8u; ++i)
     {
         g_fp_stack[i] =
@@ -1255,6 +1259,8 @@ typedef struct RunResult
     DWORD coveredMembers;
 
     DWORD fpTop;
+    uint16_t x87ControlWord;
+    uint16_t x87StatusWord;
     uint64_t fpStackBits[8];
     DWORD xmmBits[8][4];
 
@@ -1275,6 +1281,10 @@ static unsigned __int64 hash_fp_state(void)
     DWORD lane;
 
     hash ^= (unsigned __int64)g_fp_top;
+    hash *= kPrime;
+    hash ^= (unsigned __int64)g_x87_control_word;
+    hash *= kPrime;
+    hash ^= (unsigned __int64)g_x87_status_word;
     hash *= kPrime;
 
     for (i = 0u; i < 8u; ++i)
@@ -1317,6 +1327,8 @@ static void capture_result(DWORD caseIndex, RunResult* result)
     result->canaryOk = canaries_ok(caseIndex);
 
     result->fpTop = g_fp_top;
+    result->x87ControlWord = g_x87_control_word;
+    result->x87StatusWord = g_x87_status_word;
     for (i = 0u; i < 8u; ++i)
         memcpy(
             &result->fpStackBits[i],
@@ -1393,6 +1405,8 @@ static int architecture_matches(const RunResult* a, const RunResult* b)
         a->coverageMask == b->coverageMask &&
         a->coveredMembers == b->coveredMembers &&
         a->fpTop == b->fpTop &&
+        a->x87ControlWord == b->x87ControlWord &&
+        a->x87StatusWord == b->x87StatusWord &&
         memcmp(a->fpStackBits, b->fpStackBits, sizeof(a->fpStackBits)) == 0 &&
         memcmp(a->xmmBits, b->xmmBits, sizeof(a->xmmBits)) == 0 &&
         a->fpStateHash == b->fpStateHash &&
