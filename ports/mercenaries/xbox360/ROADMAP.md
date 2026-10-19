@@ -1434,3 +1434,31 @@ the translated boot path.
 Build tag: `P5B-NTOPEN202-NATIVE-20261019-A`.
 
 Cookie: `P5B1 / 0x50354231`.
+
+
+#### Phase 5B — native NtOpenFile hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5B-NTOPEN202-NATIVE-20261019-A` mapped the observed
+`\Device\Harddisk0\partition1\` request to
+`game:\merc360-partition1`, returned STATUS_SUCCESS with tagged guest handle
+`0x48000001`, and resumed translated execution with `fault=0`.
+
+The next live dependency is `ICALL_SAFE target=0x800000DA`, ordinal 218
+`NtQueryVolumeInformationFile`, with an exact 24-byte full frame.
+
+#### Phase 5C — native volume query + handle close
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5C.ps1`
+
+5C resolves the tagged guest handle to its native Xenon handle, services
+`XboxFileFsSizeInformation` from native `game:` free/total space using
+512-byte sectors and 32 sectors per allocation unit, then resumes execution.
+
+Ordinal 187 `NtClose` is also armed for the tagged native handle lifecycle.
+
+Build tag: `P5C-VOLUME218-NATIVE-20261019-A`.
+
+Cookie: `P5C1 / 0x50354331`.
