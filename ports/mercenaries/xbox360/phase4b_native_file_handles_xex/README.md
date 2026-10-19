@@ -1,6 +1,6 @@
 # Phase 4B-B — Native Xenon file/handle gate
 
-**Status: hardware gate A ready.**
+**Status: hardware PASS; Phase 4B-B2 runtime verification active.**
 
 Phase 4B-A/A2 is complete. The exact retail audit now reports 11 remaining
 direct semantic host-backed import paths and 6 Phase-4B platform-bound paths.
@@ -90,3 +90,56 @@ previous hardware gates.
 After a hardware PASS, Phase 4B-B2 will place the proven file primitives
 behind a shared platform boundary while preserving the existing Xbox guest
 path translation, IO status, read-cache, directory-context, and bridge logic.
+
+
+## Hardware result — October 19, 2026
+
+Build `P4B-FILE-20261019-A` passed on real Xbox 360 hardware.
+
+The xbWatson run passed every bounded storage check:
+
+- test directory create/existing;
+- `CreateFileA(CREATE_ALWAYS)`;
+- full payload `WriteFile` + `FlushFileBuffers`;
+- `GetFileSize` and `GetFileInformationByHandle`;
+- begin/explicit seek and `FILE_CURRENT` position;
+- full and explicit-offset `ReadFile`;
+- `SetEndOfFile` truncate to 24 bytes;
+- close/reopen with truncated size preserved;
+- `GetFileAttributesA` regular-file identification;
+- `FindFirstFileA` / directory enumeration / `FindClose`;
+- missing `OPEN_EXISTING` returns a not-found error;
+- file and directory cleanup.
+
+Overall result:
+
+```text
+[Merc360:P4B-FILE] PHASE 4B-B NATIVE FILE/HANDLE RESULT: PASS
+```
+
+This proves the bounded XDK primitive set. It does not by itself prove the
+full translated game's storage path.
+
+## Phase 4B-B2 verification
+
+The production file HLE now routes the nine retail file/handle import paths
+through `src/platform/kernel_file_io.*` while preserving guest path
+translation, handle-token ownership, IO status layout, read caching and
+directory contexts.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4b_native_file_handles_xex\Verify-Phase4B-B2.ps1"
+```
+
+The expected migration split is:
+
+```text
+host_surface=2
+platform_bound=15
+arg_missing=0
+arg_mismatch=0
+fallback_referenced=0
+fallback_refs=0
+```
