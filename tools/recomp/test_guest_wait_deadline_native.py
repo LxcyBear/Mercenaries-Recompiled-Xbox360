@@ -153,8 +153,23 @@ def _msvc_environment(vcvars: Path, workdir: Path):
         if "=" not in line:
             continue
         key, value = line.split("=", 1)
+
+        # Windows environment-variable names are case-insensitive, while a
+        # Python dict is not. cmd.exe commonly reports "Path=", so blindly
+        # adding it beside an existing "PATH" leaves two competing entries
+        # and makes shutil.which() inspect the stale one.
+        for existing in list(env):
+            if existing.lower() == key.lower() and existing != key:
+                del env[existing]
         env[key] = value
     return env
+
+
+def _env_value(env, name):
+    for key, value in env.items():
+        if key.lower() == name.lower():
+            return value
+    return None
 
 
 def compile_c(source: Path, exe: Path, *, winmm=False):
@@ -171,10 +186,21 @@ def compile_c(source: Path, exe: Path, *, winmm=False):
     vcvars = _vcvars64()
     if vcvars:
         env = _msvc_environment(vcvars, source.parent)
-        cl = shutil.which("cl.exe", path=env.get("PATH"))
+        cl = shutil.which("cl.exe", path=_env_value(env, "PATH"))
+        if not cl:
+            # Defensive fallback for older VS Build Tools layouts: the
+            # activation script may populate INCLUDE/LIB correctly even when
+            # its PATH formatting is unusual. Locate cl.exe from the VC tree.
+            vc_root = vcvars.parents[3]
+            matches = sorted(
+                vc_root.glob("Tools/MSVC/*/bin/Hostx64/x64/cl.exe"),
+                reverse=True,
+            )
+            if matches:
+                cl = str(matches[0])
         if not cl:
             raise AssertionError(
-                f"vcvars64.bat succeeded but cl.exe was not added to PATH: {vcvars}"
+                f"vcvars64.bat succeeded but cl.exe could not be located: {vcvars}"
             )
         command = [cl, "/nologo", "/O2", "/W4", "/TC", str(source), f"/Fe:{exe}"]
         if winmm:
