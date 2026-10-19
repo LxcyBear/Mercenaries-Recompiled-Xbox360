@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Phase 4C-C: emit the first startup-thread handoff XDK package.
+"""Phase 4C-C: capture the first real startup-thread handoff.
 
-This layers the proven 4C-B package machinery with one additional live kernel
-path: ordinal 255 / PsCreateSystemThreadEx. The first title thread is entered
-synchronously and execution stops at the next live dynamic/kernel boundary.
+4C-B already proved the exact retail entry reaches kernel ordinal 255 on real
+Xbox 360 hardware. 4C-C deliberately does *not* pre-pack a guessed thread
+routine. It reuses the hardware-proven 40-body entry closure, decodes the live
+PsCreateSystemThreadEx frame, records the actual StartRoutine/contexts, and
+stops successfully at a THREAD_TARGET evidence boundary.
+
+The next phase can then package only the routine hardware actually reported.
 """
 
 from __future__ import annotations
@@ -14,9 +18,6 @@ import json
 from pathlib import Path
 
 
-THREAD_ROOTS = (0x0022B43F, 0x002295D6)
-
-
 def load_base(path: Path):
     spec = importlib.util.spec_from_file_location("phase4c_b_emitter", path)
     if spec is None or spec.loader is None:
@@ -24,52 +25,6 @@ def load_base(path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def generated_direct_closure(base, roots, generated):
-    name_to_va = {row["name"]: va for va, row in generated.items()}
-    pending = list(roots)
-    seen = set()
-
-    while pending:
-        va = pending.pop()
-        if va in seen:
-            continue
-
-        row = generated.get(va)
-        if row is None:
-            raise SystemExit(
-                f"[Phase4C-C] translated startup root/dependency "
-                f"0x{va:08X} is absent from the generated tree"
-            )
-
-        seen.add(va)
-        calls = set(base.CALL_RE.findall(base.mask_noncode(row["source"])))
-        for name in calls:
-            dep = name_to_va.get(name)
-            if dep is not None and dep not in seen:
-                pending.append(dep)
-
-    return sorted(seen)
-
-
-def pack_lookup_source(member_vas, generated):
-    lines = [
-        "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)",
-        "{",
-        "    switch (xbox_va) {",
-    ]
-    for va in member_vas:
-        lines.append(
-            f"    case 0x{va:08X}u: return {generated[va]['name']};"
-        )
-    lines += [
-        "    default: return (recomp_func_t)0;",
-        "    }",
-        "}",
-        "",
-    ]
-    return "\n".join(lines)
 
 
 def phase4c_c_boundary(base):
@@ -96,14 +51,8 @@ def phase4c_c_boundary(base):
 
     new_macro = r'''#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \
     uint32_t _phase4c_target = (uint32_t)(xbox_va); \
-    const uint32_t _phase4c_saved_ebx = g_ebx; \
-    const uint32_t _phase4c_saved_esi = g_esi; \
-    const uint32_t _phase4c_saved_edi = g_edi; \
     if (_phase4c_target == 0x800000FFu) { \
-        phase4c_follow_ps_create_system_thread_ex((uint32_t)(saved_esp)); \
-        g_ebx = _phase4c_saved_ebx; \
-        g_esi = _phase4c_saved_esi; \
-        g_edi = _phase4c_saved_edi; \
+        phase4c_capture_ps_create_system_thread_ex((uint32_t)(saved_esp)); \
     } else { \
         phase4c_escape( \
             PHASE4C_BOUNDARY_ICALL_SAFE, \
@@ -118,11 +67,10 @@ def phase4c_c_boundary(base):
 
     text += r'''
 
-static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va);
-
-static void phase4c_follow_ps_create_system_thread_ex(uint32_t savedEsp)
+static void phase4c_capture_ps_create_system_thread_ex(uint32_t savedEsp)
 {
     const uint32_t callEsp = g_esp;
+    const uint32_t expectedDelta = 44u;
     uint32_t handlePtr;
     uint32_t threadExtra;
     uint32_t kernelStack;
@@ -133,37 +81,57 @@ static void phase4c_follow_ps_create_system_thread_ex(uint32_t savedEsp)
     uint32_t createSuspended;
     uint32_t debugStack;
     uint32_t startRoutine;
-    recomp_func_t fn;
-    char line[384];
+    char line[448];
 
     /*
-     * 4C-B hardware proved savedEsp - callEsp == 0x2C:
-     * ten dword arguments plus the synthetic CALL return.
+     * 4C-B hardware observed:
+     *   callEsp  = 0x008BFF98
+     *   savedEsp = 0x008BFFC4
+     *   delta    = 0x2C
+     *
+     * PsCreateSystemThreadEx has ten 32-bit stdcall arguments. The remaining
+     * four bytes are the translated synthetic CALL return slot.
      */
-    if (savedEsp != callEsp + 44u) {
+    if (savedEsp != callEsp + expectedDelta) {
+        sprintf(
+            line,
+            "KERNEL FRAME MISMATCH: target=800000FF esp=%08X saved_esp=%08X delta=%u expected=%u",
+            (unsigned int)callEsp,
+            (unsigned int)savedEsp,
+            (unsigned int)(savedEsp - callEsp),
+            (unsigned int)expectedDelta);
+        trace(line);
         phase4c_escape(
             PHASE4C_BOUNDARY_KERNEL_FRAME,
             0x800000FFu,
             savedEsp);
     }
 
-    /* Match kernel_thunk_dispatch: pop the synthetic CALL return first. */
-    g_esp += 4u;
+    /*
+     * Do not mutate ESP in this discovery gate. The arguments begin one dword
+     * above callEsp because callEsp points at the synthetic return slot.
+     */
+    handlePtr = GUEST_READ32(callEsp + 4u);
+    threadExtra = GUEST_READ32(callEsp + 8u);
+    kernelStack = GUEST_READ32(callEsp + 12u);
+    tlsSize = GUEST_READ32(callEsp + 16u);
+    threadIdPtr = GUEST_READ32(callEsp + 20u);
+    context1 = GUEST_READ32(callEsp + 24u);
+    context2 = GUEST_READ32(callEsp + 28u);
+    createSuspended = GUEST_READ32(callEsp + 32u);
+    debugStack = GUEST_READ32(callEsp + 36u);
+    startRoutine = GUEST_READ32(callEsp + 40u);
 
-    handlePtr = GUEST_READ32(g_esp + 0u);
-    threadExtra = GUEST_READ32(g_esp + 4u);
-    kernelStack = GUEST_READ32(g_esp + 8u);
-    tlsSize = GUEST_READ32(g_esp + 12u);
-    threadIdPtr = GUEST_READ32(g_esp + 16u);
-    context1 = GUEST_READ32(g_esp + 20u);
-    context2 = GUEST_READ32(g_esp + 24u);
-    createSuspended = GUEST_READ32(g_esp + 28u);
-    debugStack = GUEST_READ32(g_esp + 32u);
-    startRoutine = GUEST_READ32(g_esp + 36u);
+    if (s_accessFault) {
+        phase4c_escape(
+            PHASE4C_BOUNDARY_GUEST_FAULT,
+            0x800000FFu,
+            savedEsp);
+    }
 
     sprintf(
         line,
-        "PsCreateSystemThreadEx: handle_ptr=%08X extra=%u kstack=%u tls=%u tid_ptr=%08X ctx1=%08X ctx2=%08X suspended=%u debug=%u routine=%08X",
+        "PsCreateSystemThreadEx LIVE FRAME: handle_ptr=%08X extra=%u kstack=%u tls=%u tid_ptr=%08X ctx1=%08X ctx2=%08X suspended=%u debug=%u routine=%08X",
         (unsigned int)handlePtr,
         (unsigned int)threadExtra,
         (unsigned int)kernelStack,
@@ -176,50 +144,23 @@ static void phase4c_follow_ps_create_system_thread_ex(uint32_t savedEsp)
         (unsigned int)startRoutine);
     trace(line);
 
-    if (s_accessFault) {
-        phase4c_escape(
-            PHASE4C_BOUNDARY_GUEST_FAULT,
-            0x800000FFu,
-            savedEsp);
-    }
-
-    if (handlePtr != 0u)
-        GUEST_WRITE32(handlePtr, 0xBEEF0001u);
-    if (threadIdPtr != 0u)
-        GUEST_WRITE32(threadIdPtr, 1u);
-
-    fn = phase4c_lookup_pack_func(startRoutine);
-    if (!fn) {
-        phase4c_escape(
-            PHASE4C_BOUNDARY_THREAD_TARGET,
-            startRoutine,
-            savedEsp);
-    }
-
     sprintf(
         line,
-        "PASS: ordinal 255 frame decoded; entering translated StartRoutine %08X synchronously",
-        (unsigned int)startRoutine);
+        "PASS: ordinal 255 frame shape is exact; captured live StartRoutine=%08X ctx1=%08X ctx2=%08X",
+        (unsigned int)startRoutine,
+        (unsigned int)context1,
+        (unsigned int)context2);
     trace(line);
 
     /*
-     * Match the production bridge's first-title-thread model: push two
-     * contexts and a synthetic return slot, then enter the translated routine
-     * synchronously on the recompiled CPU state.
+     * THREAD_TARGET is a successful evidence boundary for 4C-C. We stop here
+     * intentionally so the next phase packages the routine actually observed
+     * on hardware instead of a guessed/static candidate closure.
      */
-    g_esp -= 4u; GUEST_WRITE32(g_esp, context2);
-    g_esp -= 4u; GUEST_WRITE32(g_esp, context1);
-    g_esp -= 4u; GUEST_WRITE32(g_esp, 0u);
-
-    fn();
-
-    /*
-     * The title thread should not return during this bounded slice. If it
-     * does, restore the caller-visible stdcall result exactly.
-     */
-    g_esp = savedEsp;
-    g_eax = 0u;
-    trace("PsCreateSystemThreadEx: translated StartRoutine returned");
+    phase4c_escape(
+        PHASE4C_BOUNDARY_THREAD_TARGET,
+        startRoutine,
+        savedEsp);
 }
 '''
     return text
@@ -251,20 +192,18 @@ def main() -> int:
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated_root, by_name)
 
-    base_members = {
+    # Preserve exactly the direct translated body set that passed 4C-B.
+    member_vas = [
         int(str(row["address"]), 0)
         for row in report["closure"]["members"]
-    }
-    thread_members = set(
-        generated_direct_closure(base, THREAD_ROOTS, generated)
-    )
-    member_vas = sorted(base_members | thread_members)
+    ]
 
-    for va in member_vas:
-        if va not in generated:
-            raise SystemExit(
-                f"[Phase4C-C] generated body missing for 0x{va:08X}"
-            )
+    missing_generated = [va for va in member_vas if va not in generated]
+    if missing_generated:
+        raise SystemExit(
+            "[Phase4C-C] generated body missing for base closure member(s): "
+            + ", ".join(f"0x{va:08X}" for va in missing_generated)
+        )
 
     root_row = by_va.get(root_va)
     if root_row is None:
@@ -285,19 +224,6 @@ def main() -> int:
         rendered_by_va[va] = rendered
         bodies.append(rendered)
 
-    pack_guest_bytes = 0
-    for va in member_vas:
-        raw_size = by_va.get(va, {}).get("size", 0)
-        try:
-            pack_guest_bytes += int(str(raw_size), 0)
-        except (TypeError, ValueError):
-            pass
-
-    pack_source_bytes = sum(
-        len(generated[va]["source"].encode("utf-8"))
-        for va in member_vas
-    )
-
     template = args.phase3n_template.read_text(encoding="utf-8")
     marker = "/*__P3NB_FORWARD_DECLS__*/"
     marker_index = template.find(marker)
@@ -310,8 +236,8 @@ def main() -> int:
         "__P3NB_MEMBER_COUNT__": str(len(member_vas)),
         "__P3NB_DEPTH__": str(int(report["closure"]["max_direct_depth"])),
         "__P3NB_SCALE_COUNT__": str(len(member_vas)),
-        "__P3NB_SCALE_GUEST_BYTES__": str(pack_guest_bytes),
-        "__P3NB_SCALE_SOURCE_BYTES__": str(pack_source_bytes),
+        "__P3NB_SCALE_GUEST_BYTES__": str(int(report["closure"]["guest_bytes"])),
+        "__P3NB_SCALE_SOURCE_BYTES__": str(int(report["closure"]["source_bytes"])),
         "__P3NB_MEMBER_VAS__": ", ".join(
             f"0x{va:08X}u" for va in member_vas
         ),
@@ -330,7 +256,7 @@ def main() -> int:
         "sub_0022B178",
         "sub_0022DDA4",
         "sub_0022E51F",
-        "phase4c_lookup_pack_func",
+        "phase4c_capture_ps_create_system_thread_ex",
     })
 
     unknown = {}
@@ -352,15 +278,14 @@ def main() -> int:
 
     manifest = {
         "phase": "4C-C",
-        "build_tag": "P4C-THREAD-20261019-A",
+        "build_tag": "P4C-THREAD-20261019-B",
         "entry": f"0x{root_va:08X}",
         "root_name": root_name,
         "pack_members": len(member_vas),
-        "base_entry_members": len(base_members),
-        "thread_roots": [f"0x{va:08X}" for va in THREAD_ROOTS],
-        "thread_root_union_members": len(thread_members),
-        "pack_guest_bytes": pack_guest_bytes,
-        "pack_source_bytes": pack_source_bytes,
+        "policy": "capture-live-pscreatesystemthreadex-start-routine",
+        "expected_kernel_target": "0x800000FF",
+        "expected_kernel_ordinal": 255,
+        "expected_frame_bytes": 44,
         "unknown_direct_helpers": unknown,
         "members": [f"0x{va:08X}" for va in member_vas],
     }
@@ -374,8 +299,8 @@ def main() -> int:
         for owner, names in unknown.items():
             print(f"[Phase4C-C]   {owner}: {', '.join(names)}")
         raise SystemExit(
-            "[Phase4C-C] refusing to emit a thread-handoff XEX with "
-            "unresolved direct helper dependencies"
+            "[Phase4C-C] base 4C-B closure unexpectedly gained unresolved "
+            "direct helper dependencies"
         )
 
     env_source = base.build_env_source(
@@ -385,11 +310,11 @@ def main() -> int:
     driver = base.driver_source(root_name, root_va, len(member_vas))
     driver = driver.replace(
         "P4C-STARTUP-20261019-A",
-        "P4C-THREAD-20261019-A",
+        "P4C-THREAD-20261019-B",
     )
     driver = driver.replace(
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
-        "Policy: follow ordinal 255 into the first translated title thread and stop at the next live boundary",
+        "Policy: decode the live PsCreateSystemThreadEx frame and capture the actual StartRoutine",
     )
     driver = driver.replace("PHASE 4C-B", "PHASE 4C-C")
     driver = driver.replace(
@@ -399,15 +324,39 @@ def main() -> int:
         '    case PHASE4C_BOUNDARY_KERNEL_FRAME: return "KERNEL_FRAME";',
     )
 
+    old_pass = """        boundedPass =
+            s_phase4cBoundaryKind >= PHASE4C_BOUNDARY_ICALL &&
+            s_phase4cBoundaryKind <= PHASE4C_BOUNDARY_ITAIL_SAFE &&
+            !s_accessFault &&
+            s_traceCount > 0u &&
+            s_trace[0] == 0x%08Xu;""" % root_va
+
+    new_pass = """        boundedPass =
+            (
+                (s_phase4cBoundaryKind >= PHASE4C_BOUNDARY_ICALL &&
+                 s_phase4cBoundaryKind <= PHASE4C_BOUNDARY_ITAIL_SAFE) ||
+                s_phase4cBoundaryKind == PHASE4C_BOUNDARY_THREAD_TARGET
+            ) &&
+            !s_accessFault &&
+            s_traceCount > 0u &&
+            s_trace[0] == 0x%08Xu;""" % root_va
+
+    if old_pass not in driver:
+        raise SystemExit("[Phase4C-C] bounded PASS policy marker changed")
+    driver = driver.replace(old_pass, new_pass)
+
+    driver = driver.replace(
+        "PHASE 4C-C BOUNDED REAL STARTUP RESULT",
+        "PHASE 4C-C LIVE THREAD-HANDOFF CAPTURE RESULT",
+    )
+
     generated_main = (
         support
         + "\n"
         + boundary
-        + "\n\n/* Phase 4C-C translated startup + first-thread closure */\n"
+        + "\n\n/* Phase 4C-C: hardware-proven entry closure only */\n"
         + "\n".join(forward_decls)
-        + "\n\n"
-        + pack_lookup_source(member_vas, generated)
-        + "\n#pragma optimize(\"\", off)\n"
+        + "\n\n#pragma optimize(\"\", off)\n"
         + "\n\n".join(bodies)
         + "\n#pragma optimize(\"\", on)\n"
         + driver
@@ -416,25 +365,20 @@ def main() -> int:
     (args.out_dir / "main.cpp").write_text(generated_main, encoding="utf-8")
     (args.out_dir / "phase4c_env.cpp").write_text(env_source, encoding="utf-8")
 
-    print("[Phase4C-C] THREAD-HANDOFF XDK PACKAGE READY")
+    print("[Phase4C-C] LIVE THREAD-HANDOFF CAPTURE PACKAGE READY")
     print(
-        f"[Phase4C-C] Entry: {root_name} @ 0x{root_va:08X}; "
-        f"pack={len(member_vas)} bodies"
+        f"[Phase4C-C] Preserved 4C-B translated body set: "
+        f"{len(member_vas)} bodies"
     )
     print(
-        "[Phase4C-C] Startup roots packed: "
-        + ", ".join(f"0x{va:08X}" for va in THREAD_ROOTS)
-    )
-    print(
-        f"[Phase4C-C] Thread-root closure contributes "
-        f"{len(thread_members)} generated bodies before union"
+        "[Phase4C-C] No guessed thread routine is packed in this gate."
     )
     print(f"[Phase4C-C] main: {args.out_dir / 'main.cpp'}")
     print(f"[Phase4C-C] env:  {args.out_dir / 'phase4c_env.cpp'}")
     print(
-        "[Phase4C-C] Runtime policy: decode ordinal 255, validate/log the "
-        "actual StartRoutine, enter it synchronously, then escape at the "
-        "next live boundary."
+        "[Phase4C-C] Runtime policy: validate the 44-byte ordinal-255 frame, "
+        "log the actual StartRoutine/contexts, and stop successfully at "
+        "THREAD_TARGET."
     )
     return 0
 
