@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4B-C — remaining native memory/protection service migration after Phase 4B-B2 PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4B-C2 — final native memory/protection runtime verification after real-Xenon hardware PASS.
 >
 > **Active development:** [Phase 4B-C — native memory/protection](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4b-native-memory-protection). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -55,7 +55,7 @@ Each phase has independently checkable checkpoints below.
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
-| **4 — Native platform + kernel services** | **In progress — 4A locked PASS; 4B-A/A2 + 4B-B/B2 complete; 4B-C active** | Required native service slices are hardware-proven and runtime-platformized; 2 direct host-backed paths remain |
+| **4 — Native platform + kernel services** | **In progress — 4A locked PASS; 4B-A/A2 + 4B-B/B2 complete; 4B-C hardware PASS; C2 active** | Final target is 0 direct host-backed / 15 platform-bound / 2 guest-native with all regressions green |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
 | 7 — Gameplay, stability and release | Not started | Repeated playable scenarios, save/load, mission progression and documented release |
@@ -75,8 +75,11 @@ semantic host-backed callable paths; six timing/synchronization imports and nine
 file/handle imports are now hardware-proven and routed through native-ready
 platform boundaries. The current audit is down to **2 direct host-backed / 15
 platform-bound** imports with zero ABI metadata errors and zero referenced
-fallbacks. Phase 4B-C must migrate the remaining `NtFreeVirtualMemory` and
-`MmSetAddressProtect` paths before the first real translated-game startup push.
+fallbacks. Build `P4B-MEMPROT-20261019-B` has now passed the final memory/protection
+hardware gate on real Xenon. Phase 4B-C2 has wired `NtFreeVirtualMemory` and
+`MmSetAddressProtect` to guest-owned page-backed release/protection state and
+is now verifying the final service split before the first real translated-game
+startup push.
 D3D11, DXGI and host-audio dependencies still need Xbox 360-native replacements
 in later phases.
 
@@ -101,9 +104,13 @@ in later phases.
 10. **Done:** Phase 4B-A/A2 and 4B-B/B2 hardware + runtime verification migrated
     15 service paths to native-ready platform boundaries; current audit is
     `host_surface=2`, `platform_bound=15`.
-11. **Phase 4B-C:** migrate and verify the remaining memory/protection pair,
-    `NtFreeVirtualMemory` and `MmSetAddressProtect`, then advance toward the
-    first real translated Mercenaries startup path.
+11. **Hardware PASS:** Phase 4B-C build `P4B-MEMPROT-20261019-B` passed
+    tracked release/reuse, per-page protection, decommit/recommit, zero-init,
+    bounds and stale-release checks on real Xbox 360 hardware.
+12. **Phase 4B-C2:** verify the production guest-memory integration at
+    `host_surface=0`, `platform_bound=15`, `guest_native=2`, with ABI,
+    fallback, timing, file/handle and memory-boundary regressions all green;
+    then advance toward the first real translated Mercenaries startup path.
 
 ### Evidence policy
 
@@ -282,8 +289,11 @@ translated-code scale and reference-comparison suite passed on modified Xbox
       imports; Phase 4B-A/A2 passes at the real-console and regression layers.
 - [x] Hardware-prove and runtime-platformize the nine file/handle imports;
       Phase 4B-B/B2 passes at the real-console and regression layers.
-- [ ] Replace the remaining direct memory/protection host surface:
-      `NtFreeVirtualMemory` and `MmSetAddressProtect`.
+- [x] Hardware-prove the final memory/protection semantics on real Xenon
+      with `P4B-MEMPROT-20261019-B`.
+- [ ] Complete Phase 4B-C2 verification of the production guest-owned
+      `NtFreeVirtualMemory` / `MmSetAddressProtect` integration and confirm
+      zero remaining direct semantic host-backed imports.
 - [ ] Complete title-owned path/storage validation with real Mercenaries asset
       and save traffic on the native startup path.
 - [ ] Support Xbox 360 controller input and original-game button mapping.
@@ -1739,6 +1749,17 @@ unexecuted test PASS.**
 - **Next:** Phase 4B-C — migrate `NtFreeVirtualMemory` and
   `MmSetAddressProtect`, then prepare the first real translated-game startup
   path.
+
+### 2026-10-19 — Phase 4B-C memory/protection hardware PASS
+
+- Build `P4B-MEMPROT-20261019-B` passed on real Xbox 360 hardware.
+- Guest allocation, per-page protection, adjacent-page isolation,
+  decommit/recommit, tracked release, stale/double-release rejection,
+  released-range reuse, zero-initialized reuse and bounds rejection all passed.
+- The production bridge now pairs virtual allocation/release through the
+  page-backed guest allocator and models protection as guest page metadata.
+- **Active:** Phase 4B-C2 final service verification, targeting
+  **0 direct host-backed / 15 platform-bound / 2 guest-native**.
 
 ### How future updates are recorded
 
