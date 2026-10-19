@@ -425,3 +425,51 @@ Runtime policy:
 - stop at the first subsequent live ICALL/ITAIL boundary.
 
 Build tag: `P4C-THREADRUN-20261019-A`.
+
+
+#### Phase 4C-E — First real title-thread execution
+**Status: PASS on real Xbox 360 hardware.**
+
+Hardware trace:
+
+```text
+trace[0]=0022964A
+trace[1]=0022B4D7
+trace[2]=0022B43F
+trace[3]=00239BE8
+trace[4]=0022B363
+
+BOUNDARY:
+  kind=ICALL_SAFE
+  caller=0022B363
+  target=80000115
+  esp=008BFF3C
+  saved_esp=008BFF44
+  ticks=11
+  trace=5
+  fault=0
+```
+
+`0x80000115` is kernel ordinal 277,
+`RtlEnterCriticalSection(PRTL_CRITICAL_SECTION)`.
+
+The observed stack delta is exactly 8 bytes:
+- 4-byte critical-section argument;
+- 4-byte synthetic CALL return slot.
+
+The maintained kernel runtime intentionally implements guest critical-section
+enter/leave/initialize as no-ops while guest execution is serialized. It does
+not pass guest critical-section storage to host locks.
+
+#### Phase 4C-F — Continue through first critical-section call
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-F.ps1`
+
+4C-F validates the live ordinal-277 frame, records the guest critical-section
+VA, performs the maintained serialized-guest no-op behavior, consumes the
+synthetic CALL return and one stdcall argument exactly, and requires
+`g_esp == saved_esp` before continuing.
+
+Build tag: `P4C-CRITCONT-20261019-A`.
