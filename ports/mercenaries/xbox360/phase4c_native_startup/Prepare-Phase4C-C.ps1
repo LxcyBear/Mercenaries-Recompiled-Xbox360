@@ -73,7 +73,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Write-Host "[Phase4C-C] FIRST STARTUP-THREAD HANDOFF PACKAGE"
 Write-Host "[Phase4C-C] Phase 4C-B hardware boundary: 0x0022B4D7 -> 0x800000FF (PsCreateSystemThreadEx)."
 Write-Host "[Phase4C-C] Expected ordinal-255 frame: 40 argument bytes + 4-byte synthetic CALL return."
-Write-Host "[Phase4C-C] Packing maintained startup roots 0x0022B43F and 0x002295D6 plus their direct generated closures."
+Write-Host "[Phase4C-C] Reusing the exact 40-body 4C-B entry closure; no guessed thread routine is packed."
 Write-Host ""
 
 & $python $threadEmitter "--base-emitter" $baseEmitter "--generated-root" $generatedRoot "--functions" $functionsPath "--closure-report" $closureReport "--phase3n-template" $phase3nTemplate "--phase2e-source" $phase2eSource "--out-dir" $outDir
@@ -87,5 +87,5 @@ Write-Host "[Phase4C-C] Build BOTH generated sources in the same XDK diagnostic 
 Write-Host "[Phase4C-C]   $(Join-Path $outDir "main.cpp")"
 Write-Host "[Phase4C-C]   $(Join-Path $outDir "phase4c_env.cpp")"
 Write-Host "[Phase4C-C] Keep the exact supported retail default.xbe beside the XEX."
-Write-Host "[Phase4C-C] Expected build tag: P4C-THREAD-20261019-A"
-Write-Host "[Phase4C-C] Runtime follows ordinal 255 into the first packed translated StartRoutine and stops at the next live boundary."
+Write-Host "[Phase4C-C] Expected build tag: P4C-THREAD-20261019-B"
+Write-Host "[Phase4C-C] Runtime validates ordinal 255, logs the actual StartRoutine/contexts, and stops successfully at THREAD_TARGET."
