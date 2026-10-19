@@ -308,6 +308,8 @@ static void trace_func(DWORD va)
     s_lastBackedgeTo = (DWORD)(toVa); \
 } while (0)
 
+void recomp_guest_write8(uint32_t address, uint8_t value);
+
 static int phase3m_budget_tick(DWORD va)
 {
     ++s_execBudget;
@@ -325,7 +327,7 @@ static int phase3m_budget_tick(DWORD va)
         !s_phase3mExternalEventInjected &&
         va == 0x000A5BD2u)
     {
-        GUEST_WRITE8(0x007AC7A0u, 1u);
+        recomp_guest_write8(0x007AC7A0u, 1u);
         s_phase3mExternalEventInjected = 1;
     }
 
