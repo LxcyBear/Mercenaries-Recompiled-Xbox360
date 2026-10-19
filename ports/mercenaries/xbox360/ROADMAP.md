@@ -138,7 +138,7 @@ Phase 4B-B/B2 is complete.
 ## Active
 
 ### Phase 4B-C — Remaining memory/protection and residual host surface
-**Status: hardware gate B ready for real-Xenon validation.**
+**Status: PASS on real Xbox 360 hardware.**
 
 Hardware gate:
 `ports/mercenaries/xbox360/phase4b_native_memory_protection_xex`
@@ -150,7 +150,7 @@ Current exact worklist:
 - `NtFreeVirtualMemory`
 - `MmSetAddressProtect`
 
-Build A passed all substantive guest-owned memory/protection semantics; its lone final failure was a test-ordering bug because the released VA had already been reused. Build B corrects that ordering. The gate proves guest-owned semantics rather than host page APIs:
+Build A passed all substantive guest-owned memory/protection semantics; its lone final failure was a test-ordering bug because the released VA had already been reused. Build B corrected that ordering and passed completely. The hardware proof covers:
 - page-aligned bounded guest allocation;
 - logical page protection metadata;
 - multi-page protection updates;
@@ -159,9 +159,28 @@ Build A passed all substantive guest-owned memory/protection semantics; its lone
 - released-range reuse and zero initialization;
 - invalid-range and double-release rejection.
 
-After hardware PASS, Phase 4B-C2 will wire the real guest bridge to tracked
-guest-heap release and logical guest protection state, then rerun the exact
-111-import audit.
+Phase 4B-C hardware proof is complete.
+
+### Phase 4B-C2 — Final memory/protection runtime integration
+**Status: runtime patch landed; verification active.**
+
+The real guest bridge now:
+- allocates virtual memory from the page-rounded/page-backed guest allocator;
+- commits/decommits logical guest pages through guest metadata;
+- releases virtual memory through the same tracked guest allocator;
+- applies `MmSetAddressProtect` to page-granular guest protection metadata.
+
+Final verification target:
+- 0 direct semantic host-backed imports;
+- 15 Phase-4B platform-bound imports;
+- 2 guest-native memory/protection imports;
+- 0 ABI metadata errors;
+- 0 referenced fallbacks;
+- all timing, file/handle and memory-boundary regressions green.
+
+Gate:
+`ports/mercenaries/xbox360/phase4b_native_memory_protection_xex/Verify-Phase4B-C2.ps1`
+
 
 ### Phase 4C — Native translated-game startup path
 Begin linking/executing the real translated Mercenaries startup path with the migrated Xenon service layer.
