@@ -650,3 +650,43 @@ Revision B:
 - does not broaden or alter guest-memory mappings.
 
 Build tag: `P4C-FAULTPROBE-20261019-B`.
+
+
+#### Phase 4C-I Build B — First rejected guest-access provenance
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+FAULT ACCESS IMMEDIATE: READ width=4 guest=80000142
+BOUNDARY: kind=GUEST_FAULT caller=0022C4DF target=80000142
+FAULT ACCESS: READ width=4 guest=80000142 translated_caller=0022C4DF
+trace[5]=002295D6
+trace[6]=0022C4DF
+```
+
+`0x80000142` is the raw Xbox kernel ordinal token for decimal ordinal 322,
+`XboxHardwareInfo`, a DATA export. The production bridge's
+`kernel_data_va_for_ordinal(322)` maps that export into guest kernel data.
+
+The Phase-2E execution environment already initializes the corresponding
+`XboxHardwareInfo` bytes at guest VA `0x0087E000`:
+Flags=0 (retail), GPU revision=0xA1, MCP revision=0xB1.
+
+This identifies the blocker as a missing original-Xbox loader data-thunk
+relocation, not a bad translated pointer or a missing generic RAM region.
+
+#### Phase 4C-J — XboxHardwareInfo data-thunk relocation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-J.ps1`
+
+The J gate performs only the hardware-proven ordinal-322 relocation:
+- verify the exact Mercenaries thunk table starts at `0x002DBCE0`;
+- inspect exactly 111 import slots and require a zero terminator;
+- require exactly one raw `0x80000142` token;
+- replace only that slot with `0x0087E000`;
+- verify `XboxHardwareInfo` readback before translated execution;
+- leave callable ordinal tokens untouched;
+- retain immediate first-fault provenance for the next unresolved dependency.
+
+Build tag: `P4C-HWINFO-20261019-A`.
