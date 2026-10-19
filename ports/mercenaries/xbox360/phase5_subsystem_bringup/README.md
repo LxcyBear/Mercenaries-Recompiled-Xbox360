@@ -100,3 +100,57 @@ build\phase5_subsystem_bringup\ntopenfile_native_xdk\phase5b-manifest.json
 Build: `P5B-NTOPEN202-NATIVE-20261019-A`
 
 Cookie: `P5B1 / 0x50354231`.
+
+
+## Phase 5B hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The captured Partition1 request was serviced natively:
+
+```text
+xbox   = \Device\Harddisk0\partition1\
+native = game:\merc360-partition1
+status = 0x00000000
+token  = 0x48000001
+```
+
+The translated path resumed with `fault=0` and immediately reached
+`ICALL_SAFE target=0x800000DA` from caller `0x0022BD2D`.
+
+`0x800000DA` is ordinal 218 `NtQueryVolumeInformationFile`. The observed
+stack delta is 24 bytes, exactly five stdcall arguments plus the translated
+synthetic return.
+
+## Phase 5C — native volume query + handle lifecycle
+
+5C resolves the tagged guest handle back to its native Xenon handle and
+services `XboxFileFsSizeInformation` from the native `game:` volume using
+`GetDiskFreeSpaceExA`. Guest-visible geometry remains FATX-style:
+
+```text
+BytesPerSector            = 512
+SectorsPerAllocationUnit  = 32
+AllocationUnitSize        = 16 KiB
+```
+
+Ordinal 187 `NtClose` is also armed so the same tagged handle can be released
+natively if the live path closes it.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5C.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\volume_native_xdk\main.cpp
+build\phase5_subsystem_bringup\volume_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\volume_native_xdk\phase5c-manifest.json
+```
+
+Build: `P5C-VOLUME218-NATIVE-20261019-A`
+
+Cookie: `P5C1 / 0x50354331`.
