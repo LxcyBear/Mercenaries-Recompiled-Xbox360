@@ -542,7 +542,7 @@ def main() -> int:
 
     env_source = base.build_env_source(
         args.phase2e_source.read_text(encoding="utf-8")
-    ).replace("PHASE 4C-B", "PHASE 4C-E")
+    ).replace("PHASE 4C-B", "PHASE 4C-G")
 
     driver = base.driver_source(root_name, root_va, len(member_vas))
     driver = driver.replace(
@@ -553,7 +553,7 @@ def main() -> int:
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
         "Policy: continue through ordinals 277/294 critical-section enter/leave and stop at the next live boundary",
     )
-    driver = driver.replace("PHASE 4C-B", "PHASE 4C-E")
+    driver = driver.replace("PHASE 4C-B", "PHASE 4C-G")
     driver = driver.replace(
         '    case PHASE4C_BOUNDARY_HEAP_EXHAUSTED: return "HEAP_EXHAUSTED";',
         '    case PHASE4C_BOUNDARY_HEAP_EXHAUSTED: return "HEAP_EXHAUSTED";\n'
