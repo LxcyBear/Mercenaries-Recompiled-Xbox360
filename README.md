@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A through 3J hardware PASS; 3K wider control-flow/flags + mixed ABI next** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A through 3J hardware PASS; 3K mixed control/flags + FP selector/harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -1551,6 +1551,35 @@ unexecuted test PASS.**
   - `[XAPI RETURN VALUE] 0`
 - **Phase 3J is complete.**
 - **Next:** Phase 3K — widen to real branch/flags and mixed ABI/FP surfaces.
+
+### 2026-10-18 — Phase 3K mixed control/flags + FP gate prepared
+
+- Created `xbox360/phase3k-wider-control-fp-cluster` from the completed Phase
+  3J hardware-pass head.
+- 3K-A selects a **new** 5–10 function dependency-closed real retail cluster
+  with dependency depth >= 2.
+- All Phase 3E–3J hardware-proven function VAs are excluded from selection.
+- A valid cluster must contain both:
+  - real conditional/flag control flow
+  - supported x87 or XMM/SSE architectural state
+- The selector admits previously hardware-proven explicit float/double guest
+  memory and XMM helper surfaces while still rejecting dynamic ICALL/ITAIL,
+  backward loops, MMX, broad runtime copy paths and advanced x87 transcendental
+  behavior.
+- The XDK harness now seeds and compares integer registers, x87 stack/top,
+  XMM0–XMM7, translated trace, coverage and complete 64 MiB guest RAM.
+- The final Phase 3J branch-profile suite is expanded from 12 to **16**
+  deterministic profiles; the added profiles use safe IEEE-754 patterns to
+  drive real FP branches/state.
+- Per-profile A/B must match exact x87/XMM bits in addition to the existing
+  trace/architecture/full-RAM determinism rules.
+- Union coverage across the 16 profiles must execute every selected cluster
+  member.
+- Exact retail SHA verification and per-body explicit guest-memory audit remain
+  mandatory.
+- Build tag: `P3K-MIXEDFP-20261018-A`.
+- **Next:** run `Prepare-Phase3K.ps1`; if no mixed-state closure survives,
+  use its concrete rejection histogram for the narrowest next relaxation.
 
 ### How future updates are recorded
 
