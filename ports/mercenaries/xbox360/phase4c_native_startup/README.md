@@ -930,3 +930,46 @@ PASS: ordinal 107 KeInitializeDpc matched production guest-KDPC initialization s
 ```
 
 The P prep gate also requires Phase-4C-P labels in both generated source files.
+
+
+## Phase 4C-P hardware result — PASS
+
+```text
+[Merc360:P4C] KeInitializeDpc LIVE FRAME: dpc=00869580 routine=0022F116 context=00000000 esp=008BFEE4 saved_esp=008BFEF4
+[Merc360:P4C] PASS: ordinal 107 KeInitializeDpc matched production guest-KDPC initialization semantics
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=0022F128 target=80000071 esp=008BFEE8 saved_esp=008BFEF4 ticks=31 trace=10
+[Merc360:P4C] ... fault=0
+[Merc360:P4C] PHASE 4C-P KEINITIALIZEDPC RESULT: PASS
+```
+
+## Phase 4C-Q — KeInitializeTimerEx continuation
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-Q.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\timer113_xdk\main.cpp
+build\phase4c_native_startup\timer113_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-TIMER113-20261019-A
+```
+
+Expected live evidence:
+
+```text
+PASS: Phase 4C-Q main/env build cookie matches
+KeInitializeTimerEx LIVE FRAME: timer=XXXXXXXX type_raw=XXXXXXXX type=N esp=XXXXXXXX saved_esp=XXXXXXXX
+PASS: ordinal 113 KeInitializeTimerEx matched production guest-KTIMER initialization semantics
+```
+
+The Q build cookie makes a stale environment project item a link-time failure
+instead of merely a cosmetic log-label mismatch.
