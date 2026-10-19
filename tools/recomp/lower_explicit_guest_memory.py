@@ -153,16 +153,58 @@ def _statement_end(mask: str, pos: int) -> int:
     raise LoweringError("write has no terminating semicolon")
 
 
-def _statement_prefix_is_empty(mask: str, start: int) -> bool:
-    # Allow a simple statement after a previous semicolon or brace, including
-    # compact forms such as "{ MEM32(x) = y; }". Reject expression-valued
-    # writes such as "foo(MEM32(x) = y)" or unbraced conditional writes.
+def _statement_prefix(mask: str, start: int) -> str:
+    """Return text between the previous statement delimiter and this write."""
     i = start - 1
     while i >= 0:
         if mask[i] in ";{}":
             break
         i -= 1
-    return not mask[i + 1:start].strip()
+    return mask[i + 1:start]
+
+
+def _is_complete_control_prefix(prefix: str) -> bool:
+    """Accept a write used only as a single control-statement body.
+
+    Examples:
+        for (...) MEM32(x) = y;
+        if (...) MEM8(x) = y;
+        while (...) MEM16(x) = y;
+
+    A write inside the condition/header itself is rejected because the prefix
+    does not contain one complete balanced parenthesized control expression.
+    """
+    text = prefix.strip()
+    for keyword in ("for", "if", "while"):
+        if not text.startswith(keyword):
+            continue
+        pos = len(keyword)
+        while pos < len(text) and text[pos].isspace():
+            pos += 1
+        if pos >= len(text) or text[pos] != "(":
+            continue
+        depth = 0
+        close = None
+        for index in range(pos, len(text)):
+            char = text[index]
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    close = index
+                    break
+            if depth < 0:
+                return False
+        if close is None:
+            return False
+        return not text[close + 1:].strip()
+    return False
+
+
+def _write_has_supported_statement_context(mask: str, start: int) -> bool:
+    prefix = _statement_prefix(mask, start)
+    return not prefix.strip() or _is_complete_control_prefix(prefix)
 
 
 def _assignment_after(mask: str, close_pos: int):
@@ -253,10 +295,11 @@ def lower_source(source: str) -> tuple[str, dict]:
 
         kind, name, start, open_pos, close_pos, op_pos, op = write
         statement_start = start if kind != "prefix" else op_pos
-        if not _statement_prefix_is_empty(_mask_noncode(source), statement_start):
+        if not _write_has_supported_statement_context(
+                _mask_noncode(source), statement_start):
             line = source.count("\n", 0, start) + 1
             raise LoweringError(
-                f"line {line}: legacy write is embedded in a larger expression/control statement")
+                f"line {line}: legacy write is embedded in an unsupported expression/control context")
 
         address = source[open_pos + 1:close_pos]
         address, nested = _lower_reads_only(address)
