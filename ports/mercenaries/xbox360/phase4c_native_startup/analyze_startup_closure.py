@@ -18,10 +18,9 @@ ENTRY_VA = 0x0022964A
 
 FUNC_START_RE = re.compile(
     r"(?m)^\s*(?:static\s+)?(?:__forceinline\s+)?"
-    r"void\s+(sub_([0-9A-Fa-f]{8}))\s*"
+    r"void\s+([A-Za-z_][A-Za-z0-9_]*)\s*"
     r"\(\s*void\s*\)\s*\{"
 )
-SUB_SYMBOL_RE = re.compile(r"\bsub_([0-9A-Fa-f]{8})\b")
 CALL_TOKEN_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 DYNAMIC_TOKENS = (
     "RECOMP_ICALL",
@@ -94,30 +93,55 @@ def matching_brace(masked: str, open_index: int) -> int:
     raise ValueError(f"unmatched brace at offset {open_index}")
 
 
-def extract_functions(root: Path) -> dict[int, dict]:
+def extract_functions(
+    root: Path,
+    ranges: list[dict],
+) -> dict[int, dict]:
+    """Load generated translated definitions using the function inventory.
+
+    Generated symbols are not always named sub_XXXXXXXX. Identified functions
+    such as xbe_entry_point retain their symbolic inventory names, so the
+    inventory is the authoritative name -> VA mapping.
+    """
     functions: dict[int, dict] = {}
+    by_name = {row["name"]: row for row in ranges}
+
     for path in sorted(root.glob("recomp_*.c")):
         if path.name in ("recomp_dispatch.c", "recomp_stubs_unresolved.c"):
             continue
+
         raw = path.read_text(encoding="utf-8", errors="replace")
         masked = mask_noncode(raw)
+
         for match in FUNC_START_RE.finditer(masked):
-            va = int(match.group(2), 16)
+            name = match.group(1)
+            inventory = by_name.get(name)
+            if inventory is None:
+                # Only translated game definitions belong in this closure.
+                # Ignore non-inventory helpers if a generated source ever
+                # grows one.
+                continue
+
+            va = int(inventory["start"])
             open_index = masked.find("{", match.start(), match.end())
             end = matching_brace(masked, open_index)
+
             if va in functions:
                 raise SystemExit(
-                    f"[Phase4C-A] duplicate translated function 0x{va:08X}"
+                    f"[Phase4C-A] duplicate translated function "
+                    f"{name} at 0x{va:08X}"
                 )
+
             source = raw[match.start():end]
             masked_source = masked[match.start():end]
             functions[va] = {
                 "va": va,
-                "name": match.group(1),
+                "name": name,
                 "file": path.name,
                 "source": source,
                 "masked": masked_source,
             }
+
     return functions
 
 
@@ -250,14 +274,18 @@ def resolve_entry(functions: dict[int, dict], ranges: list[dict]) -> dict:
     }
 
 
-def direct_dependencies(row: dict) -> list[int]:
-    own = row["name"].lower()
-    deps = {
-        int(match.group(1), 16)
-        for match in SUB_SYMBOL_RE.finditer(row["masked"])
-        if f"sub_{match.group(1).lower()}" != own
-    }
-    return sorted(deps)
+def direct_dependencies(
+    row: dict,
+    name_to_va: dict[str, int],
+) -> list[int]:
+    """Return direct translated callees, including identified named symbols."""
+    calls = set(CALL_TOKEN_RE.findall(row["masked"]))
+    calls.discard(row["name"])
+    return sorted({
+        name_to_va[name]
+        for name in calls
+        if name in name_to_va
+    })
 
 
 def composite_tree_sha(root: Path) -> str:
@@ -277,6 +305,11 @@ def analyze(
     entry_resolution = resolve_entry(functions, ranges)
     root_va = int(entry_resolution["owner_start"])
 
+    name_to_va = {
+        row["name"]: va
+        for va, row in functions.items()
+    }
+
     queue = deque([(root_va, 0)])
     seen: set[int] = set()
     depth_by_va: dict[int, int] = {}
@@ -294,7 +327,7 @@ def analyze(
         max_depth = max(max_depth, depth)
 
         row = functions[va]
-        for dep in direct_dependencies(row):
+        for dep in direct_dependencies(row, name_to_va):
             if dep not in functions:
                 missing.add(dep)
             elif dep not in seen:
@@ -314,10 +347,10 @@ def analyze(
         calls = set(CALL_TOKEN_RE.findall(row["masked"]))
         calls.discard(row["name"])
         calls -= COMMON_CALLS
+        calls -= set(name_to_va)
         calls = {
             call for call in calls
-            if not call.startswith("sub_")
-            and not call.startswith("MEM")
+            if not call.startswith("MEM")
             and not call.startswith("GUEST_")
             and not call.startswith("XBOX_")
         }
@@ -338,7 +371,8 @@ def analyze(
             "source_bytes": len(functions[va]["source"].encode("utf-8")),
             "source_file": functions[va]["file"],
             "direct_dependencies": [
-                f"0x{dep:08X}" for dep in direct_dependencies(functions[va])
+                f"0x{dep:08X}"
+                for dep in direct_dependencies(functions[va], name_to_va)
             ],
         }
         for va in members
@@ -376,6 +410,10 @@ def render_text(report: dict) -> str:
     closure = report["closure"]
     lines = [
         "[Phase4C-A] RETAIL ENTRY-ROOTED STARTUP CLOSURE",
+        f"[Phase4C-A] Inventory functions: "
+        f"{report['inventory_function_count']}",
+        f"[Phase4C-A] Generated translated definitions: "
+        f"{report['generated_function_count']}",
         f"[Phase4C-A] Retail entry: {closure['entry']}",
         f"[Phase4C-A] Entry resolution: {closure['entry_resolution']['kind']}",
         f"[Phase4C-A] Entry owner: "
@@ -478,9 +516,9 @@ def main() -> int:
             f"expected {expected_tree}, got {actual_tree}"
         )
 
-    functions = extract_functions(args.generated_root)
-    sizes = load_guest_sizes(args.functions)
     ranges = load_function_ranges(args.functions)
+    functions = extract_functions(args.generated_root, ranges)
+    sizes = load_guest_sizes(args.functions)
     closure = analyze(functions, sizes, ranges)
 
     structural_pass = (
@@ -497,6 +535,8 @@ def main() -> int:
             "platform_bound": int(counts["platform_surface_bound"]),
             "guest_native": int(counts["guest_native_bound"]),
         },
+        "inventory_function_count": len(ranges),
+        "generated_function_count": len(functions),
         "closure": closure,
         "structural_pass": structural_pass,
     }
