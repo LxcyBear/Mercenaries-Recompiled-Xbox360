@@ -45,6 +45,11 @@ WRITE_HELPERS = {
 MACRO_RE = re.compile(
     r"\b(MEM8|MEM16|MEM32|MEM64|SMEM8|SMEM16|SMEM32|SMEM64|MEMF|MEMD)\s*\("
 )
+
+RAW_GUEST_MEMSET_RE = re.compile(
+    r"^(?P<indent>\s*)memset\(\(void\s*\*\)XBOX_PTR\((?P<addr>[^()]+)\),\s*"
+    r"\(uint8_t\)(?P<value>[^,;]+),\s*(?P<count>[^);]+)\);\s*$"
+)
 ASSIGN_OPS = ("<<=", ">>=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "=")
 COMPOUND_BINARY = {
     "+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%",
@@ -398,6 +403,33 @@ def lower_source(source: str) -> tuple[str, dict]:
     return source, stats
 
 
+def _lower_raw_guest_bulk_line(line: str) -> tuple[str, int]:
+    """Lower legacy raw-pointer bulk guest writes emitted by the lifter.
+
+    The normal PC path uses host memset for forward REP STOSB. In the explicit
+    ABI the destination is a guest address, so preserve x86 semantics with
+    checked byte writes instead of exposing XBOX_PTR.
+    """
+    body = line[:-1] if line.endswith("\n") else line
+    newline = "\n" if line.endswith("\n") else ""
+    match = RAW_GUEST_MEMSET_RE.match(body)
+    if not match:
+        return line, 0
+
+    indent = match.group("indent")
+    addr = match.group("addr").strip()
+    value = match.group("value").strip()
+    count = match.group("count").strip()
+    lowered = (
+        f"{indent}{{ uint32_t _guest_memset_i; "
+        f"for (_guest_memset_i = 0; _guest_memset_i < ({count}); "
+        f"++_guest_memset_i) "
+        f"GUEST_WRITE8(({addr}) + _guest_memset_i, (uint8_t)({value})); }}"
+        f"{newline}"
+    )
+    return lowered, 1
+
+
 def lower_file_to_temp(path: Path) -> tuple[Path, dict]:
     """Lower one file without mutating the audited source tree yet.
 
@@ -421,6 +453,7 @@ def lower_file_to_temp(path: Path) -> tuple[Path, dict]:
         "compound_writes": 0,
         "incdec_writes": 0,
         "reads": 0,
+        "bulk_writes": 0,
     }
     output = []
     i = 0
@@ -428,6 +461,16 @@ def lower_file_to_temp(path: Path) -> tuple[Path, dict]:
         line_number = i + 1
         line = source_lines[i]
         mask_line = mask_lines[i]
+
+        # Raw-pointer bulk stores are not MEM lvalues, so lower them before the
+        # ordinary MEM* fast path.
+        lowered_bulk, bulk_count = _lower_raw_guest_bulk_line(line)
+        if bulk_count:
+            output.append(lowered_bulk)
+            totals["bulk_writes"] += bulk_count
+            i += 1
+            continue
+
         active = list(MACRO_RE.finditer(mask_line))
         if not active:
             output.append(line)
@@ -498,6 +541,7 @@ def lower_tree(root: Path) -> dict:
         "compound_writes": 0,
         "incdec_writes": 0,
         "reads": 0,
+        "bulk_writes": 0,
         "source_bytes": 0,
     }
     per_file = []
@@ -513,6 +557,7 @@ def lower_tree(root: Path) -> dict:
             total["source_bytes"] += stats["bytes"]
             for key in ("writes", "compound_writes", "incdec_writes", "reads"):
                 total[key] += stats[key]
+            total["bulk_writes"] += stats.get("bulk_writes", 0)
             per_file.append(stats)
 
         # Commit the conversion only after every generated source file proves
