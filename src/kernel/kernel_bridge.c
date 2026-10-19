@@ -900,63 +900,92 @@ static void bridge_MmClaimGpuInstanceMemory(void)
  */
 static void bridge_NtAllocateVirtualMemory(void)
 {
-    uint32_t base_ptr = STACK_ARG(0);  /* PVOID* in Xbox VA */
+    uint32_t base_ptr = STACK_ARG(0);
     uint32_t zero_bits = STACK_ARG(1);
-    uint32_t size_ptr = STACK_ARG(2);  /* PULONG in Xbox VA */
+    uint32_t size_ptr = STACK_ARG(2);
     uint32_t alloc_type = STACK_ARG(3);
     uint32_t protect = STACK_ARG(4);
+    uint32_t size = size_ptr ? BRIDGE_MEM32(size_ptr) : 0u;
+    uint32_t base_hint = base_ptr ? BRIDGE_MEM32(base_ptr) : 0u;
+    uint32_t allocation_size;
+    uint32_t xbox_va;
+    (void)zero_bits;
 
-    /* Read the requested size from Xbox memory */
-    uint32_t size = size_ptr ? BRIDGE_MEM32(size_ptr) : 0;
-    /* Read the base address hint (0 = let kernel choose) */
-    uint32_t base_hint = base_ptr ? BRIDGE_MEM32(base_ptr) : 0;
-
-    if (bridge_trace_kernel_calls_enabled() && g_kernel_call_count <= 200) {
-        fprintf(stderr, "  [KERNEL] NtAllocateVirtualMemory: base=0x%08X size=%u type=0x%X prot=0x%X\n",
+    if (bridge_trace_kernel_calls_enabled() &&
+        g_kernel_call_count <= 200) {
+        fprintf(stderr,
+                "  [KERNEL] NtAllocateVirtualMemory: "
+                "base=0x%08X size=%u type=0x%X prot=0x%X\n",
                 base_hint, size, alloc_type, protect);
         fflush(stderr);
     }
 
-    if (size == 0) {
-        g_eax = 0xC0000045u; /* STATUS_INVALID_PAGE_PROTECTION */
+    if (!base_ptr || !size_ptr || size == 0u) {
+        g_eax = 0xC000000Du; /* STATUS_INVALID_PARAMETER */
         return;
     }
 
-    /*
-     * Xbox NtAllocateVirtualMemory supports two modes:
-     * - MEM_RESERVE (0x2000): Reserve virtual address space
-     * - MEM_COMMIT  (0x1000): Commit pages within a reserved region
-     * - MEM_RESERVE|MEM_COMMIT (0x3000): Both in one call
-     *
-     * Our Xbox heap (bump allocator) always commits memory immediately,
-     * so MEM_COMMIT on an already-reserved region is a no-op.
-     * Only allocate new memory when MEM_RESERVE is requested.
-     */
-    if (base_hint != 0 && (alloc_type & 0x2000) == 0) {
-        /* MEM_COMMIT only, on an already-reserved region.
-         * The memory is already committed by our bump allocator.
-         * Don't change the base address - just return success. */
-        if (bridge_trace_kernel_calls_enabled() && g_kernel_call_count <= 200) {
-            fprintf(stderr, "  [KERNEL] -> MEM_COMMIT on existing region 0x%08X, no-op\n", base_hint);
+    /* Commit pages inside an already reserved guest region. */
+    if (base_hint != 0u && (alloc_type & MEM_RESERVE) == 0u) {
+        if ((alloc_type & MEM_COMMIT) == 0u ||
+            !xbox_GuestMemoryCommit(base_hint, size, protect)) {
+            g_eax = 0xC000000Du; /* STATUS_INVALID_PARAMETER */
+            return;
+        }
+
+        if (bridge_trace_kernel_calls_enabled() &&
+            g_kernel_call_count <= 200) {
+            fprintf(stderr,
+                    "  [KERNEL] -> guest MEM_COMMIT "
+                    "base=0x%08X size=%u prot=0x%X\n",
+                    base_hint, size, protect);
             fflush(stderr);
         }
-        g_eax = 0; /* STATUS_SUCCESS */
+
+        g_eax = 0u;
         return;
     }
 
-    /* Allocate from Xbox heap (MEM_RESERVE or MEM_RESERVE|MEM_COMMIT) */
-    uint32_t xbox_va = xbox_HeapAlloc(size, 4096);
+    if ((alloc_type & MEM_RESERVE) == 0u) {
+        g_eax = 0xC000000Du; /* STATUS_INVALID_PARAMETER */
+        return;
+    }
+
+    xbox_va = xbox_HeapAllocPageRounded(size, 4096u);
     if (!xbox_va) {
         g_eax = 0xC0000017u; /* STATUS_NO_MEMORY */
         return;
     }
 
-    /* Write back the allocated address and actual size */
-    if (base_ptr) BRIDGE_MEM32(base_ptr) = xbox_va;
-    if (size_ptr) BRIDGE_MEM32(size_ptr) = size;
+    allocation_size = xbox_HeapGetAllocationSize(xbox_va);
+    if (allocation_size == 0u) {
+        xbox_HeapFree(xbox_va);
+        g_eax = 0xC0000017u;
+        return;
+    }
 
-    g_eax = 0; /* STATUS_SUCCESS */
+    if ((alloc_type & MEM_COMMIT) != 0u) {
+        if (!xbox_GuestMemoryCommit(
+                xbox_va, allocation_size, protect)) {
+            xbox_HeapReleasePageRounded(xbox_va, NULL);
+            g_eax = 0xC0000017u;
+            return;
+        }
+    } else {
+        /* Reserve without commit: own the VA but mark pages inaccessible. */
+        if (!xbox_GuestMemoryDecommit(
+                xbox_va, allocation_size)) {
+            xbox_HeapReleasePageRounded(xbox_va, NULL);
+            g_eax = 0xC0000017u;
+            return;
+        }
+    }
+
+    BRIDGE_MEM32(base_ptr) = xbox_va;
+    BRIDGE_MEM32(size_ptr) = allocation_size;
+    g_eax = 0u;
 }
+
 
 /* -- NtFreeVirtualMemory (ordinal 199) --------------------
  * NTSTATUS NtFreeVirtualMemory(PVOID *BaseAddress, PULONG FreeSize,
@@ -967,10 +996,70 @@ static void bridge_NtFreeVirtualMemory(void)
     uint32_t base_ptr = STACK_ARG(0);
     uint32_t size_ptr = STACK_ARG(1);
     uint32_t free_type = STACK_ARG(2);
+    uint32_t xbox_va;
+    uint32_t size;
+    uint32_t released_size = 0u;
 
-    g_eax = (uint32_t)xbox_NtFreeVirtualMemory(
-        XBOX_TO_NATIVE(base_ptr), XBOX_TO_NATIVE(size_ptr), free_type);
+    if (!base_ptr) {
+        g_eax = 0xC000000Du; /* STATUS_INVALID_PARAMETER */
+        return;
+    }
+
+    xbox_va = BRIDGE_MEM32(base_ptr);
+    size = size_ptr ? BRIDGE_MEM32(size_ptr) : 0u;
+
+    if (xbox_va == 0u) {
+        g_eax = 0xC000000Du;
+        return;
+    }
+
+    if ((free_type & MEM_RELEASE) != 0u) {
+        if (!xbox_HeapReleasePageRounded(
+                xbox_va, &released_size)) {
+            g_eax = 0xC000000Du;
+            return;
+        }
+
+        BRIDGE_MEM32(base_ptr) = 0u;
+        if (size_ptr)
+            BRIDGE_MEM32(size_ptr) = 0u;
+
+        if (bridge_trace_kernel_calls_enabled() &&
+            g_kernel_call_count <= 200) {
+            fprintf(stderr,
+                    "  [KERNEL] NtFreeVirtualMemory: "
+                    "MEM_RELEASE base=0x%08X tracked=%u\n",
+                    xbox_va, released_size);
+            fflush(stderr);
+        }
+
+        g_eax = 0u;
+        return;
+    }
+
+    if ((free_type & MEM_DECOMMIT) != 0u) {
+        if (size == 0u ||
+            !xbox_GuestMemoryDecommit(xbox_va, size)) {
+            g_eax = 0xC000000Du;
+            return;
+        }
+
+        if (bridge_trace_kernel_calls_enabled() &&
+            g_kernel_call_count <= 200) {
+            fprintf(stderr,
+                    "  [KERNEL] NtFreeVirtualMemory: "
+                    "MEM_DECOMMIT base=0x%08X size=%u\n",
+                    xbox_va, size);
+            fflush(stderr);
+        }
+
+        g_eax = 0u;
+        return;
+    }
+
+    g_eax = 0xC000000Du;
 }
+
 
 /* -- ExAllocatePool / ExAllocatePoolWithTag (ordinals 14, 15) -
  * Must allocate from Xbox heap so the returned pointer is an Xbox VA
@@ -1416,9 +1505,19 @@ static void bridge_MmSetAddressProtect(void)
     uint32_t size = STACK_ARG(1);
     uint32_t prot = STACK_ARG(2);
 
-    xbox_MmSetAddressProtect(XBOX_TO_NATIVE(addr), size, prot);
-    g_eax = 0;
+    if (!xbox_GuestMemorySetProtect(addr, size, prot) &&
+        bridge_trace_kernel_calls_enabled() &&
+        g_kernel_call_count <= 200) {
+        fprintf(stderr,
+                "  [KERNEL] MmSetAddressProtect rejected: "
+                "base=0x%08X size=%u prot=0x%X\n",
+                addr, size, prot);
+        fflush(stderr);
+    }
+
+    g_eax = 0u;
 }
+
 
 /* -- AvSetDisplayMode (ordinal 3) -------------------------- */
 /* AvSendTVEncoderOption (ordinal 2). */
