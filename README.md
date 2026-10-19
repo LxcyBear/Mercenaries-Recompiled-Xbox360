@@ -40,7 +40,8 @@ Snapshot: 2026-10-19.
 | 4C-F | **Hardware PASS** | Real title-thread execution continued through ordinal 277 `RtlEnterCriticalSection`; live CS=`0x00312FC0`, exact 8-byte frame, stack restored, fault=0. Next boundary: `0x0022B363 -> 0x80000126`. |
 | 4C-G | **Hardware PASS** | Real title-thread execution completed ordinal 277/294 enter/leave on the same guest CS `0x00312FC0`; exact 8-byte frames, fault=0. Next live target is `0x002295D6`, exactly the ctx1 captured from the real thread-creation frame. |
 | 4C-H | **Hardware callback entry proven; gate blocked** | Xenon entered callback `0x002295D6`, reached `0x0022C4DF`, then stopped on a deterministic `GUEST_FAULT` at translated VA `0x0022C4FF`; fault=1, stack balanced. |
-| 4C-I | **Build B ready** | Probe A hung after callback entry due to loose accessor-text matching in the diagnostic transform. Build B uses exact accessor-body replacements and logs fault address/direction/width immediately inside the rejecting accessor. |
+| 4C-I | **Hardware diagnostic PASS** | Build B proved the first rejected callback access is READ32 guest `0x80000142` from `0x0022C4DF`; `0x142` = ordinal 322 = `XboxHardwareInfo` DATA export. |
+| 4C-J | **Package prep ready** | Emulate the original-Xbox loader for this one proven data import: replace raw thunk token `0x80000142` with initialized guest `XboxHardwareInfo` at `0x0087E000`, then continue startup with first-fault provenance still active. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
