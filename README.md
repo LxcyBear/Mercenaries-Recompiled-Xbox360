@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-U — continue live ordinal 301 RtlNtStatusToDosError after Phase 4C-T hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-V — execute a bounded direct translated closure rooted at 0x0022F0FB after Phase 4C-U hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -185,9 +185,13 @@ phases.
     `ExQueryNonVolatileSetting`; the live frame was `XC_MISC` with a 4-byte
     value buffer, returned STATUS_SUCCESS, and startup advanced with `fault=0`
     to `ICALL_SAFE caller=0x00230060 target=0x8000012D`.
-33. **Phase 4C-U:** validate and continue ordinal 301
-    `RtlNtStatusToDosError` using the locked one-argument stdcall ABI and
-    existing runtime bridge mapping.
+33. **Done:** Phase 4C-U validated and continued ordinal 301
+    `RtlNtStatusToDosError`; STATUS_SUCCESS mapped to DOS error 0 with the
+    expected 8-byte frame, and startup advanced with `fault=0` to
+    `DIRECT_FRONTIER caller=0x00230060 target=0x0022F0FB`.
+34. **Phase 4C-V:** promote a bounded depth-2 direct translated closure rooted
+    at `0x0022F0FB` (cap 16 members) so multiple safe direct callees can
+    execute in one hardware run while deeper/dynamic boundaries remain fenced.
 
 ### Evidence policy
 
@@ -2229,6 +2233,23 @@ unexecuted test PASS.**
 - **Phase 4C-T hardware result: PASS.**
 - **Next:** Phase 4C-U validates and continues ordinal 301 in-place.
 - Build tag: `P4C-RTL301-20261019-A`.
+
+### 2026-10-19 — Phase 4C-U RtlNtStatusToDosError PASS
+
+- U main/env link-time build cookie matched on hardware.
+- The proven startup chain remained intact through ordinal 24
+  `ExQueryNonVolatileSetting`.
+- Live ordinal-301 frame:
+  `ret=0`, `status=STATUS_SUCCESS`, expected 8-byte call frame.
+- The runtime bridge mapping returned DOS error 0 and restored
+  `ESP=0x008BFED8`.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x00230060 target=0x0022F0FB`.
+- Boundary state remained clean: `fault=0`.
+- **Phase 4C-U hardware result: PASS.**
+- **Next:** Phase 4C-V promotes a bounded depth-2 direct closure rooted at
+  `0x0022F0FB` to reduce one-function-per-boot churn.
+- Build tag: `P4C-F0FB-CLOSURE-20261019-A`.
 
 ### How future updates are recorded
 
