@@ -634,3 +634,52 @@ Build tag:
 ```text
 P4C-FAULTPROBE-20261019-B
 ```
+
+
+## Phase 4C-I Build B hardware result — PASS
+
+The hardened first-fault probe captured the exact rejected access:
+
+```text
+[Merc360:P4C] FAULT ACCESS IMMEDIATE: READ width=4 guest=80000142
+[Merc360:P4C] BOUNDARY: kind=GUEST_FAULT caller=0022C4DF target=80000142 esp=008BFF4C saved_esp=008BFF4C ticks=18 trace=7
+[Merc360:P4C] FAULT ACCESS: READ width=4 guest=80000142 translated_caller=0022C4DF
+```
+
+`0x142` is kernel ordinal 322, `XboxHardwareInfo`, which is a DATA export.
+The original Xbox loader would replace that thunk token with the exported
+object's address. The stripped Phase-2E startup environment loads the raw XBE
+and initializes the hardware-info object, but had not yet performed this data
+thunk relocation.
+
+## Phase 4C-J — XboxHardwareInfo thunk relocation
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-J.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\hardware_info_xdk\main.cpp
+build\phase4c_native_startup\hardware_info_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-HWINFO-20261019-A
+```
+
+Expected pre-execution evidence:
+
+```text
+DATA THUNK FIXUP: ordinal=322 XboxHardwareInfo slot=XXXXXXXX old=80000142 new=0087E000
+PASS: XboxHardwareInfo thunk points at initialized guest kernel data
+PHASE 4C-J DATA-THUNK PREP RESULT: PASS
+```
+
+Only ordinal 322 is relocated in this gate. First-fault provenance remains
+active so any subsequent unresolved data-import token is reported immediately.
