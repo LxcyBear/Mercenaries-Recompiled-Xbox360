@@ -29,7 +29,8 @@ Snapshot: 2026-10-19.
 | 4B-A2 | **Complete PASS** | Six timing/sync imports migrated to `merc_platform_*`; 11 direct host-backed + 6 platform-bound; 0 ABI errors; 0 referenced fallbacks; 7,722 deadline cases PASS. |
 | 4B-B | **Hardware PASS** | `P4B-FILE-20261019-A` passed on real Xenon: create/open/read/write, offsets, size/query, truncate, attributes, directory enumeration, missing-file errors, and cleanup all PASS. |
 | 4B-B2 | **Complete PASS** | Nine file/handle imports route through `merc_platform_file_*`; verifier passed at 2 direct host-backed + 15 platform-bound with ABI/fallback checks clean and all regressions green. |
-| 4B-C | **Hardware gate B ready** | Final direct host-backed pair: `NtFreeVirtualMemory` and `MmSetAddressProtect`; Xenon gate proves guest release/reuse plus logical decommit/recommit/protection metadata. |
+| 4B-C | **Hardware PASS** | `P4B-MEMPROT-20261019-B` passed on real Xenon: guest allocation, per-page protection, decommit/recommit, tracked release/reuse, zero-init, bounds and stale-release checks all PASS. |
+| 4B-C2 | **Active verification** | Real bridges now use page-backed guest allocation/release and logical guest protection metadata; target is 0 direct host-backed / 15 platform-bound / 2 guest-native. |
 | 4C | Planned | First real translated Mercenaries startup path with the migrated Xenon service layer. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
@@ -41,10 +42,10 @@ Latest completed hardware gate:
 P4B-FILE-20261019-A  PASS
 ```
 
-Current hardware gate:
+Latest memory/protection hardware gate:
 
 ```text
-P4B-MEMPROT-20261019-B  READY
+P4B-MEMPROT-20261019-B  PASS
 ```
 
 Current verified service accounting after the Phase 4B-B2 PASS:
@@ -63,8 +64,10 @@ fallback_refs=0
 ```
 
 Phase 4B-B/B2 is complete: hardware proof and runtime verification both passed.
-Only the two memory/protection paths remain direct host-backed before the native
-translated-game startup push.
+The two memory/protection paths have now passed the Xenon hardware gate and are
+wired to guest-owned runtime state. Phase 4B-C2 is verifying the final expected
+split of 0 direct host-backed / 15 platform-bound / 2 guest-native before the
+native translated-game startup push.
 
 For the detailed evidence gates and next-step requirements, see
 [`ports/mercenaries/xbox360/ROADMAP.md`](ports/mercenaries/xbox360/ROADMAP.md).
