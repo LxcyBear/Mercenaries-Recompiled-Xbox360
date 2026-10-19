@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AE — execute hardware-observed translated root 0x0022C8EA after Phase 4C-AD hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AF — execute hardware-observed translated root 0x0022CEEE after Phase 4C-AE hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -214,10 +214,12 @@ phases.
     advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022CA2B`.
 42. **Done:** Phase 4C-AD executed translated root `0x0022CA2B` and
     advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022C8EA`.
-43. **Phase 4C-AE:** promote only hardware-observed translated root
-    `0x0022C8EA`, retaining all proven reserve/commit and kernel state. Gate:
-    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AE.ps1`.
-    Build tag: `P4C-DIRECTC8EA-AE-20261019-A`.
+43. **Done:** Phase 4C-AE executed translated root `0x0022C8EA` and
+    advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022CEEE`.
+44. **Phase 4C-AF:** promote only hardware-observed translated root
+    `0x0022CEEE`, retaining all proven reserve/commit and kernel state. Gate:
+    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AF.ps1`.
+    Build tag: `P4C-DIRECTCEEE-AF-20261019-A`.
 
 ### Evidence policy
 
@@ -2419,6 +2421,18 @@ unexecuted test PASS.**
 - **Phase 4C-AD hardware result: PASS.**
 - **Next:** Phase 4C-AE promotes only `0x0022C8EA`.
 - Build tag: `P4C-DIRECTC8EA-AE-20261019-A`.
+
+### 2026-10-19 — Phase 4C-AE C8EA PASS
+
+- AE main/env cookie matched on hardware.
+- All proven startup/kernel/VM continuations remained intact.
+- Translated root `0x0022C8EA` executed.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x0022C8EA target=0x0022CEEE`.
+- The translated trace reached 19 entries with `fault=0`.
+- **Phase 4C-AE hardware result: PASS.**
+- **Next:** Phase 4C-AF promotes only `0x0022CEEE`.
+- Build tag: `P4C-DIRECTCEEE-AF-20261019-A`.
 
 ### How future updates are recorded
 
