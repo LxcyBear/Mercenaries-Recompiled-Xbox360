@@ -1401,3 +1401,36 @@ storage/content implementation gate.
 Build tag: `P5A-NTOPEN202-CAPTURE-20261019-A`.
 
 Cookie: `P5A1 / 0x50354131`.
+
+
+#### Phase 5A — captured first live NtOpenFile
+**Status: HARDWARE PASS.**
+
+Build `P5A-NTOPEN202-CAPTURE-20261019-A` captured the first runtime storage
+request with `fault=0`:
+
+```text
+path=\Device\Harddisk0\partition1\
+access=0x00100001
+share=0x00000003
+options=0x00800021
+caller=0x0022BD2D
+```
+
+The 28-byte live frame and guest OBJECT_ATTRIBUTES / ANSI_STRING decoding both
+matched the expected ordinal-202 ABI.
+
+#### Phase 5B — native NtOpenFile continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5B.ps1`
+
+5B maps the observed Partition1 tree to
+`game:\merc360-partition1`, performs the open using native Xenon/XDK file
+primitives, returns a tagged 32-bit guest handle + IO_STATUS_BLOCK, and resumes
+the translated boot path.
+
+Build tag: `P5B-NTOPEN202-NATIVE-20261019-A`.
+
+Cookie: `P5B1 / 0x50354231`.
