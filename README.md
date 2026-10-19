@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-W — continue live ordinal 149 KeSetTimer after Phase 4C-V hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-X — execute a bounded direct translated closure rooted at 0x0022D980 after Phase 4C-W hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -192,9 +192,13 @@ phases.
 34. **Done:** Phase 4C-V executed the bounded direct closure rooted at
     `0x0022F0FB`; the live path advanced with `fault=0` to
     `ICALL_SAFE caller=0x0022F0FB target=0x80000095`.
-35. **Phase 4C-W:** validate and continue ordinal 149 `KeSetTimer` using the
-    locked 16-byte stdcall ABI, the proven Xbox 360 system-time path, and the
-    existing guest-KTIMER semantics.
+35. **Done:** Phase 4C-W validated and continued ordinal 149 `KeSetTimer`;
+    the expected 20-byte full frame armed KTIMER `0x008695A0` with DPC
+    `0x00869580`, returned prior-active FALSE, and startup advanced with
+    `fault=0` to `DIRECT_FRONTIER caller=0x0022F0FB target=0x0022D980`.
+36. **Phase 4C-X:** promote a bounded depth-2 direct translated closure rooted
+    at `0x0022D980` (cap 16 members) while retaining the proven
+    `0x0022F0FB` closure.
 
 ### Evidence policy
 
@@ -2269,6 +2273,23 @@ unexecuted test PASS.**
 - **Phase 4C-V hardware result: PASS.**
 - **Next:** Phase 4C-W validates and continues ordinal 149 in-place.
 - Build tag: `P4C-TIMER149-20261019-A`.
+
+### 2026-10-19 — Phase 4C-W KeSetTimer PASS
+
+- W main/env link-time build cookie matched on hardware.
+- The proven startup chain remained intact through the translated
+  `0x0022F0FB` function.
+- Live ordinal-149 frame matched the locked ABI:
+  dummy return + 16 argument bytes = 20 bytes.
+- Guest KTIMER `0x008695A0` was armed with DPC `0x00869580`;
+  the prior-active return was FALSE.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x0022F0FB target=0x0022D980`.
+- Boundary state remained clean: `fault=0`.
+- **Phase 4C-W hardware result: PASS.**
+- **Next:** Phase 4C-X promotes a bounded depth-2 direct closure rooted at
+  `0x0022D980`.
+- Build tag: `P4C-D980-CLOSURE-20261019-A`.
 
 ### How future updates are recorded
 
