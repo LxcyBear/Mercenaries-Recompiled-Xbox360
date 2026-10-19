@@ -615,7 +615,42 @@ def patch_weapon_fire_continuation(text: str) -> str:
     parent = match[0]
     tail_match = re.search(r'void sub_000357E2\(void\)\n\{.*?\n\}', text, re.S)
     if tail_match is None:
-        raise RuntimeError('Weapon fire shared tail missing')
+        # With the reviewed 0x34BD0:0x358A0 range the switch cases and shared
+        # feedback/epilogue blocks are translated as local labels in the owner.
+        required = (
+            'loc_000357C6: ;',
+            'loc_000357CD: ;',
+            'loc_000357D4: ;',
+            'loc_000357DB: ;',
+            'loc_000357E2: ;',
+            'loc_000357E4: ;',
+            'loc_000357F8: ;',
+            'loc_00035832: ;',
+        )
+        missing = [label for label in required if label not in parent]
+        if missing:
+            raise RuntimeError(
+                'Coalesced weapon-fire labels missing: ' + ', '.join(missing)
+            )
+        if 'esp += 24; return;' not in parent:
+            raise RuntimeError('Coalesced weapon-fire RET 20 epilogue missing')
+        forbidden = (
+            'sub_000357C6();', 'sub_000357CD();', 'sub_000357D4();',
+            'sub_000357DB();', 'sub_000357E2();', 'sub_000357E4();',
+            'sub_000357F8();', 'sub_00035832();',
+        )
+        leaked = [call for call in forbidden if call in parent]
+        if leaked:
+            raise RuntimeError(
+                'Coalesced weapon-fire still has externalized branches: ' +
+                ', '.join(leaked)
+            )
+        parent = parent.replace(
+            '\n    #undef fp_push',
+            '\n    ' + marker + '\n    #undef fp_push',
+            1,
+        )
+        return text[:match.start()] + parent + text[match.end():]
     tail = tail_match[0][tail_match[0].index('loc_000357E2: ;'):].rsplit('\n}', 1)[0]
     tail = tail.replace('    eax = 0; /* xor self */\n',
                         '    eax = 0; /* xor self */\n\nloc_000357E4: ;\n', 1)
