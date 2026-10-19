@@ -1,6 +1,6 @@
 # Phase 4B-B — Native Xenon file/handle gate
 
-**Status: hardware PASS; Phase 4B-B2 runtime verification active.**
+**Status: Phase 4B-B hardware PASS; Phase 4B-B2 runtime verification PASS.**
 
 Phase 4B-A/A2 is complete. The exact retail audit now reports 11 remaining
 direct semantic host-backed import paths and 6 Phase-4B platform-bound paths.
@@ -133,7 +133,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4b_native_file_handles_xex\Verify-Phase4B-B2.ps1"
 ```
 
-The expected migration split is:
+The final migration split is:
 
 ```text
 host_surface=2
@@ -143,3 +143,24 @@ arg_mismatch=0
 fallback_referenced=0
 fallback_refs=0
 ```
+
+
+## Phase 4B-B2 final result
+
+The full verifier passed on October 19, 2026.
+
+```text
+host_surface=2
+platform_bound=15
+arg_missing=0
+arg_mismatch=0
+fallback_referenced=0
+fallback_refs=0
+```
+
+The timing/deadline regression, canonical guest-kernel ABI regression,
+time/sync platform-boundary regression, and all four file/handle
+platform-boundary tests passed.
+
+Phase 4B-B/B2 is complete. The active next slice is Phase 4B-C, covering the
+remaining memory/protection host surface.
