@@ -3,9 +3,11 @@
 
 Phase 4C-W continued ordinal 149 KeSetTimer and real hardware advanced cleanly
 to DIRECT_FRONTIER 0x0022D980 from translated caller 0x0022F0FB with fault=0.
-This gate preserves every proven startup continuation and promotes a bounded
-depth-2 direct translated closure rooted at 0x0022D980, while retaining the
-previous 0x0022F0FB closure. The main/env build cookie is rotated for X.
+This gate preserves every proven startup continuation and promotes only the
+hardware-observed translated root 0x0022D980, while retaining the previous
+0x0022F0FB closure. Deeper direct callees remain explicit frontiers so an
+unsupported speculative descendant cannot block package emission. The
+main/env build cookie is rotated for X.
 """
 
 from __future__ import annotations
@@ -34,8 +36,8 @@ LIVE_DIRECT_FRONTIER_TARGET_3 = 0x0022C5A4
 LIVE_DIRECT_FRONTIER_TARGET_4 = 0x00230060
 LIVE_DIRECT_FRONTIER_TARGET_5 = 0x0022F0FB
 LIVE_DIRECT_FRONTIER_TARGET_6 = 0x0022D980
-PROMOTED_CLOSURE_DEPTH = 2
-PROMOTED_CLOSURE_CAP = 16
+PROMOTED_CLOSURE_DEPTH = 0
+PROMOTED_CLOSURE_CAP = 1
 KERNEL_HEADER_BASE = 0x80010000
 KERNEL_HEADER_SIZE = 0x1000
 KERNEL_HEADER_ELFANEW = 0x80
@@ -2304,7 +2306,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
     (args.out_dir / "main.cpp").write_text(generated_main, encoding="utf-8")
     (args.out_dir / "phase4c_env.cpp").write_text(env_source, encoding="utf-8")
 
-    print("[Phase4C-X] D980 DIRECT-CLOSURE PACKAGE READY")
+    print("[Phase4C-X] D980 SAFE-ROOT PACKAGE READY")
     print(
         f"[Phase4C-X] Entry closure={len(entry_members)} bodies; "
         f"thread closure={len(thread_members)} bodies; "
@@ -2379,8 +2381,8 @@ extern "C" DWORD phase4c_env_build_cookie(void)
     print(f"[Phase4C-X] env:  {args.out_dir / 'phase4c_env.cpp'}")
     print(
         "[Phase4C-X] Runtime policy: preserve the proven startup path, keep "
-        "ordinal 113 + 24 + 301 + 149 continuations live, execute bounded direct closure rooted at "
-        "0x0022D980, and stop at the next dynamic/deeper-direct frontier, timer-DPC boundary, or new guest fault."
+        "ordinal 113 + 24 + 301 + 149 continuations live, execute safe translated root "
+        "0x0022D980, and fence every deeper direct/dynamic/kernel/timer-DPC or guest-fault boundary."
     )
     return 0
 
