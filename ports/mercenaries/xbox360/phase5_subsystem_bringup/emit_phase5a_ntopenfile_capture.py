@@ -2948,7 +2948,7 @@ def main() -> int:
         "promoted_direct_members": [
             f"0x{va:08X}" for va in sorted(promoted_direct_members)
         ],
-        "diagnostic_goal": "execute_hardware_observed_root_0022CEEE_then_stop_next_boundary",
+        "diagnostic_goal": "capture_first_live_storage_request_ordinal_202_NtOpenFile",
         "data_thunk_fixups": [
             {"ordinal": 156, "name": "KeTickCount", "guest_data_va": "0x0087E020"},
             {"ordinal": 322, "name": "XboxHardwareInfo", "guest_data_va": "0x0087E000"},
@@ -3040,6 +3040,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         "PHASE 4C-AC",
         "PHASE 4C-AD",
         "PHASE 4C-AE",
+        "PHASE 4C-AF",
     ):
         env_source = env_source.replace(stale_phase, "PHASE 5A")
 
@@ -3085,7 +3086,11 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         "    s_phase4cFaultAddress = 0u;\n"
         "    s_phase4cFaultWidth = 0u;\n"
         "    s_phase4cFaultWrite = 0u;\n"
-        "    s_phase4cFaultEscapeArmed = 0;\n",
+        "    s_phase4cFaultEscapeArmed = 0;\n"
+        "    s_phase5aNtOpenFileCaptureCount = 0u;\n"
+        "    s_phase5aNtOpenFileObjectAttributes = 0u;\n"
+        "    s_phase5aNtOpenFilePathVa = 0u;\n"
+        "    s_phase5aNtOpenFilePathLength = 0u;\n",
         1,
     )
     driver = driver.replace(
@@ -3228,7 +3233,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         raise SystemExit("[Phase5A] boundary PASS marker changed")
     driver = driver.replace(old_escape_pass, new_escape_pass)
 
-    result_marker = "PHASE 5A NTOPEN202 CAPTURE RESULT"
+    result_marker = "PHASE 5A BOUNDED REAL STARTUP RESULT"
     if result_marker not in driver:
         raise SystemExit("[Phase5A] generated result label marker changed")
     driver = driver.replace(
