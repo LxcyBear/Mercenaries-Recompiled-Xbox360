@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 3L — bounded real backward-control-flow/loop coverage.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 3M — x87 exceptional/rounding coverage.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -71,8 +71,7 @@ independent reference across six controlled inputs.
 **Present blockers:** the explicit PowerPC-safe guest-memory ABI plus bounded
 real translated function, direct-call, tail-call, indirect-call, composed slice,
 dependency-closed cluster, and mixed control/flags + x87/XMM cluster paths are
-now proven on modified Xbox 360 hardware. Remaining Phase 3 blockers are bounded
-backward-control-flow/loop coverage, exceptional/rounding paths, full post-patch
+now proven on modified Xbox 360 hardware. Remaining Phase 3 blockers are exceptional/rounding paths, full post-patch
 generated-tree audit, and compiler/linker/runtime scale limits.
 D3D11, Win32, DXGI and host-audio dependencies still need Xbox 360-native
 replacements in later phases.
@@ -239,8 +238,12 @@ executes as Xbox 360 PowerPC.
 - [x] Widen to a new seven-function translated cluster with broader control-flow/flags
       and mixed x87/XMM state; 16 deterministic hardware profiles passed with 7/7
       coverage, exact integer/x87/XMM A/B state, full 64 MiB RAM equality and XAPI 0.
-- [ ] Prove a bounded real translated closure containing backward guest control flow
-      under an explicit execution budget before guarded game-entry execution.
+- [x] Prove a bounded real translated closure containing backward guest control flow
+      under an explicit execution budget; 16 hardware profiles passed with 9/9
+      coverage, 17,344 real backward-edge executions, deterministic mixed state,
+      full 64 MiB RAM equality and XAPI 0.
+- [ ] Prove real x87 rounding/exceptional-path translation under controlled control-word
+      and NaN/Infinity/boundary inputs before guarded game-entry execution.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -1609,6 +1612,38 @@ unexecuted test PASS.**
 - **Phase 3K is complete.**
 - **Next:** Phase 3L — admit bounded real backward guest control flow / loops
   under a hard execution budget so no candidate can hang modified hardware.
+
+### 2026-10-19 — Phase 3L bounded backward-control hardware gate PASS
+
+- Automatically selected real retail root `0x000CE310` with **9 members** and
+  dependency depth **2**.
+- Selected closure members:
+  `0x000C87B0`, `0x000C87D0`, `0x000C87F0`, `0x000C8E20`,
+  `0x000C8F80`, `0x000C91C0`, `0x000CA6B0`, `0x000CDF90`,
+  `0x000CE310`.
+- Phase 3L admitted ordinary backward guest branches while retaining the Phase
+  3K mixed integer/flags/x87/XMM closure requirements.
+- Every generated guest basic-block label was guarded by a **4096-entry**
+  execution budget so an unexpected retail loop could not hang the console.
+- All **16/16** deterministic A/B hardware profiles completed without
+  guest-memory faults or budget exhaustion.
+- Every profile executed **9/9** selected members.
+- Every profile executed **1,084 real backward edges** and consumed **1,117 /
+  4,096** budget ticks.
+- Suite total: **17,344 backward-edge executions**.
+- Repeated runs matched translated trace, integer state, x87 state, XMM state,
+  high-RAM canaries and complete **64 MiB guest-RAM hashes**.
+- Final markers:
+  - `SUITE COVERAGE: 9/9 mask=000001FF expected=000001FF`
+  - `SUITE BACKEDGES: 17344`
+  - `PASS: deterministic profile suite executes at least one real backward guest edge`
+  - `[XAPI RETURN VALUE] 0`
+- The first emitted 3L hardware build retained stale human-readable `PHASE 3K`
+  START/RESULT/END text, but its prefix, build tag, budget/backedge instrumentation
+  and all 3L-only proof fields were correct. The label-only bug was fixed after
+  the hardware pass in commit `6ae0b2c6424cbdcd963ccc8ca283b328600622c8`.
+- **Phase 3L is complete.**
+- **Next:** Phase 3M — real x87 rounding and exceptional-path coverage.
 
 ### How future updates are recorded
 
