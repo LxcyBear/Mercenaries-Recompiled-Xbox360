@@ -29,8 +29,12 @@ The desktop launcher identifies the supported retail XBE entry as:
 0x0022964A
 ```
 
-Before emitting an XDK startup XEX, 4C-A walks that exact entry in the locked
-generated tree and builds its complete direct translated dependency closure.
+Before emitting an XDK startup XEX, 4C-A resolves that exact entry in the
+locked function inventory. If the XBE entry is not itself a translated function
+start, the analyzer resolves the containing translated owner and requires the
+exact interior label `loc_0022964A` to exist in its audited generated body.
+It then builds the complete direct translated dependency closure from that
+owner.
 
 The report records:
 
@@ -73,3 +77,16 @@ the locked audited tree. It does **not** mean startup executes yet.
 The next step uses that manifest together with the Phase-2E real-XBE
 loader/execution environment and the completed Phase-4B service layer to emit
 the first bounded native startup XEX with deterministic xbWatson checkpoints.
+
+
+## Entry-resolution correction
+
+The first 4C-A run showed that `0x0022964A` is not present as an exact
+`sub_0022964A` function start in the locked generated tree. That is not by
+itself a translation failure: the recompiler supports reviewed function ranges
+whose valid external entry points may lie inside a translated owner.
+
+The preflight now resolves the XBE entry against `functions.json` and requires
+an exact generated interior label before accepting that owner. It also reports
+the owner range and entry offset so the subsequent startup emitter can build a
+dedicated entry adapter rather than incorrectly calling the owner's prologue.
