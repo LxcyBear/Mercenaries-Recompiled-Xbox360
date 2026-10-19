@@ -37,7 +37,8 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 | 4C | **Active** | Link and execute the first real retail-derived translated Mercenaries startup path with the migrated Xenon service layer. |
 | 4C-A | **Complete PASS** | `xbe_entry_point` at `0x0022964A`; 40 directly reachable translated bodies, depth 8, 5,918 guest bytes, 111,376 generated-source bytes, 0 missing direct dependencies, 14 dynamic/indirect-boundary bodies. |
 | 4C-B | **Hardware PASS** | Real `xbe_entry_point` ran on Xenon to the first live dynamic dispatch with no guest fault: `0x0022B4D7 -> 0x800000FF`, identified as `PsCreateSystemThreadEx` ordinal 255. |
-| 4C-C | **Package prep ready** | Resolve the ordinal-255 startup-thread handoff, verify its 44-byte call frame, capture the actual StartRoutine/contexts on hardware, and stop at THREAD_TARGET. Routine execution moves to the next phase. |
+| 4C-C | **Hardware PASS** | Real Xenon capture: `PsCreateSystemThreadEx` StartRoutine=`0x0022B43F`, ctx1=`0x002295D6`, ctx2=`0x00000000`, exact 44-byte frame, fault=0. |
+| 4C-D | **Preflight ready** | Root analysis at the hardware-observed `0x0022B43F` only; report its direct translated closure, dynamic boundaries and helper surface before building the first title-thread execution XEX. |
 
 This table is the continuation of the Phase-3 hardware map: later phases should only advance when their stated evidence gate passes.
 
