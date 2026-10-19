@@ -71,10 +71,10 @@ try {
     Invoke-Python "-m" "unittest" "tools.recomp.test_lower_explicit_guest_memory"
 
     Write-Host "[Phase3N] Running x87 extended-memory/status preflight..."
-    Invoke-Python (Join-Path $repoRoot "tools\recomp\test_xbox360_x87_memory_abi.py")
+    Invoke-Python "-m" "tools.recomp.test_xbox360_x87_memory_abi"
 
     Write-Host "[Phase3N] Running reviewed function-reject preflight..."
-    Invoke-Python (Join-Path $repoRoot "tools\recomp\test_reviewed_function_reject.py")
+    Invoke-Python "-m" "tools.recomp.test_reviewed_function_reject"
 
     if (-not $ResumeLowering) {
         Write-Host ""
