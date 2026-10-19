@@ -1364,3 +1364,22 @@ explicitly if CEEE is a mid-function/split entry rather than a generated
 function start.
 
 Build tag: `P4C-DIRECTCEEE-AF-20261019-A`.
+
+
+#### Phase 4C-AF — translated startup reaches storage/content
+**Status: HARDWARE PASS — PHASE 4 COMPLETE.**
+
+Build `P4C-DIRECTCEEE-AF-20261019-A` executed translated root
+`0x0022CEEE`, then flowed through `0x00239C23`, `0x0022C27A`, and
+`0x0022BD2D` before reaching `ICALL_SAFE target=0x800000CA` with
+`fault=0`. The translated trace reached 23 entries.
+
+`0x800000CA` is ordinal 202 `NtOpenFile`. The observed stack delta is
+28 bytes, exactly matching six stdcall arguments plus the synthetic return.
+
+The live boot path is now demanding storage/content I/O, which belongs to
+Phase 5 subsystem bring-up. Phase 4C therefore exits successfully here.
+
+**Phase 4 exit criterion: PASS on real Xbox 360 hardware.**
+
+Next branch: `xbox360/phase5-native-subsystems`.
