@@ -91,6 +91,91 @@ def load_function_ranges(path: Path) -> list[dict]:
     return rows
 
 
+def _function_lookup(functions_path: Path | None) -> dict[int, dict]:
+    if not functions_path:
+        return {}
+    return {row["start"]: row for row in load_function_ranges(functions_path)}
+
+
+def build_unresolved_components(entries: list[dict],
+                                functions_path: Path | None) -> list[dict]:
+    """Group live unresolved edges into nearby/native control-flow families."""
+    lookup = _function_lookup(functions_path)
+    components = []
+    seen = set()
+
+    # Build an undirected graph using caller function starts plus the detected
+    # parent/previous function that owns each target.
+    adjacency = {}
+    edge_rows = []
+    for entry in entries:
+        target_owner = None
+        if entry.get("parent_start"):
+            target_owner = int(entry["parent_start"], 16)
+        elif entry.get("previous_end"):
+            # Find the function whose end matches previous_end.
+            previous_end = int(entry["previous_end"], 16)
+            for start, row in lookup.items():
+                if row["end"] == previous_end:
+                    target_owner = start
+                    break
+
+        callers = []
+        for ref in entry.get("references", []):
+            for site in ref.get("sites", []):
+                name = site.get("caller_function")
+                if name and name.startswith("sub_"):
+                    try:
+                        callers.append(int(name[4:], 16))
+                    except ValueError:
+                        pass
+
+        nodes = set(callers)
+        if target_owner is not None:
+            nodes.add(target_owner)
+        edge_rows.append((entry, nodes))
+        for node in nodes:
+            adjacency.setdefault(node, set()).update(nodes - {node})
+
+    for node in sorted(adjacency):
+        if node in seen:
+            continue
+        stack = [node]
+        group = set()
+        while stack:
+            cur = stack.pop()
+            if cur in group:
+                continue
+            group.add(cur)
+            stack.extend(adjacency.get(cur, ()))
+        seen.update(group)
+
+        related = [
+            entry for entry, nodes in edge_rows if nodes & group
+        ]
+        starts = [n for n in group if n in lookup]
+        if not starts:
+            continue
+        min_start = min(starts)
+        max_end = max(lookup[n]["end"] for n in starts)
+        next_starts = sorted(
+            row["start"] for row in lookup.values()
+            if row["start"] >= max_end and row["start"] not in group
+        )
+        components.append({
+            "start": f"0x{min_start:08X}",
+            "covered_detected_end": f"0x{max_end:08X}",
+            "next_detected_start": (
+                f"0x{next_starts[0]:08X}" if next_starts else None
+            ),
+            "functions": [f"0x{n:08X}" for n in sorted(group)],
+            "targets": [entry["address_hex"] for entry in related],
+            "edge_count": sum(entry.get("reference_count", 0)
+                              for entry in related),
+        })
+    return components
+
+
 def classify_unresolved(entries: list[dict], functions_path: Path | None) -> dict:
     if not functions_path:
         return {"counts": {}, "entries": entries}
@@ -291,6 +376,24 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
     dead_unresolved_classification = classify_unresolved(
         dead_entries, functions_path
     )
+
+    lookup = _function_lookup(functions_path)
+    for entry in unresolved_classification.get("entries", []):
+        for ref in entry.get("references", []):
+            for site in ref.get("sites", []):
+                caller = site.get("caller_function")
+                if caller and caller.startswith("sub_"):
+                    try:
+                        caller_va = int(caller[4:], 16)
+                    except ValueError:
+                        caller_va = None
+                    if caller_va in lookup:
+                        site["caller_start"] = f"0x{caller_va:08X}"
+                        site["caller_end"] = f"0x{lookup[caller_va]['end']:08X}"
+
+    unresolved_components = build_unresolved_components(
+        unresolved_classification.get("entries", []), functions_path
+    )
     return {
         "root": str(root),
         "file_count": len(rows),
@@ -304,6 +407,7 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
         "dead_unresolved_stub_bodies": len(dead_entries),
         "unresolved_stub_files": unresolved_files,
         "unresolved_classification": unresolved_classification,
+        "unresolved_components": unresolved_components,
         "dead_unresolved_classification": dead_unresolved_classification,
         "fatal_count": len(fatal),
         "fatal": fatal,
@@ -381,11 +485,35 @@ def main(argv=None) -> int:
                             " same-parent" if caller_name == parent_name
                             else f" cross-parent->{parent_name}"
                         )
+                    span = ""
+                    if site.get("caller_start") and site.get("caller_end"):
+                        span = (
+                            f" span={site['caller_start']}:{site['caller_end']}"
+                        )
                     print(
                         f"    caller {caller_name} "
-                        f"{Path(ref['file']).name}:{site['line']}:{relation} "
-                        f"{site['text']}"
+                        f"{Path(ref['file']).name}:{site['line']}:{relation}"
+                        f"{span} {site['text']}"
                     )
+
+    components = report.get("unresolved_components", [])
+    if components:
+        print("LIVE unresolved control-flow components:")
+        for component in components:
+            print(
+                "  component "
+                f"{component['start']}..{component['covered_detected_end']} "
+                f"next={component.get('next_detected_start') or '-'} "
+                f"functions={len(component['functions'])} "
+                f"targets={len(component['targets'])} "
+                f"edges={component['edge_count']}"
+            )
+            print(
+                "    funcs=" + ",".join(component["functions"])
+            )
+            print(
+                "    targets=" + ",".join(component["targets"])
+            )
 
     dead_info = report.get("dead_unresolved_classification", {})
     dead_counts = dead_info.get("counts", {})
