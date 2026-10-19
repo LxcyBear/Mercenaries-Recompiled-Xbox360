@@ -108,32 +108,69 @@ try {
             $priorLowering = Get-Content -LiteralPath $loweringReport -Raw | ConvertFrom-Json
         }
 
+        # A previous resume can finish lowering and then fail while the report
+        # is being consolidated. Preserve that already-completed evidence
+        # before this invocation overwrites the incremental report.
+        $pendingLoweringData = $null
+        if (Test-Path -LiteralPath $resumeLoweringReport -PathType Leaf) {
+            $pendingLoweringData = Get-Content -LiteralPath $resumeLoweringReport -Raw | ConvertFrom-Json
+        }
+
         Invoke-Python $lowerer $generatedRoot "--report" $resumeLoweringReport
 
-        $resumeLowering = Get-Content -LiteralPath $resumeLoweringReport -Raw | ConvertFrom-Json
+        # Do not call this $resumeLowering: PowerShell variable names are
+        # case-insensitive, so that collides with the typed [switch]
+        # $ResumeLowering script parameter.
+        $resumeLoweringData = Get-Content -LiteralPath $resumeLoweringReport -Raw | ConvertFrom-Json
+
+        $priorReads = 0
+        $priorWrites = 0
+        $priorCompound = 0
+        $priorIncDec = 0
+        $priorBulk = 0
         if ($null -ne $priorLowering) {
-            $priorBulk = 0
+            $priorReads = [int]$priorLowering.reads
+            $priorWrites = [int]$priorLowering.writes
+            $priorCompound = [int]$priorLowering.compound_writes
+            $priorIncDec = [int]$priorLowering.incdec_writes
             if ($null -ne $priorLowering.PSObject.Properties["bulk_writes"]) {
                 $priorBulk = [int]$priorLowering.bulk_writes
             }
-            $resumeBulk = 0
-            if ($null -ne $resumeLowering.PSObject.Properties["bulk_writes"]) {
-                $resumeBulk = [int]$resumeLowering.bulk_writes
+        }
+
+        $pendingReads = 0
+        $pendingWrites = 0
+        $pendingCompound = 0
+        $pendingIncDec = 0
+        $pendingBulk = 0
+        if ($null -ne $pendingLoweringData) {
+            $pendingReads = [int]$pendingLoweringData.reads
+            $pendingWrites = [int]$pendingLoweringData.writes
+            $pendingCompound = [int]$pendingLoweringData.compound_writes
+            $pendingIncDec = [int]$pendingLoweringData.incdec_writes
+            if ($null -ne $pendingLoweringData.PSObject.Properties["bulk_writes"]) {
+                $pendingBulk = [int]$pendingLoweringData.bulk_writes
             }
-            [ordered]@{
-                files = [int]$resumeLowering.files
-                reads = [int]$priorLowering.reads + [int]$resumeLowering.reads
-                writes = [int]$priorLowering.writes + [int]$resumeLowering.writes
-                compound_writes = [int]$priorLowering.compound_writes + [int]$resumeLowering.compound_writes
-                incdec_writes = [int]$priorLowering.incdec_writes + [int]$resumeLowering.incdec_writes
-                bulk_writes = $priorBulk + $resumeBulk
-                source_bytes = [int64]$resumeLowering.source_bytes
-                resumed = $true
-            } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $loweringReport -Encoding UTF8
         }
-        else {
-            Copy-Item -LiteralPath $resumeLoweringReport -Destination $loweringReport -Force
+
+        $resumeBulk = 0
+        if ($null -ne $resumeLoweringData.PSObject.Properties["bulk_writes"]) {
+            $resumeBulk = [int]$resumeLoweringData.bulk_writes
         }
+
+        [ordered]@{
+            files = [int]$resumeLoweringData.files
+            reads = $priorReads + $pendingReads + [int]$resumeLoweringData.reads
+            writes = $priorWrites + $pendingWrites + [int]$resumeLoweringData.writes
+            compound_writes = $priorCompound + $pendingCompound + [int]$resumeLoweringData.compound_writes
+            incdec_writes = $priorIncDec + $pendingIncDec + [int]$resumeLoweringData.incdec_writes
+            bulk_writes = $priorBulk + $pendingBulk + $resumeBulk
+            source_bytes = [int64]$resumeLoweringData.source_bytes
+            resumed = $true
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $loweringReport -Encoding UTF8
+
+        # The incremental report is now folded into the durable aggregate.
+        Remove-Item -LiteralPath $resumeLoweringReport -Force -ErrorAction SilentlyContinue
 
         Write-Host "[Phase3N] Auditing resumed post-lowering tree..."
         Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $generatedRoot
