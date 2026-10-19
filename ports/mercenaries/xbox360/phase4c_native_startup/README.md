@@ -1,6 +1,6 @@
 # Phase 4C-A — real translated startup closure preflight
 
-**Status: ready.**
+**Status: Phase 4C-A PASS; Phase 4C-B package preparation ready.**
 
 Phase 4B service migration is complete. The exact retail service surface is:
 
@@ -99,3 +99,60 @@ symbols rather than only `sub_XXXXXXXX` calls.
 Interior-entry resolution remains supported for any future entry that actually
 lands inside a translated owner, but `0x0022964A` is expected to resolve as
 an exact translated function start once named symbols are indexed correctly.
+
+
+## Phase 4C-A result — October 19, 2026
+
+The corrected named-symbol analyzer passed:
+
+```text
+Retail entry: 0x0022964A
+Entry resolution: exact_function
+Entry owner: 0x0022964A:0x002296BC xbe_entry_point
+Reachable direct translated bodies: 40
+Maximum direct-call depth: 8
+Reachable retail guest bytes: 5918
+Reachable generated source bytes: 111376
+Missing direct translated dependencies: 0
+Dynamic/indirect boundary bodies: 14
+STRUCTURAL RESULT: PASS
+```
+
+## Phase 4C-B — first bounded real startup XEX
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-B.ps1"
+```
+
+The preparation step emits two local XDK sources:
+
+```text
+build\phase4c_native_startup\xdk\main.cpp
+build\phase4c_native_startup\xdk\phase4c_env.cpp
+```
+
+Add **both** files to the known-good XDK diagnostic project.
+
+Build tag:
+
+```text
+P4C-STARTUP-20261019-A
+```
+
+The runtime loads and verifies the user's exact retail `game:\default.xbe`,
+reconstructs the proven Phase-2E execution environment, enters the real
+translated `xbe_entry_point`, and performs a non-local escape at the first
+live indirect/tail dispatch boundary.
+
+A successful bounded run is expected to report a line shaped like:
+
+```text
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=........ target=........ esp=........ saved_esp=........ ticks=... trace=...
+[Merc360:P4C] PHASE 4C-B BOUNDED REAL STARTUP RESULT: PASS
+```
+
+That PASS means real retail-derived startup executed from the actual XBE entry
+to its first live dynamic dependency without a guest-memory fault or execution
+budget exhaustion. It does not mean full startup or gameplay yet.
