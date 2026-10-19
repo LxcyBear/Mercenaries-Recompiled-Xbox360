@@ -47,7 +47,8 @@ Snapshot: 2026-10-19.
 | 4C-M | **Hardware PASS** | Synthetic xboxkrnl PE-header surface passed; translated startup advanced through `0x0022C47B` into `0x0022C28B`, then reached `ICALL_SAFE 0x8000002F` with `fault=0` and a 12-byte frame. |
 | 4C-N | **Hardware PASS** | Live ordinal 47 frame validated: registration `0x003134C0`, Register=1, exact 12-byte frame; production no-callback semantics returned cleanly and startup advanced with `fault=0` to `DIRECT_FRONTIER 0x0022F128` from `0x0022C28B`. |
 | 4C-O | **Hardware PASS** | Promoted `0x0022F128` executed on Xenon; next boundary is `ICALL_SAFE 0x8000006B` from `0x0022F128`, `fault=0`, 16-byte frame. Ordinal 107 = `KeInitializeDpc`. |
-| 4C-P | **Package prep ready** | Continue live ordinal 107 with exact production KDPC initialization: validate 16-byte frame, zero 32-byte guest KDPC, Type=0x13, routine at +12, context at +16, return `eax=0`, resume translated startup. |
+| 4C-P | **Hardware PASS** | Live ordinal 107 `KeInitializeDpc` frame validated: DPC `0x00869580`, routine `0x0022F116`, context 0; production KDPC initialization passed and startup advanced with `fault=0` to `ICALL_SAFE 0x80000071`. |
+| 4C-Q | **Package prep ready** | Continue ordinal 113 `KeInitializeTimerEx`: validate 12-byte frame, zero 40-byte guest KTIMER, set Type=`0x08+(TimerType&1)`, return `eax=0`, resume. Adds a main/env link-time build cookie to reject stale env sources. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
