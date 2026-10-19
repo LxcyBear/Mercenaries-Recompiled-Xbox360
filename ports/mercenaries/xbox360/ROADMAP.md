@@ -779,3 +779,58 @@ Calls from that function to translated targets not already packed remain
 immediate first-fault provenance remain active.
 
 Build tag: `P4C-DIRECTC47B-20261019-A`.
+
+
+#### Phase 4C-L — promoted direct frontier
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+PASS: hardware-observed direct target 0022C47B is packed for translated execution
+
+FAULT ACCESS IMMEDIATE:
+  READ width=4
+  guest=8001003C
+
+BOUNDARY:
+  kind=GUEST_FAULT
+  caller=0022C47B
+  target=8001003C
+  esp=008BFF40
+  saved_esp=008BFF40
+  ticks=25
+  fault=1
+
+trace[6]=0022C4DF
+trace[7]=0022C47B
+```
+
+The promoted body executed successfully and exposed a new runtime dependency.
+`0x8001003C` is not a kernel ordinal token. It falls inside the deliberately
+fenced `0x80010000-0x80010FFF` original-Xbox kernel image page.
+
+The original Xbox kernel image base is `0x80010000`; offset `0x3C` is the
+PE/DOS `e_lfanew` field. Known Xbox recompilation work documents a RenderWare
+startup/cache path that reads this exact address and can safely proceed with a
+minimal synthetic PE header containing zero sections.
+
+#### Phase 4C-M — synthetic xboxkrnl PE-header surface
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-M.ps1`
+
+4C-M does **not** remove the kernel-page fence or alias it to title RAM.
+Instead it maps only `0x80010000-0x80010FFF` to a separate 4 KiB synthetic
+kernel-header page and seeds:
+- DOS signature `MZ`;
+- `e_lfanew = 0x80`;
+- NT signature `PE\0\0`;
+- machine = i386;
+- `NumberOfSections = 0`.
+
+The zero-section model intentionally makes section-scanning startup code exit
+without requiring the real kernel binary. Startup DATA relocations 156/322/324,
+the promoted `0x0022C47B` body, and immediate first-fault provenance remain
+active.
+
+Build tag: `P4C-KHDR-20261019-A`.
