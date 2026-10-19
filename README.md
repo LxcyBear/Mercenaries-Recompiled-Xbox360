@@ -32,7 +32,8 @@ Snapshot: 2026-10-19.
 | 4B-C | **Hardware PASS** | `P4B-MEMPROT-20261019-B` passed on real Xenon: guest allocation, per-page protection, decommit/recommit, tracked release/reuse, zero-init, bounds and stale-release checks all PASS. |
 | 4B-C2 | **Complete PASS** | Final verifier passes at 0 direct host-backed / 15 platform-bound / 2 guest-native with ABI/fallback, timing, file/handle and memory ownership regressions all green. |
 | 4C | **Active** | First real translated Mercenaries startup path with the migrated Xenon service layer. |
-| 4C-A | **Preflight ready** | Walk retail entry `0x0022964A` through the locked Phase-3N-A generated tree, measure its direct translated closure, and identify dynamic/indirect startup boundaries before emitting the first XDK startup slice. |
+| 4C-A | **Complete PASS** | Retail entry `0x0022964A` resolves exactly to `xbe_entry_point`; direct closure is 40 translated bodies, depth 8, 5,918 guest bytes, 111,376 generated-source bytes, 0 missing direct dependencies, 14 dynamic/indirect-boundary bodies. |
+| 4C-B | **Package prep ready** | Emit the first real translated startup XDK package: exact Phase-2E retail environment + the 40-body closure; execute `xbe_entry_point` and escape deterministically at the first live ICALL/ITAIL boundary. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
