@@ -32,8 +32,13 @@ Write-Host "[Phase4C-Y] All previously proven startup invariants, direct roots, 
 Write-Host "[Phase4C-Y] Main/env build cookie is rotated to the Y pair."
 Write-Host ""
 
-& $python $emitter "--base-emitter" $baseEmitter "--generated-root" $generatedRoot "--functions" $functionsPath "--entry-report" $entryReport "--thread-report" $threadReport "--phase3n-template" $phase3nTemplate "--phase2e-source" $phase2eSource "--out-dir" $outDir
-if ($LASTEXITCODE -ne 0) { throw "Phase 4C-Y 38C00 safe-root package emission failed." }
+$emitLog = Join-Path $repoRoot "build\phase4c_native_startup\phase4c-y-emitter.log"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $emitLog) | Out-Null
+& $python $emitter "--base-emitter" $baseEmitter "--generated-root" $generatedRoot "--functions" $functionsPath "--entry-report" $entryReport "--thread-report" $threadReport "--phase3n-template" $phase3nTemplate "--phase2e-source" $phase2eSource "--out-dir" $outDir 2>&1 | Tee-Object -FilePath $emitLog
+$emitExit = $LASTEXITCODE
+if ($emitExit -ne 0) {
+    throw "Phase 4C-Y 38C00 safe-root package emission failed (exit $emitExit). Full emitter output: $emitLog"
+}
 
 $main = Join-Path $outDir "main.cpp"
 $env = Join-Path $outDir "phase4c_env.cpp"
