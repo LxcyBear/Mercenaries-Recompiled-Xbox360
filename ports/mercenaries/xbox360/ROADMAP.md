@@ -1229,10 +1229,22 @@ remained `fault=0` and stopped explicitly at `VM_UNSUPPORTED` because the
 focused startup arena does not yet model reserved-but-uncommitted guest pages.
 
 #### Phase 4C-AA — reserved guest virtual-memory state
-**Status: next blocker.**
+**Status: package preparation ready.**
 
-Add explicit reserve/commit page state for the hardware-observed ordinal-184
-path, retain the reserved VA for subsequent commits, and continue startup.
-This is the remaining platform/runtime behavior presently blocking native
-startup; Phase 5 begins once the native startup path is established and starts
-demanding its real runtime subsystems.
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AA.ps1`
+
+AA now implements explicit reserved/uncommitted and committed guest-page state
+for the hardware-observed ordinal-184 path. Page-backed ranges grow downward
+from the top of the 64 MiB guest arena, matching the production runtime's
+allocator direction, while the existing bounded ordinary heap remains below.
+
+The exact Z request — 1 MiB, MEM_RESERVE, PAGE_READWRITE, Base=NULL — will now
+receive a persistent reserved VA. Later MEM_COMMIT calls preserve that VA,
+zero newly committed pages, and update per-page protection metadata. Accesses
+to reserved/uncommitted pages remain fenced.
+
+Build tag: `P4C-VMRESERVE-AA-20261019-A`.
+
+This remains the current Phase-4C blocker; Phase 5 begins once the native
+startup path is established and starts demanding its runtime subsystems.
