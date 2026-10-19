@@ -724,3 +724,45 @@ P4C-KDATA3-20261019-A
 4C-K relocates exactly ordinals 156, 322, and 324 because those are the
 guest-visible DATA exports explicitly initialized by the current Phase-2E
 environment. It does not preemptively relocate uninitialized data exports.
+
+
+## Phase 4C-K hardware result — PASS
+
+```text
+[Merc360:P4C] DATA THUNK FIXUP: ordinal=156 slot=002DBD58 old=8000009C new=0087E020
+[Merc360:P4C] DATA THUNK FIXUP: ordinal=322 slot=002DBE0C old=80000142 new=0087E000
+[Merc360:P4C] DATA THUNK FIXUP: ordinal=324 slot=002DBE14 old=80000144 new=0087E010
+[Merc360:P4C] PASS: startup data imports 156/322/324 point at initialized guest kernel data
+[Merc360:P4C] DIRECT FRONTIER: caller=0022C4DF target=0022C47B esp=008BFF4C
+[Merc360:P4C] BOUNDARY: kind=DIRECT_FRONTIER caller=0022C4DF target=0022C47B esp=008BFF4C saved_esp=008BFF4C ticks=24 trace=7
+[Merc360:P4C] ... fault=0
+[Merc360:P4C] PHASE 4C-K STARTUP DATA-THUNK RESULT: PASS
+```
+
+The callback is now past the startup kernel-data relocation blockers and stops
+only because the bounded translated slice intentionally excluded the next live
+direct target.
+
+## Phase 4C-L — promote live direct target 0x0022C47B
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-L.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\promoted_direct_xdk\main.cpp
+build\phase4c_native_startup\promoted_direct_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-DIRECTC47B-20261019-A
+```
+
+Only `0x0022C47B` is added beyond the K pack. Deeper direct dependencies
+remain evidence boundaries.
