@@ -34,7 +34,7 @@ Snapshot: 2026-10-19.
 | 4C | **Active** | First real translated Mercenaries startup path with the migrated Xenon service layer. |
 | 4C-A | **Complete PASS** | Retail entry `0x0022964A` resolves exactly to `xbe_entry_point`; direct closure is 40 translated bodies, depth 8, 5,918 guest bytes, 111,376 generated-source bytes, 0 missing direct dependencies, 14 dynamic/indirect-boundary bodies. |
 | 4C-B | **Hardware PASS** | Real retail-derived `xbe_entry_point` executed on Xbox 360 and reached the first live boundary with fault=0: caller `0x0022B4D7`, target `0x800000FF` = kernel ordinal 255 `PsCreateSystemThreadEx`. |
-| 4C-C | **Package prep ready** | Follow the first kernel thread handoff: decode/validate the 10-argument ordinal-255 frame, log its actual StartRoutine/contexts, synchronously enter the translated startup-thread routine, then stop at the next live boundary. |
+| 4C-C | **Package prep ready** | Decode/validate the live 10-argument ordinal-255 frame, capture the actual StartRoutine/contexts from hardware, and stop successfully at a THREAD_TARGET evidence boundary. No guessed thread closure is packed. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
