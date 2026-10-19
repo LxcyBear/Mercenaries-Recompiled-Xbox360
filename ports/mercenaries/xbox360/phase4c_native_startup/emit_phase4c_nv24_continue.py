@@ -461,22 +461,22 @@ def phase4c_t_boundary(base):
         raise SystemExit("[Phase4C-T] RECOMP_ICALL_SAFE marker changed")
     text = text.replace(old_macro, new_macro)
 
-    old_itail = r'''#define RECOMP_ITAIL(xbox_va) do { \\
-    phase4c_escape( \\
-        PHASE4C_BOUNDARY_ITAIL, \\
-        (DWORD)(xbox_va), \\
-        g_esp); \\
+    old_itail = r'''#define RECOMP_ITAIL(xbox_va) do { \
+    phase4c_escape( \
+        PHASE4C_BOUNDARY_ITAIL, \
+        (DWORD)(xbox_va), \
+        g_esp); \
 } while (0)'''
-    new_itail = r'''#define RECOMP_ITAIL(xbox_va) do { \\
-    uint32_t _phase4c_tail_target = (uint32_t)(xbox_va); \\
-    if (_phase4c_tail_target == 0x80000018u && !s_phase4cNvQueryHandled) { \\
-        phase4c_ex_query_nonvolatile_setting(); \\
-    } else { \\
-        phase4c_escape( \\
-            PHASE4C_BOUNDARY_ITAIL, \\
-            _phase4c_tail_target, \\
-            g_esp); \\
-    } \\
+    new_itail = r'''#define RECOMP_ITAIL(xbox_va) do { \
+    uint32_t _phase4c_tail_target = (uint32_t)(xbox_va); \
+    if (_phase4c_tail_target == 0x80000018u && !s_phase4cNvQueryHandled) { \
+        phase4c_ex_query_nonvolatile_setting(); \
+    } else { \
+        phase4c_escape( \
+            PHASE4C_BOUNDARY_ITAIL, \
+            _phase4c_tail_target, \
+            g_esp); \
+    } \
 } while (0)'''
     if old_itail not in text:
         raise SystemExit("[Phase4C-T] RECOMP_ITAIL marker changed")
