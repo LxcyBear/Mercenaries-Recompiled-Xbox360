@@ -119,9 +119,11 @@ phases.
     `fault=0`: caller `0x0022B4D7`, target `0x800000FF`.
     That target is kernel ordinal 255, `PsCreateSystemThreadEx`; the observed
     44-byte frame exactly matches ten arguments plus the synthetic return slot.
-15. **Phase 4C-C:** decode the live ordinal-255 frame, verify/log the actual
-    StartRoutine and contexts, follow the first startup-thread handoff
-    synchronously, and capture the next live boundary.
+15. **Phase 4C-C:** package preparation is ready. Decode the live
+    ordinal-255 frame, verify/log the actual StartRoutine and contexts, follow
+    the first startup-thread handoff synchronously, and capture the next live
+    boundary. The emitted package is isolated under
+    `build\phase4c_native_startup\thread_xdk`.
 
 ### Evidence policy
 
@@ -1859,6 +1861,18 @@ unexecuted test PASS.**
 - **Phase 4C-B hardware result: PASS.**
 - **Next:** Phase 4C-C follows the first startup-thread handoff and captures
   the next live dependency.
+
+### 2026-10-19 — Phase 4C-C thread-handoff package ready
+
+- The hardware-proven 4C-B emitter remains unchanged/reproducible.
+- A separate 4C-C emitter now packages the maintained startup roots
+  `0x0022B43F` and `0x002295D6` plus their direct generated closures.
+- Runtime decodes the actual `PsCreateSystemThreadEx` frame, validates its
+  44-byte shape, logs StartRoutine/context values, and enters the live packed
+  StartRoutine synchronously.
+- Output is isolated under
+  `build\phase4c_native_startup\thread_xdk`.
+- Build tag: `P4C-THREAD-20261019-A`.
 
 ### How future updates are recorded
 
