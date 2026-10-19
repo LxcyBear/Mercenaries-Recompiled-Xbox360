@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define P4C_BUILD_TAG "P4B-MEMPROT-20261019-A"
+#define P4C_BUILD_TAG "P4B-MEMPROT-20261019-B"
 
 #define GUEST_ARENA_SIZE   (1024u * 1024u)
 #define GUEST_PAGE_SIZE    4096u
@@ -427,6 +427,18 @@ static void run_tests(GuestArena* arena)
         releasedVa == 0 && releasedSize == 0,
         "MEM_RELEASE clears base and region size");
 
+    /*
+     * Check the stale original VA before the allocator is allowed to reuse
+     * that range. Build A accidentally performed this check after reuse,
+     * at which point the same VA was live again and a release was valid.
+     */
+    {
+        DWORD staleVa = va;
+        check_result(
+            !guest_release(arena, &staleVa, NULL),
+            "double release/untracked release is rejected");
+    }
+
     reused = guest_alloc(arena, 0x1000u);
     check_result(
         reused == va,
@@ -446,8 +458,8 @@ static void run_tests(GuestArena* arena)
         "cross-arena protection request is rejected");
 
     check_result(
-        !guest_release(arena, &va, NULL),
-        "double release/untracked release is rejected");
+        guest_release(arena, &reused, NULL) && reused == 0,
+        "reused guest allocation can be released cleanly");
 }
 
 VOID __cdecl main()
