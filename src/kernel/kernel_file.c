@@ -17,8 +17,11 @@
 #define _GNU_SOURCE   /* FNM_CASEFOLD */
 #include "kernel.h"
 #if defined(_WIN32)
+#include "platform/kernel_file_io.h"
+#if !defined(_XBOX)
 #include "mod_overlay.h"
 #include "preview_log.h"
+#endif
 #endif
 #include <string.h>
 #include <stdio.h>
@@ -53,8 +56,58 @@ static void cleanup_dir_context_for_handle(HANDLE Handle);
 
 /* ======================================================================== */
 #if defined(_WIN32)
-/* ====================  Win32 backend  =================================== */
+/* ====================  Win32 / Xenon backend  =========================== */
 /* ======================================================================== */
+
+static BOOL file_overlay_readonly(const WCHAR *path)
+{
+#if defined(_XBOX)
+    (void)path;
+    return FALSE;
+#else
+    return xbox_mod_overlay_readonly(path);
+#endif
+}
+
+static void file_overlay_apply_find_data(
+    HANDLE directory,
+    MERC_PLATFORM_FIND_DATA *data)
+{
+#if defined(_XBOX)
+    (void)directory;
+    (void)data;
+#else
+    WIN32_FIND_DATAW native_data;
+    int converted;
+
+    memset(&native_data, 0, sizeof(native_data));
+    native_data.ftCreationTime = data->CreationTime;
+    native_data.ftLastAccessTime = data->LastAccessTime;
+    native_data.ftLastWriteTime = data->LastWriteTime;
+    native_data.dwFileAttributes = data->FileAttributes;
+    native_data.nFileSizeHigh = data->FileSizeHigh;
+    native_data.nFileSizeLow = data->FileSizeLow;
+
+    MultiByteToWideChar(
+        CP_ACP, 0, data->FileName, -1,
+        native_data.cFileName, MAX_PATH);
+
+    xbox_mod_overlay_find_data(directory, &native_data);
+
+    data->CreationTime = native_data.ftCreationTime;
+    data->LastAccessTime = native_data.ftLastAccessTime;
+    data->LastWriteTime = native_data.ftLastWriteTime;
+    data->FileAttributes = native_data.dwFileAttributes;
+    data->FileSizeHigh = native_data.nFileSizeHigh;
+    data->FileSizeLow = native_data.nFileSizeLow;
+
+    converted = WideCharToMultiByte(
+        CP_ACP, 0, native_data.cFileName, -1,
+        data->FileName, MAX_PATH, NULL, NULL);
+    if (converted <= 0)
+        data->FileName[0] = '\0';
+#endif
+}
 
 /* Convert Xbox create disposition to Win32 */
 static DWORD xbox_disposition_to_win32(ULONG Disposition)
@@ -419,58 +472,70 @@ NTSTATUS __stdcall xbox_NtCreateFile(
         return STATUS_INVALID_PARAMETER;
 
     if (!translate_obj_path(ObjectAttributes, win_path, MAX_PATH)) {
-        xbox_log(XBOX_LOG_ERROR, XBOX_LOG_FILE, "NtCreateFile: path translation failed");
+        xbox_log(XBOX_LOG_ERROR, XBOX_LOG_FILE,
+                 "NtCreateFile: path translation failed");
         return STATUS_OBJECT_PATH_NOT_FOUND;
     }
 
-    if (xbox_mod_overlay_readonly(win_path) &&
-        ((DesiredAccess & (GENERIC_WRITE | GENERIC_ALL | DELETE | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | XBOX_FILE_WRITE_DATA | XBOX_FILE_APPEND_DATA)) ||
-         (CreateDisposition != XBOX_FILE_OPEN && CreateDisposition != XBOX_FILE_OPEN_IF))) {
-        if (IoStatusBlock) { IoStatusBlock->Status = STATUS_ACCESS_DENIED; IoStatusBlock->Information = 0; }
+    if (file_overlay_readonly(win_path) &&
+        ((DesiredAccess &
+          (GENERIC_WRITE | GENERIC_ALL | DELETE |
+           FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA |
+           XBOX_FILE_WRITE_DATA | XBOX_FILE_APPEND_DATA)) ||
+         (CreateDisposition != XBOX_FILE_OPEN &&
+          CreateDisposition != XBOX_FILE_OPEN_IF))) {
+        if (IoStatusBlock) {
+            IoStatusBlock->Status = STATUS_ACCESS_DENIED;
+            IoStatusBlock->Information = 0;
+        }
         return STATUS_ACCESS_DENIED;
     }
-    existing_attrs = GetFileAttributesW(win_path);
+
+    existing_attrs = merc_platform_file_get_attributes(win_path);
     if ((CreateOptions & XBOX_FILE_DIRECTORY_FILE) ||
-        (existing_attrs != INVALID_FILE_ATTRIBUTES &&
+        (existing_attrs != MERC_PLATFORM_INVALID_FILE_ATTRIBUTES &&
          (existing_attrs & FILE_ATTRIBUTE_DIRECTORY))) {
-        if (CreateDisposition == XBOX_FILE_CREATE || CreateDisposition == XBOX_FILE_OPEN_IF)
-            CreateDirectoryW(win_path, NULL);
-        h = CreateFileW(win_path, xbox_access_to_win32(DesiredAccess),
-            xbox_share_to_win32(ShareAccess), NULL, OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS, NULL);
+        if (CreateDisposition == XBOX_FILE_CREATE ||
+            CreateDisposition == XBOX_FILE_OPEN_IF)
+            merc_platform_file_create_directory(win_path);
+
+        h = merc_platform_file_open(
+            win_path,
+            xbox_access_to_win32(DesiredAccess),
+            xbox_share_to_win32(ShareAccess),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS);
     } else {
         if (FileAttributes & XBOX_FILE_ATTRIBUTE_READONLY)
             flags_and_attrs |= FILE_ATTRIBUTE_READONLY;
-        h = CreateFileW(win_path, xbox_access_to_win32(DesiredAccess),
-            xbox_share_to_win32(ShareAccess), NULL,
-            xbox_disposition_to_win32(CreateDisposition), flags_and_attrs, NULL);
+
+        h = merc_platform_file_open(
+            win_path,
+            xbox_access_to_win32(DesiredAccess),
+            xbox_share_to_win32(ShareAccess),
+            xbox_disposition_to_win32(CreateDisposition),
+            flags_and_attrs);
     }
 
     if (h == INVALID_HANDLE_VALUE) {
-        DWORD err = GetLastError();
-        const char *xbox_path = get_xbox_path(ObjectAttributes);
-        const unsigned int xbox_path_length =
-            ObjectAttributes->ObjectName ? ObjectAttributes->ObjectName->Length : 0u;
-        fprintf(stderr,
-                "  [FILE] NtCreateFile failed: xbox=%.*s host=%S error=%u"
-                " access=%08X share=%08X disposition=%u options=%08X\n",
-                (int)xbox_path_length, xbox_path ? xbox_path : "", win_path, err,
-                (unsigned int)DesiredAccess, (unsigned int)ShareAccess,
-                (unsigned int)CreateDisposition, (unsigned int)CreateOptions);
-        if (getenv("MERCENARIES_TRACE_NULL_PATH") != NULL && xbox_path != NULL &&
-            strstr(xbox_path, "(null)") != NULL)
-            g_recomp_trace_dump_requested = 1u;
-        XBOX_TRACE(XBOX_LOG_FILE, "NtCreateFile FAILED: %S (err=%u)", win_path, err);
+        DWORD err = merc_platform_file_last_error();
+
         if (IoStatusBlock) {
             IoStatusBlock->Status = STATUS_OBJECT_NAME_NOT_FOUND;
             IoStatusBlock->Information = 0;
         }
+
         switch (err) {
-            case ERROR_FILE_NOT_FOUND: return STATUS_OBJECT_NAME_NOT_FOUND;
-            case ERROR_PATH_NOT_FOUND: return STATUS_OBJECT_PATH_NOT_FOUND;
-            case ERROR_ACCESS_DENIED:  return STATUS_ACCESS_DENIED;
-            case ERROR_ALREADY_EXISTS: return STATUS_OBJECT_NAME_COLLISION;
-            default:                   return STATUS_UNSUCCESSFUL;
+            case ERROR_FILE_NOT_FOUND:
+                return STATUS_OBJECT_NAME_NOT_FOUND;
+            case ERROR_PATH_NOT_FOUND:
+                return STATUS_OBJECT_PATH_NOT_FOUND;
+            case ERROR_ACCESS_DENIED:
+                return STATUS_ACCESS_DENIED;
+            case ERROR_ALREADY_EXISTS:
+                return STATUS_OBJECT_NAME_COLLISION;
+            default:
+                return STATUS_UNSUCCESSFUL;
         }
     }
 
@@ -478,11 +543,12 @@ NTSTATUS __stdcall xbox_NtCreateFile(
     register_read_cache_handle(h, CreateOptions);
     if (IoStatusBlock) {
         IoStatusBlock->Status = STATUS_SUCCESS;
-        IoStatusBlock->Information = (CreateDisposition == XBOX_FILE_CREATE) ? 2 : 1;
+        IoStatusBlock->Information =
+            (CreateDisposition == XBOX_FILE_CREATE) ? 2 : 1;
     }
-    XBOX_TRACE(XBOX_LOG_FILE, "NtCreateFile: %S -> handle=%p", win_path, h);
     return STATUS_SUCCESS;
 }
+
 
 NTSTATUS __stdcall xbox_NtReadFile(
     HANDLE FileHandle, HANDLE Event, PIO_APC_ROUTINE ApcRoutine, PVOID ApcContext,
@@ -495,86 +561,114 @@ NTSTATUS __stdcall xbox_NtReadFile(
     DWORD read_error;
     BOOL result;
     BOOL cache_handled = FALSE;
-    OVERLAPPED ov;
     LARGE_INTEGER trace_frequency = { 0 };
     LARGE_INTEGER trace_start = { 0 };
     LARGE_INTEGER trace_end = { 0 };
-    (void)ApcRoutine; (void)ApcContext;
+    (void)ApcRoutine;
+    (void)ApcContext;
 
     if (!IoStatusBlock)
         return STATUS_INVALID_PARAMETER;
 
+#if defined(_XBOX)
+    trace_reads = 0;
+#else
     if (trace_reads < 0)
         trace_reads = getenv("MERCENARIES_TRACE_FILE_READS") != NULL;
+#endif
+
     if (trace_reads) {
-        QueryPerformanceFrequency(&trace_frequency);
-        QueryPerformanceCounter(&trace_start);
+        merc_platform_query_performance_frequency(&trace_frequency);
+        merc_platform_query_performance_counter(&trace_start);
     }
 
     result = read_file_through_guest_cache(
-        FileHandle, Buffer, Length, ByteOffset, &bytes_read, &cache_handled);
-    if (!cache_handled && ByteOffset && ByteOffset->QuadPart >= 0) {
-        memset(&ov, 0, sizeof(ov));
-        ov.Offset = ByteOffset->LowPart;
-        ov.OffsetHigh = ByteOffset->HighPart;
-        result = ReadFile(FileHandle, Buffer, Length, &bytes_read, &ov);
-    } else if (!cache_handled) {
-        result = ReadFile(FileHandle, Buffer, Length, &bytes_read, NULL);
+        FileHandle, Buffer, Length, ByteOffset,
+        &bytes_read, &cache_handled);
+
+    if (!cache_handled) {
+        result = merc_platform_file_read(
+            FileHandle, Buffer, Length, &bytes_read,
+            (ByteOffset && ByteOffset->QuadPart >= 0) ?
+                ByteOffset : NULL);
     }
 
-    read_error = result ? ERROR_SUCCESS : GetLastError();
+    read_error =
+        result ? ERROR_SUCCESS : merc_platform_file_last_error();
+
+#if !defined(_XBOX)
     if (trace_reads) {
         ULONGLONG duration_us = 0;
         WCHAR path[MAX_PATH];
         DWORD path_length;
-        QueryPerformanceCounter(&trace_end);
-        if (trace_frequency.QuadPart > 0) {
-            duration_us = (ULONGLONG)(trace_end.QuadPart -
-                                      trace_start.QuadPart) * 1000000ull /
-                          (ULONGLONG)trace_frequency.QuadPart;
-        }
-        /* Successful sub-millisecond reads are normal and too numerous to
-         * print.  Always retain the first few calls to identify the stream,
-         * then report only reads slow enough to interrupt a 60 Hz frame. */
-        if (traced_reads < 16u || duration_us >= 1000u || !result) {
-            path_length = GetFinalPathNameByHandleW(
-                FileHandle, path, ARRAYSIZE(path), FILE_NAME_NORMALIZED);
-            if (path_length == 0 || path_length >= ARRAYSIZE(path))
-                wcscpy_s(path, ARRAYSIZE(path), L"(unknown)");
-            /* The bounded asynchronous logger remains active after startup.
-             * Never stop timing at a read-count cap: later map streaming is
-             * precisely where intermittent hitches need attribution. */
-            xbox_preview_log_sample("file-read",
-                    "index=%u func=%08X length=%u offset=%lld bytes=%u "
-                    "result=%u error=%lu duration_us=%llu cached=%u path=%S",
-                    traced_reads, g_recomp_current_func, (unsigned)Length,
-                    ByteOffset ? (long long)ByteOffset->QuadPart : -1ll,
-                    (unsigned)bytes_read, result ? 1u : 0u,
-                    (unsigned long)read_error,
-                    (unsigned long long)duration_us, cache_handled ? 1u : 0u, path);
-        }
-        if (traced_reads != UINT32_MAX) ++traced_reads;
-    }
-    /* Path lookup and diagnostics must not replace the I/O failure code. */
-    if (!result) SetLastError(read_error);
 
-    if (result || GetLastError() == ERROR_HANDLE_EOF) {
+        merc_platform_query_performance_counter(&trace_end);
+        if (trace_frequency.QuadPart > 0) {
+            duration_us =
+                (ULONGLONG)(trace_end.QuadPart - trace_start.QuadPart) *
+                1000000ull /
+                (ULONGLONG)trace_frequency.QuadPart;
+        }
+
+        if (traced_reads < 16u ||
+            duration_us >= 1000u || !result) {
+            path_length = GetFinalPathNameByHandleW(
+                FileHandle, path, ARRAYSIZE(path),
+                FILE_NAME_NORMALIZED);
+            if (path_length == 0 ||
+                path_length >= ARRAYSIZE(path))
+                wcscpy_s(
+                    path, ARRAYSIZE(path), L"(unknown)");
+
+            xbox_preview_log_sample(
+                "file-read",
+                "index=%u func=%08X length=%u offset=%lld "
+                "bytes=%u result=%u error=%lu duration_us=%llu "
+                "cached=%u path=%S",
+                traced_reads, g_recomp_current_func,
+                (unsigned)Length,
+                ByteOffset ?
+                    (long long)ByteOffset->QuadPart : -1ll,
+                (unsigned)bytes_read,
+                result ? 1u : 0u,
+                (unsigned long)read_error,
+                (unsigned long long)duration_us,
+                cache_handled ? 1u : 0u,
+                path);
+        }
+
+        if (traced_reads != UINT32_MAX)
+            ++traced_reads;
+    }
+#else
+    (void)trace_frequency;
+    (void)trace_start;
+    (void)trace_end;
+    (void)traced_reads;
+#endif
+
+    if (!result)
+        merc_platform_file_set_last_error(read_error);
+
+    if (result ||
+        merc_platform_file_last_error() == ERROR_HANDLE_EOF) {
         IoStatusBlock->Information = bytes_read;
         if (bytes_read == 0 && Length > 0) {
             IoStatusBlock->Status = STATUS_END_OF_FILE;
             return STATUS_END_OF_FILE;
         }
+
         IoStatusBlock->Status = STATUS_SUCCESS;
-        if (Event) SetEvent(Event);
+        if (Event)
+            merc_platform_set_event(Event);
         return STATUS_SUCCESS;
     }
 
-    XBOX_TRACE(XBOX_LOG_FILE, "NtReadFile(handle=%p, len=%u) failed err=%u",
-               FileHandle, Length, GetLastError());
     IoStatusBlock->Status = STATUS_UNSUCCESSFUL;
     IoStatusBlock->Information = 0;
     return STATUS_UNSUCCESSFUL;
 }
+
 
 #include "file_observer.h"
 static xbox_file_write_observer title_write_observer;
@@ -592,10 +686,11 @@ NTSTATUS __stdcall xbox_NtWriteFile(
 {
     DWORD bytes_written = 0;
     BOOL result;
-    OVERLAPPED ov;
     LARGE_INTEGER observed_offset, zero_offset;
-    observed_offset.QuadPart = -1; zero_offset.QuadPart = 0;
-    (void)ApcRoutine; (void)ApcContext;
+    observed_offset.QuadPart = -1;
+    zero_offset.QuadPart = 0;
+    (void)ApcRoutine;
+    (void)ApcContext;
 
     if (!IoStatusBlock)
         return STATUS_INVALID_PARAMETER;
@@ -603,46 +698,57 @@ NTSTATUS __stdcall xbox_NtWriteFile(
     invalidate_read_cache_for_handle(FileHandle);
 
     if (title_write_observer) {
-        if (ByteOffset && ByteOffset->QuadPart >= 0) observed_offset = *ByteOffset;
-        else SetFilePointerEx(FileHandle, zero_offset, &observed_offset, FILE_CURRENT);
-    }
-    if (ByteOffset && ByteOffset->QuadPart >= 0) {
-        memset(&ov, 0, sizeof(ov));
-        ov.Offset = ByteOffset->LowPart;
-        ov.OffsetHigh = ByteOffset->HighPart;
-        result = WriteFile(FileHandle, Buffer, Length, &bytes_written, &ov);
-    } else {
-        result = WriteFile(FileHandle, Buffer, Length, &bytes_written, NULL);
+        if (ByteOffset && ByteOffset->QuadPart >= 0)
+            observed_offset = *ByteOffset;
+        else
+            merc_platform_file_seek(
+                FileHandle, zero_offset,
+                &observed_offset, FILE_CURRENT);
     }
 
+    result = merc_platform_file_write(
+        FileHandle, Buffer, Length, &bytes_written,
+        (ByteOffset && ByteOffset->QuadPart >= 0) ?
+            ByteOffset : NULL);
+
     if (result) {
-        if (title_write_observer && observed_offset.QuadPart >= 0)
-            title_write_observer(FileHandle, observed_offset.QuadPart, Buffer, bytes_written);
+        if (title_write_observer &&
+            observed_offset.QuadPart >= 0) {
+            title_write_observer(
+                FileHandle, observed_offset.QuadPart,
+                Buffer, bytes_written);
+        }
+
         IoStatusBlock->Status = STATUS_SUCCESS;
         IoStatusBlock->Information = bytes_written;
-        if (Event) SetEvent(Event);
+        if (Event)
+            merc_platform_set_event(Event);
         return STATUS_SUCCESS;
     }
 
-    XBOX_TRACE(XBOX_LOG_FILE, "NtWriteFile(handle=%p, len=%u) failed err=%u",
-               FileHandle, Length, GetLastError());
     IoStatusBlock->Status = STATUS_UNSUCCESSFUL;
     IoStatusBlock->Information = 0;
     return STATUS_UNSUCCESSFUL;
 }
 
+
 NTSTATUS __stdcall xbox_NtClose(HANDLE Handle)
 {
-    XBOX_TRACE(XBOX_LOG_FILE, "NtClose(handle=%p)", Handle);
     if (Handle && Handle != INVALID_HANDLE_VALUE) {
         cleanup_dir_context_for_handle(Handle);
         cleanup_read_cache_for_handle(Handle);
-        if (!CloseHandle(Handle)) return STATUS_INVALID_HANDLE;
-        if (title_close_observer) title_close_observer(Handle);
+
+        if (!merc_platform_file_close(Handle))
+            return STATUS_INVALID_HANDLE;
+
+        if (title_close_observer)
+            title_close_observer(Handle);
         return STATUS_SUCCESS;
     }
+
     return STATUS_INVALID_HANDLE;
 }
+
 
 NTSTATUS __stdcall xbox_NtDeleteFile(PXBOX_OBJECT_ATTRIBUTES ObjectAttributes)
 {
@@ -657,163 +763,268 @@ NTSTATUS __stdcall xbox_NtDeleteFile(PXBOX_OBJECT_ATTRIBUTES ObjectAttributes)
 
 NTSTATUS __stdcall xbox_NtQueryInformationFile(
     HANDLE FileHandle, PXBOX_IO_STATUS_BLOCK IoStatusBlock,
-    PVOID FileInformation, ULONG Length, XBOX_FILE_INFORMATION_CLASS FileInformationClass)
+    PVOID FileInformation, ULONG Length,
+    XBOX_FILE_INFORMATION_CLASS FileInformationClass)
 {
+    MERC_PLATFORM_FILE_INFO native_info;
     (void)Length;
+
     if (!IoStatusBlock || !FileInformation)
         return STATUS_INVALID_PARAMETER;
 
     switch (FileInformationClass) {
         case XboxFileBasicInformation: {
-            PXBOX_FILE_BASIC_INFORMATION info = (PXBOX_FILE_BASIC_INFORMATION)FileInformation;
-            BY_HANDLE_FILE_INFORMATION fi;
-            if (!GetFileInformationByHandle(FileHandle, &fi))
+            PXBOX_FILE_BASIC_INFORMATION info =
+                (PXBOX_FILE_BASIC_INFORMATION)FileInformation;
+
+            if (!merc_platform_file_query_info(
+                    FileHandle, &native_info))
                 return STATUS_UNSUCCESSFUL;
-            info->CreationTime.LowPart    = fi.ftCreationTime.dwLowDateTime;
-            info->CreationTime.HighPart   = fi.ftCreationTime.dwHighDateTime;
-            info->LastAccessTime.LowPart  = fi.ftLastAccessTime.dwLowDateTime;
-            info->LastAccessTime.HighPart = fi.ftLastAccessTime.dwHighDateTime;
-            info->LastWriteTime.LowPart   = fi.ftLastWriteTime.dwLowDateTime;
-            info->LastWriteTime.HighPart  = fi.ftLastWriteTime.dwHighDateTime;
+
+            info->CreationTime.LowPart =
+                native_info.CreationTime.dwLowDateTime;
+            info->CreationTime.HighPart =
+                native_info.CreationTime.dwHighDateTime;
+            info->LastAccessTime.LowPart =
+                native_info.LastAccessTime.dwLowDateTime;
+            info->LastAccessTime.HighPart =
+                native_info.LastAccessTime.dwHighDateTime;
+            info->LastWriteTime.LowPart =
+                native_info.LastWriteTime.dwLowDateTime;
+            info->LastWriteTime.HighPart =
+                native_info.LastWriteTime.dwHighDateTime;
             info->ChangeTime = info->LastWriteTime;
-            info->FileAttributes = fi.dwFileAttributes;
+            info->FileAttributes =
+                native_info.FileAttributes;
+
             IoStatusBlock->Status = STATUS_SUCCESS;
-            IoStatusBlock->Information = sizeof(XBOX_FILE_BASIC_INFORMATION);
+            IoStatusBlock->Information =
+                sizeof(XBOX_FILE_BASIC_INFORMATION);
             return STATUS_SUCCESS;
         }
+
         case XboxFileStandardInformation: {
-            PXBOX_FILE_STANDARD_INFORMATION info = (PXBOX_FILE_STANDARD_INFORMATION)FileInformation;
-            BY_HANDLE_FILE_INFORMATION fi;
-            if (!GetFileInformationByHandle(FileHandle, &fi))
+            PXBOX_FILE_STANDARD_INFORMATION info =
+                (PXBOX_FILE_STANDARD_INFORMATION)FileInformation;
+
+            if (!merc_platform_file_query_info(
+                    FileHandle, &native_info))
                 return STATUS_UNSUCCESSFUL;
-            info->AllocationSize.QuadPart = ((LONGLONG)fi.nFileSizeHigh << 32) | fi.nFileSizeLow;
-            info->AllocationSize.QuadPart = (info->AllocationSize.QuadPart + 4095) & ~4095LL;
-            info->EndOfFile.QuadPart = ((LONGLONG)fi.nFileSizeHigh << 32) | fi.nFileSizeLow;
-            info->NumberOfLinks = fi.nNumberOfLinks;
+
+            info->EndOfFile.QuadPart =
+                ((LONGLONG)native_info.FileSizeHigh << 32) |
+                native_info.FileSizeLow;
+            info->AllocationSize.QuadPart =
+                (info->EndOfFile.QuadPart + 4095) & ~4095LL;
+            info->NumberOfLinks =
+                native_info.NumberOfLinks;
             info->DeletePending = FALSE;
-            info->Directory = (fi.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? TRUE : FALSE;
+            info->Directory =
+                (native_info.FileAttributes &
+                 FILE_ATTRIBUTE_DIRECTORY) ?
+                    TRUE : FALSE;
+
             IoStatusBlock->Status = STATUS_SUCCESS;
-            IoStatusBlock->Information = sizeof(XBOX_FILE_STANDARD_INFORMATION);
+            IoStatusBlock->Information =
+                sizeof(XBOX_FILE_STANDARD_INFORMATION);
             return STATUS_SUCCESS;
         }
+
         case XboxFilePositionInformation: {
-            PXBOX_FILE_POSITION_INFORMATION info = (PXBOX_FILE_POSITION_INFORMATION)FileInformation;
+            PXBOX_FILE_POSITION_INFORMATION info =
+                (PXBOX_FILE_POSITION_INFORMATION)FileInformation;
             LARGE_INTEGER pos, zero;
             zero.QuadPart = 0;
-            if (!SetFilePointerEx(FileHandle, zero, &pos, FILE_CURRENT))
+
+            if (!merc_platform_file_seek(
+                    FileHandle, zero,
+                    &pos, FILE_CURRENT))
                 return STATUS_UNSUCCESSFUL;
+
             info->CurrentByteOffset = pos;
             IoStatusBlock->Status = STATUS_SUCCESS;
-            IoStatusBlock->Information = sizeof(XBOX_FILE_POSITION_INFORMATION);
+            IoStatusBlock->Information =
+                sizeof(XBOX_FILE_POSITION_INFORMATION);
             return STATUS_SUCCESS;
         }
+
         case XboxFileNetworkOpenInformation: {
-            PXBOX_FILE_NETWORK_OPEN_INFORMATION info = (PXBOX_FILE_NETWORK_OPEN_INFORMATION)FileInformation;
-            BY_HANDLE_FILE_INFORMATION fi;
-            if (!GetFileInformationByHandle(FileHandle, &fi))
+            PXBOX_FILE_NETWORK_OPEN_INFORMATION info =
+                (PXBOX_FILE_NETWORK_OPEN_INFORMATION)FileInformation;
+
+            if (!merc_platform_file_query_info(
+                    FileHandle, &native_info))
                 return STATUS_UNSUCCESSFUL;
-            info->CreationTime.LowPart    = fi.ftCreationTime.dwLowDateTime;
-            info->CreationTime.HighPart   = fi.ftCreationTime.dwHighDateTime;
-            info->LastAccessTime.LowPart  = fi.ftLastAccessTime.dwLowDateTime;
-            info->LastAccessTime.HighPart = fi.ftLastAccessTime.dwHighDateTime;
-            info->LastWriteTime.LowPart   = fi.ftLastWriteTime.dwLowDateTime;
-            info->LastWriteTime.HighPart  = fi.ftLastWriteTime.dwHighDateTime;
+
+            info->CreationTime.LowPart =
+                native_info.CreationTime.dwLowDateTime;
+            info->CreationTime.HighPart =
+                native_info.CreationTime.dwHighDateTime;
+            info->LastAccessTime.LowPart =
+                native_info.LastAccessTime.dwLowDateTime;
+            info->LastAccessTime.HighPart =
+                native_info.LastAccessTime.dwHighDateTime;
+            info->LastWriteTime.LowPart =
+                native_info.LastWriteTime.dwLowDateTime;
+            info->LastWriteTime.HighPart =
+                native_info.LastWriteTime.dwHighDateTime;
             info->ChangeTime = info->LastWriteTime;
-            info->EndOfFile.QuadPart = ((LONGLONG)fi.nFileSizeHigh << 32) | fi.nFileSizeLow;
-            info->AllocationSize.QuadPart = (info->EndOfFile.QuadPart + 4095) & ~4095LL;
-            info->FileAttributes = fi.dwFileAttributes;
+            info->EndOfFile.QuadPart =
+                ((LONGLONG)native_info.FileSizeHigh << 32) |
+                native_info.FileSizeLow;
+            info->AllocationSize.QuadPart =
+                (info->EndOfFile.QuadPart + 4095) & ~4095LL;
+            info->FileAttributes =
+                native_info.FileAttributes;
+
             IoStatusBlock->Status = STATUS_SUCCESS;
-            IoStatusBlock->Information = sizeof(XBOX_FILE_NETWORK_OPEN_INFORMATION);
+            IoStatusBlock->Information =
+                sizeof(XBOX_FILE_NETWORK_OPEN_INFORMATION);
             return STATUS_SUCCESS;
         }
+
         default:
-            xbox_log(XBOX_LOG_WARN, XBOX_LOG_FILE,
-                "NtQueryInformationFile: unhandled class %d", FileInformationClass);
+            xbox_log(
+                XBOX_LOG_WARN, XBOX_LOG_FILE,
+                "NtQueryInformationFile: unhandled class %d",
+                FileInformationClass);
             return STATUS_NOT_IMPLEMENTED;
     }
 }
 
+
 NTSTATUS __stdcall xbox_NtSetInformationFile(
     HANDLE FileHandle, PXBOX_IO_STATUS_BLOCK IoStatusBlock,
-    PVOID FileInformation, ULONG Length, XBOX_FILE_INFORMATION_CLASS FileInformationClass)
+    PVOID FileInformation, ULONG Length,
+    XBOX_FILE_INFORMATION_CLASS FileInformationClass)
 {
-    (void)Length;
     if (!IoStatusBlock || !FileInformation)
         return STATUS_INVALID_PARAMETER;
 
     switch (FileInformationClass) {
         case XboxFilePositionInformation: {
-            PXBOX_FILE_POSITION_INFORMATION info = (PXBOX_FILE_POSITION_INFORMATION)FileInformation;
-            if (!SetFilePointerEx(FileHandle, info->CurrentByteOffset, NULL, FILE_BEGIN))
+            PXBOX_FILE_POSITION_INFORMATION info =
+                (PXBOX_FILE_POSITION_INFORMATION)FileInformation;
+
+            if (!merc_platform_file_seek(
+                    FileHandle, info->CurrentByteOffset,
+                    NULL, FILE_BEGIN))
                 return STATUS_UNSUCCESSFUL;
+
             IoStatusBlock->Status = STATUS_SUCCESS;
             return STATUS_SUCCESS;
         }
+
         case XboxFileEndOfFileInformation: {
-            PXBOX_FILE_END_OF_FILE_INFORMATION info = (PXBOX_FILE_END_OF_FILE_INFORMATION)FileInformation;
-            LARGE_INTEGER cur, zero = {0};
+            PXBOX_FILE_END_OF_FILE_INFORMATION info =
+                (PXBOX_FILE_END_OF_FILE_INFORMATION)FileInformation;
+            LARGE_INTEGER cur, zero;
+            zero.QuadPart = 0;
+
             invalidate_read_cache_for_handle(FileHandle);
-            SetFilePointerEx(FileHandle, zero, &cur, FILE_CURRENT);
-            SetFilePointerEx(FileHandle, info->EndOfFile, NULL, FILE_BEGIN);
-            if (!SetEndOfFile(FileHandle)) {
-                SetFilePointerEx(FileHandle, cur, NULL, FILE_BEGIN);
+
+            if (!merc_platform_file_seek(
+                    FileHandle, zero,
+                    &cur, FILE_CURRENT))
+                return STATUS_UNSUCCESSFUL;
+
+            if (!merc_platform_file_seek(
+                    FileHandle, info->EndOfFile,
+                    NULL, FILE_BEGIN))
+                return STATUS_UNSUCCESSFUL;
+
+            if (!merc_platform_file_set_end(FileHandle)) {
+                merc_platform_file_seek(
+                    FileHandle, cur,
+                    NULL, FILE_BEGIN);
                 return STATUS_UNSUCCESSFUL;
             }
-            if (cur.QuadPart <= info->EndOfFile.QuadPart)
-                SetFilePointerEx(FileHandle, cur, NULL, FILE_BEGIN);
+
+            if (cur.QuadPart <= info->EndOfFile.QuadPart) {
+                merc_platform_file_seek(
+                    FileHandle, cur,
+                    NULL, FILE_BEGIN);
+            }
+
             IoStatusBlock->Status = STATUS_SUCCESS;
             return STATUS_SUCCESS;
         }
+
         case XboxFileAllocationInformation: {
             PXBOX_FILE_ALLOCATION_INFORMATION info =
                 (PXBOX_FILE_ALLOCATION_INFORMATION)FileInformation;
-            FILE_ALLOCATION_INFO native_info;
-            if (Length < sizeof(*info) || info->AllocationSize.QuadPart < 0) {
-                IoStatusBlock->Status = STATUS_INVALID_PARAMETER;
+
+            if (Length < sizeof(*info) ||
+                info->AllocationSize.QuadPart < 0) {
+                IoStatusBlock->Status =
+                    STATUS_INVALID_PARAMETER;
                 IoStatusBlock->Information = 0;
                 return STATUS_INVALID_PARAMETER;
             }
-            native_info.AllocationSize = info->AllocationSize;
-            if (!SetFileInformationByHandle(FileHandle, FileAllocationInfo,
-                                            &native_info,
-                                            sizeof(native_info))) {
-                IoStatusBlock->Status = STATUS_UNSUCCESSFUL;
+
+            if (!merc_platform_file_set_allocation(
+                    FileHandle, info->AllocationSize)) {
+                IoStatusBlock->Status =
+                    STATUS_UNSUCCESSFUL;
                 IoStatusBlock->Information = 0;
                 return STATUS_UNSUCCESSFUL;
             }
+
             IoStatusBlock->Status = STATUS_SUCCESS;
             IoStatusBlock->Information = 0;
             return STATUS_SUCCESS;
         }
+
         case XboxFileDispositionInformation: {
-            PXBOX_FILE_DISPOSITION_INFORMATION info = (PXBOX_FILE_DISPOSITION_INFORMATION)FileInformation;
-            FILE_DISPOSITION_INFO fdi;
-            fdi.DeleteFile = info->DeleteFile;
-            if (!SetFileInformationByHandle(FileHandle, FileDispositionInfo, &fdi, sizeof(fdi)))
-                xbox_log(XBOX_LOG_WARN, XBOX_LOG_FILE,
-                         "SetFileDispositionInfo failed: err=%u", GetLastError());
+            PXBOX_FILE_DISPOSITION_INFORMATION info =
+                (PXBOX_FILE_DISPOSITION_INFORMATION)FileInformation;
+
+            if (!merc_platform_file_set_delete_pending(
+                    FileHandle, info->DeleteFile)) {
+                xbox_log(
+                    XBOX_LOG_WARN, XBOX_LOG_FILE,
+                    "SetFileDispositionInfo failed: err=%u",
+                    merc_platform_file_last_error());
+            }
+
             IoStatusBlock->Status = STATUS_SUCCESS;
             return STATUS_SUCCESS;
         }
+
         case XboxFileBasicInformation: {
-            PXBOX_FILE_BASIC_INFORMATION info = (PXBOX_FILE_BASIC_INFORMATION)FileInformation;
+            PXBOX_FILE_BASIC_INFORMATION info =
+                (PXBOX_FILE_BASIC_INFORMATION)FileInformation;
             FILETIME ct, at, wt;
-            ct.dwLowDateTime = info->CreationTime.LowPart;
-            ct.dwHighDateTime = info->CreationTime.HighPart;
-            at.dwLowDateTime = info->LastAccessTime.LowPart;
-            at.dwHighDateTime = info->LastAccessTime.HighPart;
-            wt.dwLowDateTime = info->LastWriteTime.LowPart;
-            wt.dwHighDateTime = info->LastWriteTime.HighPart;
-            SetFileTime(FileHandle, &ct, &at, &wt);
+
+            ct.dwLowDateTime =
+                info->CreationTime.LowPart;
+            ct.dwHighDateTime =
+                info->CreationTime.HighPart;
+            at.dwLowDateTime =
+                info->LastAccessTime.LowPart;
+            at.dwHighDateTime =
+                info->LastAccessTime.HighPart;
+            wt.dwLowDateTime =
+                info->LastWriteTime.LowPart;
+            wt.dwHighDateTime =
+                info->LastWriteTime.HighPart;
+
+            merc_platform_file_set_times(
+                FileHandle, &ct, &at, &wt);
+
             IoStatusBlock->Status = STATUS_SUCCESS;
             return STATUS_SUCCESS;
         }
+
         default:
-            xbox_log(XBOX_LOG_WARN, XBOX_LOG_FILE,
-                "NtSetInformationFile: unhandled class %d", FileInformationClass);
+            xbox_log(
+                XBOX_LOG_WARN, XBOX_LOG_FILE,
+                "NtSetInformationFile: unhandled class %d",
+                FileInformationClass);
             return STATUS_NOT_IMPLEMENTED;
     }
 }
+
 
 NTSTATUS __stdcall xbox_NtQueryVolumeInformationFile(
     HANDLE FileHandle, PXBOX_IO_STATUS_BLOCK IoStatusBlock,
@@ -865,39 +1076,56 @@ NTSTATUS __stdcall xbox_NtQueryFullAttributesFile(
     PXBOX_FILE_NETWORK_OPEN_INFORMATION FileInformation)
 {
     WCHAR win_path[MAX_PATH];
-    WIN32_FILE_ATTRIBUTE_DATA fad;
+    MERC_PLATFORM_FILE_INFO native_info;
 
     if (!FileInformation)
         return STATUS_INVALID_PARAMETER;
-    if (!translate_obj_path(ObjectAttributes, win_path, MAX_PATH))
+
+    if (!translate_obj_path(
+            ObjectAttributes, win_path, MAX_PATH))
         return STATUS_OBJECT_PATH_NOT_FOUND;
 
-    if (!GetFileAttributesExW(win_path, GetFileExInfoStandard, &fad)) {
-        DWORD err = GetLastError();
-        if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
+    if (!merc_platform_file_query_path_info(
+            win_path, &native_info)) {
+        DWORD err = merc_platform_file_last_error();
+        if (err == ERROR_FILE_NOT_FOUND ||
+            err == ERROR_PATH_NOT_FOUND)
             return STATUS_OBJECT_NAME_NOT_FOUND;
         return STATUS_UNSUCCESSFUL;
     }
 
-    FileInformation->CreationTime.LowPart    = fad.ftCreationTime.dwLowDateTime;
-    FileInformation->CreationTime.HighPart   = fad.ftCreationTime.dwHighDateTime;
-    FileInformation->LastAccessTime.LowPart  = fad.ftLastAccessTime.dwLowDateTime;
-    FileInformation->LastAccessTime.HighPart = fad.ftLastAccessTime.dwHighDateTime;
-    FileInformation->LastWriteTime.LowPart   = fad.ftLastWriteTime.dwLowDateTime;
-    FileInformation->LastWriteTime.HighPart  = fad.ftLastWriteTime.dwHighDateTime;
-    FileInformation->ChangeTime = FileInformation->LastWriteTime;
-    FileInformation->EndOfFile.QuadPart = ((LONGLONG)fad.nFileSizeHigh << 32) | fad.nFileSizeLow;
-    FileInformation->AllocationSize.QuadPart = (FileInformation->EndOfFile.QuadPart + 4095) & ~4095LL;
-    FileInformation->FileAttributes = fad.dwFileAttributes;
+    FileInformation->CreationTime.LowPart =
+        native_info.CreationTime.dwLowDateTime;
+    FileInformation->CreationTime.HighPart =
+        native_info.CreationTime.dwHighDateTime;
+    FileInformation->LastAccessTime.LowPart =
+        native_info.LastAccessTime.dwLowDateTime;
+    FileInformation->LastAccessTime.HighPart =
+        native_info.LastAccessTime.dwHighDateTime;
+    FileInformation->LastWriteTime.LowPart =
+        native_info.LastWriteTime.dwLowDateTime;
+    FileInformation->LastWriteTime.HighPart =
+        native_info.LastWriteTime.dwHighDateTime;
+    FileInformation->ChangeTime =
+        FileInformation->LastWriteTime;
+    FileInformation->EndOfFile.QuadPart =
+        ((LONGLONG)native_info.FileSizeHigh << 32) |
+        native_info.FileSizeLow;
+    FileInformation->AllocationSize.QuadPart =
+        (FileInformation->EndOfFile.QuadPart + 4095) &
+        ~4095LL;
+    FileInformation->FileAttributes =
+        native_info.FileAttributes;
     return STATUS_SUCCESS;
 }
+
 
 #define MAX_DIR_CONTEXTS 64
 typedef struct {
     HANDLE file_handle;
     HANDLE find_handle;
     BOOL   first_done;
-    WIN32_FIND_DATAW find_data;
+    MERC_PLATFORM_FIND_DATA find_data;
 } DIR_CONTEXT;
 
 static DIR_CONTEXT s_dir_contexts[MAX_DIR_CONTEXTS];
@@ -915,7 +1143,7 @@ static void cleanup_dir_context_for_handle(HANDLE Handle)
         if (ctx->file_handle != Handle)
             continue;
         if (ctx->find_handle && ctx->find_handle != INVALID_HANDLE_VALUE)
-            FindClose(ctx->find_handle);
+            merc_platform_file_find_close(ctx->find_handle);
         memset(ctx, 0, sizeof(*ctx));
     }
     LeaveCriticalSection(&s_dir_cs);
@@ -952,92 +1180,138 @@ NTSTATUS __stdcall xbox_NtQueryDirectoryFile(
 {
     DIR_CONTEXT* ctx;
     PXBOX_FILE_DIRECTORY_INFORMATION entry;
-    (void)Event; (void)ApcRoutine; (void)ApcContext;
+    char pattern[MAX_PATH];
+    int name_len;
+    (void)Event;
+    (void)ApcRoutine;
+    (void)ApcContext;
 
     if (!IoStatusBlock || !FileInformation)
         return STATUS_INVALID_PARAMETER;
-    if (FileInformationClass != XboxFileDirectoryInformation) {
-        IoStatusBlock->Status = STATUS_INVALID_PARAMETER;
+
+    if (FileInformationClass !=
+        XboxFileDirectoryInformation) {
+        IoStatusBlock->Status =
+            STATUS_INVALID_PARAMETER;
         IoStatusBlock->Information = 0;
         return STATUS_INVALID_PARAMETER;
     }
 
-    ctx = find_or_create_dir_context(FileHandle, TRUE);
+    ctx = find_or_create_dir_context(
+        FileHandle, TRUE);
     if (!ctx)
         return STATUS_INSUFFICIENT_RESOURCES;
 
     if (RestartScan || !ctx->first_done) {
-        if (ctx->find_handle && ctx->find_handle != INVALID_HANDLE_VALUE) {
-            FindClose(ctx->find_handle);
+        if (ctx->find_handle &&
+            ctx->find_handle != INVALID_HANDLE_VALUE) {
+            merc_platform_file_find_close(
+                ctx->find_handle);
             ctx->find_handle = NULL;
         }
-        WCHAR search_path[MAX_PATH];
-        WCHAR dir_path[MAX_PATH];
-        DWORD path_len = GetFinalPathNameByHandleW(FileHandle, dir_path, MAX_PATH,
-                                                   FILE_NAME_NORMALIZED);
-        if (path_len == 0 || path_len >= MAX_PATH) {
-            IoStatusBlock->Status = STATUS_UNSUCCESSFUL;
-            return STATUS_UNSUCCESSFUL;
-        }
-        WCHAR* clean_path = dir_path;
-        if (wcsncmp(clean_path, L"\\\\?\\", 4) == 0)
-            clean_path += 4;
-        if (FileName && FileName->Buffer) {
-            WCHAR pattern_wide[MAX_PATH];
-            MultiByteToWideChar(CP_ACP, 0, FileName->Buffer, FileName->Length,
-                                pattern_wide, MAX_PATH);
-            pattern_wide[FileName->Length] = L'\0';
-            swprintf_s(search_path, MAX_PATH, L"%s\\%s", clean_path, pattern_wide);
+
+        if (FileName &&
+            FileName->Buffer &&
+            FileName->Length > 0) {
+            USHORT copy_length = FileName->Length;
+            if (copy_length >= MAX_PATH)
+                copy_length = MAX_PATH - 1;
+            memcpy(
+                pattern,
+                FileName->Buffer,
+                copy_length);
+            pattern[copy_length] = '\0';
         } else {
-            swprintf_s(search_path, MAX_PATH, L"%s\\*", clean_path);
+            strcpy(pattern, "*");
         }
-        ctx->find_handle = FindFirstFileW(search_path, &ctx->find_data);
-        if (ctx->find_handle == INVALID_HANDLE_VALUE) {
+
+        ctx->find_handle =
+            merc_platform_file_find_first(
+                FileHandle,
+                pattern,
+                &ctx->find_data);
+
+        if (ctx->find_handle ==
+            INVALID_HANDLE_VALUE) {
             ctx->find_handle = NULL;
-            IoStatusBlock->Status = STATUS_NO_MORE_FILES;
+            IoStatusBlock->Status =
+                STATUS_NO_MORE_FILES;
             return STATUS_NO_MORE_FILES;
         }
+
         ctx->first_done = TRUE;
     } else {
-        if (!FindNextFileW(ctx->find_handle, &ctx->find_data)) {
-            FindClose(ctx->find_handle);
+        if (!merc_platform_file_find_next(
+                ctx->find_handle,
+                &ctx->find_data)) {
+            merc_platform_file_find_close(
+                ctx->find_handle);
             ctx->find_handle = NULL;
             ctx->file_handle = NULL;
-            IoStatusBlock->Status = STATUS_NO_MORE_FILES;
+            IoStatusBlock->Status =
+                STATUS_NO_MORE_FILES;
             return STATUS_NO_MORE_FILES;
         }
     }
 
-    xbox_mod_overlay_find_data(FileHandle, &ctx->find_data);
-    entry = (PXBOX_FILE_DIRECTORY_INFORMATION)FileInformation;
+    file_overlay_apply_find_data(
+        FileHandle, &ctx->find_data);
+
+    entry =
+        (PXBOX_FILE_DIRECTORY_INFORMATION)
+        FileInformation;
     memset(entry, 0, Length);
-    char filename_ansi[MAX_PATH];
-    int name_len = WideCharToMultiByte(CP_ACP, 0, ctx->find_data.cFileName, -1,
-                                       filename_ansi, MAX_PATH, NULL, NULL);
-    if (name_len > 0) name_len--;
+    name_len =
+        (int)strlen(ctx->find_data.FileName);
 
     entry->NextEntryOffset = 0;
     entry->FileIndex = 0;
-    entry->CreationTime.LowPart   = ctx->find_data.ftCreationTime.dwLowDateTime;
-    entry->CreationTime.HighPart  = ctx->find_data.ftCreationTime.dwHighDateTime;
-    entry->LastAccessTime.LowPart = ctx->find_data.ftLastAccessTime.dwLowDateTime;
-    entry->LastAccessTime.HighPart = ctx->find_data.ftLastAccessTime.dwHighDateTime;
-    entry->LastWriteTime.LowPart  = ctx->find_data.ftLastWriteTime.dwLowDateTime;
-    entry->LastWriteTime.HighPart = ctx->find_data.ftLastWriteTime.dwHighDateTime;
-    entry->ChangeTime = entry->LastWriteTime;
-    entry->EndOfFile.QuadPart = ((LONGLONG)ctx->find_data.nFileSizeHigh << 32) | ctx->find_data.nFileSizeLow;
-    entry->AllocationSize.QuadPart = (entry->EndOfFile.QuadPart + 4095) & ~4095LL;
-    entry->FileAttributes = ctx->find_data.dwFileAttributes;
+    entry->CreationTime.LowPart =
+        ctx->find_data.CreationTime.dwLowDateTime;
+    entry->CreationTime.HighPart =
+        ctx->find_data.CreationTime.dwHighDateTime;
+    entry->LastAccessTime.LowPart =
+        ctx->find_data.LastAccessTime.dwLowDateTime;
+    entry->LastAccessTime.HighPart =
+        ctx->find_data.LastAccessTime.dwHighDateTime;
+    entry->LastWriteTime.LowPart =
+        ctx->find_data.LastWriteTime.dwLowDateTime;
+    entry->LastWriteTime.HighPart =
+        ctx->find_data.LastWriteTime.dwHighDateTime;
+    entry->ChangeTime =
+        entry->LastWriteTime;
+    entry->EndOfFile.QuadPart =
+        ((LONGLONG)ctx->find_data.FileSizeHigh << 32) |
+        ctx->find_data.FileSizeLow;
+    entry->AllocationSize.QuadPart =
+        (entry->EndOfFile.QuadPart + 4095) &
+        ~4095LL;
+    entry->FileAttributes =
+        ctx->find_data.FileAttributes;
     entry->FileNameLength = name_len;
+
     {
-        ULONG header_size = (ULONG)((ULONG_PTR)&((PXBOX_FILE_DIRECTORY_INFORMATION)0)->FileName);
-        if (name_len > 0 && (header_size + name_len) <= Length)
-            memcpy(entry->FileName, filename_ansi, name_len);
+        ULONG header_size = (ULONG)(
+            (ULONG_PTR)&(
+                (PXBOX_FILE_DIRECTORY_INFORMATION)0
+            )->FileName);
+
+        if (name_len > 0 &&
+            (header_size + (ULONG)name_len) <= Length) {
+            memcpy(
+                entry->FileName,
+                ctx->find_data.FileName,
+                name_len);
+        }
+
         IoStatusBlock->Status = STATUS_SUCCESS;
-        IoStatusBlock->Information = header_size + name_len;
+        IoStatusBlock->Information =
+            header_size + name_len;
     }
+
     return STATUS_SUCCESS;
 }
+
 
 /* ======================================================================== */
 #else /* !_WIN32 */
