@@ -336,3 +336,43 @@ Build tag: `P4C-THREAD-20261019-B`.
 
 The following phase will package only the StartRoutine actually observed on
 hardware, avoiding speculative expansion into renderer/audio/XACT/XInput code.
+
+
+#### Phase 4C-C — Live startup-thread handoff capture
+**Status: PASS on real Xbox 360 hardware.**
+
+Hardware result:
+
+```text
+PsCreateSystemThreadEx LIVE FRAME:
+  handle_ptr=008BFFD0
+  extra=0
+  kstack=262144
+  tls=20
+  tid_ptr=00000000
+  ctx1=002295D6
+  ctx2=00000000
+  suspended=0
+  debug=0
+  routine=0022B43F
+
+BOUNDARY: kind=THREAD_TARGET caller=0022B4D7 target=0022B43F
+fault=0
+PHASE 4C-C LIVE THREAD-HANDOFF CAPTURE RESULT: PASS
+```
+
+The live hardware frame exactly matches the maintained startup metadata:
+`0x0022B43F` is the routine passed to `PsCreateSystemThreadEx`, while
+`0x002295D6` is its first context.
+
+#### Phase 4C-D — Hardware-observed first title-thread preflight
+**Status: ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Analyze-Phase4C-D.ps1`
+
+4C-D roots only at the hardware-observed StartRoutine `0x0022B43F`. It
+measures that routine's direct translated closure, dynamic/indirect boundaries,
+and non-translated helper surface before emitting the first thread-execution
+slice. Context values are pinned to the live 4C-C result:
+`ctx1=0x002295D6`, `ctx2=0`.
