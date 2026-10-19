@@ -1393,3 +1393,34 @@ build\phase4c_native_startup\rtl291_ab_xdk\phase4c-ab-manifest.json
 Build tag: `P4C-RTL291-AB-20261019-A`.
 
 The AB main/env cookie is `0x50434142` (`PCAB`).
+
+
+## Phase 4C-AC — hardware-observed direct root 0x0022D431
+
+Phase 4C-AB passed on hardware. Ordinal 291
+`RtlInitializeCriticalSection` received the expected 8-byte full frame,
+matched the maintained serialized-guest semantics, and startup advanced with
+`fault=0` to
+`DIRECT_FRONTIER caller=0x00238C00 target=0x0022D431`.
+
+AC preserves every proven startup/kernel/VM continuation and promotes only
+`0x0022D431`. Preparation explicitly distinguishes an exact function start
+from a split/mid-function target before emitting; deeper calls remain fenced.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-AC.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\direct_d431_ac_xdk\main.cpp
+build\phase4c_native_startup\direct_d431_ac_xdk\phase4c_env.cpp
+build\phase4c_native_startup\direct_d431_ac_xdk\phase4c-ac-manifest.json
+```
+
+Build tag: `P4C-DIRECTD431-AC-20261019-A`.
+
+The AC main/env cookie is `0x50434143` (`PCAC`).
