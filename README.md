@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 3M — x87 exceptional/rounding coverage.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 3N — final generated-tree audit + XDK/runtime scale gate.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A through 3J hardware PASS; 3K mixed control/flags + FP selector/harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A through 3M hardware PASS; 3N final audit/scale gate active** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -70,9 +70,10 @@ independent reference across six controlled inputs.
 
 **Present blockers:** the explicit PowerPC-safe guest-memory ABI plus bounded
 real translated function, direct-call, tail-call, indirect-call, composed slice,
-dependency-closed cluster, and mixed control/flags + x87/XMM cluster paths are
-now proven on modified Xbox 360 hardware. Remaining Phase 3 blockers are exceptional/rounding paths, full post-patch
-generated-tree audit, and compiler/linker/runtime scale limits.
+dependency-closed cluster, bounded backward control flow, mixed control/flags +
+x87/XMM state, and real x87 rounding/exceptional conversion paths are now proven
+on modified Xbox 360 hardware. Remaining Phase 3 blockers are the full post-patch
+generated-tree audit and compiler/linker/runtime scale limits.
 D3D11, Win32, DXGI and host-audio dependencies still need Xbox 360-native
 replacements in later phases.
 
@@ -81,16 +82,17 @@ replacements in later phases.
 1. **Done:** native XEX bootstrap, input, heartbeat and clean timeout.
 2. **Done:** guest RAM, exact retail XBE loading, aliases and execution-environment fixtures.
 3. **Done:** explicit scalar, signed/x87, SSE/XMM/MMX and runtime/string memory ABI fixtures on Xenon.
-4. Generate reviewed retail function `0x00208F30` locally with
+4. **Done:** generate reviewed retail function `0x00208F30` locally with
    `--explicit-guest-memory`; reject unexpected calls/writes/legacy lvalues.
 5. **Done:** compile the generated function into the bounded Phase 3E XDK
    harness and match all six controlled inputs against the independent
    `(byte & 1)` reference on modified Xbox 360 hardware.
 6. **Done:** execute real translated direct CALL, tail-call and nonzero
    function-pointer ICALL paths on modified Xbox 360 hardware.
-7. Run the Phase 3I five-stage composite translated slice in one persistent
-   guest arena; require repeated-run trace/state/full-RAM checkpoint equality
-   before widening toward guarded startup execution.
+7. **Done:** run the Phase 3I five-stage composite translated slice in one persistent
+   guest arena; repeated-run trace/state/full-RAM checkpoint equality passed.
+8. **Phase 3N:** audit the full post-patch generated tree, then compile/link and
+   execute a substantially larger translated-code shard to prove XDK/runtime scale.
 
 ### Evidence policy
 
@@ -203,10 +205,12 @@ executes as Xbox 360 PowerPC.
 - [x] Generate and compile isolated memory/instruction fixtures under the actual
       Xbox 360 compiler before attempting translated game functions. Phase
       3A/3B/3C/3D all passed on modified Xbox 360 hardware.
-- [ ] Validate flags, sign extension, stack/calling convention, frame saving,
-      `RECOMP_ICALL` dispatch, direct/tail calls and function returns.
-- [ ] Validate x87, MMX and SSE semantics against the original instruction
-      results; test rounding, NaN and exceptional paths.
+- [x] Validate flags, sign extension, stack/calling convention, frame saving,
+      `RECOMP_ICALL` dispatch, direct/tail calls and function returns on real
+      modified Xbox 360 hardware across Phase 3E–3L fixtures.
+- [x] Validate x87, MMX and SSE semantics against the original instruction
+      results, including controlled rounding, NaN, Infinity and invalid-conversion
+      paths; Phase 3M hardware suite passed with full selected-cluster coverage.
 - [ ] Evaluate Xenon limitations: native stack depth, object/code size,
       memory budget and compiler/linker constraints.
 - [x] Execute one bounded real translated Mercenaries function on hardware:
@@ -242,8 +246,13 @@ executes as Xbox 360 PowerPC.
       under an explicit execution budget; 16 hardware profiles passed with 9/9
       coverage, 17,344 real backward-edge executions, deterministic mixed state,
       full 64 MiB RAM equality and XAPI 0.
-- [ ] Prove real x87 rounding/exceptional-path translation under controlled control-word
-      and NaN/Infinity/boundary inputs before guarded game-entry execution.
+- [x] Prove real x87 rounding/exceptional-path translation under controlled control-word
+      and NaN/Infinity/boundary inputs: Phase 3M hardware build D passed 9/9
+      selected-cluster coverage, deterministic A/B state/full-RAM comparison,
+      11 real x87 rounding/conversion calls and clean XAPI return.
+- [ ] **Phase 3N final Gate-3 consolidation:** run a full post-patch generated-tree
+      explicit-memory/unsupported-surface audit and prove compiler/linker/runtime
+      scale with a substantially larger translated-code XDK build and hardware run.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -1644,6 +1653,35 @@ unexecuted test PASS.**
   the hardware pass in commit `6ae0b2c6424cbdcd963ccc8ca283b328600622c8`.
 - **Phase 3L is complete.**
 - **Next:** Phase 3M — real x87 rounding and exceptional-path coverage.
+
+### 2026-10-19 — Phase 3M x87 rounding + exceptional-path hardware gate PASS
+
+- Final hardware build: `P3M-X87ROUND-20261019-D`.
+- Automatically selected real retail root `0x000A5AF0` with **9 members** and
+  dependency depth **3**.
+- The independent helper preflight passed all four x87 rounding-control modes,
+  finite inexact precision status, NaN integer-indefinite + IE without PE,
+  Infinity invalid conversion and out-of-range invalid conversion.
+- The retail closure executed real x87 rounding/conversion code; suite total:
+  **11 x87 rounding/conversion calls**.
+- Initial 3M-A/B coverage exposed retail member `0x0020BDC0` as dependent on
+  outside queue-producer state. Build B injected only the producer flag and
+  remained 8/9; build C modeled a non-empty queue but deliberately failed the
+  4096-tick guard at 4098/4096 because its synthetic queue window was too large.
+- Build D modeled exactly one **0x18-byte queue entry**. Profile 16 then executed
+  `0x0020D450 -> 0x0020BDC0`, reached **9/9** coverage, stayed within budget at
+  **4056/4096**, preserved exact root-return ESP, and matched A/B integer,
+  x87/XMM and complete 64 MiB guest-RAM state.
+- Final suite markers:
+  - `SUITE COVERAGE: 9/9 mask=000001FF expected=000001FF`
+  - `SUITE BACKEDGES (optional): 4609`
+  - `SUITE X87 ROUNDING CALLS: 11`
+  - `PHASE 3M X87 ROUNDING + EXCEPTION CLUSTER RESULT: PASS`
+  - `[XAPI RETURN VALUE] 0`
+- **Phase 3M is complete.**
+- **Next:** Phase 3N — final Gate-3 consolidation: full generated-tree audit plus
+  compiler/linker/runtime scale proof. If 3N passes, Phase 3 closes and work
+  advances to Phase 4 native platform/kernel services.
 
 ### How future updates are recorded
 
