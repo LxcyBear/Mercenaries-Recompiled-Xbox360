@@ -617,4 +617,20 @@ mapping. The first rejected access records:
 The diagnostic counts as a successful provenance capture only when the real
 startup callback was entered and a concrete first-fault width was recorded.
 
-Build tag: `P4C-FAULTPROBE-20261019-A`.
+Build tag: `P4C-FAULTPROBE-20261019-B`.
+
+
+##### Phase 4C-I Build A diagnostic harness correction
+
+The first provenance probe reached the real startup callback but then hung
+before producing the expected fault record. Review found the diagnostic
+transform searched loosely for accessor names such as
+`recomp_guest_read32(`, which can occur before the accessor definition in
+support code. That made the rewrite position-sensitive.
+
+Build B replaces only exact accessor definition/body fragments and emits
+`FAULT ACCESS IMMEDIATE: READ|WRITE width=N guest=XXXXXXXX` inside the
+rejecting accessor before the existing fault path continues. Guest mapping
+semantics are unchanged.
+
+Build tag: `P4C-FAULTPROBE-20261019-B`.
