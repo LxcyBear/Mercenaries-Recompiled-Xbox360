@@ -37,7 +37,8 @@ Snapshot: 2026-10-19.
 | 4C-C | **Hardware PASS** | Live ordinal-255 frame captured on Xbox 360: StartRoutine `0x0022B43F`, ctx1 `0x002295D6`, ctx2 `0x00000000`, exact 44-byte frame, fault=0. |
 | 4C-D | **Complete PASS** | Hardware-observed `0x0022B43F` resolves exactly; closure is 6 bodies, depth 2, 460 guest bytes, 8,556 generated-source bytes, 0 missing translated dependencies, 5 dynamic-boundary bodies. |
 | 4C-E | **Hardware PASS** | Continuous Xenon execution reached the real title thread and advanced to caller `0x0022B363` -> `0x80000115` with fault=0; ordinal `0x115` = 277 = `RtlEnterCriticalSection`. |
-| 4C-F | **Package prep ready** | Validate the observed 8-byte ordinal-277 frame, log the guest critical-section pointer, apply the maintained serialized-guest no-op semantics, restore ESP exactly, and continue to the next live boundary. |
+| 4C-F | **Hardware PASS** | Real title-thread execution continued through ordinal 277 `RtlEnterCriticalSection`; live CS=`0x00312FC0`, exact 8-byte frame, stack restored, fault=0. Next boundary: `0x0022B363 -> 0x80000126`. |
+| 4C-G | **Package prep ready** | Route ordinal 294 `RtlLeaveCriticalSection` with the same maintained serialized-guest no-op semantics and exact 8-byte cleanup, then capture the first boundary after the critical-section pair. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
