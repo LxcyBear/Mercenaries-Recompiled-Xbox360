@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-O — promote the next hardware-observed direct target 0x0022F128 after Phase 4C-N hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-P — continue live ordinal 107 KeInitializeDpc after Phase 4C-O hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -167,8 +167,10 @@ phases.
     (`registration=0x003134C0`, Register=1), matched production no-callback
     semantics, and resumed translated startup with `fault=0` to
     `DIRECT_FRONTIER 0x0022F128`.
-27. **Phase 4C-O:** promote only `0x0022F128` into the translated pack and
-    continue to the next real boundary.
+27. **Done:** Phase 4C-O promoted `0x0022F128`; real hardware executed it
+    and reached `ICALL_SAFE 0x8000006B` with `fault=0` and a 16-byte frame.
+28. **Phase 4C-P:** continue ordinal 107 `KeInitializeDpc` using production
+    KDPC initialization semantics and resume translated startup.
 
 ### Evidence policy
 
@@ -2118,6 +2120,21 @@ unexecuted test PASS.**
 - **Phase 4C-N hardware result: PASS.**
 - **Next:** Phase 4C-O promotes only `0x0022F128`.
 - Build tag: `P4C-DIRECTF128-20261019-A`.
+
+### 2026-10-19 — Phase 4C-O promoted F128 PASS
+
+- Real Xbox 360 hardware executed promoted translated body `0x0022F128`.
+- New boundary:
+  `ICALL_SAFE caller=0x0022F128 target=0x8000006B`.
+- Frame: `esp=0x008BFEE4`, `saved_esp=0x008BFEF4`, delta 16 bytes.
+- Guest fault state remained 0.
+- Ordinal 107 is `KeInitializeDpc`; production ABI metadata requires
+  12 argument bytes, exactly matching the live frame plus synthetic return.
+- Production bridge initializes a 32-byte guest KDPC:
+  Type `0x13`, DeferredRoutine at +12, DeferredContext at +16.
+- **Phase 4C-O hardware result: PASS.**
+- **Next:** Phase 4C-P reproduces that guest KDPC initialization and continues.
+- Build tag: `P4C-DPC107-20261019-A`.
 
 ### How future updates are recorded
 
