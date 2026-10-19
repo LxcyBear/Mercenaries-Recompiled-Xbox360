@@ -251,6 +251,54 @@ void recomp_guest_write128(uint32_t address, const uint32_t words[4]);
 #define RECOMP_WRITE64(addr, v)   (MEM64(addr) = (uint64_t)(v))
 #endif
 
+/**
+ * Read an x87 80-bit extended-precision value from little-endian guest
+ * memory and reduce it to the runtime's architectural double model.
+ *
+ * The x87 encoding stores a 64-bit significand (including the explicit
+ * integer bit) followed by a sign/exponent word.  Do not reinterpret a
+ * 10-byte FLD as float32: several retail CRT exception paths use extended
+ * constants and depend on their sign/infinity magnitude.
+ */
+static __forceinline double recomp_x87_load_f80(uint32_t addr) {
+    const uint64_t significand = RECOMP_READ64(addr);
+    const uint16_t sign_exponent = RECOMP_READ16(addr + 8u);
+    const uint32_t sign = (uint32_t)(sign_exponent >> 15);
+    const uint32_t exponent = (uint32_t)(sign_exponent & 0x7FFFu);
+    const uint64_t integer_bit = ((uint64_t)0x80000000u << 32);
+    double value;
+
+    if (exponent == 0u) {
+        if (significand == 0u) {
+            value = 0.0;
+        } else {
+            value = ldexp((double)significand, 1 - 16383 - 63);
+        }
+    } else if (exponent == 0x7FFFu) {
+        uint64_t bits;
+        if (significand == integer_bit) {
+            bits = ((uint64_t)0x7FF00000u << 32);
+        } else {
+            bits = ((uint64_t)0x7FF80000u << 32);
+        }
+        if (sign)
+            bits |= ((uint64_t)0x80000000u << 32);
+        memcpy(&value, &bits, sizeof(value));
+        return value;
+    } else if ((significand & integer_bit) == 0u) {
+        /* Unsupported/unnormal x87 encoding: preserve invalidity as NaN. */
+        uint64_t bits = ((uint64_t)0x7FF80000u << 32);
+        if (sign)
+            bits |= ((uint64_t)0x80000000u << 32);
+        memcpy(&value, &bits, sizeof(value));
+        return value;
+    } else {
+        value = ldexp((double)significand, (int)exponent - 16383 - 63);
+    }
+
+    return sign ? -value : value;
+}
+
 /* Full 128-bit XMM helpers. Scalar SSE instructions use lane zero through
  * the xmmN aliases below; packed instructions use the xmmNv aliases. */
 static __forceinline void recomp_xmm_load(float dst[4], uint32_t addr) {
@@ -550,6 +598,20 @@ static inline int x87_isfinite_value(double value) {
     uint64_t bits;
     memcpy(&bits, &value, sizeof(bits));
     return ((bits >> 52) & 0x7FFull) != 0x7FFull;
+}
+
+/**
+ * Materialize x87 C3/C2/C0 condition bits for a comparison.
+ * Unordered (NaN) => 111, less => 001, equal => 100, greater => 000.
+ */
+static inline void x87_set_compare_status(double left, double right) {
+    int cmp = ((left != left) || (right != right)) ? 2 :
+              (left < right) ? -1 : (left > right) ? 1 : 0;
+    g_x87_status_word = (uint16_t)(
+        (g_x87_status_word & ~0x4500u) |
+        ((cmp == 2) ? 0x4500u :
+         (cmp < 0) ? 0x0100u :
+         (cmp == 0) ? 0x4000u : 0u));
 }
 
 /** Truncate toward zero without depending on the host FP rounding mode. */
