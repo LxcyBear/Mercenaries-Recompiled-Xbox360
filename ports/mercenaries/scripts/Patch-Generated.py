@@ -632,6 +632,12 @@ def patch_weapon_fire_continuation(text: str) -> str:
         if parent.count(before) != count:
             raise RuntimeError(f'Weapon fire branch count changed: {address}')
         parent = parent.replace(before, f'goto loc_{address};')
+    seh_fire_tail = 'g_seh_ebp = ebp; sub_000357E4(); return;'
+    if parent.count(seh_fire_tail) != 4:
+        raise RuntimeError(
+            'Weapon fire 0x000357E4 shared-tail call count changed'
+        )
+    parent = parent.replace(seh_fire_tail, 'goto loc_000357E4;')
     switch = ('    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(eax * 4 + 0x35874)); '
               'return; /* indirect tail jmp */')
     local_switch = '    { const uint32_t _fire_tail = MEM32(eax * 4 + 0x35874);\n'
@@ -13449,6 +13455,10 @@ def patch_generated(    generated_root: Path, *, allow_missing: bool = False
             1,
         ).replace(
             "{ sub_00020095(); return; }", "goto loc_00020095;"
+        )
+        parent_body = parent_body.replace(
+            "if ((edi != 0)) { sub_00020095(); return; }",
+            "if ((edi != 0)) goto loc_00020095;",
         )
         parent_body = parent_body.replace(
             "loc_00020093: ;\n    edi = eax;\n    PUSH32(esp, 0);",
