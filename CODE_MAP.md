@@ -42,7 +42,8 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 | 4C-E | **Hardware PASS** | Real entry -> ordinal 255 -> live StartRoutine `0x0022B43F` executed on Xenon; next boundary is `0x0022B363 -> 0x80000115`, fault=0. |
 | 4C-F | **Hardware PASS** | Ordinal 277 `RtlEnterCriticalSection` executed with live guest CS `0x00312FC0`, exact 8-byte frame and stack restoration; next live target is `0x80000126`. |
 | 4C-G | **Hardware PASS** | Ordinal 277/294 enter/leave pair executed on Xenon with balanced 8-byte frames; next live ICALL is `0x002295D6`, proving the thread ctx1 is the executable startup callback. |
-| 4C-H | **Package prep ready** | Execute `0x002295D6` using a depth-1 bounded direct-call frontier; preserve exact translated call-site stack state and stop at the first ICALL/ITAIL or DIRECT_FRONTIER target. |
+| 4C-H | **Blocked after real callback entry** | Callback `0x002295D6` executed on hardware and reached `0x0022C4DF`; next stop was `GUEST_FAULT` at translated VA `0x0022C4FF`, with `esp == saved_esp`. |
+| 4C-I | **Package prep ready** | Preserve the H slice and instrument the first rejected guest memory access so xbWatson reports exact address, access width, direction, and caller. |
 
 This table is the continuation of the Phase-3 hardware map: later phases should only advance when their stated evidence gate passes.
 
