@@ -348,18 +348,62 @@ def lower_source(source: str) -> tuple[str, dict]:
 
 
 def lower_file_to_temp(path: Path) -> tuple[Path, dict]:
-    """Lower one file without mutating the audited source tree yet."""
+    """Lower one file without mutating the audited source tree yet.
+
+    Generated instructions and Mercenaries patch statements are intentionally
+    line-oriented. Lowering each active source line avoids repeatedly rescanning
+    an entire ~80k-line chunk for every guest write. A guest-memory expression
+    that crosses a physical line is rejected rather than guessed.
+    """
     raw = path.read_bytes()
     newline = "\r\n" if b"\r\n" in raw else "\n"
     source = raw.decode("utf-8").replace("\r\n", "\n")
-    lowered, stats = lower_source(source)
+    masked = _mask_noncode(source)
+
+    source_lines = source.splitlines(keepends=True)
+    mask_lines = masked.splitlines(keepends=True)
+    if len(source_lines) != len(mask_lines):
+        raise LoweringError("internal line-map mismatch after comment masking")
+
+    totals = {
+        "writes": 0,
+        "compound_writes": 0,
+        "incdec_writes": 0,
+        "reads": 0,
+    }
+    output = []
+    for line_number, (line, mask_line) in enumerate(
+            zip(source_lines, mask_lines), 1):
+        active = list(MACRO_RE.finditer(mask_line))
+        if not active:
+            output.append(line)
+            continue
+
+        # Refuse a rare cross-line block-comment ambiguity instead of letting
+        # the line-local masker reinterpret text hidden by the full-file mask.
+        local_active = list(MACRO_RE.finditer(_mask_noncode(line)))
+        if len(local_active) != len(active):
+            raise LoweringError(
+                f"line {line_number}: cross-line comment around guest-memory "
+                "syntax requires explicit handling")
+
+        try:
+            lowered_line, stats = lower_source(line)
+        except LoweringError as exc:
+            raise LoweringError(f"line {line_number}: {exc}") from exc
+
+        for key in totals:
+            totals[key] += stats[key]
+        output.append(lowered_line)
+
+    lowered = "".join(output)
     if newline == "\r\n":
         lowered = lowered.replace("\n", "\r\n")
 
     temp = path.with_name(path.name + ".phase3n.tmp")
     temp.write_bytes(lowered.encode("utf-8"))
-    stats["bytes"] = temp.stat().st_size
-    return temp, stats
+    totals["bytes"] = temp.stat().st_size
+    return temp, totals
 
 
 def lower_tree(root: Path) -> dict:
