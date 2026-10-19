@@ -566,3 +566,55 @@ after the real translated argument pushes and synthetic CALL return push have
 already occurred.
 
 Build tag: `P4C-CALLBACK-20261019-A`.
+
+
+#### Phase 4C-H — Hardware-confirmed startup callback entry
+**Status: callback entry proven; execution gate blocked by guest-memory fault.**
+
+Real Xbox 360 trace:
+
+```text
+STARTUP CALLBACK LIVE FRAME:
+  target=002295D6
+  arg0=00000000
+  esp=008BFF50
+  saved_esp=008BFF58
+
+PASS: entering hardware-confirmed translated startup callback 002295D6
+
+BOUNDARY:
+  kind=GUEST_FAULT
+  caller=0022C4DF
+  target=0022C4FF
+  esp=008BFF48
+  saved_esp=008BFF48
+  ticks=19
+  trace=7
+  fault=1
+
+trace[5]=002295D6
+trace[6]=0022C4DF
+```
+
+The balanced stack at the fault boundary argues against an immediate
+translated-call ABI collapse. The current harness only records the boolean
+`s_accessFault`, so `0x0022C4FF` identifies the translated execution point
+where the fault is observed, not the rejected guest memory address itself.
+
+#### Phase 4C-I — First guest-fault provenance
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-I.ps1`
+
+4C-I preserves the exact H execution slice and does not broaden guest-memory
+mapping. The first rejected access records:
+- guest address;
+- READ vs WRITE;
+- access width (1/2/4/8/16 bytes);
+- translated caller captured by the existing boundary trace.
+
+The diagnostic counts as a successful provenance capture only when the real
+startup callback was entered and a concrete first-fault width was recorded.
+
+Build tag: `P4C-FAULTPROBE-20261019-A`.
