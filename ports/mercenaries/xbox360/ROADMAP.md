@@ -979,3 +979,57 @@ The prep wrapper now validates both freshly generated `main.cpp` and
 `phase4c_env.cpp` phase markers to prevent stale-source pairing.
 
 Build tag: `P4C-DPC107-20261019-A`.
+
+
+#### Phase 4C-P — KeInitializeDpc continuation
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+KeInitializeDpc LIVE FRAME:
+  dpc=00869580
+  routine=0022F116
+  context=00000000
+  esp=008BFEE4
+  saved_esp=008BFEF4
+
+PASS: ordinal 107 KeInitializeDpc matched production guest-KDPC initialization semantics
+
+BOUNDARY:
+  kind=ICALL_SAFE
+  caller=0022F128
+  target=80000071
+  esp=008BFEE8
+  saved_esp=008BFEF4
+  ticks=31
+  fault=0
+```
+
+The live DPC frame matched the production 12-byte ABI plus synthetic return.
+The guest KDPC was initialized exactly as the production bridge expects:
+32 bytes zeroed, Type=0x13, DeferredRoutine at +12, DeferredContext at +16.
+
+The next target, `0x80000071`, is ordinal 113,
+`KeInitializeTimerEx(PKTIMER, TIMER_TYPE)`. The live frame delta is 12 bytes,
+matching its 8 argument bytes plus the translated synthetic return.
+
+#### Phase 4C-Q — KeInitializeTimerEx continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-Q.ps1`
+
+4C-Q reproduces the production guest-visible timer initialization:
+- require `savedEsp-callEsp == 12`;
+- read Timer VA and TimerType;
+- zero 40-byte guest KTIMER;
+- set 16-bit Type to `0x08 + (TimerType & 1)`;
+- validate the complete guest KTIMER readback;
+- return `eax=0` and clean 8 argument bytes plus synthetic return;
+- require ordinal 113 to be handled before later progress can PASS.
+
+4C-Q also introduces a link-time `phase4c_env_build_cookie` symbol/value shared
+between the freshly generated main/env pair. An older env file does not define
+the Q cookie, so a stale XDK project reference should fail to link instead of
+silently producing mismatched phase labels.
+
+Build tag: `P4C-TIMER113-20261019-A`.
