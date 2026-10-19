@@ -157,13 +157,17 @@ def arg_bytes_map(bridge_text: str) -> dict[int, int]:
     }
 
 
-def find_function_body(symbol: str, sources: dict[Path, str]):
+def find_function_body(
+    symbol: str,
+    sources: dict[Path, str],
+    masked_sources: dict[Path, str],
+):
     pat = re.compile(
         r"(?ms)^[^;{}]*\b" + re.escape(symbol) +
         r"\s*\([^;{}]*?\)\s*\{"
     )
     for path, raw in sources.items():
-        masked = mask_noncode(raw)
+        masked = masked_sources[path]
         match = pat.search(masked)
         if not match:
             continue
@@ -176,10 +180,14 @@ def find_function_body(symbol: str, sources: dict[Path, str]):
     return None, None, None
 
 
-def find_symbol_source(symbol: str, sources: dict[Path, str]):
+def find_symbol_source(
+    symbol: str,
+    sources: dict[Path, str],
+    masked_sources: dict[Path, str],
+):
     token = re.compile(r"\b" + re.escape(symbol) + r"\b")
-    for path, text in sources.items():
-        if token.search(mask_noncode(text)):
+    for path in sources:
+        if token.search(masked_sources[path]):
             return path
     return None
 
@@ -319,6 +327,10 @@ def main() -> int:
         p: p.read_text(encoding="utf-8-sig", errors="replace")
         for p in source_paths
     }
+    # Symbol classification revisits the same source files for each imported
+    # ordinal. Cache comment/string-masked views once instead of rebuilding
+    # them hundreds of times.
+    masked_sources = {p: mask_noncode(text) for p, text in sources.items()}
 
     generated_dir = args.generated_dir.resolve() if args.generated_dir else None
     static_refs = scan_generated_refs(generated_dir, xbe.kernel_imports)
@@ -374,13 +386,13 @@ def main() -> int:
         if runtime_kind == "data":
             counts["source_data"] += 1
             if symbol:
-                source_path = find_symbol_source(symbol, sources)
+                source_path = find_symbol_source(symbol, sources, masked_sources)
                 if source_path:
                     source = str(source_path.relative_to(repo)).replace("\\", "/")
                 else:
                     counts["source_definition_missing"] += 1
         elif symbol:
-            source_path, raw_body, masked_body = find_function_body(symbol, sources)
+            source_path, raw_body, masked_body = find_function_body(symbol, sources, masked_sources)
             if raw_body is not None:
                 counts["source_callable"] += 1
                 source = str(source_path.relative_to(repo)).replace("\\", "/")
