@@ -473,3 +473,44 @@ synthetic CALL return and one stdcall argument exactly, and requires
 `g_esp == saved_esp` before continuing.
 
 Build tag: `P4C-CRITCONT-20261019-A`.
+
+
+#### Phase 4C-F — Continue through first critical-section enter
+**Status: PASS on real Xbox 360 hardware.**
+
+Hardware evidence:
+
+```text
+RtlEnterCriticalSection LIVE FRAME:
+  cs=00312FC0
+  esp=008BFF3C
+  saved_esp=008BFF44
+
+PASS: ordinal 277 RtlEnterCriticalSection matched maintained serialized-guest semantics
+
+BOUNDARY:
+  caller=0022B363
+  target=80000126
+  esp=008BFF3C
+  saved_esp=008BFF44
+  ticks=14
+  trace=5
+  fault=0
+```
+
+`0x80000126` is kernel ordinal 294,
+`RtlLeaveCriticalSection(PRTL_CRITICAL_SECTION)`. The observed frame delta is
+again exactly 8 bytes.
+
+#### Phase 4C-G — Continue through first critical-section pair
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-G.ps1`
+
+The 43-body translated slice is unchanged. The gate now handles both ordinal
+277 enter and ordinal 294 leave with the maintained serialized-guest no-op
+semantics. Each call must have an exact 8-byte translated frame and restore
+`g_esp == saved_esp` before execution continues.
+
+Build tag: `P4C-CRITPAIR-20261019-A`.
