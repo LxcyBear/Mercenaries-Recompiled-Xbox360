@@ -834,7 +834,6 @@ static DWORD phase5b_native_share(uint32_t share)
     DWORD nativeShare = 0u;
     if (share & 0x01u) nativeShare |= FILE_SHARE_READ;
     if (share & 0x02u) nativeShare |= FILE_SHARE_WRITE;
-    if (share & 0x04u) nativeShare |= FILE_SHARE_DELETE;
     return nativeShare;
 }
 
@@ -1016,7 +1015,7 @@ static void phase5b_nt_open_file(uint32_t savedEsp)
     if (virtualRoot)
     {
         DWORD rootAttrs = GetFileAttributesA(nativePath);
-        if (rootAttrs == INVALID_FILE_ATTRIBUTES)
+        if (rootAttrs == 0xFFFFFFFFu)
         {
             if (!CreateDirectoryA(nativePath, NULL) &&
                 GetLastError() != ERROR_ALREADY_EXISTS)
