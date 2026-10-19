@@ -114,26 +114,28 @@ The cohesive retail file/handle surface includes:
 
 Phase 4B-B hardware proof is complete.
 
-## Active
-
 ### Phase 4B-B2 — Integrate hardware-proven file/handle backend
-**Status: runtime patch landed; verification active.**
+**Status: PASS.**
 
-The nine file/handle import paths now route through
+The nine file/handle import paths route through
 `src/platform/kernel_file_io.*` via `merc_platform_file_*`.
 
-Verification target:
+Verification result:
 - 2 remaining direct semantic host-backed imports;
 - 15 Phase-4B platform-bound imports;
 - 0 ABI metadata errors;
 - 0 statically referenced fallbacks;
-- timing/sync regressions remain green;
-- file/handle platform-boundary regression passes.
+- 7,722-case timing/deadline regression: PASS;
+- guest-kernel ABI regression: PASS;
+- time/sync platform-boundary regression: PASS;
+- file/handle platform-boundary regression: PASS.
 
 Gate:
 `ports/mercenaries/xbox360/phase4b_native_file_handles_xex/Verify-Phase4B-B2.ps1`
 
-## Next
+Phase 4B-B/B2 is complete.
+
+## Active
 
 ### Phase 4B-C — Remaining memory/protection and residual host surface
 Expected focus:
