@@ -42,7 +42,8 @@ Snapshot: 2026-10-19.
 | 4C-H | **Hardware callback entry proven; gate blocked** | Xenon entered callback `0x002295D6`, reached `0x0022C4DF`, then stopped on a deterministic `GUEST_FAULT` at translated VA `0x0022C4FF`; fault=1, stack balanced. |
 | 4C-I | **Hardware diagnostic PASS** | Build B proved the first rejected callback access is READ32 guest `0x80000142` from `0x0022C4DF`; `0x142` = ordinal 322 = `XboxHardwareInfo` DATA export. |
 | 4C-J | **Hardware PASS** | Ordinal-322 `XboxHardwareInfo` thunk relocated at live slot `0x002DBE0C`; startup advanced past the old fault and next rejected access is READ16 `0x80000148` with ECX=`0x80000144`, proving raw ordinal 324 `XboxKrnlVersion` is being dereferenced at offset +4 (Build). |
-| 4C-K | **Package prep ready** | Relocate the initialized startup DATA subset: 156 `KeTickCount` -> `0x0087E020`, 322 `XboxHardwareInfo` -> `0x0087E000`, 324 `XboxKrnlVersion` -> `0x0087E010`; retain first-fault provenance and leave all other imports untouched. |
+| 4C-K | **Hardware PASS** | Relocated startup DATA imports 156/322/324; all three exact thunk slots fixed, `fault=0`, callback advanced beyond both prior data faults to `DIRECT_FRONTIER 0x0022C47B` from caller `0x0022C4DF`. |
+| 4C-L | **Package prep ready** | Promote only the hardware-observed direct target `0x0022C47B` into the translated pack; deeper direct calls remain deterministic frontiers and all startup data relocations/fault provenance remain active. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
