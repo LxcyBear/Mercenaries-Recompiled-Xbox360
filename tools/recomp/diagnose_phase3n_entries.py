@@ -92,6 +92,11 @@ def main() -> int:
     parser.add_argument("--target", action="append", type=parse_address)
     parser.add_argument("--bytes", type=int, default=128)
     parser.add_argument("--instructions", type=int, default=28)
+    parser.add_argument(
+        "--continue-after-ret",
+        action="store_true",
+        help="Continue linear decode after RET for shared-tail inspection.",
+    )
     args = parser.parse_args()
 
     config.configure_from_xbe(str(args.xbe))
@@ -168,7 +173,8 @@ def main() -> int:
             # Continue a little beyond a terminal instruction only when the
             # caller may target a following shared block; otherwise one retail
             # path is enough for classification.
-            if insn.mnemonic.startswith("ret") and count >= 4:
+            if (not args.continue_after_ret and
+                    insn.mnemonic.startswith("ret") and count >= 4):
                 break
 
     return 0
