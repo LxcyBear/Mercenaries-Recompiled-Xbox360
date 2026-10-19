@@ -883,8 +883,17 @@ static uint32_t recomp_xmm_movmskps(const float src[4])
  * dependency order does not become a native C compiler constraint. */
 /*__P3K_FORWARD_DECLS__*/
 
-/* Dependency-first, mechanically translated retail bodies. */
+/*
+ * Dependency-first, mechanically translated retail bodies.
+ *
+ * The Xbox 360 XDK compiler can ICE in its optimizer on wider generated
+ * mixed-control/SSE functions. Keep optimization disabled only for the
+ * mechanically translated cluster; the surrounding harness remains under
+ * the project defaults. This does not alter guest-visible translated logic.
+ */
+#pragma optimize("", off)
 /*__P3K_CLUSTER_BODIES__*/
+#pragma optimize("", on)
 
 static unsigned __int64 hash_guest_ram(void)
 {
