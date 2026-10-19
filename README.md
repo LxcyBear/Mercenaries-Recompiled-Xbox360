@@ -4,9 +4,9 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AF — execute hardware-observed translated root 0x0022CEEE after Phase 4C-AE hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 5A — capture the first live storage/content request at ordinal 202 NtOpenFile after Phase 4 hardware completion.
 >
-> **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
+> **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
 ## The mission
 
@@ -55,10 +55,10 @@ Each phase has independently checkable checkpoints below.
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
-| **4 — Native platform + kernel services** | **In progress — 4A locked PASS; Phase 4B service migration COMPLETE; Phase 4C startup active** | First real retail-derived translated startup path executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
-| 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
-| 7 — Gameplay, stability and release | Not started | Repeated playable scenarios, save/load, mission progression and documented release |
+| **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A storage/content capture active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
+| 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
 **Verified foundation:** the VS17/XDK bootstrap, 64 MiB guest RAM contract,
 exact retail-XBE identity, bounded 14-section load, and the full Phase 3
@@ -70,17 +70,19 @@ clean XAPI return. Phase 4A then locked the exact 111-import guest-kernel/ABI
 surface. Phase 4B is now complete: timing/sync, file/handle and
 memory/protection slices all passed real-Xenon hardware gates plus runtime
 verification, closing the original 17-path semantic host surface at
-**0 direct host-backed / 15 platform-bound / 2 guest-native**.
+**0 direct host-backed / 15 platform-bound / 2 guest-native**. Phase 4C then
+executed the real retail startup path on hardware through 23 translated
+entries, including live thread/TLS/kernel/VM continuations, and reached
+ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 3 and Phase 4B service migration are complete.
-The exact 111-import audit now reports **0 direct semantic host-backed paths**,
-with 15 platform-bound services and 2 guest-native memory/protection services;
-ABI cleanup metadata and referenced fallbacks remain clean. The next blocker is
-no longer service-surface migration: it is executing the real retail-derived
-translated Mercenaries startup path on Xenon and using xbWatson checkpoints to
-identify the first live runtime dependency. D3D11, DXGI and host-audio
-dependencies still need Xbox 360-native replacements in later startup-driven
-phases.
+**Present blockers:** Phase 4 is complete. The real retail-derived startup
+path now reaches a live storage/content request: ordinal 202 `NtOpenFile`
+from translated caller `0x0022BD2D`, with a 28-byte full frame and
+`fault=0`. Phase 5A captures the exact guest path/access/share/options
+without fabricating I/O; that evidence will drive the first native Xbox 360
+storage implementation. Graphics, input, audio/movie and async/runtime
+dependencies remain later Phase-5 blockers discovered by continued live
+execution.
 
 ### Immediate next tests
 
@@ -216,10 +218,18 @@ phases.
     advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022C8EA`.
 43. **Done:** Phase 4C-AE executed translated root `0x0022C8EA` and
     advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022CEEE`.
-44. **Phase 4C-AF:** promote only hardware-observed translated root
-    `0x0022CEEE`, retaining all proven reserve/commit and kernel state. Gate:
-    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AF.ps1`.
-    Build tag: `P4C-DIRECTCEEE-AF-20261019-A`.
+44. **Done:** Phase 4C-AF executed `0x0022CEEE`, then flowed through
+    `0x00239C23`, `0x0022C27A`, and `0x0022BD2D` before reaching
+    `ICALL_SAFE target=0x800000CA` with a 23-entry trace and `fault=0`.
+    Target `0x800000CA` is ordinal 202 `NtOpenFile`; its observed
+    28-byte full frame matches six stdcall arguments plus the synthetic return.
+    **Phase 4 / Gate 4 is complete.**
+45. **Phase 5A:** capture the live ordinal-202 `NtOpenFile` request,
+    including guest `OBJECT_ATTRIBUTES`, `ANSI_STRING` path,
+    access/share/options, handle pointer and I/O-status pointer, then stop at
+    the explicit `STORAGE_OPEN` boundary without fabricating I/O. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5A.ps1`.
+    Build tag: `P5A-NTOPEN202-CAPTURE-20261019-A`.
 
 ### Evidence policy
 
@@ -2433,6 +2443,18 @@ unexecuted test PASS.**
 - **Phase 4C-AE hardware result: PASS.**
 - **Next:** Phase 4C-AF promotes only `0x0022CEEE`.
 - Build tag: `P4C-DIRECTCEEE-AF-20261019-A`.
+
+### 2026-10-19 — Phase 4 complete / Phase 5A begins
+
+- Phase 4C-AF build `P4C-DIRECTCEEE-AF-20261019-A` passed on real Xbox 360 hardware.
+- The live translated trace reached 23 entries with `fault=0`.
+- Startup flowed through `0x0022CEEE -> 0x00239C23 -> 0x0022C27A -> 0x0022BD2D`.
+- New live dependency: `ICALL_SAFE target=0x800000CA` = ordinal 202 `NtOpenFile`.
+- The observed stack delta is 28 bytes, exactly six stdcall arguments plus the translated synthetic return.
+- **Gate 4 / Phase 4: COMPLETE.**
+- New active branch: `xbox360/phase5-native-subsystems`.
+- **Phase 5A:** capture the exact live storage/content path and open flags before implementing native I/O.
+- Build tag: `P5A-NTOPEN202-CAPTURE-20261019-A`.
 
 ### How future updates are recorded
 
