@@ -178,8 +178,7 @@ try {
 
     Write-Host ""
     Write-Host "[Phase3N] Running full post-patch portability audit..."
-    $portabilityAudit = Join-Path $repoRoot "tools\recomp\audit_phase3n_portability.py"
-    Invoke-Python $portabilityAudit $generatedRoot "--output" $portabilityReport
+    Invoke-Python "-m" "tools.recomp.audit_phase3n_portability" $generatedRoot "--output" $portabilityReport
 
     # Re-run the narrow scanner explicitly at the phase boundary. Recompile.ps1
     # already ran it; this makes the final report unambiguously post-lowering.
