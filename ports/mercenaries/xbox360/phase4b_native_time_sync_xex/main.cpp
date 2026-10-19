@@ -11,7 +11,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#define P4B_BUILD_TAG "P4B-TIMESYNC-20261019-A"
+#define P4B_BUILD_TAG "P4B-TIMESYNC-20261019-B"
 
 static HANDLE s_logFile = INVALID_HANDLE_VALUE;
 static int s_failures = 0;
@@ -336,18 +336,27 @@ static void test_one_shot_timer(void)
     unsigned __int64 elapsed;
     DWORD result;
 
+    /*
+     * Start timing before CreateThread. On Xenon, thread creation may hand the
+     * processor to the new worker immediately; the worker can complete its
+     * 25 ms sleep and signal the event before the creating thread resumes.
+     * Timing only the subsequent wait therefore measures ~0 us even though
+     * the timer itself behaved correctly.
+     */
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&a);
+
     check_result(native_set_one_shot_timer(&timer, 25),
                  "one-shot timer creation");
     if (!timer.Event)
         return;
 
-    QueryPerformanceFrequency(&frequency);
-    QueryPerformanceCounter(&a);
     result = WaitForSingleObject(timer.Event, 500);
     QueryPerformanceCounter(&b);
 
     elapsed = qpc_elapsed_us(&a, &b, &frequency);
-    tracef("one-shot timer wait=%08X elapsed=%I64u us", result, elapsed);
+    tracef("one-shot timer request-to-signal=%I64u us wait=%08X",
+           elapsed, result);
 
     check_result(result == WAIT_OBJECT_0, "one-shot timer signals event");
     check_result(elapsed >= 10000ui64 && elapsed < 500000ui64,
