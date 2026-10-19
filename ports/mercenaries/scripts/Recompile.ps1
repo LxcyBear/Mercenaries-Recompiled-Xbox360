@@ -226,6 +226,10 @@ try {
         "--function-range", "0x00145460:0x001455D2",
         "--function-range", "0x00162610:0x00162652",
         "--function-range", "0x00167E40:0x00168016",
+        # Projectile damage and weapon-fire feedback tails are retail
+        # basic blocks in their owners' live frames, not standalone functions.
+        "--function-range", "0x0001FBB0:0x000208D0",
+        "--function-range", "0x00034BD0:0x000358A0",
         # Phase 3N full-tree audit: reviewed fragmented native regions.
         # Function discovery split these shared-tail/jump-table regions into
         # tiny synthetic functions whose branches return into interior blocks
