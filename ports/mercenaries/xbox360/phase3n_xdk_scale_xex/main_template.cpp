@@ -1,9 +1,10 @@
 /*
  * Mercenaries Xbox 360 - Phase 3N-B final XDK/runtime scale gate.
  *
- * The execution path is the already hardware-proven Phase 3M nine-member
- * closure, extracted from the exact post-patch/post-lowering 3N-A tree.
- * A much larger set of audited translated leaf bodies is compiled and linked
+ * The execution path is the hardware-proven Phase 3E retail accessor,
+ * extracted from the exact post-patch/post-lowering 3N-A tree and checked
+ * against an independent six-case reference. A much larger set of audited
+ * translated leaf bodies is compiled and linked
  * into the XEX and kept alive by volatile function-pointer relocations, but is
  * deliberately not executed merely to manufacture scale.
  */
@@ -42,6 +43,9 @@ typedef __int64            int64_t;
 
 #define ROOT_STACK         0x008B4000u
 #define ARG_COUNT          48u
+
+#define PHASE3E_OBJECT_VA  0x00030000u
+#define PHASE3E_STACK_TOP  0x008BFFF0u
 
 #define SAFE_EAX_BASE      0x00100000u
 #define SAFE_ECX_BASE      0x00110000u
@@ -1926,6 +1930,107 @@ static int run_x87_helper_fixture(void)
     return ok;
 }
 
+static BYTE phase3e_reference_accessor(BYTE value)
+{
+    return (BYTE)(value & 1u);
+}
+
+static int run_phase3e_reference_case(BYTE value)
+{
+    BYTE before;
+    BYTE after;
+    BYTE expected;
+    BYTE actual;
+    char line[192];
+    int ok = 1;
+
+    s_accessFault = 0;
+    s_execBudget = 0u;
+    s_budgetExceeded = 0;
+    s_backedgeCount = 0u;
+    s_lastBackedgeFrom = 0u;
+    s_lastBackedgeTo = 0u;
+    s_activeProfile = 0u;
+    s_phase3nExternalEventInjected = 0;
+    reset_trace();
+
+    GUEST_WRITE8(PHASE3E_OBJECT_VA + 0x14u, value);
+    before = GUEST_READ8(PHASE3E_OBJECT_VA + 0x14u);
+
+    g_eax = 0xA5A5A5A5u;
+    g_ecx = PHASE3E_OBJECT_VA;
+    g_edx = 0xD2D2D2D2u;
+    g_ebx = 0xB3B3B3B3u;
+    g_esi = 0x51515151u;
+    g_edi = 0xD1D1D1D1u;
+    g_seh_ebp = 0u;
+    g_eflags = 0u;
+
+    g_esp = PHASE3E_STACK_TOP - 4u;
+    GUEST_WRITE32(g_esp, 0xDEADC0DEu);
+
+    expected = phase3e_reference_accessor(value);
+
+    __P3NB_ROOT_NAME__();
+
+    actual = LO8(g_eax);
+    after = GUEST_READ8(PHASE3E_OBJECT_VA + 0x14u);
+
+    if (s_accessFault)
+        ok = 0;
+    if (s_budgetExceeded)
+        ok = 0;
+    if (s_traceCount == 0u || s_trace[0] != ROOT_VA)
+        ok = 0;
+    if (actual != expected)
+        ok = 0;
+    if (before != after)
+        ok = 0;
+    if (g_esp != PHASE3E_STACK_TOP)
+        ok = 0;
+
+    sprintf(
+        line,
+        "P3E CASE input=%02X expected=%u actual=%u esp=%08X trace=%u budget=%u %s",
+        (unsigned int)value,
+        (unsigned int)expected,
+        (unsigned int)actual,
+        (unsigned int)g_esp,
+        (unsigned int)s_traceCount,
+        (unsigned int)s_execBudget,
+        ok ? "PASS" : "FAIL");
+    trace(line);
+
+    return ok;
+}
+
+static int run_phase3e_reference_fixture(void)
+{
+    static const BYTE kCases[] = {
+        0x00u, 0x01u, 0x02u, 0x03u, 0xFEu, 0xFFu
+    };
+    DWORD i;
+    int ok = 1;
+
+    memset(g_ram, 0, RAM_SIZE);
+
+    for (i = 0u; i < (DWORD)(sizeof(kCases) / sizeof(kCases[0])); ++i)
+        ok &= run_phase3e_reference_case(kCases[i]);
+
+    ok &= check(
+        GUEST_READ8(PHASE3E_OBJECT_VA + 0x14u) == 0xFFu,
+        "PASS: Phase 3E final guest byte remains the last supplied input",
+        "FAIL: Phase 3E final guest byte changed unexpectedly");
+
+    ok &= check(
+        ok,
+        "PASS: Phase 3E six-case independent reference fixture",
+        "FAIL: Phase 3E independent reference fixture mismatch");
+
+    return ok;
+}
+
+/* Legacy wider-profile fixture retained as compile-only harness support. */
 static int run_fixture(void)
 {
     DWORD profileIndex;
@@ -2005,7 +2110,7 @@ VOID __cdecl main()
 
     trace("PHASE 3N-B XDK SCALE + RUNTIME PROOF START");
     trace("BUILD TAG: P3N-XDKSCALE-20261019-A");
-    trace("Scale policy: audited 3N-A leaf pack is linked/anchored but not executed; hardware-proven 3M closure executes deterministic A/B proof");
+    trace("Scale policy: audited 3N-A leaf pack is linked/anchored but not executed; Phase 3E retail accessor executes six independent-reference cases");
 
     sprintf(
         line,
@@ -2042,7 +2147,7 @@ VOID __cdecl main()
     }
 
     result &= run_x87_helper_fixture();
-    result &= run_fixture();
+    result &= run_phase3e_reference_fixture();
 
     if (result)
         trace("PHASE 3N-B XDK SCALE + RUNTIME PROOF RESULT: PASS");
