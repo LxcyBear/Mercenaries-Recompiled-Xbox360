@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-L — promote the first hardware-observed translated direct frontier target after Phase 4C-K hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-M — model the original-Xbox kernel PE-header page after Phase 4C-L hardware PASS exposed READ32 0x8001003C.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -158,9 +158,11 @@ phases.
 23. **Done:** Phase 4C-K relocated initialized startup DATA imports 156/322/324
     on real hardware. The callback advanced with `fault=0` to
     `DIRECT_FRONTIER caller=0x0022C4DF target=0x0022C47B`.
-24. **Phase 4C-L:** add only hardware-observed direct target `0x0022C47B`
-    to the translated pack and continue until the next dynamic/deeper-direct
-    frontier or first rejected guest access.
+24. **Done:** Phase 4C-L promoted `0x0022C47B`; real hardware executed it
+    and exposed READ32 `0x8001003C` from that function with a balanced stack.
+25. **Phase 4C-M:** model the original-Xbox kernel image header page at
+    `0x80010000` as a separate synthetic PE-header surface instead of
+    aliasing it to title RAM.
 
 ### Evidence policy
 
@@ -2068,6 +2070,20 @@ unexecuted test PASS.**
 - **Phase 4C-K hardware result: PASS.**
 - **Next:** Phase 4C-L promotes only `0x0022C47B` into the translated pack.
 - Build tag: `P4C-DIRECTC47B-20261019-A`.
+
+### 2026-10-19 — Phase 4C-L promoted direct target PASS
+
+- Real Xbox 360 hardware executed promoted translated body `0x0022C47B`.
+- First new dependency: **READ32 `0x8001003C`**.
+- Boundary caller: `0x0022C47B`.
+- Stack remained balanced at `0x008BFF40`.
+- The address falls inside the intentionally fenced original-Xbox kernel image
+  page at `0x80010000`, not the kernel ordinal-token range.
+- **Phase 4C-L hardware result: PASS.**
+- **Next:** Phase 4C-M supplies a separate minimal xboxkrnl PE-header page
+  (MZ, `e_lfanew=0x80`, PE signature, i386, zero sections) while preserving
+  all prior startup data relocations and fault telemetry.
+- Build tag: `P4C-KHDR-20261019-A`.
 
 ### How future updates are recorded
 
