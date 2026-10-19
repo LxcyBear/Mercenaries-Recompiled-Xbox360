@@ -47,7 +47,8 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 | 4C-J | **Hardware PASS** | Live ordinal-322 data relocation succeeded at thunk slot `0x002DBE0C`; callback advanced to READ16 `0x80000148` with ECX=`0x80000144`, identifying ordinal 324 `XboxKrnlVersion` +4. |
 | 4C-K | **Hardware PASS** | Startup DATA relocations 156/322/324 succeeded; real callback continued with `fault=0` to `DIRECT_FRONTIER caller=0x0022C4DF target=0x0022C47B`. |
 | 4C-L | **Hardware PASS** | Live target `0x0022C47B` executed; first new dependency is READ32 `0x8001003C`, inside the intentionally fenced xboxkrnl image page. |
-| 4C-M | **Package prep ready** | Route only `0x80010000-0x80010FFF` to a separate synthetic kernel-header buffer and seed the minimal PE surface required by startup/cache probing; do not alias it to title RAM. |
+| 4C-M | **Hardware PASS** | Kernel-header model removed the `0x8001003C` blocker; trace advanced to translated `0x0022C28B` and stopped cleanly at kernel target `0x8000002F` (ordinal 47) with `fault=0`. |
+| 4C-N | **Package prep ready** | Validate and continue the live ordinal-47 `HalRegisterShutdownNotification(PVOID, BOOLEAN)` frame using production semantics, then stop at the next real frontier. |
 
 This table is the continuation of the Phase-3 hardware map: later phases should only advance when their stated evidence gate passes.
 
