@@ -1,6 +1,6 @@
 # Phase 3J — First dependency-closed translated function cluster
 
-**Status: selector/harness ready; local selection + modified Xbox 360 hardware run pending.**
+**Status: COMPLETE — Build `P3J-CLOSURE-20261018-B` hardware PASS on modified Xbox 360 hardware.**
 
 Phase 3I proved that several previously verified translated families can coexist
 inside one persistent guest arena. Phase 3J removes the hand-picked composition:
@@ -44,14 +44,15 @@ The first hardware cluster is deliberately bounded:
 - at most 320 bytes / 96 instructions per member
 - all members are new to this gate: the hand-selected Phase 3E–3I function VAs
   are excluded
-- each member has a plain translated RET
-- RET-N members are deferred
+- the root has exactly one plain translated RET
+- nested members may use bounded RET-N cleanup (<= 64 bytes)
 - forward/acyclic conditional control flow is allowed
 - backward guest branch edges, LOOP/LOOPE/LOOPNE and generated C while/for/switch surfaces are deferred to Phase 3K
 
-The branchless requirement is intentional for 3J-A. It makes the first closure
-test about automatic dependency selection and execution rather than branch-path
-seeding, and lets the hardware gate require every selected member to execute.
+The initial branchless requirement was removed after selector evidence showed
+that real Mercenaries closures overwhelmingly contain ordinary conditional
+control flow. The final gate allows forward/acyclic branch control while
+continuing to reject backward guest edges/loops and dynamic dispatch surfaces.
 
 ## Candidate ranking
 
@@ -76,15 +77,16 @@ The generated XEX receives:
 - the automatically selected root
 - the exact selected member VA table
 
-Three deterministic register/stack/object seeds are used.
+Twelve deterministic branch-driving register/stack/object profiles are used.
 
-For each case the full cluster runs twice from identical state.
+For each profile the full cluster runs twice from identical state.
 
 The gate requires:
 
 - no guest-memory faults
 - translated trace starts at the selected root
-- **every selected cluster member appears in the translated trace**
+- A/B member coverage is identical for each profile
+- the **union of all 12 profile coverage masks executes every selected cluster member**
 - unrelated high-RAM canaries remain intact
 - the root returns with exact guest stack state
 - A/B translated traces match exactly
@@ -345,3 +347,42 @@ Build B also logs the selected member table, profile traces, coverage masks and
 specific missing member VAs.
 
 Build tag: `P3J-CLOSURE-20261018-B`.
+
+## Final hardware PASS — Phase 3J complete
+
+Build `P3J-CLOSURE-20261018-B` passed on modified Xbox 360 hardware.
+
+Selected cluster:
+- root `0x000B2080`
+- 6 members
+- dependency depth 2
+
+Member VAs:
+- `0x000AE4E0`
+- `0x000AE510`
+- `0x000AE540`
+- `0x000B14D0`
+- `0x000B2080` (root)
+- `0x00209720`
+
+The deterministic 12-profile suite achieved:
+
+```text
+SUITE COVERAGE: 6/6 mask=0000003F expected=0000003F
+PASS: deterministic profile suite executes every statically closed cluster member
+PHASE 3J DEPENDENCY-CLOSED TRANSLATED CLUSTER RESULT: PASS
+[XAPI RETURN VALUE] 0
+```
+
+Profiles 2, 3, 5, 7, 8, 9, 10 and 11 each independently executed all six
+members. Every profile's A/B pair matched translated trace, final architectural
+state and complete 64 MiB guest-RAM hash.
+
+Every profile also:
+- completed without guest-memory faults
+- preserved unrelated high-RAM canaries
+- began at the automatically selected real root
+- returned with exact guest ESP `0x008B4004`
+
+This closes Phase 3J. Phase 3K widens the real translated surface to broader
+control-flow/flags and mixed ABI/FP behavior.
