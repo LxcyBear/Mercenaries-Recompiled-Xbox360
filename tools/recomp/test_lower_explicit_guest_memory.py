@@ -1,6 +1,12 @@
+import tempfile
 import unittest
+from pathlib import Path
 
-from tools.recomp.lower_explicit_guest_memory import LoweringError, lower_source
+from tools.recomp.lower_explicit_guest_memory import (
+    LoweringError,
+    lower_file_to_temp,
+    lower_source,
+)
 
 
 class LowerExplicitGuestMemoryTests(unittest.TestCase):
@@ -103,6 +109,40 @@ class LowerExplicitGuestMemoryTests(unittest.TestCase):
             out,
             "if (GUEST_READ32(esi + 8) == 1u && GUEST_READ8(esi + 4)) {",
         )
+
+    def test_multiline_guest_read_source(self):
+        out = self.lower(
+            "if (MEM32(\n"
+            "        esi + 8) != 0u && MEMF(esi + 0x40) == 0.0f) {\n"
+        )
+        self.assertEqual(
+            out,
+            "if (GUEST_READ32(\n"
+            "        esi + 8) != 0u && GUEST_READF32(esi + 0x40) == 0.0f) {\n",
+        )
+
+    def test_file_fast_path_coalesces_multiline_guest_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recomp_test.c"
+            path.write_text(
+                "if (MEM32(\n"
+                "        esi + 8) != 0u && MEM8(esi + 4)) {\n"
+                "    eax = MEM32(edi);\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            temp, stats = lower_file_to_temp(path)
+            try:
+                out = temp.read_text(encoding="utf-8")
+            finally:
+                temp.unlink()
+            self.assertIn(
+                "if (GUEST_READ32(\n"
+                "        esi + 8) != 0u && GUEST_READ8(esi + 4)) {",
+                out,
+            )
+            self.assertIn("eax = GUEST_READ32(edi);", out)
+            self.assertGreaterEqual(stats["reads"], 3)
 
     def test_address_of_lvalue_is_rejected(self):
         with self.assertRaises(LoweringError):
