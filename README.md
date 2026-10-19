@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-N — continue live ordinal 47 HalRegisterShutdownNotification after Phase 4C-M hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-O — promote the next hardware-observed direct target 0x0022F128 after Phase 4C-N hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -163,9 +163,12 @@ phases.
 25. **Done:** Phase 4C-M modeled the fenced xboxkrnl PE-header page; hardware
     advanced through `0x0022C47B` into `0x0022C28B`, then stopped at
     `ICALL_SAFE 0x8000002F` with `fault=0` and a 12-byte frame.
-26. **Phase 4C-N:** continue ordinal 47 `HalRegisterShutdownNotification`
-    using the production 8-byte ABI/no-callback semantics and resume translated
-    startup to the next live boundary.
+26. **Done:** Phase 4C-N validated the live ordinal-47 frame
+    (`registration=0x003134C0`, Register=1), matched production no-callback
+    semantics, and resumed translated startup with `fault=0` to
+    `DIRECT_FRONTIER 0x0022F128`.
+27. **Phase 4C-O:** promote only `0x0022F128` into the translated pack and
+    continue to the next real boundary.
 
 ### Evidence policy
 
@@ -2102,6 +2105,19 @@ unexecuted test PASS.**
 - **Next:** Phase 4C-N validates/logs the live registration frame, mirrors the
   production no-callback semantics, returns `eax=0`, and resumes startup.
 - Build tag: `P4C-HAL47-20261019-A`.
+
+### 2026-10-19 — Phase 4C-N ordinal-47 continuation PASS
+
+- Live `HalRegisterShutdownNotification` frame:
+  registration `0x003134C0`, Register=1.
+- Frame delta 12 exactly matched the production 8-byte ABI plus synthetic return.
+- Handler matched production no-callback semantics and returned `eax=0`.
+- Startup resumed cleanly with guest fault state 0.
+- Next boundary:
+  `DIRECT_FRONTIER caller=0x0022C28B target=0x0022F128`.
+- **Phase 4C-N hardware result: PASS.**
+- **Next:** Phase 4C-O promotes only `0x0022F128`.
+- Build tag: `P4C-DIRECTF128-20261019-A`.
 
 ### How future updates are recorded
 
