@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-J — relocate the hardware-proven XboxHardwareInfo data import after Phase 4C-I first-fault provenance PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-K — relocate the initialized startup DATA-import subset after Phase 4C-J hardware PASS exposed XboxKrnlVersion as the next raw data thunk.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -150,9 +150,15 @@ phases.
     real Xbox 360 hardware: READ32 `0x80000142` from translated caller
     `0x0022C4DF`. Ordinal `0x142` = decimal 322 =
     `XboxHardwareInfo`, a guest-visible DATA export.
-22. **Phase 4C-J:** emulate the original-Xbox loader for that one proven data
-    import by replacing raw token `0x80000142` with initialized guest
-    `XboxHardwareInfo` at `0x0087E000`, then continue the callback path.
+22. **Done:** Phase 4C-J relocated ordinal 322 `XboxHardwareInfo` at live
+    thunk slot `0x002DBE0C`; real hardware advanced past the old fault.
+    The next rejected access is READ16 `0x80000148` with
+    `ECX=0x80000144`, identifying ordinal 324 `XboxKrnlVersion` plus
+    offset 4 (the Build field).
+23. **Phase 4C-K:** relocate the initialized startup DATA subset:
+    ordinal 156 `KeTickCount` -> `0x0087E020`, ordinal 322
+    `XboxHardwareInfo` -> `0x0087E000`, and ordinal 324
+    `XboxKrnlVersion` -> `0x0087E010`; leave all other imports untouched.
 
 ### Evidence policy
 
@@ -2030,6 +2036,22 @@ unexecuted test PASS.**
 - **Next:** Phase 4C-J relocates only ordinal 322, validates the exact
   111-import table/terminator and hardware-info readback, then resumes startup.
 - Build tag: `P4C-HWINFO-20261019-A`.
+
+### 2026-10-19 — Phase 4C-J XboxHardwareInfo relocation PASS
+
+- Real hardware relocated ordinal **322** `XboxHardwareInfo` at thunk slot
+  `0x002DBE0C`: `0x80000142 -> 0x0087E000`.
+- The previous 4C-I fault disappeared.
+- The next rejected access was **READ16 `0x80000148`** from
+  `0x0022C4DF`, with `ECX=0x80000144`.
+- `0x80000144` is raw ordinal **324**, `XboxKrnlVersion`; the +4 read is
+  its 16-bit Build field.
+- Phase-2E already initializes `XboxKrnlVersion` as 1.0.5849.0 at
+  `0x0087E010`.
+- **Phase 4C-J hardware result: PASS.**
+- **Next:** Phase 4C-K relocates the three DATA imports explicitly initialized
+  by Phase-2E: 156/322/324, while preserving immediate first-fault telemetry.
+- Build tag: `P4C-KDATA3-20261019-A`.
 
 ### How future updates are recorded
 
