@@ -178,7 +178,11 @@ try {
 
     Write-Host ""
     Write-Host "[Phase3N] Running full post-patch portability audit..."
-    Invoke-Python "-m" "tools.recomp.audit_phase3n_portability" $generatedRoot "--output" $portabilityReport
+    $functionsPath = Join-Path $analysisRoot "disasm\\functions.json"
+    if (-not (Test-Path -LiteralPath $functionsPath -PathType Leaf)) {
+        throw "Phase 3N disassembly function database missing: $functionsPath"
+    }
+    Invoke-Python "-m" "tools.recomp.audit_phase3n_portability" $generatedRoot "--functions" $functionsPath "--output" $portabilityReport
 
     # Re-run the narrow scanner explicitly at the phase boundary. Recompile.ps1
     # already ran it; this makes the final report unambiguously post-lowering.
