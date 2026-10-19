@@ -1248,3 +1248,27 @@ Build tag: `P4C-VMRESERVE-AA-20261019-A`.
 
 This remains the current Phase-4C blocker; Phase 5 begins once the native
 startup path is established and starts demanding its runtime subsystems.
+
+
+#### Phase 4C-AA — reserved guest virtual-memory state
+**Status: HARDWARE PASS.**
+
+Build `P4C-VMRESERVE-AA-20261019-A` handled the exact live ordinal-184 path:
+the title reserved 1 MiB at `0x03F00000`, then committed the first 4 KiB at
+that same VA. Both calls returned STATUS_SUCCESS, the reservation remained
+stable across the commit, and startup advanced with `fault=0` to
+`ICALL_SAFE target=0x80000123`.
+
+#### Phase 4C-AB — RtlInitializeCriticalSection continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AB.ps1`
+
+`0x80000123` is ordinal 291, `RtlInitializeCriticalSection`. AB validates
+the observed 8-byte full frame and applies the maintained serialized-guest
+critical-section behavior: no native host lock mapping, EAX=0, stdcall cleanup.
+
+All AA VM reserve/commit state remains active.
+
+Build tag: `P4C-RTL291-AB-20261019-A`.
