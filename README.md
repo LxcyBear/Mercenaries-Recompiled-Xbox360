@@ -1832,6 +1832,15 @@ unexecuted test PASS.**
 - **Phase 4C-B remains active:** regenerate the package, then build both emitted
   C++ sources into one XEX.
 
+### 2026-10-19 — Phase 4C-B transformed-helper audit corrected
+
+- The startup emitter already rewrote generated `__debugbreak()` calls to the
+  bounded `PHASE4C_DEBUGBREAK()` diagnostic escape.
+- The helper validator was still inspecting the pre-transform generated body,
+  so it falsely rejected `__debugbreak` as unresolved.
+- Validation now runs against the exact transformed source emitted into the XDK
+  package. Phase 4C-B package preparation remains active.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
