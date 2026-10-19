@@ -1193,3 +1193,27 @@ Phase 4C-Y now embeds the same guest-visible contract:
 
 Hardware output will include `CRT memmove LIVE FRAME` and a matching PASS
 before startup continues to the next real boundary.
+
+
+#### Phase 4C-Y — translated CRT memmove path
+**Status: HARDWARE PASS.**
+
+Build `P4C-DIRECT38C00-20261019-A` executed translated root
+`0x00238C00`. The maintained `recomp_crt_memmove` helper received
+`dest=0x008BFE70 src=0x008BFF14 len=48`, returned the destination with the
+expected cdecl cleanup, and startup advanced with `fault=0` to
+`ICALL_SAFE target=0x800000B8`, ordinal 184 `NtAllocateVirtualMemory`.
+The hardware trace reached 16 translated entries.
+
+#### Phase 4C-Z — NtAllocateVirtualMemory continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-Z.ps1`
+
+4C-Z validates the observed 24-byte full frame and continues ordinal 184 for
+reserve+commit and commit-existing-region modes. Reserve-without-commit remains
+an explicit `VM_UNSUPPORTED` boundary until per-page inaccessible state is
+modeled in the focused startup harness.
+
+Build tag: `P4C-NTALLOC184-20261019-A`.
