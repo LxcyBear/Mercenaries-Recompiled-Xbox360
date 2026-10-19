@@ -218,7 +218,7 @@ Result:
 No retail code was executed by 4C-A.
 
 #### Phase 4C-B — First bounded real translated startup execution
-**Status: package preparation ready.**
+**Status: PASS on real Xbox 360 hardware.**
 
 Gate:
 `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-B.ps1`
@@ -279,3 +279,27 @@ Once real gameplay executes:
 - Native translated-game startup is not gameplay.
 - Gameplay claims require the real translated title path to reach and sustain an interactive game state on hardware.
 - Update this roadmap and `CODE_MAP.md` whenever a phase gate changes state.
+
+
+#### Phase 4C-C — First startup-thread handoff
+**Status: active.**
+
+Phase 4C-B hardware evidence:
+
+```text
+[Merc360:P4C] PASS: entering real translated xbe_entry_point now
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=0022B4D7 target=800000FF esp=008BFF98 saved_esp=008BFFC4 ticks=5 trace=2
+[Merc360:P4C] BOUNDARY REGISTERS: ... fault=0
+[Merc360:P4C] trace[0]=0022964A
+[Merc360:P4C] trace[1]=0022B4D7
+[Merc360:P4C] PHASE 4C-B BOUNDED REAL STARTUP RESULT: PASS
+```
+
+`0x800000FF` is Xbox kernel ordinal 255, `PsCreateSystemThreadEx`.
+The observed stack delta is `0x2C` bytes, exactly matching its 40 bytes of
+stdcall arguments plus the synthetic four-byte CALL return slot.
+
+4C-C will decode that live frame, log the actual StartRoutine and two contexts,
+write the synthetic thread handle, enter the translated first thread routine
+synchronously using the production bridge model, and stop at the next live
+dynamic/kernel boundary.
