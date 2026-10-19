@@ -367,7 +367,7 @@ static BOOL read_file_through_guest_cache(
     }
 
     if (!block) {
-        OVERLAPPED ov;
+        LARGE_INTEGER read_offset;
         DWORD fetched = 0;
         BOOL result;
         DWORD error;
@@ -380,18 +380,18 @@ static BOOL read_file_through_guest_cache(
             return FALSE;
         }
 
-        memset(&ov, 0, sizeof(ov));
-        ov.Offset = byte_offset->LowPart;
-        ov.OffsetHigh = byte_offset->HighPart;
-        result = ReadFile(handle, block->data, XBOX_READ_CACHE_BLOCK_SIZE,
-                          &fetched, &ov);
-        error = result ? ERROR_SUCCESS : GetLastError();
+        read_offset = *byte_offset;
+        result = merc_platform_file_read(
+            handle, block->data, XBOX_READ_CACHE_BLOCK_SIZE,
+            &fetched, &read_offset);
+        error = result ? ERROR_SUCCESS :
+            merc_platform_file_last_error();
         if (!result) {
             block->populated = FALSE;
             block->valid = 0;
             LeaveCriticalSection(&s_read_cache_cs);
             *handled = TRUE;
-            SetLastError(error);
+            merc_platform_file_set_last_error(error);
             return FALSE;
         }
         block->offset = request_offset;
