@@ -376,3 +376,52 @@ measures that routine's direct translated closure, dynamic/indirect boundaries,
 and non-translated helper surface before emitting the first thread-execution
 slice. Context values are pinned to the live 4C-C result:
 `ctx1=0x002295D6`, `ctx2=0`.
+
+
+#### Phase 4C-D — Hardware-observed first title-thread preflight
+**Status: PASS.**
+
+Report:
+`build/phase4c_native_startup/phase4c-thread-routine.txt`
+
+Result:
+
+```text
+StartRoutine: 0x0022B43F
+Context1:     0x002295D6
+Context2:     0x00000000
+Entry resolution: exact_function
+Reachable direct translated bodies: 6
+Maximum direct-call depth: 2
+Reachable retail guest bytes: 460
+Reachable generated source bytes: 8556
+Missing direct translated dependencies: 0
+Dynamic/indirect boundary bodies: 5
+STRUCTURAL RESULT: PASS
+```
+
+The raw helper inventory is limited to the already-proven translated ABI/support
+surface plus the canonical manual `SetLastError` wrapper, guest REP MOVS and
+bounded debug-break support. No new broad renderer/audio/XACT/XInput closure is
+required for this gate.
+
+#### Phase 4C-E — First real title-thread execution slice
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-E.ps1`
+
+The package unions the 40-body Phase-4C-B entry closure with the 6-body
+hardware-observed thread closure. Three translated bodies are new beyond the
+already hardware-proven entry pack, for 43 unique translated bodies total.
+
+Runtime policy:
+- verify/load the exact supported retail XBE;
+- enter real translated `xbe_entry_point`;
+- intercept only the first `0x800000FF` / `PsCreateSystemThreadEx`;
+- require the live handoff to remain
+  StartRoutine=`0x0022B43F`, ctx1=`0x002295D6`, ctx2=0;
+- enter `0x0022B43F` synchronously with the production bridge stack shape;
+- stop at the first subsequent live ICALL/ITAIL boundary.
+
+Build tag: `P4C-THREADRUN-20261019-A`.
