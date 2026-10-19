@@ -772,9 +772,11 @@ def main() -> int:
         row = generated[va]
         calls = set(CALL_RE.findall(mask_noncode(row["source"])))
         calls.discard(row["name"])
+        local_supplied = set(supplied)
+        local_supplied.update(DEFINE_RE.findall(row["source"]))
         missing = sorted(
             name for name in calls
-            if name not in supplied and name not in STANDARD_CALLS
+            if name not in local_supplied and name not in STANDARD_CALLS
         )
         if missing:
             unknown[f"0x{va:08X} {row['name']}"] = missing
