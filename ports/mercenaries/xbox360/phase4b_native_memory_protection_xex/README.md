@@ -1,6 +1,6 @@
 # Phase 4B-C — Guest memory/protection hardware gate
 
-**Status: hardware PASS; Phase 4B-C2 runtime verification active.**
+**Status: hardware PASS; Phase 4B-C2 runtime verification PASS; Phase 4B complete.**
 
 Phase 4B-A/A2 and Phase 4B-B/B2 are complete. The exact retail audit now
 reports only two remaining direct semantic host-backed import paths:
@@ -149,3 +149,26 @@ arg_mismatch=0
 fallback_referenced=0
 fallback_refs=0
 ```
+
+
+## Phase 4B-C2 final result
+
+The complete verifier passed on October 19, 2026.
+
+```text
+host_surface=0
+platform_bound=15
+guest_native=2
+arg_missing=0
+arg_mismatch=0
+fallback_referenced=0
+fallback_refs=0
+```
+
+All regression layers passed: the 7,722-case timing/deadline suite, canonical
+guest-kernel ABI metadata, time/sync platform boundary, file/handle platform
+boundary, and all six guest-memory ownership tests.
+
+Phase 4B service migration is complete. The next active phase is Phase 4C:
+execute the first real retail-derived translated Mercenaries startup path with
+the migrated Xenon service layer.
