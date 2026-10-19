@@ -1340,3 +1340,27 @@ target `0x0022C8EA`. Preparation fails explicitly if C8EA is a
 mid-function/split entry rather than a generated function start.
 
 Build tag: `P4C-DIRECTC8EA-AE-20261019-A`.
+
+
+#### Phase 4C-AE — promoted 0x0022C8EA
+**Status: HARDWARE PASS.**
+
+Build `P4C-DIRECTC8EA-AE-20261019-A` executed translated root
+`0x0022C8EA` and advanced with `fault=0` to
+`DIRECT_FRONTIER caller=0x0022C8EA target=0x0022CEEE`. The translated
+hardware trace reached 19 entries.
+
+#### Phase 4C-AF — promote live target 0x0022CEEE
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AF.ps1`
+
+AF preserves all AE invariants, including the working virtual-memory
+reserve/commit state and ordinal-291 continuation, retains `0x0022D431`,
+`0x0022CA2B`, and `0x0022C8EA`, and promotes only the exact
+hardware-observed translated target `0x0022CEEE`. Preparation fails
+explicitly if CEEE is a mid-function/split entry rather than a generated
+function start.
+
+Build tag: `P4C-DIRECTCEEE-AF-20261019-A`.
