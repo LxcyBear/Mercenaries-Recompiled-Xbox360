@@ -1815,6 +1815,23 @@ unexecuted test PASS.**
   enters the real XBE entry and escapes at the first live ICALL/ITAIL so the
   next startup dependency is captured deterministically.
 
+### 2026-10-19 — Phase 4C-B startup helper surface classified
+
+- The first 4C-B package emission intentionally stopped on nine unsupported
+  direct helper references before producing an XEX.
+- Four addresses are canonical maintained manual runtime functions:
+  `0x0022B150` / `0x0022B178` (Xbox LastError) and
+  `0x0022DDA4` / `0x0022E51F` (retail heap allocate/free).
+- The remaining helper surfaces are guest-aware `XBOX_REP_MOVS` and generated
+  `__debugbreak`.
+- The 4C-B emitter now packages the manual entry points and REP MOVS semantics;
+  a live debug break becomes a deterministic diagnostic escape instead of a
+  raw XEX trap.
+- The bounded title heap uses the maintained initial arena
+  `0x008C1000..0x009C0000`; unexpected exhaustion is reported explicitly.
+- **Phase 4C-B remains active:** regenerate the package, then build both emitted
+  C++ sources into one XEX.
+
 ### How future updates are recorded
 
 Every substantive development change should update this README's **live table,
