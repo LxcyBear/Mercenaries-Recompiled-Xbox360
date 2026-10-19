@@ -73,6 +73,20 @@ try {
     if (-not $ResumeLowering) {
         Write-Host ""
         Write-Host "[Phase3N] Recompiling the supported retail XBE in an isolated workspace..."
+
+        # A fresh generated tree is a new evidence baseline. Do not aggregate
+        # lowering/audit reports left by an older tree or by a failed previous
+        # regeneration.
+        $resumeLoweringReport = Join-Path $buildRoot "explicit-memory-lowering-resume.json"
+        foreach ($staleReport in @(
+            $loweringReport,
+            $resumeLoweringReport,
+            $portabilityReport,
+            $gateReport,
+            $manifestPath
+        )) {
+            Remove-Item -LiteralPath $staleReport -Force -ErrorAction SilentlyContinue
+        }
         $recompileArgs = @{
             GameDirectory = $GameDirectory
             MaxPasses = $MaxPasses
