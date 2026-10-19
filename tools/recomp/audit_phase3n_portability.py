@@ -225,9 +225,32 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
         pattern = re.compile(r"\b" + re.escape(symbol) + r"\s*\(")
         references = []
         for path, code_text in source_code.items():
-            count = len(pattern.findall(code_text))
-            if count:
-                references.append({"file": str(path), "count": count})
+            path_refs = []
+            for match in pattern.finditer(code_text):
+                line_start = code_text.rfind("\n", 0, match.start()) + 1
+                line_end = code_text.find("\n", match.end())
+                if line_end < 0:
+                    line_end = len(code_text)
+                line_text = code_text[line_start:line_end].strip()
+
+                # A replacement implementation is a resolution, not a caller.
+                if re.match(
+                    r"^void\s+" + re.escape(symbol) +
+                    r"\s*\(\s*void\s*\)",
+                    line_text,
+                ):
+                    continue
+
+                path_refs.append({
+                    "line": line_number(code_text, match.start()),
+                    "text": line_text[:240],
+                })
+            if path_refs:
+                references.append({
+                    "file": str(path),
+                    "count": len(path_refs),
+                    "sites": path_refs,
+                })
         row = dict(entry)
         row["references"] = references
         row["reference_count"] = sum(item["count"] for item in references)
@@ -319,8 +342,15 @@ def main(argv=None) -> int:
             print(
                 "  unresolved "
                 f"{entry['address_hex']} {entry['name']}: "
-                f"{entry.get('classification', 'unclassified')}{details}"
+                f"{entry.get('classification', 'unclassified')}{details} "
+                f"refs={entry.get('reference_count', 0)}"
             )
+            for ref in entry.get("references", []):
+                for site in ref.get("sites", []):
+                    print(
+                        f"    caller {Path(ref['file']).name}:{site['line']}: "
+                        f"{site['text']}"
+                    )
 
     dead_info = report.get("dead_unresolved_classification", {})
     dead_counts = dead_info.get("counts", {})
