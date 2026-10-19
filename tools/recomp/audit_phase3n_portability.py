@@ -81,11 +81,13 @@ def scan_file(path: Path) -> dict:
     ))
 
     failed_stubs = len(re.findall(r"/\*\s*FAILED:", text))
+    residual_unresolved_stubs = len(re.findall(r"minimal guest ret", text))
     return {
         "path": str(path),
         "bytes": len(text.encode("utf-8")),
         "functions": functions,
         "failed_stubs": failed_stubs,
+        "residual_unresolved_stubs": residual_unresolved_stubs,
         "fatal": fatal,
         "platform": dict(platform),
         "surfaces": dict(surfaces),
@@ -116,6 +118,9 @@ def scan_tree(root: Path) -> dict:
         "source_bytes": sum(row["bytes"] for row in rows),
         "function_bodies": sum(row["functions"] for row in rows),
         "failed_translation_stubs": sum(row["failed_stubs"] for row in rows),
+        "residual_unresolved_stubs": sum(
+            row["residual_unresolved_stubs"] for row in rows
+        ),
         "unresolved_stub_files": unresolved_files,
         "fatal_count": len(fatal),
         "fatal": fatal,
@@ -146,7 +151,8 @@ def main(argv=None) -> int:
         "Phase 3N portability audit: "
         f"files={report['file_count']} functions={report['function_bodies']} "
         f"bytes={report['source_bytes']} fatal={report['fatal_count']} "
-        f"failed_stubs={report['failed_translation_stubs']}"
+        f"failed_stubs={report['failed_translation_stubs']} "
+        f"residual_unresolved={report['residual_unresolved_stubs']}"
     )
     if report["platform_surfaces"]:
         print("Phase 4+ platform surfaces: " + ", ".join(
