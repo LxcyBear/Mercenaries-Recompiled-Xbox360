@@ -26,6 +26,9 @@ def main():
     assert lifter._smem_accessor(2) == "SMEM16"
     assert lifter._fmt_float_mem_read(mem(4)) == "MEMF(ecx + 4)"
     assert lifter._fmt_float_mem_read(mem(8)) == "MEMD(ecx + 4)"
+    assert lifter._fmt_float_mem_read(mem(10)) == (
+        "recomp_x87_load_f80(ecx + 4)"
+    )
 
     lifter.configure_guest_memory_abi(True)
 
@@ -36,6 +39,9 @@ def main():
 
     assert lifter._fmt_float_mem_read(mem(4)) == "GUEST_READF32(ecx + 4)"
     assert lifter._fmt_float_mem_read(mem(8)) == "GUEST_READF64(ecx + 4)"
+    assert lifter._fmt_float_mem_read(mem(10)) == (
+        "recomp_x87_load_f80(ecx + 4)"
+    )
     assert lifter._fmt_float_mem_write(mem(4), "value") == (
         "GUEST_WRITEF32(ecx + 4, value);"
     )
@@ -49,6 +55,12 @@ def main():
 
     assert l._lift_fpu(insn(), "fld", [mem(4)]) == [
         "fp_push(GUEST_READF32(ecx + 4)); /* fld float */"
+    ]
+    assert l._lift_fpu(insn(), "fld", [mem(10)]) == [
+        "fp_push(recomp_x87_load_f80(ecx + 4)); /* fld extended */"
+    ]
+    assert l._lift_fpu(insn(), "ftst", []) == [
+        "x87_set_compare_status(fp_top(), 0.0); /* ftst */"
     ]
     assert l._lift_fpu(insn(), "fstp", [mem(8)]) == [
         "GUEST_WRITEF64(ecx + 4, fp_top()); fp_pop(); /* fstp */"
