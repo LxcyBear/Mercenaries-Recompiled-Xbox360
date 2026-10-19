@@ -2,7 +2,13 @@
 param(
     [string]$GameDirectory,
     [ValidateRange(2, 64)]
-    [int]$MaxPasses = 32
+    [int]$MaxPasses = 32,
+    [string]$AnalysisRootOverride,
+    [string]$GeneratedRootOverride,
+    [string]$RecompRootOverride,
+    [switch]$SkipGeneratedProvenanceArchive,
+    [switch]$LowerExplicitGuestMemory,
+    [string]$LoweringReport
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,12 +23,24 @@ if (-not $GameDirectory) {
 $gameRoot = [System.IO.Path]::GetFullPath($GameDirectory)
 $xbePath = Join-Path $gameRoot "default.xbe"
 $python = Join-Path $repoRoot ".venv\Scripts\python.exe"
-$analysisRoot = Join-Path $portRoot "analysis"
+$analysisRoot = if ($AnalysisRootOverride) {
+    [System.IO.Path]::GetFullPath($AnalysisRootOverride)
+} else {
+    Join-Path $portRoot "analysis"
+}
 $disasmRoot = Join-Path $analysisRoot "disasm"
 $funcIdRoot = Join-Path $analysisRoot "func_id"
-$recompRoot = Join-Path $analysisRoot "recomp"
+$recompRoot = if ($RecompRootOverride) {
+    [System.IO.Path]::GetFullPath($RecompRootOverride)
+} else {
+    Join-Path $analysisRoot "recomp"
+}
 $xbeJson = Join-Path $analysisRoot "xbe.json"
-$generatedRoot = Join-Path $portRoot "src\recomp\gen"
+$generatedRoot = if ($GeneratedRootOverride) {
+    [System.IO.Path]::GetFullPath($GeneratedRootOverride)
+} else {
+    Join-Path $portRoot "src\recomp\gen"
+}
 $manualSeeds = Join-Path $portRoot "manual-seeds.json"
 $mergedSeeds = Join-Path $analysisRoot "seeds.json"
 $mergeScript = Join-Path $PSScriptRoot "Merge-FunctionSeeds.ps1"
@@ -41,6 +59,17 @@ if ($actualHash -ne $expectedXbeHash) {
 }
 
 New-Item -ItemType Directory -Force -Path $analysisRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $recompRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $generatedRoot | Out-Null
+
+# An isolated generated root still needs the maintained runtime header one
+# directory above gen/, matching the normal ports/mercenaries/src/recomp layout.
+if ($GeneratedRootOverride) {
+    $generatedParent = Split-Path -Parent $generatedRoot
+    $sourceRuntime = Join-Path $portRoot "src\recomp\recomp_types.h"
+    $isolatedRuntime = Join-Path $generatedParent "recomp_types.h"
+    Copy-Item -LiteralPath $sourceRuntime -Destination $isolatedRuntime -Force
+}
 
 function Invoke-Python {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -123,7 +152,7 @@ try {
 
     if (Test-Path -LiteralPath $generatedRoot) {
         $generatedFiles = @(Get-ChildItem -LiteralPath $generatedRoot -File)
-        if ($generatedFiles.Count -gt 0) {
+        if ($generatedFiles.Count -gt 0 -and -not $SkipGeneratedProvenanceArchive) {
             Write-Host ""
             Write-Host "Archiving generated-tree provenance before replacement..."
             $archiveScript = Join-Path $PSScriptRoot "Archive-GeneratedProvenance.py"
@@ -228,6 +257,19 @@ try {
 
     $patchGenerated = Join-Path $PSScriptRoot "Patch-Generated.py"
     Invoke-Python $patchGenerated $generatedRoot
+
+    if ($LowerExplicitGuestMemory) {
+        Write-Host ""
+        Write-Host "Lowering patched generated C to the explicit guest-memory ABI..."
+        $lowerer = Join-Path $repoRoot "tools\recomp\lower_explicit_guest_memory.py"
+        if (-not $LoweringReport) {
+            $LoweringReport = Join-Path $recompRoot "explicit-memory-lowering.json"
+        }
+        Invoke-Python $lowerer $generatedRoot "--report" $LoweringReport
+
+        Write-Host "Auditing the post-patch/post-lowering generated tree..."
+        Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $generatedRoot
+    }
 
     $summary = Get-Content -LiteralPath (Join-Path $recompRoot "summary.json") -Raw | ConvertFrom-Json
     Write-Host ""
