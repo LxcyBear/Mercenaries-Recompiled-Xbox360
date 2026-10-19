@@ -27,7 +27,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 Write-Host "[Phase4C-I] FIRST-FAULT PROVENANCE PACKAGE"
 Write-Host "[Phase4C-I] Reproduces the hardware-proven callback path without relaxing guest-memory validity."
-Write-Host "[Phase4C-I] Captures first rejected guest access: address, width, and READ/WRITE direction."
+Write-Host "[Phase4C-I] Captures first rejected guest access and escapes immediately from the accessor after setjmp is armed."
 Write-Host ""
 
 & $python $emitter "--base-emitter" $baseEmitter "--generated-root" $generatedRoot "--functions" $functionsPath "--entry-report" $entryReport "--thread-report" $threadReport "--phase3n-template" $phase3nTemplate "--phase2e-source" $phase2eSource "--out-dir" $outDir
