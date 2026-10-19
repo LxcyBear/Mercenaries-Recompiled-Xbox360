@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-C — follow the first real kernel thread handoff after Phase 4C-B hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-D — analyze the hardware-observed first title-thread routine after Phase 4C-C live handoff PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -119,11 +119,12 @@ phases.
     `fault=0`: caller `0x0022B4D7`, target `0x800000FF`.
     That target is kernel ordinal 255, `PsCreateSystemThreadEx`; the observed
     44-byte frame exactly matches ten arguments plus the synthetic return slot.
-15. **Phase 4C-C:** package preparation is ready. Reuse the exact 40-body
-    Phase-4C-B entry closure, decode the live ordinal-255 frame, verify the
-    44-byte call shape, capture the actual StartRoutine/context values, and stop
-    successfully at a `THREAD_TARGET` evidence boundary. The next phase will
-    package only the routine hardware actually reports.
+15. **Done:** Phase 4C-C captured the live ordinal-255 frame on real Xbox 360
+    hardware: StartRoutine `0x0022B43F`, ctx1 `0x002295D6`, ctx2
+    `0x00000000`, exact 44-byte frame, `fault=0`.
+16. **Phase 4C-D:** analyze only the hardware-observed StartRoutine
+    `0x0022B43F`, measure its direct translated closure, dynamic boundaries
+    and helper surface, then emit the first bounded title-thread execution XEX.
 
 ### Evidence policy
 
@@ -1886,6 +1887,19 @@ unexecuted test PASS.**
 - A valid `THREAD_TARGET` stop is the 4C-C PASS condition.
 - New build tag: `P4C-THREAD-20261019-B`.
 - The following phase will package only the hardware-observed StartRoutine.
+
+### 2026-10-19 — Phase 4C-C live startup-thread handoff PASS
+
+- Real Xenon captured the complete `PsCreateSystemThreadEx` argument frame.
+- Live values: StartRoutine `0x0022B43F`, ctx1 `0x002295D6`,
+  ctx2 `0x00000000`.
+- Kernel stack request: **262,144 bytes**; TLS size: **20 bytes**.
+- Frame delta remained exactly **0x2C** bytes and guest fault state remained 0.
+- Evidence boundary:
+  `THREAD_TARGET caller=0x0022B4D7 target=0x0022B43F`.
+- **Phase 4C-C hardware result: PASS.**
+- **Next:** Phase 4C-D analyzes only `0x0022B43F` before building the first
+  translated title-thread execution slice.
 
 ### How future updates are recorded
 
