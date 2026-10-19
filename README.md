@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-X — execute a bounded direct translated closure rooted at 0x0022D980 after Phase 4C-W hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-X — execute the hardware-observed translated root 0x0022D980 with deeper callees fenced after Phase 4C-W hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -196,9 +196,9 @@ phases.
     the expected 20-byte full frame armed KTIMER `0x008695A0` with DPC
     `0x00869580`, returned prior-active FALSE, and startup advanced with
     `fault=0` to `DIRECT_FRONTIER caller=0x0022F0FB target=0x0022D980`.
-36. **Phase 4C-X:** promote a bounded depth-2 direct translated closure rooted
-    at `0x0022D980` (cap 16 members) while retaining the proven
-    `0x0022F0FB` closure.
+36. **Phase 4C-X:** promote only the hardware-observed translated root
+    `0x0022D980` while retaining the proven `0x0022F0FB` closure; deeper
+    callees remain explicit boundaries.
 
 ### Evidence policy
 
