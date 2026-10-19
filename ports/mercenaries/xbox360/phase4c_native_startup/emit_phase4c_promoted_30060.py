@@ -1609,7 +1609,8 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         "    trace(\"PASS: hardware-observed direct target 0022F128 is packed for translated execution\");\n"
         "    trace(\"PASS: ordinal 107 KeInitializeDpc continuation armed\");\n"
         "    trace(\"PASS: ordinal 113 KeInitializeTimerEx continuation armed\");\n"
-        "    trace(\"PASS: hardware-observed direct target 0022C5A4 is packed for translated execution\");\n",
+        "    trace(\"PASS: hardware-observed direct target 0022C5A4 is packed for translated execution\");\n"
+        "    trace(\"PASS: hardware-observed direct target 00230060 is packed for translated execution\");\n",
         1,
     )
     driver = driver.replace(
