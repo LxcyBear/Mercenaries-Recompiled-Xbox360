@@ -430,10 +430,42 @@ def bounded_promoted_members(base, root_va, generated, max_depth, member_cap):
 
 
 def rewrite_direct_frontier(base, source, generated, packed_vas):
-    name_to_va = {row["name"]: va for va, row in generated.items()}
-    calls = set(base.CALL_RE.findall(base.mask_noncode(source)))
+    """
+    Fence every translated x86 direct CALL whose retail target is outside the
+    current pack.
+
+    The lifter emits:
+        PUSH32(esp, 0); sub_XXXXXXXX(); /* call 0xXXXXXXXX */
+
+    Older Phase-4C gates resolved the callee name through the generated-body
+    table first. That incorrectly rejected valid direct targets represented by
+    unresolved/mid-function stubs, because those names had no generated body
+    and later appeared as "unknown helpers". The embedded retail target is the
+    authoritative control-flow identity, so use it directly.
+    """
     frontier = []
 
+    direct_call_re = re.compile(
+        r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\);"
+        r"(\s*/\*\s*call\s+0x([0-9A-Fa-f]{8})\s*\*/)"
+    )
+
+    def fence_match(match):
+        va = int(match.group(3), 16)
+        if va in packed_vas:
+            return match.group(0)
+        frontier.append(va)
+        return (
+            f"phase4c_direct_frontier(0x{va:08X}u);"
+            f"{match.group(2)}"
+        )
+
+    source = direct_call_re.sub(fence_match, source)
+
+    # Retain the generated-name fallback for older translated bodies that may
+    # not carry the explicit /* call 0x... */ annotation.
+    name_to_va = {row["name"]: va for va, row in generated.items()}
+    calls = set(base.CALL_RE.findall(base.mask_noncode(source)))
     for name in sorted(calls):
         va = name_to_va.get(name)
         if va is None or va in packed_vas:
