@@ -45,7 +45,8 @@ Snapshot: 2026-10-19.
 | 4C-K | **Hardware PASS** | Relocated startup DATA imports 156/322/324; all three exact thunk slots fixed, `fault=0`, callback advanced beyond both prior data faults to `DIRECT_FRONTIER 0x0022C47B` from caller `0x0022C4DF`. |
 | 4C-L | **Hardware PASS** | Promoted `0x0022C47B` executed on Xenon; next dependency is READ32 `0x8001003C` from `0x0022C47B`, with balanced stack and deterministic first-fault capture. |
 | 4C-M | **Hardware PASS** | Synthetic xboxkrnl PE-header surface passed; translated startup advanced through `0x0022C47B` into `0x0022C28B`, then reached `ICALL_SAFE 0x8000002F` with `fault=0` and a 12-byte frame. |
-| 4C-N | **Package prep ready** | Continue ordinal 47 `HalRegisterShutdownNotification` with the production 8-byte ABI/no-callback semantics, require the live 12-byte frame, log both guest arguments, return `eax=0`, and resume translated startup. |
+| 4C-N | **Hardware PASS** | Live ordinal 47 frame validated: registration `0x003134C0`, Register=1, exact 12-byte frame; production no-callback semantics returned cleanly and startup advanced with `fault=0` to `DIRECT_FRONTIER 0x0022F128` from `0x0022C28B`. |
+| 4C-O | **Package prep ready** | Promote only hardware-observed direct target `0x0022F128` beyond the N pack; preserve all loader/data/header/kernel-call continuations and stop at the next real frontier. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
