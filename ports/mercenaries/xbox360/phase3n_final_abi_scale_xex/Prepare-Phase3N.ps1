@@ -2,7 +2,8 @@
 param(
     [string]$GameDirectory,
     [ValidateRange(2, 64)]
-    [int]$MaxPasses = 32
+    [int]$MaxPasses = 32,
+    [switch]$ResumeLowering
 )
 
 $ErrorActionPreference = "Stop"
@@ -69,19 +70,39 @@ try {
     Write-Host "[Phase3N] Running lowering unit tests..."
     Invoke-Python "-m" "unittest" "tools.recomp.test_lower_explicit_guest_memory"
 
-    Write-Host ""
-    Write-Host "[Phase3N] Recompiling the supported retail XBE in an isolated workspace..."
-    $recompileArgs = @{
-        GameDirectory = $GameDirectory
-        MaxPasses = $MaxPasses
-        AnalysisRootOverride = $analysisRoot
-        GeneratedRootOverride = $generatedRoot
-        RecompRootOverride = $recompRoot
-        SkipGeneratedProvenanceArchive = $true
-        LowerExplicitGuestMemory = $true
-        LoweringReport = $loweringReport
+    if (-not $ResumeLowering) {
+        Write-Host ""
+        Write-Host "[Phase3N] Recompiling the supported retail XBE in an isolated workspace..."
+        $recompileArgs = @{
+            GameDirectory = $GameDirectory
+            MaxPasses = $MaxPasses
+            AnalysisRootOverride = $analysisRoot
+            GeneratedRootOverride = $generatedRoot
+            RecompRootOverride = $recompRoot
+            SkipGeneratedProvenanceArchive = $true
+            LowerExplicitGuestMemory = $true
+            LoweringReport = $loweringReport
+        }
+        & $recompile @recompileArgs
     }
-    & $recompile @recompileArgs
+    else {
+        Write-Host ""
+        Write-Host "[Phase3N] Resume mode: preserving existing translated/patched tree."
+        $summaryPath = Join-Path $recompRoot "summary.json"
+        if (-not (Test-Path -LiteralPath $summaryPath -PathType Leaf)) {
+            throw "Resume requested but recompiler summary is missing: $summaryPath"
+        }
+        if (-not (Test-Path -LiteralPath $generatedRoot -PathType Container)) {
+            throw "Resume requested but generated tree is missing: $generatedRoot"
+        }
+
+        Write-Host "[Phase3N] Lowering existing patched tree to explicit guest-memory ABI..."
+        $lowerer = Join-Path $repoRoot "tools\recomp\lower_explicit_guest_memory.py"
+        Invoke-Python $lowerer $generatedRoot "--report" $loweringReport
+
+        Write-Host "[Phase3N] Auditing resumed post-lowering tree..."
+        Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $generatedRoot
+    }
 
     Write-Host ""
     Write-Host "[Phase3N] Running full post-patch portability audit..."
