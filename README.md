@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AA — model the hardware-observed 1 MiB reserved guest-VM region after Phase 4C-Z hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AA — hardware-test explicit reserved/uncommitted guest-page state for the observed 1 MiB NtAllocateVirtualMemory request.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -204,8 +204,12 @@ phases.
     `ICALL_SAFE target=0x800000B8`, ordinal 184 `NtAllocateVirtualMemory`.
 38. **Done:** Phase 4C-Z validated ordinal 184 and captured the live 1 MiB
     `MEM_RESERVE` / `PAGE_READWRITE` request with `fault=0`.
-39. **Phase 4C-AA:** add reserved/uncommitted guest-page state, preserve the
-    allocated VA through subsequent commit calls, and continue native startup.
+39. **Phase 4C-AA:** **package ready** — model reserved/uncommitted guest
+    pages explicitly, allocate page-backed VA downward from the top of 64 MiB
+    RAM, preserve the returned VA across later MEM_COMMIT calls, and continue
+    native startup. Gate:
+    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AA.ps1`.
+    Build tag: `P4C-VMRESERVE-AA-20261019-A`.
 
 ### Evidence policy
 
@@ -2340,6 +2344,21 @@ unexecuted test PASS.**
 - **Phase 4C-Z hardware result: PASS.**
 - **Next:** Phase 4C-AA adds explicit reserved/uncommitted guest-page state and
   continues this exact allocation path.
+
+### 2026-10-19 — Phase 4C-AA package ready
+
+- Z hardware PASS identified the exact blocker as a 1 MiB
+  `MEM_RESERVE` / `PAGE_READWRITE` ordinal-184 request.
+- AA now models reserved/uncommitted guest pages instead of stopping at
+  `VM_UNSUPPORTED`.
+- Page-backed virtual allocations grow downward from the top of 64 MiB guest
+  RAM, matching the production runtime allocator strategy.
+- Later `MEM_COMMIT` calls preserve the reserved VA, zero newly committed
+  pages, and record protection metadata.
+- Reserved/uncommitted pages remain inaccessible to translated guest accesses.
+- Gate:
+  `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AA.ps1`
+- Build tag: `P4C-VMRESERVE-AA-20261019-A`.
 
 ### How future updates are recorded
 
