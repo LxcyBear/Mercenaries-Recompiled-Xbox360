@@ -70,6 +70,12 @@ try {
     Write-Host "[Phase3N] Running lowering unit tests..."
     Invoke-Python "-m" "unittest" "tools.recomp.test_lower_explicit_guest_memory"
 
+    Write-Host "[Phase3N] Running x87 extended-memory/status preflight..."
+    Invoke-Python (Join-Path $repoRoot "tools\recomp\test_xbox360_x87_memory_abi.py")
+
+    Write-Host "[Phase3N] Running reviewed function-reject preflight..."
+    Invoke-Python (Join-Path $repoRoot "tools\recomp\test_reviewed_function_reject.py")
+
     if (-not $ResumeLowering) {
         Write-Host ""
         Write-Host "[Phase3N] Recompiling the supported retail XBE in an isolated workspace..."
