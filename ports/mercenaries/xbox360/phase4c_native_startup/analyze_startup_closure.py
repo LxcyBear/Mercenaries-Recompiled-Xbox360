@@ -134,6 +134,122 @@ def load_guest_sizes(path: Path) -> dict[int, int]:
     return result
 
 
+def load_function_ranges(path: Path) -> list[dict]:
+    rows = json.loads(path.read_text(encoding="utf-8-sig"))
+    result = []
+    for row in rows:
+        try:
+            start = int(str(row["start"]), 0)
+            end = int(str(row["end"]), 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        result.append({
+            "start": start,
+            "end": end,
+            "name": row.get("name", f"sub_{start:08X}"),
+            "section": row.get("section"),
+        })
+    return sorted(result, key=lambda row: row["start"])
+
+
+def resolve_entry(functions: dict[int, dict], ranges: list[dict]) -> dict:
+    if ENTRY_VA in functions:
+        return {
+            "kind": "exact_function",
+            "entry": ENTRY_VA,
+            "owner_start": ENTRY_VA,
+            "owner_end": next(
+                (
+                    row["end"]
+                    for row in ranges
+                    if row["start"] == ENTRY_VA
+                ),
+                ENTRY_VA,
+            ),
+            "owner_name": functions[ENTRY_VA]["name"],
+            "generated_label": True,
+        }
+
+    parent = next(
+        (
+            row
+            for row in ranges
+            if row["start"] <= ENTRY_VA < row["end"]
+        ),
+        None,
+    )
+    if parent is None:
+        previous = None
+        following = None
+        for row in ranges:
+            if row["start"] <= ENTRY_VA:
+                previous = row
+                continue
+            following = row
+            break
+        raise SystemExit(
+            "[Phase4C-A] retail entry 0x%08X is not a detected function start "
+            "and is not contained by any function range; previous=%s next=%s"
+            % (
+                ENTRY_VA,
+                (
+                    "0x%08X:0x%08X" %
+                    (previous["start"], previous["end"])
+                    if previous else "-"
+                ),
+                (
+                    "0x%08X:0x%08X" %
+                    (following["start"], following["end"])
+                    if following else "-"
+                ),
+            )
+        )
+
+    owner = functions.get(parent["start"])
+    if owner is None:
+        raise SystemExit(
+            "[Phase4C-A] retail entry 0x%08X is inside %s "
+            "(0x%08X:0x%08X), but that owner is absent from the "
+            "locked generated tree"
+            % (
+                ENTRY_VA,
+                parent["name"],
+                parent["start"],
+                parent["end"],
+            )
+        )
+
+    label = f"loc_{ENTRY_VA:08X}:"
+    generated_label = re.search(
+        rf"(?m)^\s*{re.escape(label)}\s*;?\s*$",
+        owner["source"],
+    ) is not None
+    if not generated_label:
+        raise SystemExit(
+            "[Phase4C-A] retail entry 0x%08X resolves inside generated owner "
+            "%s (0x%08X:0x%08X), but the exact interior label %s is absent. "
+            "The entry must be split/retranslated before startup execution."
+            % (
+                ENTRY_VA,
+                owner["name"],
+                parent["start"],
+                parent["end"],
+                label,
+            )
+        )
+
+    return {
+        "kind": "interior_label",
+        "entry": ENTRY_VA,
+        "owner_start": parent["start"],
+        "owner_end": parent["end"],
+        "owner_name": owner["name"],
+        "generated_label": True,
+        "label": label[:-1],
+        "entry_offset": ENTRY_VA - parent["start"],
+    }
+
+
 def direct_dependencies(row: dict) -> list[int]:
     own = row["name"].lower()
     deps = {
@@ -153,13 +269,15 @@ def composite_tree_sha(root: Path) -> str:
     return hashlib.sha256(joined).hexdigest().upper()
 
 
-def analyze(functions: dict[int, dict], sizes: dict[int, int]) -> dict:
-    if ENTRY_VA not in functions:
-        raise SystemExit(
-            f"[Phase4C-A] retail entry 0x{ENTRY_VA:08X} is absent from audited tree"
-        )
+def analyze(
+    functions: dict[int, dict],
+    sizes: dict[int, int],
+    ranges: list[dict],
+) -> dict:
+    entry_resolution = resolve_entry(functions, ranges)
+    root_va = int(entry_resolution["owner_start"])
 
-    queue = deque([(ENTRY_VA, 0)])
+    queue = deque([(root_va, 0)])
     seen: set[int] = set()
     depth_by_va: dict[int, int] = {}
     missing: set[int] = set()
@@ -228,6 +346,18 @@ def analyze(functions: dict[int, dict], sizes: dict[int, int]) -> dict:
 
     return {
         "entry": f"0x{ENTRY_VA:08X}",
+        "entry_resolution": {
+            **entry_resolution,
+            "entry": f"0x{ENTRY_VA:08X}",
+            "owner_start": f"0x{entry_resolution['owner_start']:08X}",
+            "owner_end": f"0x{entry_resolution['owner_end']:08X}",
+            "entry_offset": (
+                f"0x{entry_resolution.get('entry_offset', 0):X}"
+                if entry_resolution["kind"] == "interior_label"
+                else "0x0"
+            ),
+        },
+        "closure_root": f"0x{root_va:08X}",
         "member_count": len(members),
         "max_direct_depth": max_depth,
         "guest_bytes": guest_bytes,
@@ -247,6 +377,18 @@ def render_text(report: dict) -> str:
     lines = [
         "[Phase4C-A] RETAIL ENTRY-ROOTED STARTUP CLOSURE",
         f"[Phase4C-A] Retail entry: {closure['entry']}",
+        f"[Phase4C-A] Entry resolution: {closure['entry_resolution']['kind']}",
+        f"[Phase4C-A] Entry owner: "
+        f"{closure['entry_resolution']['owner_start']}:"
+        f"{closure['entry_resolution']['owner_end']} "
+        f"{closure['entry_resolution']['owner_name']}",
+        f"[Phase4C-A] Entry offset in owner: "
+        f"{closure['entry_resolution']['entry_offset']}",
+        (
+            f"[Phase4C-A] Entry interior label: "
+            f"{closure['entry_resolution'].get('label', '-')}"
+        ),
+        f"[Phase4C-A] Closure root: {closure['closure_root']}",
         f"[Phase4C-A] Reachable direct translated bodies: {closure['member_count']}",
         f"[Phase4C-A] Maximum direct-call depth: {closure['max_direct_depth']}",
         f"[Phase4C-A] Reachable retail guest bytes: {closure['guest_bytes']}",
@@ -338,7 +480,8 @@ def main() -> int:
 
     functions = extract_functions(args.generated_root)
     sizes = load_guest_sizes(args.functions)
-    closure = analyze(functions, sizes)
+    ranges = load_function_ranges(args.functions)
+    closure = analyze(functions, sizes, ranges)
 
     structural_pass = (
         not closure["missing_direct_dependencies"]
@@ -347,6 +490,7 @@ def main() -> int:
     report = {
         "phase": "4C-A",
         "entry": f"0x{ENTRY_VA:08X}",
+        "entry_resolution": closure["entry_resolution"],
         "source_phase3n_tree_sha256": actual_tree,
         "phase4_service_split": {
             "host_surface": int(counts["host_surface_flagged"]),
