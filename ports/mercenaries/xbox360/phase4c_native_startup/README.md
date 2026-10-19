@@ -79,14 +79,23 @@ loader/execution environment and the completed Phase-4B service layer to emit
 the first bounded native startup XEX with deterministic xbWatson checkpoints.
 
 
-## Entry-resolution correction
+## Entry-resolution corrections
 
-The first 4C-A run showed that `0x0022964A` is not present as an exact
-`sub_0022964A` function start in the locked generated tree. That is not by
-itself a translation failure: the recompiler supports reviewed function ranges
-whose valid external entry points may lie inside a translated owner.
+The first 4C-A run assumed every generated function was named
+`sub_XXXXXXXX`, so it could not recognize identified translated symbols.
 
-The preflight now resolves the XBE entry against `functions.json` and requires
-an exact generated interior label before accepting that owner. It also reports
-the owner range and entry offset so the subsequent startup emitter can build a
-dedicated entry adapter rather than incorrectly calling the owner's prologue.
+The second run proved that the function inventory already contains:
+
+```text
+xbe_entry_point  0x0022964A:0x002296BC
+```
+
+The generated-code parser now uses the inventory's authoritative symbolic
+name-to-VA mapping. That means named translated definitions such as
+`xbe_entry_point` participate in the closure exactly like `sub_...`
+definitions, and direct dependencies are resolved through all known translated
+symbols rather than only `sub_XXXXXXXX` calls.
+
+Interior-entry resolution remains supported for any future entry that actually
+lands inside a translated owner, but `0x0022964A` is expected to resolve as
+an exact translated function start once named symbols are indexed correctly.
