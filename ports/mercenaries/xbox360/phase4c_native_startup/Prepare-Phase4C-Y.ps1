@@ -37,6 +37,20 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $emitLog) | Out-Nu
 & $python $emitter "--base-emitter" $baseEmitter "--generated-root" $generatedRoot "--functions" $functionsPath "--entry-report" $entryReport "--thread-report" $threadReport "--phase3n-template" $phase3nTemplate "--phase2e-source" $phase2eSource "--out-dir" $outDir 2>&1 | Tee-Object -FilePath $emitLog
 $emitExit = $LASTEXITCODE
 if ($emitExit -ne 0) {
+    $failedManifest = Join-Path $outDir "phase4c-y-manifest.json"
+    if (Test-Path -LiteralPath $failedManifest) {
+        try {
+            $failedJson = Get-Content -LiteralPath $failedManifest -Raw | ConvertFrom-Json
+            if ($failedJson.unknown_direct_helpers) {
+                Write-Host "[Phase4C-Y] Remaining unresolved helper dependencies:"
+                $failedJson.unknown_direct_helpers.PSObject.Properties | ForEach-Object {
+                    Write-Host ("[Phase4C-Y]   {0}: {1}" -f $_.Name, ($_.Value -join ", "))
+                }
+            }
+        } catch {
+            Write-Host "[Phase4C-Y] Could not decode failure manifest: $($_.Exception.Message)"
+        }
+    }
     throw "Phase 4C-Y 38C00 safe-root package emission failed (exit $emitExit). Full emitter output: $emitLog"
 }
 
