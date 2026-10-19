@@ -1,6 +1,13 @@
 # Repository code map
 
-Snapshot: 2026-09-29. Entries are **Verified from current implementation** unless explicitly marked otherwise. Follow symbols as well as paths: generated chunk numbers and line numbers change after regeneration. See [ARCHITECTURE](ARCHITECTURE.md) for evidence definitions.
+Snapshot: 2026-10-19. Entries are **Verified from current implementation** unless explicitly marked otherwise. Follow symbols as well as paths: generated chunk numbers and line numbers change after regeneration. See [ARCHITECTURE](ARCHITECTURE.md) for evidence definitions.
+
+## Xbox 360 native-port status
+
+The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xenon hardware. The final 3N-B gate compiled/linked a 128-function audited translated-code scale pack, verified all anchors live in the loaded XEX, passed maintained x87 rounding/exception checks, passed six independent-reference executions of retail function `0x00208F30`, and exited with XAPI return value 0.
+
+**Phase 4 - Host kernel/platform services is active.** Start with [phase4a_kernel_surface_audit](ports/mercenaries/xbox360/phase4a_kernel_surface_audit): it inventories the exact 111 kernel imports in the supported Mercenaries retail XBE and cross-checks them against the current compatibility layer before selecting the first Xenon-native service batch.
+
 
 ## Start with the question
 
@@ -10,6 +17,7 @@ Snapshot: 2026-09-29. Entries are **Verified from current implementation** unles
 | Runtime startup/memory mapping | [main.c](ports/mercenaries/src/main.c): `WinMain`, `host_graphics_init` | [xbox_memory_layout.c](src/kernel/xbox_memory_layout.c), exception/MMIO setup. |
 | Wrong instruction result/missing call/stack drift | [recomp_types.h](ports/mercenaries/src/recomp/recomp_types.h), [lifter.py](tools/recomp/lifter.py) | [translator.py](tools/recomp/translator.py), discovery, generated body, [Patch-Generated.py](ports/mercenaries/scripts/Patch-Generated.py). |
 | Import arguments/return/callback timing | [kernel_bridge.c](src/kernel/kernel_bridge.c) | [kernel_thunks.c](src/kernel/kernel_thunks.c), lower kernel module. |
+| Xbox 360 Phase 4 / native kernel service conversion | [phase4a_kernel_surface_audit](ports/mercenaries/xbox360/phase4a_kernel_surface_audit) | [kernel_thunks.c](src/kernel/kernel_thunks.c), [kernel_bridge.c](src/kernel/kernel_bridge.c), then the owning `src/kernel/kernel_*.c` service module. |
 | Guest allocation failure | [recomp_manual.c](ports/mercenaries/src/recomp_manual.c) | Layout allocator, title metadata, Lua/XMem fallback ownership. |
 | Missing draw/render state/alias surface | [nv2a_pgraph_d3d11.c](src/nv2a/nv2a_pgraph_d3d11.c) | [nv2a_core.c](src/nv2a/nv2a_core.c), D3D resources/states/shaders. |
 | FPS cap/stutter/adapter selection | [d3d8_device.c](src/d3d/d3d8_device.c) | [d3d8_frame_timing.h](src/d3d/d3d8_frame_timing.h), host service, options, guest clock patches. |
@@ -36,6 +44,7 @@ Snapshot: 2026-09-29. Entries are **Verified from current implementation** unles
 | [src/apu](src/apu), [src/audio](src/audio) | APU processing/output and supplementary DirectSound wrappers respectively. |
 | [src/input](src/input), [src/platform](src/platform) | Controller backends/activity and platform wrappers. |
 | [ports/mercenaries](ports/mercenaries) | Product build, generated integration, title policies, launcher, resources/data/assets. |
+| [ports/mercenaries/xbox360](ports/mercenaries/xbox360) | Native Xenon/XDK hardware gates and the active Phase 4 kernel/platform migration path. Phase 3 proof harnesses are historical evidence; new platform work begins under `phase4a_kernel_surface_audit`. |
 | [tools/xbe_parser](tools/xbe_parser), [tools/disasm](tools/disasm), [tools/func_id](tools/func_id), [tools/recomp](tools/recomp) | Offline analysis, discovery, lifting, validation, fixtures and oracles. |
 | [tools/diagnostics](tools/diagnostics) | Development capture/replay/inspection; some tools mutate a live process. |
 | [tools/debug](tools/debug), [tools/debug_symbols](tools/debug_symbols), [tools/symbols](tools/symbols), [tools/ghidra_naming](tools/ghidra_naming) | Debugging/name evidence tooling, not a second runtime. |
