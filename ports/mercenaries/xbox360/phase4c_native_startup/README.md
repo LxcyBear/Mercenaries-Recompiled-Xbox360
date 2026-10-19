@@ -197,3 +197,26 @@ the emitter compiled the transformed body.
 The validator now checks the exact transformed source that is emitted into
 `main.cpp`. This keeps helper-surface validation and compiled startup code in
 lockstep.
+
+
+## Phase 4C-B hardware result — PASS
+
+Real Xbox 360 hardware reached the first live startup dispatch:
+
+```text
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=0022B4D7 target=800000FF esp=008BFF98 saved_esp=008BFFC4 ticks=5 trace=2
+[Merc360:P4C] BOUNDARY REGISTERS: eax=008BFFD0 ecx=00000000 edx=00000000 ebx=00000000 esi=00000000 edi=00000000 seh_ebp=00000000 fault=0
+[Merc360:P4C] trace[0]=0022964A
+[Merc360:P4C] trace[1]=0022B4D7
+[Merc360:P4C] PHASE 4C-B BOUNDED REAL STARTUP RESULT: PASS
+```
+
+The target `0x800000FF` is Xbox kernel ordinal 255,
+`PsCreateSystemThreadEx`. The observed `saved_esp - esp = 0x2C` exactly
+matches ten 32-bit arguments plus the translated synthetic CALL return slot.
+
+This is the first hardware proof that retail-derived Mercenaries startup code
+has executed from the genuine XBE entry on Xenon. It is not full title startup
+or gameplay proof.
+
+Phase 4C-C follows this kernel handoff into the first translated startup thread.
