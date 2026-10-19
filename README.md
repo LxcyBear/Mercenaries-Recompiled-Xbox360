@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-P — continue live ordinal 107 KeInitializeDpc after Phase 4C-O hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-Q — continue live ordinal 113 KeInitializeTimerEx after Phase 4C-P hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -169,8 +169,11 @@ phases.
     `DIRECT_FRONTIER 0x0022F128`.
 27. **Done:** Phase 4C-O promoted `0x0022F128`; real hardware executed it
     and reached `ICALL_SAFE 0x8000006B` with `fault=0` and a 16-byte frame.
-28. **Phase 4C-P:** continue ordinal 107 `KeInitializeDpc` using production
-    KDPC initialization semantics and resume translated startup.
+28. **Done:** Phase 4C-P validated and executed live ordinal 107
+    `KeInitializeDpc` with DPC `0x00869580`, routine `0x0022F116`,
+    context 0; startup advanced with `fault=0` to `ICALL_SAFE 0x80000071`.
+29. **Phase 4C-Q:** continue ordinal 113 `KeInitializeTimerEx` using exact
+    production guest-KTIMER initialization semantics and a main/env build cookie.
 
 ### Evidence policy
 
@@ -2135,6 +2138,21 @@ unexecuted test PASS.**
 - **Phase 4C-O hardware result: PASS.**
 - **Next:** Phase 4C-P reproduces that guest KDPC initialization and continues.
 - Build tag: `P4C-DPC107-20261019-A`.
+
+### 2026-10-19 — Phase 4C-P KeInitializeDpc PASS
+
+- Live DPC frame:
+  `dpc=0x00869580`, `routine=0x0022F116`, `context=0`.
+- The production 32-byte KDPC initialization and readback passed on hardware.
+- Startup resumed with guest fault state 0.
+- New boundary:
+  `ICALL_SAFE caller=0x0022F128 target=0x80000071`.
+- Frame delta 12 bytes = 8 argument bytes + synthetic return.
+- Ordinal 113 is `KeInitializeTimerEx(PKTIMER, TIMER_TYPE)`.
+- **Phase 4C-P hardware result: PASS.**
+- **Next:** Phase 4C-Q initializes the 40-byte guest KTIMER exactly as the
+  production bridge does and introduces a main/env link-time build cookie.
+- Build tag: `P4C-TIMER113-20261019-A`.
 
 ### How future updates are recorded
 
