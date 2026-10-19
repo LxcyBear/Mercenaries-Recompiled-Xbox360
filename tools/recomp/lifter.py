@@ -157,8 +157,10 @@ def _smem_accessor(size):
 
 
 def _fmt_float_mem_read(op):
-    """Format an x87-style float/double guest-memory read."""
+    """Format an x87-style float/double/extended guest-memory read."""
     addr = _fmt_mem(op)
+    if op.mem_size == 10:
+        return f"recomp_x87_load_f80({addr})"
     if _EXPLICIT_GUEST_MEMORY_ABI:
         return (f"GUEST_READF64({addr})" if op.mem_size == 8
                 else f"GUEST_READF32({addr})")
@@ -2240,6 +2242,8 @@ class Lifter:
                         return [f"fp_push({_fmt_float_mem_read(ops[0])}); /* fld float */"]
                     elif ops[0].mem_size == 8:
                         return [f"fp_push({_fmt_float_mem_read(ops[0])}); /* fld double */"]
+                    elif ops[0].mem_size == 10:
+                        return [f"fp_push({_fmt_float_mem_read(ops[0])}); /* fld extended */"]
                     return [f"fp_push({_fmt_float_mem_read(ops[0])}); /* fld */"]
                 reg_index = x87_reg_index(ops[0])
                 if reg_index is not None:
@@ -2365,6 +2369,8 @@ class Lifter:
             else:
                 expression = f"{lhs} {op}= fp_top();"
             return [f"{expression} fp_pop(); /* {m} */"]
+        if m == "ftst":
+            return ["x87_set_compare_status(fp_top(), 0.0); /* ftst */"]
         if m == "fchs":
             return [f"fp_top() = -fp_top(); /* fchs */"]
         if m == "fabs":
