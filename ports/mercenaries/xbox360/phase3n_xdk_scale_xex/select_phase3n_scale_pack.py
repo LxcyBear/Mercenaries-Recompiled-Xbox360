@@ -16,19 +16,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from tools.recomp.lower_explicit_guest_memory import _mask_noncode
 
-EXEC_ROOT = 0x000A5AF0
-EXEC_MEMBERS = (
-    0x00011D80,
-    0x000A5AF0,
-    0x001F9DE0,
-    0x00209040,
-    0x0020A2B0,
-    0x0020BDC0,
-    0x0020D2B0,
-    0x0020D450,
-    0x002375B4,
-)
-EXEC_DEPTH = 3
+# Runtime execution is intentionally the Phase 3E hardware-proven accessor.
+# Stage B is a compiler/linker scale gate; arbitrary scale-only retail bodies
+# must not be executed without valid game state.
+EXEC_ROOT = 0x00208F30
+EXEC_MEMBERS = (EXEC_ROOT,)
+EXEC_DEPTH = 0
 
 TARGET_SCALE_FUNCTIONS = 128
 MIN_SCALE_FUNCTIONS = 64
@@ -211,7 +204,7 @@ def main() -> int:
     missing_exec = [va for va in EXEC_MEMBERS if va not in functions]
     if missing_exec:
         raise SystemExit(
-            "[Phase3N-B] audited tree is missing hardware-proven execution "
+            "[Phase3N-B] audited tree is missing Phase 3E execution proof "
             "member(s): " + ", ".join(f"0x{va:08X}" for va in missing_exec)
         )
 
@@ -372,8 +365,8 @@ def main() -> int:
 
     print("[Phase3N-B] XDK SCALE PACK READY")
     print(
-        f"[Phase3N-B] Execution proof: {len(EXEC_MEMBERS)} audited bodies, "
-        f"root=0x{EXEC_ROOT:08X}, depth={EXEC_DEPTH}"
+        f"[Phase3N-B] Execution proof: Phase 3E reference accessor "
+        f"0x{EXEC_ROOT:08X} ({len(EXEC_MEMBERS)} audited body)"
     )
     print(
         f"[Phase3N-B] Scale pack: {len(selected)} audited leaf bodies, "
