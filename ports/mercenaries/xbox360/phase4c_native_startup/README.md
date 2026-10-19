@@ -220,3 +220,34 @@ has executed from the genuine XBE entry on Xenon. It is not full title startup
 or gameplay proof.
 
 Phase 4C-C follows this kernel handoff into the first translated startup thread.
+
+
+## Phase 4C-C package preparation
+
+The next package is emitted separately from the hardware-proven 4C-B artifact.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-C.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\thread_xdk\main.cpp
+build\phase4c_native_startup\thread_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-THREAD-20261019-A
+```
+
+The package includes both maintained startup-related roots
+`0x0022B43F` and `0x002295D6` plus their direct generated closures, but the
+runtime does not assume either is the live thread target. It decodes the actual
+`PsCreateSystemThreadEx` argument frame on hardware, logs the StartRoutine and
+contexts, and only enters the target if that exact address exists in the packed
+closure. Otherwise it stops with a `THREAD_TARGET` boundary.
