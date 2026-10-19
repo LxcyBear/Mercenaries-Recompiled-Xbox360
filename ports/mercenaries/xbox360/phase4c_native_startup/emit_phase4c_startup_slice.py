@@ -138,6 +138,8 @@ def localize_and_instrument(source: str, name: str) -> str:
             f"[Phase4C-B] could not localize translated definition {name}"
         )
 
+    source = source.replace("__debugbreak()", "PHASE4C_DEBUGBREAK()")
+
     out: list[str] = []
     for line in source.splitlines():
         out.append(line)
@@ -284,6 +286,11 @@ def boundary_support() -> str:
 #include <setjmp.h>
 
 #define PHASE4C_EXEC_BUDGET 200000u
+#define PHASE4C_TITLE_HEAP_BASE  0x008C0000u
+#define PHASE4C_TITLE_HEAP_START (PHASE4C_TITLE_HEAP_BASE + 0x00001000u)
+#define PHASE4C_TITLE_HEAP_END   (PHASE4C_TITLE_HEAP_BASE + 0x00100000u)
+#define PHASE4C_HEAP_BLOCKS 4096u
+#define PHASE4C_HEAP_ZERO_MEMORY 0x00000008u
 
 enum Phase4CBoundaryKind
 {
@@ -293,7 +300,9 @@ enum Phase4CBoundaryKind
     PHASE4C_BOUNDARY_ITAIL = 3,
     PHASE4C_BOUNDARY_ITAIL_SAFE = 4,
     PHASE4C_BOUNDARY_BUDGET = 5,
-    PHASE4C_BOUNDARY_GUEST_FAULT = 6
+    PHASE4C_BOUNDARY_GUEST_FAULT = 6,
+    PHASE4C_BOUNDARY_DEBUGBREAK = 7,
+    PHASE4C_BOUNDARY_HEAP_EXHAUSTED = 8
 };
 
 static jmp_buf s_phase4cEscape;
@@ -330,13 +339,12 @@ static void phase4c_escape(
 
 static void phase4c_budget_tick(DWORD va)
 {
-    (void)va;
     ++s_phase4cBlockTicks;
 
     if (s_accessFault)
         phase4c_escape(
             PHASE4C_BOUNDARY_GUEST_FAULT,
-            0u,
+            va,
             g_esp);
 
     if (s_phase4cBlockTicks > PHASE4C_EXEC_BUDGET)
@@ -348,6 +356,14 @@ static void phase4c_budget_tick(DWORD va)
 
 #define PHASE4C_BUDGET_TICK(va) \
     do { phase4c_budget_tick((DWORD)(va)); } while (0)
+
+#define PHASE4C_DEBUGBREAK() \
+    do { \
+        phase4c_escape( \
+            PHASE4C_BOUNDARY_DEBUGBREAK, \
+            0u, \
+            g_esp); \
+    } while (0)
 
 typedef void (*recomp_func_t)(void);
 
@@ -379,9 +395,9 @@ typedef void (*recomp_func_t)(void);
         (DWORD)(saved_esp)); \
 } while (0)
 
-/* The startup closure currently does not require live dispatch resolution.
- * These declarations make an accidental direct lookup call a link-time
- * failure rather than silently inventing behavior. */
+/* The first startup execution intentionally does not resolve dynamic targets.
+ * Any live indirect/tail target becomes the xbWatson evidence for the next
+ * Phase 4C slice. */
 recomp_func_t recomp_lookup(uint32_t xbox_va);
 recomp_func_t recomp_lookup_manual(uint32_t xbox_va);
 recomp_func_t recomp_lookup_kernel(uint32_t xbox_va);
@@ -416,9 +432,218 @@ static uint64_t xbox_ReadTimeStampCounter(void)
     eax = (uint32_t)_recomp_tsc; \
     edx = (uint32_t)(_recomp_tsc >> 32); \
 } while (0)
+
+/* Guest-aware REP MOVS helper copied from the production ABI semantics. */
+static __forceinline void XBOX_REP_MOVS(
+    uint32_t destination,
+    uint32_t source,
+    uint32_t count,
+    uint32_t width)
+{
+    while (count-- != 0u) {
+        if (width == 4u)
+            GUEST_WRITE32(destination, GUEST_READ32(source));
+        else if (width == 2u)
+            GUEST_WRITE16(destination, GUEST_READ16(source));
+        else
+            GUEST_WRITE8(destination, GUEST_READ8(source));
+        destination += width;
+        source += width;
+    }
+}
+
+/* The four direct manual dependencies reached by the 4C-A translated closure.
+ * These retain the maintained guest calling conventions. */
+static uint32_t s_phase4cLastError;
+
+typedef struct Phase4CHeapBlock
+{
+    uint32_t address;
+    uint32_t requested;
+    uint32_t capacity;
+    uint8_t inUse;
+} Phase4CHeapBlock;
+
+static Phase4CHeapBlock s_phase4cHeap[PHASE4C_HEAP_BLOCKS];
+static DWORD s_phase4cHeapCount;
+static int s_phase4cHeapInitialized;
+
+static uint32_t phase4c_heap_align(uint32_t requested)
+{
+    uint32_t size = requested == 0u ? 1u : requested;
+    if (size > 0xFFFFFFF0u)
+        return 0u;
+    return (size + 15u) & ~15u;
+}
+
+static void phase4c_heap_init(void)
+{
+    if (s_phase4cHeapInitialized)
+        return;
+
+    memset(s_phase4cHeap, 0, sizeof(s_phase4cHeap));
+    s_phase4cHeap[0].address = PHASE4C_TITLE_HEAP_START;
+    s_phase4cHeap[0].capacity =
+        PHASE4C_TITLE_HEAP_END - PHASE4C_TITLE_HEAP_START;
+    s_phase4cHeapCount = 1u;
+    s_phase4cHeapInitialized = 1;
+}
+
+static void phase4c_heap_remove(DWORD index)
+{
+    if (index + 1u < s_phase4cHeapCount) {
+        memmove(
+            &s_phase4cHeap[index],
+            &s_phase4cHeap[index + 1u],
+            (s_phase4cHeapCount - index - 1u) *
+                sizeof(s_phase4cHeap[0]));
+    }
+    --s_phase4cHeapCount;
+}
+
+static void phase4c_heap_coalesce(DWORD index)
+{
+    if (index >= s_phase4cHeapCount)
+        return;
+
+    if (index != 0u) {
+        Phase4CHeapBlock* previous = &s_phase4cHeap[index - 1u];
+        Phase4CHeapBlock* block = &s_phase4cHeap[index];
+        if (!previous->inUse && !block->inUse &&
+            previous->address + previous->capacity == block->address) {
+            previous->capacity += block->capacity;
+            phase4c_heap_remove(index);
+            --index;
+        }
+    }
+
+    if (index + 1u < s_phase4cHeapCount) {
+        Phase4CHeapBlock* block = &s_phase4cHeap[index];
+        Phase4CHeapBlock* next = &s_phase4cHeap[index + 1u];
+        if (!block->inUse && !next->inUse &&
+            block->address + block->capacity == next->address) {
+            block->capacity += next->capacity;
+            phase4c_heap_remove(index + 1u);
+        }
+    }
+}
+
+static uint32_t phase4c_heap_allocate(
+    uint32_t flags,
+    uint32_t requested)
+{
+    uint32_t capacity = phase4c_heap_align(requested);
+    DWORD index;
+
+    phase4c_heap_init();
+    if (capacity == 0u)
+        return 0u;
+
+    for (index = 0u; index < s_phase4cHeapCount; ++index) {
+        Phase4CHeapBlock* block = &s_phase4cHeap[index];
+
+        if (block->inUse || block->capacity < capacity)
+            continue;
+
+        if (block->capacity > capacity) {
+            if (s_phase4cHeapCount >= PHASE4C_HEAP_BLOCKS)
+                phase4c_escape(
+                    PHASE4C_BOUNDARY_HEAP_EXHAUSTED,
+                    requested,
+                    g_esp);
+
+            memmove(
+                &s_phase4cHeap[index + 2u],
+                &s_phase4cHeap[index + 1u],
+                (s_phase4cHeapCount - index - 1u) *
+                    sizeof(s_phase4cHeap[0]));
+
+            s_phase4cHeap[index + 1u].address =
+                block->address + capacity;
+            s_phase4cHeap[index + 1u].requested = 0u;
+            s_phase4cHeap[index + 1u].capacity =
+                block->capacity - capacity;
+            s_phase4cHeap[index + 1u].inUse = 0u;
+            ++s_phase4cHeapCount;
+            block = &s_phase4cHeap[index];
+            block->capacity = capacity;
+        }
+
+        block->requested = requested;
+        block->inUse = 1u;
+
+        if ((flags & PHASE4C_HEAP_ZERO_MEMORY) != 0u) {
+            if (block->address >= GUEST_RAM_SIZE ||
+                block->capacity > GUEST_RAM_SIZE - block->address) {
+                phase4c_escape(
+                    PHASE4C_BOUNDARY_GUEST_FAULT,
+                    block->address,
+                    g_esp);
+            }
+            memset(g_ram + block->address, 0, block->capacity);
+        }
+
+        return block->address;
+    }
+
+    phase4c_escape(
+        PHASE4C_BOUNDARY_HEAP_EXHAUSTED,
+        requested,
+        g_esp);
+    return 0u;
+}
+
+static uint32_t phase4c_heap_free(uint32_t address)
+{
+    DWORD index;
+
+    if (address == 0u)
+        return 1u;
+
+    phase4c_heap_init();
+
+    for (index = 0u; index < s_phase4cHeapCount; ++index) {
+        Phase4CHeapBlock* block = &s_phase4cHeap[index];
+        if (block->inUse && block->address == address) {
+            block->requested = 0u;
+            block->inUse = 0u;
+            phase4c_heap_coalesce(index);
+            return 1u;
+        }
+    }
+
+    return 0u;
+}
+
+static void sub_0022B150(void)
+{
+    g_eax = s_phase4cLastError;
+    g_esp += 4u;
+}
+
+static void sub_0022B178(void)
+{
+    s_phase4cLastError = GUEST_READ32(g_esp + 4u);
+    g_esp += 8u;
+}
+
+static void sub_0022DDA4(void)
+{
+    uint32_t flags = GUEST_READ32(g_esp + 8u);
+    uint32_t size = GUEST_READ32(g_esp + 12u);
+
+    g_eax = phase4c_heap_allocate(flags, size);
+    g_esp += 16u;
+}
+
+static void sub_0022E51F(void)
+{
+    uint32_t allocation = GUEST_READ32(g_esp + 12u);
+
+    g_eax = phase4c_heap_free(allocation);
+    g_esp += 16u;
+}
 '''
-
-
 def driver_source(root_name: str, root_va: int, member_count: int) -> str:
     return rf'''
 extern "C" int phase4c_env_prepare(void);
@@ -437,6 +662,8 @@ static const char* phase4c_boundary_name(DWORD kind)
     case PHASE4C_BOUNDARY_ITAIL_SAFE: return "ITAIL_SAFE";
     case PHASE4C_BOUNDARY_BUDGET: return "BUDGET";
     case PHASE4C_BOUNDARY_GUEST_FAULT: return "GUEST_FAULT";
+    case PHASE4C_BOUNDARY_DEBUGBREAK: return "DEBUGBREAK";
+    case PHASE4C_BOUNDARY_HEAP_EXHAUSTED: return "HEAP_EXHAUSTED";
     default: return "NONE";
     }}
 }}
@@ -766,6 +993,12 @@ def main() -> int:
 
     supplied = support_symbols(support + boundary)
     supplied.update(closure_names)
+    supplied.update({
+        "sub_0022B150",
+        "sub_0022B178",
+        "sub_0022DDA4",
+        "sub_0022E51F",
+    })
 
     unknown: dict[str, list[str]] = {}
     for va in member_vas:
