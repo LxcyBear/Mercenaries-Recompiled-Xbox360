@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AB — continue ordinal 291 RtlInitializeCriticalSection after Phase 4C-AA hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-AC — execute hardware-observed translated root 0x0022D431 after Phase 4C-AB hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -207,11 +207,13 @@ phases.
 39. **Done:** Phase 4C-AA reserved 1 MiB at `0x03F00000`, committed the
     first 4 KiB at the same VA, and advanced with `fault=0` to
     `ICALL_SAFE target=0x80000123`.
-40. **Phase 4C-AB:** continue ordinal 291 `RtlInitializeCriticalSection`
-    using the maintained serialized-guest no-op semantics and the observed
-    8-byte full frame. Gate:
-    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AB.ps1`.
-    Build tag: `P4C-RTL291-AB-20261019-A`.
+40. **Done:** Phase 4C-AB continued ordinal 291
+    `RtlInitializeCriticalSection` and advanced with `fault=0` to
+    `DIRECT_FRONTIER target=0x0022D431`.
+41. **Phase 4C-AC:** promote only hardware-observed translated root
+    `0x0022D431`, retaining all proven reserve/commit and kernel state. Gate:
+    `ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AC.ps1`.
+    Build tag: `P4C-DIRECTD431-AC-20261019-A`.
 
 ### Evidence policy
 
@@ -2376,6 +2378,19 @@ unexecuted test PASS.**
 - **Phase 4C-AA hardware result: PASS.**
 - **Next:** Phase 4C-AB continues ordinal 291.
 - Build tag: `P4C-RTL291-AB-20261019-A`.
+
+### 2026-10-19 — Phase 4C-AB RTL291 PASS
+
+- AB main/env cookie matched on hardware.
+- The working ordinal-184 reserve/commit sequence remained intact.
+- Ordinal 291 `RtlInitializeCriticalSection` received the exact 8-byte frame.
+- Maintained serialized-guest semantics completed successfully.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x00238C00 target=0x0022D431`.
+- The boundary remained `fault=0`.
+- **Phase 4C-AB hardware result: PASS.**
+- **Next:** Phase 4C-AC promotes only `0x0022D431`.
+- Build tag: `P4C-DIRECTD431-AC-20261019-A`.
 
 ### How future updates are recorded
 
