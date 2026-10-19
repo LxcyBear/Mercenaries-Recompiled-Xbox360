@@ -76,9 +76,17 @@ static DWORD s_phase4cFaultWrite = 0u;"""
 {
     if (!s_accessFault)
     {
+        char line[192];
         s_phase4cFaultAddress = address;
         s_phase4cFaultWidth = width;
         s_phase4cFaultWrite = isWrite;
+        sprintf(
+            line,
+            "FAULT ACCESS IMMEDIATE: %s width=%u guest=%08X",
+            isWrite ? "WRITE" : "READ",
+            (unsigned int)width,
+            (unsigned int)address);
+        trace(line);
     }
     s_accessFault = 1;
 }
@@ -88,43 +96,195 @@ static DWORD s_phase4cFaultWrite = 0u;"""
         raise SystemExit("[Phase4C-I] guest accessor insertion marker changed")
     support = support.replace(marker, note + marker, 1)
 
-    specs = [
-        ("recomp_guest_read8", "1u", "0u"),
-        ("recomp_guest_read16", "2u", "0u"),
-        ("recomp_guest_read32", "4u", "0u"),
-        ("recomp_guest_read64", "8u", "0u"),
-        ("recomp_guest_write8", "1u", "1u"),
-        ("recomp_guest_write16", "2u", "1u"),
-        ("recomp_guest_write32", "4u", "1u"),
-        ("recomp_guest_write64", "8u", "1u"),
-        ("recomp_guest_read128", "16u", "0u"),
-        ("recomp_guest_write128", "16u", "1u"),
+    replacements = [
+        (
+            """uint8_t recomp_guest_read8(uint32_t address)
+{
+    BYTE* p = guest_ptr((DWORD)address, 1u);
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """uint8_t recomp_guest_read8(uint32_t address)
+{
+    BYTE* p = guest_ptr((DWORD)address, 1u);
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 1u, 0u);""",
+        ),
+        (
+            """uint16_t recomp_guest_read16(uint32_t address)
+{
+    BYTE* p = guest_ptr((DWORD)address, 2u);
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """uint16_t recomp_guest_read16(uint32_t address)
+{
+    BYTE* p = guest_ptr((DWORD)address, 2u);
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 2u, 0u);""",
+        ),
+        (
+            """uint32_t recomp_guest_read32(uint32_t address)
+{
+    BYTE* p = guest_ptr((DWORD)address, 4u);
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """uint32_t recomp_guest_read32(uint32_t address)
+{
+    BYTE* p = guest_ptr((DWORD)address, 4u);
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 4u, 0u);""",
+        ),
+        (
+            """uint64_t recomp_guest_read64(uint32_t address)
+{
+    BYTE* p = guest_ptr((DWORD)address, 8u);
+    uint64_t lo;
+    uint64_t hi;
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """uint64_t recomp_guest_read64(uint32_t address)
+{
+    BYTE* p = guest_ptr((DWORD)address, 8u);
+    uint64_t lo;
+    uint64_t hi;
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 8u, 0u);""",
+        ),
+        (
+            """void recomp_guest_write8(uint32_t address, uint8_t value)
+{
+    BYTE* p = guest_ptr((DWORD)address, 1u);
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """void recomp_guest_write8(uint32_t address, uint8_t value)
+{
+    BYTE* p = guest_ptr((DWORD)address, 1u);
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 1u, 1u);""",
+        ),
+        (
+            """void recomp_guest_write16(uint32_t address, uint16_t value)
+{
+    BYTE* p = guest_ptr((DWORD)address, 2u);
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """void recomp_guest_write16(uint32_t address, uint16_t value)
+{
+    BYTE* p = guest_ptr((DWORD)address, 2u);
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 2u, 1u);""",
+        ),
+        (
+            """void recomp_guest_write32(uint32_t address, uint32_t value)
+{
+    BYTE* p = guest_ptr((DWORD)address, 4u);
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """void recomp_guest_write32(uint32_t address, uint32_t value)
+{
+    BYTE* p = guest_ptr((DWORD)address, 4u);
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 4u, 1u);""",
+        ),
+        (
+            """void recomp_guest_write64(uint32_t address, uint64_t value)
+{
+    BYTE* p = guest_ptr((DWORD)address, 8u);
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """void recomp_guest_write64(uint32_t address, uint64_t value)
+{
+    BYTE* p = guest_ptr((DWORD)address, 8u);
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 8u, 1u);""",
+        ),
+        (
+            """static void recomp_guest_read128(uint32_t address, uint32_t words[4])
+{
+    BYTE* p = guest_ptr((DWORD)address, 16u);
+    DWORD i;
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """static void recomp_guest_read128(uint32_t address, uint32_t words[4])
+{
+    BYTE* p = guest_ptr((DWORD)address, 16u);
+    DWORD i;
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 16u, 0u);""",
+        ),
+        (
+            """static void recomp_guest_write128(
+    uint32_t address,
+    const uint32_t words[4])
+{
+    BYTE* p = guest_ptr((DWORD)address, 16u);
+    DWORD i;
+
+    if (!p)
+    {
+        s_accessFault = 1;""",
+            """static void recomp_guest_write128(
+    uint32_t address,
+    const uint32_t words[4])
+{
+    BYTE* p = guest_ptr((DWORD)address, 16u);
+    DWORD i;
+
+    if (!p)
+    {
+        phase4c_note_access_fault((DWORD)address, 16u, 1u);""",
+        ),
     ]
 
-    for name, width, is_write in specs:
-        start = support.find(name + "(")
-        if start < 0:
+    for old, new in replacements:
+        if old not in support:
             raise SystemExit(
-                f"[Phase4C-I] guest accessor {name} is missing"
+                "[Phase4C-I] exact guest accessor body marker changed"
             )
-        next_brace = support.find("{", start)
-        next_fault = support.find("s_accessFault = 1;", next_brace)
-        if next_brace < 0 or next_fault < 0:
-            raise SystemExit(
-                f"[Phase4C-I] fault assignment missing in {name}"
-            )
-        replacement = (
-            f"phase4c_note_access_fault((DWORD)address, "
-            f"{width}, {is_write});"
-        )
-        support = (
-            support[:next_fault]
-            + replacement
-            + support[next_fault + len("s_accessFault = 1;"):]
+        support = support.replace(old, new, 1)
+
+    # Only the assignment inside phase4c_note_access_fault may remain.
+    if support.count("s_accessFault = 1;") != 1:
+        raise SystemExit(
+            "[Phase4C-I] residual direct fault assignments remain"
         )
 
     return support
-
 
 def bounded_callback_members(base, root_va, generated):
     name_to_va = {row["name"]: va for va, row in generated.items()}
@@ -720,7 +880,7 @@ def main() -> int:
 
     manifest = {
         "phase": "4C-I",
-        "build_tag": "P4C-FAULTPROBE-20261019-A",
+        "build_tag": "P4C-FAULTPROBE-20261019-B",
         "entry": f"0x{root_va:08X}",
         "thread_start": f"0x{THREAD_START:08X}",
         "thread_context1": f"0x{THREAD_CTX1:08X}",
@@ -765,7 +925,7 @@ def main() -> int:
     driver = base.driver_source(root_name, root_va, len(member_vas))
     driver = driver.replace(
         "P4C-STARTUP-20261019-A",
-        "P4C-FAULTPROBE-20261019-A",
+        "P4C-FAULTPROBE-20261019-B",
     )
     driver = driver.replace(
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
