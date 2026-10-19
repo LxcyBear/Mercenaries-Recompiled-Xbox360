@@ -1009,3 +1009,29 @@ P4C-DIRECTC5A4-20261019-A
 ```
 
 R rotates the main/env build cookie and adds only `0x0022C5A4` beyond Q.
+
+
+## Phase 4C-S — promote live direct target 0x00230060
+
+Phase 4C-R passed on hardware and executed 0x0022C5A4, reaching the next clean direct frontier at 0x00230060 with fault=0.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\\ports\\mercenaries\\xbox360\\phase4c_native_startup\\Prepare-Phase4C-S.ps1"
+```
+
+Output:
+
+```text
+build\\phase4c_native_startup\\promoted_30060_xdk\\main.cpp
+build\\phase4c_native_startup\\promoted_30060_xdk\\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-DIRECT30060-20261019-A
+```
+
+S rotates the main/env build cookie and adds only `0x00230060` beyond R.
