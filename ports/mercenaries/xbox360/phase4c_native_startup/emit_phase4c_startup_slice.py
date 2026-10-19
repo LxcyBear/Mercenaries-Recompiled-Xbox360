@@ -573,8 +573,8 @@ static uint32_t phase4c_heap_allocate(
         block->inUse = 1u;
 
         if ((flags & PHASE4C_HEAP_ZERO_MEMORY) != 0u) {
-            if (block->address >= GUEST_RAM_SIZE ||
-                block->capacity > GUEST_RAM_SIZE - block->address) {
+            if (block->address >= RAM_SIZE ||
+                block->capacity > RAM_SIZE - block->address) {
                 phase4c_escape(
                     PHASE4C_BOUNDARY_GUEST_FAULT,
                     block->address,
