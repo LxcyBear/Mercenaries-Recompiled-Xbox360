@@ -553,3 +553,16 @@ Only a small reviewed direct-call slice is packed. A translated direct call
 outside that slice becomes a deterministic `DIRECT_FRONTIER` evidence
 boundary with its exact target, while ordinary ICALL/ITAIL boundaries remain
 observable as before.
+
+
+4C-H preparation gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-H.ps1`
+
+The package preserves the 43-body hardware-proven entry/thread slice and adds
+the hardware-confirmed callback `0x002295D6` plus its immediate translated
+callees only (direct depth 1, cap 64). Calls to translated functions outside
+that bounded slice are rewritten to deterministic `DIRECT_FRONTIER` escapes
+after the real translated argument pushes and synthetic CALL return push have
+already occurred.
+
+Build tag: `P4C-CALLBACK-20261019-A`.
