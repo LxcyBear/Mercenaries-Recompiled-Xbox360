@@ -1003,6 +1003,80 @@ def retail_shared_tail_000e1d7a_patch():
     )
 
 
+def retail_lua_001de3bc_shared_entry_patch():
+    """Restore the reviewed 0x001DE3BC alternate entry.
+
+    The normal 0x001DE3B0 entry begins with PUSH EBX. Retail control flow from
+    0x001DE280 enters at 0x001DE3BC instead, deliberately reusing the caller's
+    already-saved EBX and CL state before the common POP EBX / RET paths.
+    """
+    before = (
+        'void sub_001DE3BC(void) { esp += 4; '
+        '/* 0x001DE3BC: not detected; minimal guest ret */ }'
+    )
+    after = '''void sub_001DE3BC(void)
+{
+    /* Retail bytes 001DE3BC..001DE429, reviewed by Phase 3N. */
+    eax = MEM32(ebx + 0x14);
+    if ((int32_t)eax > 0)
+        goto loc_001DE3C8;
+    if (TEST_NZ(MEM8(ebx + -0x10), LO8(ecx)))
+        goto loc_001DE3C8;
+
+loc_001DE3CC: ;
+    eax = MEM32(ebx + -0x10);
+    ebx = ebx - 0x18;
+    if (TEST_NZ(LO8(ecx), LO8(eax))) {
+        eax = 0xFFFFFFFFu;
+        goto loc_001DE3F9;
+    }
+    if (TEST_NZ(LO8(eax), 2)) {
+        eax = MEM32(ebx + 0x10);
+        ecx = MEM32(eax);
+        MEM32(ebx + 0x0C) = ecx;
+    }
+
+loc_001DE3E7: ;
+    edx = MEM32(ebx);
+    eax = MEM32(edx + -8);
+    ecx = MEM32(eax + 0x0C);
+    eax = MEM32(ebx + 0x0C);
+    eax = eax - MEM32(ecx + 0x0C);
+    eax = (uint32_t)((int32_t)eax >> 2);
+    eax = eax - 1;
+
+loc_001DE3F9: ;
+    edx = MEM32(ebx);
+    ecx = MEM32(edx + -8);
+    edx = MEM32(ecx + 0x0C);
+    ecx = MEM32(edx + 0x0C);
+    eax = MEM32(ecx + eax * 4);
+    ecx = eax & 0x3Fu;
+    if (ecx == 0x19u || ecx == 0x1Au)
+        goto loc_001DE416;
+
+loc_001DE3C8: ;
+    eax = 0;
+    POP32(esp, ebx);
+    esp += 4; return; /* ret */
+
+loc_001DE416: ;
+    edx = MEM32(esp + 8);
+    PUSH32(esp, edx);
+    eax = eax >> 24;
+    PUSH32(esp, eax);
+    PUSH32(esp, 0); sub_001DE280(); /* call 0x001DE280 */
+    esp = esp + 8;
+    POP32(esp, ebx);
+    esp += 4; return; /* ret */
+}'''
+    return GeneratedPatch(
+        'Retail Lua shared entry 001DE3BC preserves caller EBX frame',
+        before,
+        after,
+    )
+
+
 def phase3n_crt_x87_gap_patches():
     """Restore two reviewed CRT tail entries hidden in a detector gap."""
     zero_tail = GeneratedPatch(
@@ -1332,7 +1406,10 @@ PATCHES = tuple(GeneratedPatch(
 ) + tuple(GeneratedPatch(
     f'Retail stack-relative COMISS {site} survives ESP changes', before, after)
     for site, va, raw, delta, before, after in SSE_STACK_COMPARE_REPAIRS
-) + (retail_shared_tail_000e1d7a_patch(),) + phase3n_crt_x87_gap_patches() + tuple(
+) + (
+    retail_shared_tail_000e1d7a_patch(),
+    retail_lua_001de3bc_shared_entry_patch(),
+) + phase3n_crt_x87_gap_patches() + tuple(
     simple_shared_epilogue_patch(*entry) for entry in SIMPLE_SHARED_EPILOGUES
 ) + (
     GeneratedPatch('Optional M1 texture at RedRenderer binding',
