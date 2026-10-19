@@ -58,6 +58,10 @@ PHASE4B_PLATFORM_CALL = re.compile(r"\b(merc_platform_[A-Za-z0-9_]+)\s*\(")
 PHASE4B_GUEST_NATIVE_CALL = re.compile(
     r"\b(xbox_(?:GuestMemory[A-Za-z0-9_]*|HeapReleasePageRounded))\s*\("
 )
+PHASE4B_GUEST_NATIVE_ROOTS = {
+    "bridge_NtFreeVirtualMemory",
+    "bridge_MmSetAddressProtect",
+}
 
 
 def host_api_calls(masked_body: str) -> list[str]:
@@ -489,6 +493,8 @@ def main() -> int:
             ) = runtime_surface_for_bridge(
                 runtime_target, sources, masked_sources
             )
+            if runtime_target not in PHASE4B_GUEST_NATIVE_ROOTS:
+                guest_native_hits = []
             if source_path is not None:
                 counts["source_callable"] += 1
                 source = str(source_path.relative_to(repo)).replace("\\", "/")
