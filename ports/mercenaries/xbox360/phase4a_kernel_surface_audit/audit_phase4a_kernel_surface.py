@@ -12,7 +12,13 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from pathlib import Path
+
+# Make repository packages importable when this file is launched directly.
+_REPO_FROM_SCRIPT = Path(__file__).resolve().parents[4]
+if str(_REPO_FROM_SCRIPT) not in sys.path:
+    sys.path.insert(0, str(_REPO_FROM_SCRIPT))
 
 from tools.xbe_parser.xbe_parser import XBEParser
 
