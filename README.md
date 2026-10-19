@@ -119,11 +119,11 @@ phases.
     `fault=0`: caller `0x0022B4D7`, target `0x800000FF`.
     That target is kernel ordinal 255, `PsCreateSystemThreadEx`; the observed
     44-byte frame exactly matches ten arguments plus the synthetic return slot.
-15. **Phase 4C-C:** package preparation is ready. Decode the live
-    ordinal-255 frame, verify/log the actual StartRoutine and contexts, follow
-    the first startup-thread handoff synchronously, and capture the next live
-    boundary. The emitted package is isolated under
-    `build\phase4c_native_startup\thread_xdk`.
+15. **Phase 4C-C:** package preparation is ready. Reuse the exact 40-body
+    Phase-4C-B entry closure, decode the live ordinal-255 frame, verify the
+    44-byte call shape, capture the actual StartRoutine/context values, and stop
+    successfully at a `THREAD_TARGET` evidence boundary. The next phase will
+    package only the routine hardware actually reports.
 
 ### Evidence policy
 
@@ -1873,6 +1873,19 @@ unexecuted test PASS.**
 - Output is isolated under
   `build\phase4c_native_startup\thread_xdk`.
 - Build tag: `P4C-THREAD-20261019-A`.
+
+### 2026-10-19 — Phase 4C-C narrowed to live thread-target capture
+
+- The first 4C-C emitter recursively packed both static startup candidates and
+  correctly failed its helper-surface audit after pulling renderer/audio/XACT/
+  XInput/runtime support into the package.
+- 4C-C now reuses the exact hardware-proven 40-body 4C-B entry closure.
+- It intercepts only kernel ordinal 255, requires the proven 44-byte frame,
+  decodes all ten `PsCreateSystemThreadEx` arguments, and records the actual
+  StartRoutine/context values.
+- A valid `THREAD_TARGET` stop is the 4C-C PASS condition.
+- New build tag: `P4C-THREAD-20261019-B`.
+- The following phase will package only the hardware-observed StartRoutine.
 
 ### How future updates are recorded
 
