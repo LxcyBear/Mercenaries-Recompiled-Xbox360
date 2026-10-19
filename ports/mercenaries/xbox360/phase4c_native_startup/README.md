@@ -488,3 +488,37 @@ P4C-CRITPAIR-20261019-A
 4C-G executes continuously through both the enter and leave calls using the
 maintained serialized-guest no-op behavior and stops at the first live boundary
 after the critical-section pair.
+
+
+## Phase 4C-G hardware result — PASS
+
+The first real critical-section pair completed on Xbox 360 hardware:
+
+```text
+[Merc360:P4C] RtlEnterCriticalSection LIVE FRAME: cs=00312FC0 esp=008BFF3C saved_esp=008BFF44
+[Merc360:P4C] PASS: ordinal 277 RtlEnterCriticalSection matched maintained serialized-guest semantics
+[Merc360:P4C] RtlLeaveCriticalSection LIVE FRAME: cs=00312FC0 esp=008BFF3C saved_esp=008BFF44
+[Merc360:P4C] PASS: ordinal 294 RtlLeaveCriticalSection matched maintained serialized-guest semantics
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=0022B363 target=002295D6 esp=008BFF50 saved_esp=008BFF58 ticks=16 trace=5
+[Merc360:P4C] ... fault=0
+```
+
+This is the first hardware proof that `ctx1=0x002295D6` from the actual
+`PsCreateSystemThreadEx` call is later invoked as executable startup code.
+
+The callback call itself has an exact 8-byte translated frame.
+
+## Phase 4C-H strategy
+
+The callback's complete static closure is too broad for a useful incremental
+hardware gate. 4C-H therefore uses a bounded direct-call frontier:
+
+- include `0x002295D6` and a small immediate translated slice;
+- preserve all already-proven entry/thread/kernel continuation code;
+- rewrite translated direct calls leaving that slice to a deterministic
+  `DIRECT_FRONTIER` escape;
+- continue to stop normally on unresolved ICALL/ITAIL targets;
+- require callback entry and `fault=0` for a PASS.
+
+This lets hardware reveal the actually executed callback path without
+speculatively importing unrelated late-startup subsystems.
