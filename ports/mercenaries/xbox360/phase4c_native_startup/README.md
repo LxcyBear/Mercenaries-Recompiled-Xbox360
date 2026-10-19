@@ -444,3 +444,47 @@ When ordinal 277 is reached, it validates the 8-byte frame, logs the live guest
 critical-section address, applies the repository's maintained serialized-guest
 no-op semantics, restores the simulated stack exactly to `saved_esp`, and
 continues until the next live ICALL/ITAIL boundary.
+
+
+## Phase 4C-F hardware result — PASS
+
+The first critical-section enter completed on real Xbox 360 hardware:
+
+```text
+[Merc360:P4C] RtlEnterCriticalSection LIVE FRAME: cs=00312FC0 esp=008BFF3C saved_esp=008BFF44
+[Merc360:P4C] PASS: ordinal 277 RtlEnterCriticalSection matched maintained serialized-guest semantics
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=0022B363 target=80000126 esp=008BFF3C saved_esp=008BFF44 ticks=14 trace=5
+[Merc360:P4C] BOUNDARY REGISTERS: eax=00000000 ecx=00000000 edx=00000008 ebx=00312FC0 esi=00312FDC edi=00312FDC seh_ebp=008BFF8C fault=0
+```
+
+Target `0x80000126` is ordinal 294, `RtlLeaveCriticalSection`. Its observed
+frame is also exactly 8 bytes.
+
+The run used the correct `P4C-CRITCONT-20261019-A` build tag; some inherited
+text banners still said `PHASE 4C-E`. That labeling bug did not affect the
+executed logic and is corrected for 4C-G.
+
+## Phase 4C-G — critical-section pair continuation
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-G.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\crit_pair_xdk\main.cpp
+build\phase4c_native_startup\crit_pair_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-CRITPAIR-20261019-A
+```
+
+4C-G executes continuously through both the enter and leave calls using the
+maintained serialized-guest no-op behavior and stops at the first live boundary
+after the critical-section pair.
