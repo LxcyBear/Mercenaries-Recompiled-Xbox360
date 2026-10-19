@@ -2054,7 +2054,6 @@ def main() -> int:
         "PHASE 4C-T",
         "PHASE 4C-U",
         "PHASE 4C-V",
-        "PHASE 4C-V",
     ):
         env_source = env_source.replace(stale_phase, "PHASE 4C-W")
     env_source += """
@@ -2070,6 +2069,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         "PHASE 4C-S",
         "PHASE 4C-T",
         "PHASE 4C-U",
+        "PHASE 4C-V",
     ):
         env_source = env_source.replace(stale_phase, "PHASE 4C-W")
 
@@ -2287,7 +2287,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
     (args.out_dir / "main.cpp").write_text(generated_main, encoding="utf-8")
     (args.out_dir / "phase4c_env.cpp").write_text(env_source, encoding="utf-8")
 
-    print("[Phase4C-W] EXQUERYNONVOLATILESETTING CONTINUATION PACKAGE READY")
+    print("[Phase4C-W] KESETTIMER149 CONTINUATION PACKAGE READY")
     print(
         f"[Phase4C-W] Entry closure={len(entry_members)} bodies; "
         f"thread closure={len(thread_members)} bodies; "
