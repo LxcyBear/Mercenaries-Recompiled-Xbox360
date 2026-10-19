@@ -1294,3 +1294,26 @@ commit state, and promotes only the exact hardware-observed translated target
 entry rather than a generated function start.
 
 Build tag: `P4C-DIRECTD431-AC-20261019-A`.
+
+
+#### Phase 4C-AC — promoted 0x0022D431
+**Status: HARDWARE PASS.**
+
+Build `P4C-DIRECTD431-AC-20261019-A` executed translated root
+`0x0022D431` and advanced with `fault=0` to
+`DIRECT_FRONTIER caller=0x0022D431 target=0x0022CA2B`. The translated
+hardware trace reached 17 entries.
+
+#### Phase 4C-AD — promote live target 0x0022CA2B
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AD.ps1`
+
+AD preserves all AC invariants, including the working virtual-memory
+reserve/commit state and ordinal-291 continuation, retains `0x0022D431`, and
+promotes only the exact hardware-observed translated target `0x0022CA2B`.
+Preparation fails explicitly if CA2B is a mid-function/split entry rather than
+a generated function start.
+
+Build tag: `P4C-DIRECTCA2B-AD-20261019-A`.
