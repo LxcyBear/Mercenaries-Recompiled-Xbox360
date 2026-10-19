@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-E — first continuous execution through the hardware-observed title-thread routine after Phase 4C-D preflight PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-F — continue the real title thread through its first RtlEnterCriticalSection kernel call after Phase 4C-E hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -126,9 +126,15 @@ phases.
     `0x0022B43F` is an exact translated function with a six-body direct
     closure, depth 2, 460 guest bytes, 8,556 generated-source bytes,
     0 missing direct translated dependencies and 5 dynamic-boundary bodies.
-17. **Phase 4C-E:** build the 43-body union of the proven entry closure and
-    live title-thread closure, execute continuously through ordinal 255 into
-    `0x0022B43F`, and capture the first subsequent live ICALL/ITAIL boundary.
+17. **Done:** Phase 4C-E executed the 43-body continuous startup slice on real
+    Xbox 360 hardware and advanced into the title thread to caller
+    `0x0022B363` -> target `0x80000115`, with `fault=0`.
+    Target `0x80000115` is kernel ordinal 277,
+    `RtlEnterCriticalSection`; the observed 8-byte frame exactly matches one
+    argument plus the synthetic CALL return.
+18. **Phase 4C-F:** validate/log the live critical-section argument, apply the
+    maintained serialized-guest no-op semantics for ordinal 277, restore the
+    stdcall frame exactly, and continue to the next live boundary.
 
 ### Evidence policy
 
@@ -1920,6 +1926,22 @@ unexecuted test PASS.**
   `0x0022B43F` with the hardware-captured contexts and stop at the next live
   dynamic/kernel boundary.
 - Build tag: `P4C-THREADRUN-20261019-A`.
+
+### 2026-10-19 — Phase 4C-E first title-thread execution PASS
+
+- Real Xenon executed continuously through the genuine XBE entry,
+  `PsCreateSystemThreadEx`, and hardware-observed title-thread routine
+  `0x0022B43F`.
+- Trace advanced through `0x00239BE8` to caller `0x0022B363`.
+- Next live target: `0x80000115` = kernel ordinal **277**,
+  `RtlEnterCriticalSection`.
+- Observed `saved_esp - esp = 0x8`, exactly one 32-bit argument plus the
+  four-byte translated CALL return slot.
+- Guest fault state remained 0.
+- **Phase 4C-E hardware result: PASS.**
+- **Next:** Phase 4C-F applies the maintained serialized-guest no-op semantics
+  for ordinal 277 and continues to the next live boundary.
+- Build tag: `P4C-CRITCONT-20261019-A`.
 
 ### How future updates are recorded
 
