@@ -41,7 +41,8 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 | 4C-D | **Complete PASS** | `0x0022B43F` exact function; 6 bodies, depth 2, 460 guest bytes, 8,556 source bytes, 0 missing direct dependencies, 5 dynamic-boundary bodies. |
 | 4C-E | **Hardware PASS** | Real entry -> ordinal 255 -> live StartRoutine `0x0022B43F` executed on Xenon; next boundary is `0x0022B363 -> 0x80000115`, fault=0. |
 | 4C-F | **Hardware PASS** | Ordinal 277 `RtlEnterCriticalSection` executed with live guest CS `0x00312FC0`, exact 8-byte frame and stack restoration; next live target is `0x80000126`. |
-| 4C-G | **Package prep ready** | Route ordinal 294 `RtlLeaveCriticalSection` using the same serialized-guest no-op semantics and exact 8-byte cleanup, then capture the next live dynamic/kernel boundary. |
+| 4C-G | **Hardware PASS** | Ordinal 277/294 enter/leave pair executed on Xenon with balanced 8-byte frames; next live ICALL is `0x002295D6`, proving the thread ctx1 is the executable startup callback. |
+| 4C-H | **Active** | Execute `0x002295D6` using a bounded direct-call frontier so hardware identifies the live path without linking its full static title graph. |
 
 This table is the continuation of the Phase-3 hardware map: later phases should only advance when their stated evidence gate passes.
 
