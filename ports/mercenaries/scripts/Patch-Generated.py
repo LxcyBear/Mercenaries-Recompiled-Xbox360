@@ -1004,6 +1004,13 @@ void sub_001FFDB0(void)
     recomp_xmm_loadss(xmm0v, esp + 4); /* movss */
     MEMF(ecx) = xmm0; /* movss */
     esp += 8; return; /* ret 4 */''',
+    'Restore Lua local-name error epilogue':
+        '''loc_001DE320: ;
+    POP32(esp, edi);
+    POP32(esp, esi);
+    eax = 0x2FB9DC;
+    POP32(esp, ebp);
+    esp += 4; return; /* ret */''',
     'Retail extraction helicopter shared return restores its full frame':        '''loc_0007CDF7: ;
     POP32(esp, edi);
     POP32(esp, esi);
