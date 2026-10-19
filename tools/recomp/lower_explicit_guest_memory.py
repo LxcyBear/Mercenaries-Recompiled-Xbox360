@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -346,15 +347,19 @@ def lower_source(source: str) -> tuple[str, dict]:
     return source, stats
 
 
-def lower_file(path: Path) -> dict:
+def lower_file_to_temp(path: Path) -> tuple[Path, dict]:
+    """Lower one file without mutating the audited source tree yet."""
     raw = path.read_bytes()
     newline = "\r\n" if b"\r\n" in raw else "\n"
     source = raw.decode("utf-8").replace("\r\n", "\n")
     lowered, stats = lower_source(source)
     if newline == "\r\n":
         lowered = lowered.replace("\n", "\r\n")
-    path.write_bytes(lowered.encode("utf-8"))
-    return stats
+
+    temp = path.with_name(path.name + ".phase3n.tmp")
+    temp.write_bytes(lowered.encode("utf-8"))
+    stats["bytes"] = temp.stat().st_size
+    return temp, stats
 
 
 def lower_tree(root: Path) -> dict:
@@ -371,17 +376,32 @@ def lower_tree(root: Path) -> dict:
         "source_bytes": 0,
     }
     per_file = []
-    for path in files:
-        try:
-            stats = lower_file(path)
-        except LoweringError as exc:
-            raise LoweringError(f"{path.name}: {exc}") from exc
-        stats["file"] = path.name
-        stats["bytes"] = path.stat().st_size
-        total["source_bytes"] += stats["bytes"]
-        for key in ("writes", "compound_writes", "incdec_writes", "reads"):
-            total[key] += stats[key]
-        per_file.append(stats)
+    staged = []
+    try:
+        for path in files:
+            try:
+                temp, stats = lower_file_to_temp(path)
+            except LoweringError as exc:
+                raise LoweringError(f"{path.name}: {exc}") from exc
+            staged.append((path, temp))
+            stats["file"] = path.name
+            total["source_bytes"] += stats["bytes"]
+            for key in ("writes", "compound_writes", "incdec_writes", "reads"):
+                total[key] += stats[key]
+            per_file.append(stats)
+
+        # Commit the conversion only after every generated source file proves
+        # lowerable. This keeps Stage A restartable after a newly discovered
+        # unsupported shape instead of leaving a half-converted tree.
+        for path, temp in staged:
+            os.replace(str(temp), str(path))
+    finally:
+        for _, temp in staged:
+            try:
+                temp.unlink()
+            except FileNotFoundError:
+                pass
+
     total["per_file"] = per_file
     return total
 
