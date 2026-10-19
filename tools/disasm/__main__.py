@@ -80,6 +80,14 @@ def main():
              "instruction boundaries. These must also be present in "
              "--seed-functions.",
     )
+    parser.add_argument(
+        "--reject-function",
+        metavar="ADDR",
+        action="append",
+        default=[],
+        help="Reject a human-reviewed non-code address from every function "
+             "candidate source (hex/decimal; repeatable).",
+    )
 
     args = parser.parse_args()
 
@@ -96,6 +104,20 @@ def main():
                 "Protected seeds are absent from --seed-functions: "
                 + ", ".join(f"0x{addr:08X}" for addr in sorted(missing_protected))
             )
+        try:
+            rejected_functions = [
+                int(value, 0) for value in args.reject_function
+            ]
+        except ValueError as exc:
+            raise ValueError(
+                "--reject-function values must be hex/decimal addresses"
+            ) from exc
+        conflict = set(protected_seed_funcs) & set(rejected_functions)
+        if conflict:
+            raise ValueError(
+                "Addresses cannot be both protected seeds and reviewed rejects: "
+                + ", ".join(f"0x{addr:08X}" for addr in sorted(conflict))
+            )
         disassembler = Disassembler(
             xbe_path=args.xbe_path,
             analysis_json=args.analysis_json,
@@ -107,6 +129,7 @@ def main():
             extra_sections=extra,
             seed_functions=seed_funcs,
             protected_seed_functions=protected_seed_funcs,
+            rejected_function_addresses=rejected_functions,
         )
         success = disassembler.run()
         sys.exit(0 if success else 1)
