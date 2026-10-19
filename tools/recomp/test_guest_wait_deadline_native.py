@@ -1,8 +1,14 @@
-"""Exercise production guest waits against precise/coarse clocks and real Windows sleep."""
+"""Exercise production guest waits against controlled clocks and real Windows sleep."""
 from pathlib import Path
-import shutil, subprocess, tempfile, unittest
-ROOT=Path(__file__).resolve().parents[2]
-MOCK=r'''
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+
+MOCK = r'''
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -20,7 +26,8 @@ static void service(void){services++;us+=cost;}
 static void (*g_host_service_callback)(void)=service;
 static DWORD merc_platform_sleep(DWORD ms, BOOL alertable){assert(ms>0 && ms<=16);us+=(long long)ms*1000;sleeps++;if((int)ms>max_slice)max_slice=ms;return alertable&&apc?WAIT_IO_COMPLETION:0;}
 '''
-HARNESS=r'''
+
+HARNESS = r'''
 static void reset(void){us=0;sleeps=services=cost=max_slice=fail_frequency=apc=0;g_host_service_callback=service;}
 int main(void){
  for(int start=0;start<16000;start+=137){
@@ -40,13 +47,13 @@ int main(void){
  puts("PASS: 7722 precise deadline/phase cases, callback cost, alertable APC, long waits and fallback");
 }
 '''
-REAL=r'''
+
+REAL = r'''
 #define _WIN32_WINNT 0x0600
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <mmsystem.h>
 #include <stdio.h>
-/* Older MinGW SDK lacks the declaration/import; call the real Windows API. */
 static ULONGLONG test_windows_tick64(void){
  typedef ULONGLONG (WINAPI *Fn)(void); static Fn fn;
  if(!fn) fn=(Fn)GetProcAddress(GetModuleHandleA("kernel32.dll"),"GetTickCount64");
@@ -61,8 +68,9 @@ static BOOL merc_platform_query_performance_counter(LARGE_INTEGER *v){return Que
 static DWORD merc_platform_get_tick_count(void){return (DWORD)test_windows_tick64();}
 static DWORD merc_platform_sleep(DWORD ms, BOOL alertable){if(alertable)return SleepEx(ms,TRUE);Sleep(ms);return 0;}
 '''
-BENCH=r'''
-static void old_wait(DWORD ms){ULONGLONG until=GetTickCount64()+ms;while(GetTickCount64()<until)Sleep(1);}
+
+BENCH = r'''
+static void old_wait(DWORD ms){ULONGLONG until=test_windows_tick64()+ms;while(test_windows_tick64()<until)Sleep(1);}
 int main(void){
  LARGE_INTEGER f,a,b;QueryPerformanceFrequency(&f);timeBeginPeriod(1);
  QueryPerformanceCounter(&a);for(int i=0;i<128;i++)old_wait(1);QueryPerformanceCounter(&b);
@@ -72,25 +80,114 @@ int main(void){
  timeEndPeriod(1);return 0;
 }
 '''
+
+
 def body():
- s=(ROOT/'src/kernel/kernel_thread.c').read_text(encoding='utf-8')
- a=s.index('static NTSTATUS xbox_host_aware_sleep(');return s[a:s.index('\n/* ===',a)]
+    source = (ROOT / "src/kernel/kernel_thread.c").read_text(encoding="utf-8")
+    start = source.index("static NTSTATUS xbox_host_aware_sleep(")
+    return source[start:source.index("\n/* ===", start)]
+
+
+def _gcc_like():
+    for name in ("gcc", "clang"):
+        found = shutil.which(name)
+        if found:
+            return found
+    fallback = Path("C:/MinGW/bin/gcc.exe")
+    return str(fallback) if fallback.is_file() else None
+
+
+def _vcvars64():
+    candidates = []
+    pf86 = os.environ.get("ProgramFiles(x86)")
+    if pf86:
+        candidates.append(Path(pf86) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe")
+    candidates.append(Path("C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"))
+
+    for vswhere in candidates:
+        if not vswhere.is_file():
+            continue
+        query = subprocess.run(
+            [
+                str(vswhere),
+                "-latest",
+                "-products", "*",
+                "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                "-property", "installationPath",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        install = query.stdout.strip()
+        if query.returncode == 0 and install:
+            vcvars = Path(install) / "VC" / "Auxiliary" / "Build" / "vcvars64.bat"
+            if vcvars.is_file():
+                return vcvars
+    return None
+
+
+def compile_c(source: Path, exe: Path, *, winmm=False):
+    cc = _gcc_like()
+    if cc:
+        command = [cc, "-O2", "-std=c11", "-Wall", "-Wextra", "-Werror", str(source), "-o", str(exe)]
+        if winmm:
+            command.append("-lwinmm")
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            raise AssertionError(result.stdout + result.stderr)
+        return f"GCC/Clang: {cc}"
+
+    vcvars = _vcvars64()
+    if vcvars:
+        libraries = " winmm.lib" if winmm else ""
+        command = (
+            f'call "{vcvars}" >nul && '
+            f'cl /nologo /O2 /W4 /TC "{source}" /Fe:"{exe}"{libraries}'
+        )
+        result = subprocess.run(
+            ["cmd.exe", "/d", "/c", command],
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+        if result.returncode != 0:
+            raise AssertionError(result.stdout + result.stderr)
+        return f"MSVC via {vcvars}"
+
+    raise AssertionError(
+        "No C compiler found. Install/enable GCC, Clang, or Visual Studio C++ "
+        "Build Tools. The verifier now auto-detects MSVC through vswhere.exe."
+    )
+
+
 class WaitTests(unittest.TestCase):
- def test_production_deadlines(self):
-  cc=shutil.which('gcc') or 'C:/MinGW/bin/gcc.exe'
-  with tempfile.TemporaryDirectory(prefix='guest-wait-') as t:
-   p=Path(t)/'test.c';exe=p.with_suffix('.exe')
-   p.write_text(MOCK+body()+HARNESS,encoding='utf-8')
-   subprocess.run([cc,'-O2','-std=c11','-Wall','-Wextra','-Werror',str(p),'-o',str(exe)],check=True,capture_output=True)
-   result=subprocess.run([str(exe)],check=True,capture_output=True,text=True,timeout=10)
-   print(result.stdout.strip())
+    def test_production_deadlines(self):
+        with tempfile.TemporaryDirectory(prefix="guest-wait-") as temp:
+            source = Path(temp) / "test.c"
+            exe = source.with_suffix(".exe")
+            source.write_text(MOCK + body() + HARNESS, encoding="utf-8")
+            compiler = compile_c(source, exe)
+            result = subprocess.run(
+                [str(exe)], check=True, capture_output=True, text=True, timeout=10
+            )
+            print(f"Compiler: {compiler}")
+            print(result.stdout.strip())
+
+
 def benchmark():
- cc=shutil.which('gcc') or 'C:/MinGW/bin/gcc.exe'
- with tempfile.TemporaryDirectory(prefix='guest-wait-real-') as t:
-  p=Path(t)/'test.c';exe=p.with_suffix('.exe');p.write_text(REAL+body()+BENCH,encoding='utf-8')
-  subprocess.run([cc,'-O2',str(p),'-o',str(exe),'-lwinmm'],check=True)
-  subprocess.run([str(exe)],check=True,timeout=15)
-if __name__=='__main__':
- import sys
- if '--benchmark' in sys.argv:benchmark()
- else:unittest.main()
+    with tempfile.TemporaryDirectory(prefix="guest-wait-real-") as temp:
+        source = Path(temp) / "test.c"
+        exe = source.with_suffix(".exe")
+        source.write_text(REAL + body() + BENCH, encoding="utf-8")
+        compiler = compile_c(source, exe, winmm=True)
+        print(f"Compiler: {compiler}")
+        subprocess.run([str(exe)], check=True, timeout=15)
+
+
+if __name__ == "__main__":
+    import sys
+    if "--benchmark" in sys.argv:
+        benchmark()
+    else:
+        unittest.main()
