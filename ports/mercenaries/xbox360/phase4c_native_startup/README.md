@@ -1175,3 +1175,37 @@ P4C-TIMER149-20261019-A
 ```
 
 The W main/env cookie is `0x50435731` (`PCW1`).
+
+
+## Phase 4C-X — bounded direct closure rooted at 0x0022D980
+
+Phase 4C-W passed on hardware. Ordinal 149 `KeSetTimer` received the expected
+20-byte full frame, armed guest KTIMER `0x008695A0` with DPC
+`0x00869580`, returned FALSE for the prior-active state, and startup advanced
+with `fault=0` to `DIRECT_FRONTIER caller=0x0022F0FB target=0x0022D980`.
+
+X retains the proven `0x0022F0FB` closure and computes a second bounded
+depth-2 translated direct closure rooted at `0x0022D980`, capped at 16
+members. Calls beyond that slice remain explicit boundaries.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-X.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\d980_closure_xdk\main.cpp
+build\phase4c_native_startup\d980_closure_xdk\phase4c_env.cpp
+build\phase4c_native_startup\d980_closure_xdk\phase4c-x-manifest.json
+```
+
+Build tag:
+
+```text
+P4C-D980-CLOSURE-20261019-A
+```
+
+The X main/env cookie is `0x50435831` (`PCX1`).
