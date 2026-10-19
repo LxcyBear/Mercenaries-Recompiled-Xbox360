@@ -938,6 +938,7 @@ def main() -> int:
     root_name = root_row["name"]
 
     bodies: list[str] = []
+    rendered_by_va: dict[int, str] = {}
     forward_decls: list[str] = []
     closure_names = set()
 
@@ -946,7 +947,9 @@ def main() -> int:
         name = row["name"]
         closure_names.add(name)
         forward_decls.append(f"static void {name}(void);")
-        bodies.append(localize_and_instrument(row["source"], name))
+        rendered = localize_and_instrument(row["source"], name)
+        rendered_by_va[va] = rendered
+        bodies.append(rendered)
 
     template = args.phase3n_template.read_text(encoding="utf-8")
     marker = "/*__P3NB_FORWARD_DECLS__*/"
@@ -1003,10 +1006,11 @@ def main() -> int:
     unknown: dict[str, list[str]] = {}
     for va in member_vas:
         row = generated[va]
-        calls = set(CALL_RE.findall(mask_noncode(row["source"])))
+        rendered = rendered_by_va[va]
+        calls = set(CALL_RE.findall(mask_noncode(rendered)))
         calls.discard(row["name"])
         local_supplied = set(supplied)
-        local_supplied.update(DEFINE_RE.findall(row["source"]))
+        local_supplied.update(DEFINE_RE.findall(rendered))
         missing = sorted(
             name for name in calls
             if name not in local_supplied and name not in STANDARD_CALLS
