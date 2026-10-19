@@ -205,6 +205,16 @@ try {
         $fatal -eq 0
     )
 
+    $bulkWrites = 0
+    if ($null -ne $lowering.PSObject.Properties["bulk_writes"]) {
+        $bulkWrites = [int]$lowering.bulk_writes
+    }
+
+    $nextMessage = "Resolve every failed translation, residual post-patch unresolved stub, or Gate-3-fatal portability leak before scale testing."
+    if ($gatePass) {
+        $nextMessage = "Select and emit the Phase 3N-B XDK scale-pack harness."
+    }
+
     $gate = [ordered]@{
         phase = "3N-A"
         purpose = "full post-patch generated-tree audit before XDK scale proof"
@@ -222,7 +232,7 @@ try {
             writes = [int]$lowering.writes
             compound_writes = [int]$lowering.compound_writes
             incdec_writes = [int]$lowering.incdec_writes
-            bulk_writes = if ($null -ne $lowering.PSObject.Properties["bulk_writes"]) { [int]$lowering.bulk_writes } else { 0 }
+            bulk_writes = $bulkWrites
             source_bytes = [int64]$lowering.source_bytes
         }
         portability = [ordered]@{
@@ -234,11 +244,7 @@ try {
             translated_surfaces = $portability.translated_surfaces
         }
         gate_a_pass = $gatePass
-        next = if ($gatePass) {
-            "Select and emit the Phase 3N-B XDK scale-pack harness."
-        } else {
-            "Resolve every failed translation, residual post-patch unresolved stub, or Gate-3-fatal portability leak before scale testing."
-        }
+        next = $nextMessage
     }
 
     $gate | ConvertTo-Json -Depth 10 |
@@ -248,10 +254,6 @@ try {
     Write-Host "[Phase3N] ===== STAGE A SUMMARY ====="
     Write-Host ("[Phase3N] Generated functions: {0}" -f $portability.function_bodies)
     Write-Host ("[Phase3N] Recompiler: {0}/{1} translated, failures={2}, raw unresolved={3}, residual unresolved={4}" -f $translated, $total, $failed, $unresolved, $residualUnresolved)
-    $bulkWrites = 0
-    if ($null -ne $lowering.PSObject.Properties["bulk_writes"]) {
-        $bulkWrites = [int]$lowering.bulk_writes
-    }
     Write-Host ("[Phase3N] Explicit lowering: reads={0}, writes={1}, compound={2}, inc/dec={3}, bulk={4}" -f $lowering.reads, $lowering.writes, $lowering.compound_writes, $lowering.incdec_writes, $bulkWrites)
     Write-Host ("[Phase3N] Gate-3-fatal portability hits: {0}" -f $fatal)
     Write-Host ("[Phase3N] Generated tree SHA256: {0}" -f $treeSha256)
