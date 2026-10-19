@@ -115,6 +115,32 @@ def _skip_ws(mask: str, pos: int, step: int = 1) -> int:
     return pos
 
 
+def _is_unary_address_of(mask: str, amp_pos: int) -> bool:
+    """Distinguish unary address-of from binary bitwise AND.
+
+    Examples:
+        foo(&MEM32(x))      -> unary address-of
+        eax = eax & MEM32(x) -> binary bitwise AND
+    """
+    prev = _skip_ws(mask, amp_pos - 1, -1)
+    if prev < 0:
+        return True
+
+    ch = mask[prev]
+    # After an opening delimiter, comma, assignment, or another operator, '&'
+    # begins a unary operand. After an identifier/value/closing delimiter it is
+    # the binary bitwise-AND operator.
+    if ch in "([{,:;=!?+-*/%~^|&<>":
+        return True
+
+    # Handle the uncommon but valid 'return &MEM32(...)' shape.
+    prefix = mask[:amp_pos].rstrip()
+    if prefix.endswith("return"):
+        return True
+
+    return False
+
+
 def _matching_paren(mask: str, open_pos: int) -> int:
     if open_pos >= len(mask) or mask[open_pos] != "(":
         raise LoweringError("internal: expected '('")
@@ -256,7 +282,8 @@ def _lower_reads_only(fragment: str) -> tuple[str, int]:
             raise LoweringError(f"write-shaped {name}(...) appeared inside an expression")
 
         before = _skip_ws(mask, match.start() - 1, -1)
-        if before >= 0 and mask[before] == "&":
+        if (before >= 0 and mask[before] == "&" and
+                _is_unary_address_of(mask, before)):
             raise LoweringError(f"address-of {name}(...) requires a manual guest bridge")
         if before >= 1 and mask[before - 1:before + 1] in ("++", "--"):
             raise LoweringError(f"prefix write-shaped {name}(...) appeared inside an expression")
@@ -295,7 +322,8 @@ def _find_write(source: str):
             return ("prefix", name, match.start(), open_pos, close_pos, before - 1,
                     mask[before - 1:before + 1])
 
-        if before >= 0 and mask[before] == "&":
+        if (before >= 0 and mask[before] == "&" and
+                _is_unary_address_of(mask, before)):
             raise LoweringError(
                 f"address-of legacy guest lvalue {name}(...) requires a manual bridge")
     return None
