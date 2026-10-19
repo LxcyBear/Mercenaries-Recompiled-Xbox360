@@ -1527,6 +1527,89 @@ static void phase4c_ke_set_timer(uint32_t savedEsp)
     }
 }
 
+/*
+ * Exact maintained Mercenaries CRT memmove ABI used by the production port.
+ * The translated CALL has already pushed the recompiler's dummy return slot.
+ * CRT memmove is cdecl, so this helper consumes only that return slot; the
+ * caller remains responsible for its 12 argument bytes.
+ */
+void recomp_crt_memmove(void)
+{
+    const uint32_t frameEsp = g_esp;
+    const uint32_t returnSlot = GUEST_READ32(frameEsp + 0u);
+    const uint32_t destination = GUEST_READ32(frameEsp + 4u);
+    const uint32_t source = GUEST_READ32(frameEsp + 8u);
+    const uint32_t length = GUEST_READ32(frameEsp + 12u);
+    BYTE* dst = NULL;
+    BYTE* src = NULL;
+    char line[448];
+
+    if (s_accessFault)
+    {
+        phase4c_escape(
+            PHASE4C_BOUNDARY_GUEST_FAULT,
+            0x00238C00u,
+            frameEsp);
+        return;
+    }
+
+    sprintf(
+        line,
+        "CRT memmove LIVE FRAME: ret=%08X dest=%08X src=%08X len=%u esp=%08X",
+        (unsigned int)returnSlot,
+        (unsigned int)destination,
+        (unsigned int)source,
+        (unsigned int)length,
+        (unsigned int)frameEsp);
+    trace(line);
+
+    if (returnSlot != 0u)
+    {
+        trace("CRT memmove FRAME MISMATCH: translated dummy return is nonzero");
+        phase4c_escape(
+            PHASE4C_BOUNDARY_KERNEL_FRAME,
+            0x00238C00u,
+            frameEsp);
+        return;
+    }
+
+    if (length != 0u)
+    {
+        dst = guest_ptr(destination, length);
+        src = guest_ptr(source, length);
+        if (!dst || !src)
+        {
+            trace("CRT memmove GUEST RANGE FAILURE");
+            if (!dst)
+                phase4c_note_access_fault(destination, length, 1u);
+            else
+                phase4c_note_access_fault(source, length, 0u);
+            if (!s_phase4cFaultEscapeArmed)
+            {
+                phase4c_escape(
+                    PHASE4C_BOUNDARY_GUEST_FAULT,
+                    !dst ? destination : source,
+                    frameEsp);
+            }
+            return;
+        }
+
+        memmove(dst, src, length);
+    }
+
+    g_eax = destination;
+    g_esp = frameEsp + 4u;
+
+    sprintf(
+        line,
+        "PASS: recomp_crt_memmove matched maintained cdecl semantics dest=%08X src=%08X len=%u new_esp=%08X",
+        (unsigned int)destination,
+        (unsigned int)source,
+        (unsigned int)length,
+        (unsigned int)g_esp);
+    trace(line);
+}
+
 static void phase4c_direct_frontier(uint32_t target)
 {
     char line[192];
@@ -1969,6 +2052,7 @@ def main() -> int:
         "phase4c_rtl_nt_status_to_dos_error",
         "phase4c_ke_set_timer",
         "phase4c_system_time_100ns",
+        "recomp_crt_memmove",
         "phase4c_direct_frontier",
         "phase4c_fix_startup_data_thunks",
         "phase4c_init_kernel_header_page",
@@ -2017,6 +2101,15 @@ def main() -> int:
         "promoted_closure_members": [
             f"0x{va:08X}" for va in sorted(promoted_closure_members)
         ],
+        "continued_support_helper_memmove": {
+            "name": "recomp_crt_memmove",
+            "retail_entry": "0x00238C00",
+            "calling_convention": "cdecl",
+            "arg_bytes": 12,
+            "callee_cleanup_bytes": 4,
+            "semantics": "overlap-safe guest memmove; EAX=destination; preserve caller registers",
+            "oracle": "tools/recomp/test_crt_memmove_native.py",
+        },
         "continued_kernel_call_149": {
             "target": "0x80000095",
             "ordinal": 149,
@@ -2226,7 +2319,8 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         "    trace(\"PASS: bounded direct closure rooted at 0022F0FB is packed for translated execution\");\n"
         "    trace(\"PASS: ordinal 149 KeSetTimer continuation armed\");\n"
         "    trace(\"PASS: bounded direct closure rooted at 0022D980 is packed for translated execution\");\n"
-        "    trace(\"PASS: hardware-observed direct root 00238C00 is packed for translated execution\");\n",
+        "    trace(\"PASS: hardware-observed direct root 00238C00 is packed for translated execution\");\n"
+        "    trace(\"PASS: maintained recomp_crt_memmove cdecl support armed\");\n",
         1,
     )
     driver = driver.replace(
