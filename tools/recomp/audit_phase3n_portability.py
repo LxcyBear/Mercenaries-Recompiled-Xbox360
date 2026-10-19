@@ -203,8 +203,44 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
     for row in rows:
         for entry in row["unresolved_entries"]:
             unresolved_entries.append({"file": row["path"], **entry})
+
+    # A post-patch unresolved stub is only a real Gate-3 dependency if some
+    # other generated C file still references its symbol. Mercenaries patches
+    # repair a number of shared continuations by replacing synthetic sub_XXXX()
+    # calls with local gotos, but the original auto-generated stub body remains
+    # in recomp_stubs_unresolved.c. Count those dead bodies separately rather
+    # than treating them as unresolved execution paths.
+    live_entries = []
+    dead_entries = []
+    source_code = {}
+    for path in files:
+        if "stubs_unresolved" in path.name:
+            continue
+        source_code[path] = _mask_noncode(
+            path.read_text(encoding="utf-8", errors="replace")
+        )
+
+    for entry in unresolved_entries:
+        symbol = entry["name"]
+        pattern = re.compile(r"\b" + re.escape(symbol) + r"\s*\(")
+        references = []
+        for path, code_text in source_code.items():
+            count = len(pattern.findall(code_text))
+            if count:
+                references.append({"file": str(path), "count": count})
+        row = dict(entry)
+        row["references"] = references
+        row["reference_count"] = sum(item["count"] for item in references)
+        if references:
+            live_entries.append(row)
+        else:
+            dead_entries.append(row)
+
     unresolved_classification = classify_unresolved(
-        unresolved_entries, functions_path
+        live_entries, functions_path
+    )
+    dead_unresolved_classification = classify_unresolved(
+        dead_entries, functions_path
     )
     return {
         "root": str(root),
@@ -212,11 +248,14 @@ def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
         "source_bytes": sum(row["bytes"] for row in rows),
         "function_bodies": sum(row["functions"] for row in rows),
         "failed_translation_stubs": sum(row["failed_stubs"] for row in rows),
-        "residual_unresolved_stubs": sum(
+        "residual_unresolved_stub_bodies": sum(
             row["residual_unresolved_stubs"] for row in rows
         ),
+        "residual_unresolved_stubs": len(live_entries),
+        "dead_unresolved_stub_bodies": len(dead_entries),
         "unresolved_stub_files": unresolved_files,
         "unresolved_classification": unresolved_classification,
+        "dead_unresolved_classification": dead_unresolved_classification,
         "fatal_count": len(fatal),
         "fatal": fatal,
         "platform_surfaces": dict(platform),
@@ -249,7 +288,8 @@ def main(argv=None) -> int:
         f"files={report['file_count']} functions={report['function_bodies']} "
         f"bytes={report['source_bytes']} fatal={report['fatal_count']} "
         f"failed_stubs={report['failed_translation_stubs']} "
-        f"residual_unresolved={report['residual_unresolved_stubs']}"
+        f"residual_unresolved={report['residual_unresolved_stubs']} "
+        f"dead_stub_bodies={report['dead_unresolved_stub_bodies']}"
     )
     if report["platform_surfaces"]:
         print("Phase 4+ platform surfaces: " + ", ".join(
@@ -260,7 +300,7 @@ def main(argv=None) -> int:
     unresolved_info = report.get("unresolved_classification", {})
     unresolved_counts = unresolved_info.get("counts", {})
     if unresolved_counts:
-        print("Residual unresolved classification: " + ", ".join(
+        print("LIVE residual unresolved classification: " + ", ".join(
             f"{key}={value}" for key, value in sorted(unresolved_counts.items())
         ))
         for entry in unresolved_info.get("entries", []):
@@ -281,6 +321,20 @@ def main(argv=None) -> int:
                 f"{entry['address_hex']} {entry['name']}: "
                 f"{entry.get('classification', 'unclassified')}{details}"
             )
+
+    dead_info = report.get("dead_unresolved_classification", {})
+    dead_counts = dead_info.get("counts", {})
+    if report.get("dead_unresolved_stub_bodies", 0):
+        print(
+            "Dead repaired unresolved stub bodies: "
+            f"{report['dead_unresolved_stub_bodies']}"
+            + (
+                " (" + ", ".join(
+                    f"{key}={value}" for key, value in sorted(dead_counts.items())
+                ) + ")"
+                if dead_counts else ""
+            )
+        )
 
     if report["fatal"]:
         print("FAIL: Gate-3-fatal generated portability leaks remain",
