@@ -972,6 +972,37 @@ loc_{address + 25:08X}: ;
     return functions.sub(repair, text)
 
 
+def retail_shared_tail_000e1d7a_patch():
+    """Restore the reviewed retail 0x000E1D7A alternate entry exactly.
+
+    0x000E1D79 is the normal entry's one-byte PUSH ESI. The branch at
+    0x000E1A20 enters at +1, intentionally reusing its caller-owned saved ESI
+    before the common POP/add/RET 4 tail.
+    """
+    before = (
+        'void sub_000E1D7A(void) { esp += 4; '
+        '/* 0x000E1D7A: not detected; minimal guest ret */ }'
+    )
+    after = '''void sub_000E1D7A(void)
+{
+    /* Retail bytes 000E1D7A..000E1D9F, reviewed by Phase 3N. */
+    recomp_xmm_loadss(xmm1v, esi + 0x3C); /* movss */
+    recomp_xmm_loadss(xmm0v, esp + 0x18); /* movss */
+    xmm1 = xmm1 + xmm0; /* addss */
+    xmm0 = xmm0 + MEMF(esi + 0x38); /* addss */
+    MEMF(esi + 0x3C) = xmm1; /* movss */
+    MEMF(esi + 0x38) = xmm0; /* movss */
+    POP32(esp, esi);
+    esp = esp + 0x10;
+    esp += 8; return; /* ret 4 */
+}'''
+    return GeneratedPatch(
+        'Retail shared tail 000E1D7A preserves caller frame',
+        before,
+        after,
+    )
+
+
 SIMPLE_SHARED_EPILOGUES = (
     ('00040626', '5f5e83c440c20400', ('edi', 'esi'), 0x40, 4),
     ('000D9303', '5f5e5bc20800', ('edi', 'esi', 'ebx'), 0, 8),
@@ -1258,7 +1289,9 @@ PATCHES = tuple(GeneratedPatch(
 ) + tuple(GeneratedPatch(
     f'Retail stack-relative COMISS {site} survives ESP changes', before, after)
     for site, va, raw, delta, before, after in SSE_STACK_COMPARE_REPAIRS
-) + tuple(simple_shared_epilogue_patch(*entry) for entry in SIMPLE_SHARED_EPILOGUES) + (
+) + (retail_shared_tail_000e1d7a_patch(),) + tuple(
+    simple_shared_epilogue_patch(*entry) for entry in SIMPLE_SHARED_EPILOGUES
+) + (
     GeneratedPatch('Optional M1 texture at RedRenderer binding',
         'loc_00210560: ;\n    PUSH32(esp, esi);\n    esi = MEM32(esp + 0xC);',
         'loc_00210560: ;\n    PUSH32(esp, esi);\n    esi = recomp_ps2_texture(MEM32(esp + 0xC));'),
