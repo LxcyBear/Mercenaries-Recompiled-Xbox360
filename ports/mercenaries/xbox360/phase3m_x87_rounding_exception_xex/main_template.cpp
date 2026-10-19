@@ -308,7 +308,9 @@ static void trace_func(DWORD va)
     s_lastBackedgeTo = (DWORD)(toVa); \
 } while (0)
 
+uint32_t recomp_guest_read32(uint32_t address);
 void recomp_guest_write8(uint32_t address, uint8_t value);
+void recomp_guest_write32(uint32_t address, uint32_t value);
 
 static int phase3m_budget_tick(DWORD va)
 {
@@ -317,16 +319,20 @@ static int phase3m_budget_tick(DWORD va)
     /*
      * Profile 16 models one external producer event after sub_0020A2B0 has
      * completed setup and before the root begins consuming queued entries.
-     * Retail sub_0020D450 gates sub_0020BDC0 on guest byte 0x7AC7A0, while
-     * sub_0020D2B0 clears that byte during setup. In the isolated closure no
-     * selected member can set it nonzero; the full game expects outside state
-     * to do so. Inject once at root safe point 0x000A5BD2 without modifying any
-     * translated function's semantics.
+     * Retail sub_0020D450 first requires the current queue cursor
+     * (0x7AC7C4) to be below the external queue end (0x7AC7A4), then gates
+     * sub_0020BDC0 on guest byte 0x7AC7A0. The isolated closure begins with an
+     * empty queue window and sub_0020D2B0 clears A0 during setup. The full game
+     * expects outside state to provide both conditions. Inject one bounded
+     * queue window plus the producer flag at root safe point 0x000A5BD2 without
+     * modifying any translated retail body.
      */
     if (s_activeProfile == 16u &&
         !s_phase3mExternalEventInjected &&
         va == 0x000A5BD2u)
     {
+        uint32_t queueCursor = recomp_guest_read32(0x007AC7C4u);
+        recomp_guest_write32(0x007AC7A4u, queueCursor + 0x1000u);
         recomp_guest_write8(0x007AC7A0u, 1u);
         s_phase3mExternalEventInjected = 1;
     }
@@ -1721,8 +1727,8 @@ static int run_case(
     {
         ok &= check(
             a.externalEventInjected && b.externalEventInjected,
-            "PASS: external producer event injected at post-setup root safe point",
-            "FAIL: external producer event was not injected");
+            "PASS: external queue/producer event injected at post-setup root safe point",
+            "FAIL: external queue/producer event was not injected");
     }
 
     ok &= check(
@@ -1938,8 +1944,8 @@ VOID __cdecl main()
         NULL);
 
     trace("PHASE 3M X87 ROUNDING + EXCEPTION CLUSTER START");
-    trace("BUILD TAG: P3M-X87ROUND-20261019-B");
-    trace("Coverage policy: x87 helper checks + 17-profile deterministic retail closure; profile 16 injects one external producer event at 0x000A5BD2");
+    trace("BUILD TAG: P3M-X87ROUND-20261019-C");
+    trace("Coverage policy: x87 helper checks + 17-profile deterministic retail closure; profile 16 injects one bounded external queue event at 0x000A5BD2");
 
     sprintf(
         line,
