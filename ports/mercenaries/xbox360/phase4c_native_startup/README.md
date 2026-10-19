@@ -1307,3 +1307,21 @@ build\phase4c_native_startup\vmalloc184_xdk\phase4c-z-manifest.json
 Build tag: `P4C-NTALLOC184-20261019-A`.
 
 The Z main/env cookie is `0x50435A31` (`PCZ1`).
+
+
+## Phase 4C-AA — reserved guest virtual-memory state
+
+Phase 4C-Z passed on hardware and captured the exact ordinal-184 request:
+`BaseAddress=NULL`, `RegionSize=0x00100000`, `AllocationType=MEM_RESERVE
+(0x2000)`, `Protect=PAGE_READWRITE (0x4)`. The locked 24-byte full frame was
+correct and the boundary remained `fault=0`.
+
+Z intentionally stopped at `VM_UNSUPPORTED` because the focused Phase-4C
+arena currently has host storage for all guest RAM but does not distinguish
+reserved/uncommitted pages from committed pages.
+
+AA is therefore the next Phase-4C blocker: add explicit guest virtual-page
+reservation/commit state for the ordinal-184 path, preserve the 1 MiB reserved
+VA across the later commit call(s), and continue the real startup path. This is
+platform/runtime behavior required by the observed boot path, not speculative
+subsystem work.
