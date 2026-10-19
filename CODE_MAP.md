@@ -34,7 +34,8 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 | 4B-B2 | **Complete PASS** | Nine file/handle imports route through `merc_platform_file_*`; audit/regressions pass at 2 direct host-backed + 15 platform-bound, 0 ABI errors, and 0 referenced fallbacks. |
 | 4B-C | **Hardware PASS** | `P4B-MEMPROT-20261019-B` passed on real Xenon: tracked release/reuse, logical protection, decommit/recommit, zero-init, bounds and stale-release behavior all PASS. |
 | 4B-C2 | **Complete PASS** | Final audit/regressions pass at 0 direct host-backed + 15 platform-bound + 2 guest-native, 0 ABI errors and 0 referenced fallbacks. |
-| 4C | **Active next** | Link and execute the first real retail-derived translated Mercenaries startup path with the migrated Xenon service layer. |
+| 4C | **Active** | Link and execute the first real retail-derived translated Mercenaries startup path with the migrated Xenon service layer. |
+| 4C-A | **Preflight ready** | Analyze the locked Phase-3N-A generated tree from retail entry `0x0022964A`; require complete direct translated closure and report dynamic/indirect boundaries before XDK startup emission. |
 
 This table is the continuation of the Phase-3 hardware map: later phases should only advance when their stated evidence gate passes.
 
