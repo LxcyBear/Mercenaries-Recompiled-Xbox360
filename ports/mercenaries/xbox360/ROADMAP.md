@@ -79,10 +79,8 @@ Gate:
 
 Phase 4B-A/A2 is complete.
 
-## Active
-
 ### Phase 4B-B — Native file/handle service slice
-**Status: hardware gate A ready for real-Xenon validation.**
+**Status: PASS on real Xbox 360 hardware.**
 
 Hardware gate:
 `ports/mercenaries/xbox360/phase4b_native_file_handles_xex`
@@ -90,7 +88,20 @@ Hardware gate:
 Build marker:
 `P4B-FILE-20261019-A`
 
-Convert and hardware-prove the cohesive file/handle surface, expected to include:
+Hardware PASS covered:
+- test directory create/existing;
+- create/overwrite;
+- write + flush;
+- size and handle-information query;
+- absolute seek and current-position observation;
+- full and explicit-offset reads;
+- EOF truncate and preserved size after reopen;
+- path attributes;
+- directory enumeration;
+- missing-file failure/not-found semantics;
+- file/enumeration close and cleanup.
+
+The cohesive retail file/handle surface includes:
 - `NtCreateFile`
 - `NtOpenFile`
 - `NtReadFile`
@@ -101,12 +112,26 @@ Convert and hardware-prove the cohesive file/handle surface, expected to include
 - `NtQueryFullAttributesFile`
 - `NtClose`
 
-Goals:
-1. preserve Xbox guest path/layout semantics;
-2. isolate XDK file/handle primitives behind a platform boundary;
-3. prove representative create/open/read/write/query/close behavior on Xenon;
-4. rerun the exact retail surface audit and regressions;
-5. reduce the remaining direct host-backed count without weakening fallbacks or ABI checks.
+Phase 4B-B hardware proof is complete.
+
+## Active
+
+### Phase 4B-B2 — Integrate hardware-proven file/handle backend
+**Status: runtime patch landed; verification active.**
+
+The nine file/handle import paths now route through
+`src/platform/kernel_file_io.*` via `merc_platform_file_*`.
+
+Verification target:
+- 2 remaining direct semantic host-backed imports;
+- 15 Phase-4B platform-bound imports;
+- 0 ABI metadata errors;
+- 0 statically referenced fallbacks;
+- timing/sync regressions remain green;
+- file/handle platform-boundary regression passes.
+
+Gate:
+`ports/mercenaries/xbox360/phase4b_native_file_handles_xex/Verify-Phase4B-B2.ps1`
 
 ## Next
 
