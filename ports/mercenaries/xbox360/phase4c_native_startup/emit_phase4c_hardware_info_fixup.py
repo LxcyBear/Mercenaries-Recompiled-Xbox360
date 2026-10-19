@@ -1131,9 +1131,13 @@ def main() -> int:
         raise SystemExit("[Phase4C-J] boundary PASS marker changed")
     driver = driver.replace(old_escape_pass, new_escape_pass)
 
+    result_marker = "PHASE 4C-J BOUNDED REAL STARTUP RESULT"
+    if result_marker not in driver:
+        raise SystemExit("[Phase4C-J] generated result label marker changed")
     driver = driver.replace(
-        "PHASE 4C-B BOUNDED REAL STARTUP RESULT",
+        result_marker,
         "PHASE 4C-J XBOXHARDWAREINFO DATA-THUNK RESULT",
+        1,
     )
     arm_marker = f"""    if (escaped == 0)
     {{
@@ -1203,9 +1207,10 @@ def main() -> int:
     print(f"[Phase4C-J] main: {args.out_dir / 'main.cpp'}")
     print(f"[Phase4C-J] env:  {args.out_dir / 'phase4c_env.cpp'}")
     print(
-        "[Phase4C-J] Runtime policy: reproduce the Phase 4C-H callback path, "
-        "capture address/width/direction for the first rejected guest access, "
-        "and escape immediately from that accessor."
+        "[Phase4C-J] Runtime policy: relocate only ordinal 322 / "
+        "XboxHardwareInfo, then continue to the next dynamic/direct frontier "
+        "or next unresolved data-import access while retaining first-fault "
+        "provenance."
     )
     return 0
 
