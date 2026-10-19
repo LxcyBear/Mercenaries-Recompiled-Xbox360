@@ -2068,7 +2068,6 @@ def main() -> int:
         "PHASE 4C-U",
         "PHASE 4C-V",
         "PHASE 4C-W",
-        "PHASE 4C-W",
     ):
         env_source = env_source.replace(stale_phase, "PHASE 4C-X")
     env_source += """
@@ -2085,6 +2084,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         "PHASE 4C-T",
         "PHASE 4C-U",
         "PHASE 4C-V",
+        "PHASE 4C-W",
     ):
         env_source = env_source.replace(stale_phase, "PHASE 4C-X")
 
