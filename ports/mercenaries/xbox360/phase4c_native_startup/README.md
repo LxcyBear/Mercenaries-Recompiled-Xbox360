@@ -887,3 +887,46 @@ P4C-DIRECTF128-20261019-A
 ```
 
 Only `0x0022F128` is newly added beyond the N pack.
+
+
+## Phase 4C-O hardware result — PASS
+
+```text
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=0022F128 target=8000006B esp=008BFEE4 saved_esp=008BFEF4 ticks=30 trace=10
+[Merc360:P4C] ... fault=0
+[Merc360:P4C] trace[9]=0022F128
+[Merc360:P4C] PHASE 4C-O PROMOTED F128 RESULT: PASS
+```
+
+Target `0x8000006B` is ordinal 107, `KeInitializeDpc`. The 16-byte live
+frame matches its 12-byte production ABI plus the synthetic translated return.
+
+## Phase 4C-P — KeInitializeDpc continuation
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-P.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\dpc107_xdk\main.cpp
+build\phase4c_native_startup\dpc107_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-DPC107-20261019-A
+```
+
+Expected live evidence includes:
+
+```text
+KeInitializeDpc LIVE FRAME: dpc=XXXXXXXX routine=XXXXXXXX context=XXXXXXXX esp=XXXXXXXX saved_esp=XXXXXXXX
+PASS: ordinal 107 KeInitializeDpc matched production guest-KDPC initialization semantics
+```
+
+The P prep gate also requires Phase-4C-P labels in both generated source files.
