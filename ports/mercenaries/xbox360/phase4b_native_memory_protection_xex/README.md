@@ -1,6 +1,6 @@
 # Phase 4B-C — Guest memory/protection hardware gate
 
-**Status: hardware gate B ready after correcting a Build-A test-ordering defect.**
+**Status: hardware PASS; Phase 4B-C2 runtime verification active.**
 
 Phase 4B-A/A2 and Phase 4B-B/B2 are complete. The exact retail audit now
 reports only two remaining direct semantic host-backed import paths:
@@ -98,3 +98,54 @@ allocation was correct behavior.
 
 Build B moves the stale-VA double-release check before reuse and additionally
 verifies that the reused live allocation can later be released cleanly.
+
+
+## Hardware result — October 19, 2026
+
+Build `P4B-MEMPROT-20261019-B` passed on real Xbox 360 hardware.
+
+Every bounded guest-owned memory check passed:
+
+- bounded guest arena allocation;
+- 4 KiB-aligned allocation and writable payload;
+- per-page protection and adjacent-page isolation;
+- multi-page protection coherence;
+- logical decommit/no-access state;
+- logical recommit;
+- tracked whole-allocation release;
+- clearing released base/size;
+- stale/double-release rejection;
+- released-range reuse;
+- zero-initialized reuse;
+- cross-arena protection rejection;
+- clean release of the reused allocation.
+
+Overall result:
+
+```text
+[Merc360:P4B-MEM] PHASE 4B-C GUEST MEMORY/PROTECTION RESULT: PASS
+```
+
+## Phase 4B-C2 verification
+
+The production guest bridge now uses page-backed guest allocations, tracked
+guest release and logical per-page guest protection state instead of
+`VirtualFree` / `VirtualProtect` on translated pointers.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4b_native_memory_protection_xex\Verify-Phase4B-C2.ps1"
+```
+
+Expected final service accounting:
+
+```text
+host_surface=0
+platform_bound=15
+guest_native=2
+arg_missing=0
+arg_mismatch=0
+fallback_referenced=0
+fallback_refs=0
+```
