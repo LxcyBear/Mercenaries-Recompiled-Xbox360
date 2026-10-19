@@ -39,7 +39,8 @@ Snapshot: 2026-10-19.
 | 4C-E | **Hardware PASS** | Continuous Xenon execution reached the real title thread and advanced to caller `0x0022B363` -> `0x80000115` with fault=0; ordinal `0x115` = 277 = `RtlEnterCriticalSection`. |
 | 4C-F | **Hardware PASS** | Real title-thread execution continued through ordinal 277 `RtlEnterCriticalSection`; live CS=`0x00312FC0`, exact 8-byte frame, stack restored, fault=0. Next boundary: `0x0022B363 -> 0x80000126`. |
 | 4C-G | **Hardware PASS** | Real title-thread execution completed ordinal 277/294 enter/leave on the same guest CS `0x00312FC0`; exact 8-byte frames, fault=0. Next live target is `0x002295D6`, exactly the ctx1 captured from the real thread-creation frame. |
-| 4C-H | **Package prep ready** | Enter hardware-confirmed callback `0x002295D6` with a depth-1 bounded direct-call frontier; deeper translated calls become deterministic DIRECT_FRONTIER evidence boundaries instead of recursively importing the full title graph. |
+| 4C-H | **Hardware callback entry proven; gate blocked** | Xenon entered callback `0x002295D6`, reached `0x0022C4DF`, then stopped on a deterministic `GUEST_FAULT` at translated VA `0x0022C4FF`; fault=1, stack balanced. |
+| 4C-I | **Package prep ready** | Reproduce the exact H path and record first rejected guest access provenance: guest address, READ/WRITE direction, width, and translated caller without relaxing memory validity. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
