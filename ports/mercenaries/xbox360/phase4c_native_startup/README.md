@@ -612,3 +612,25 @@ immediately from the rejecting accessor:
 `FAULT ACCESS IMMEDIATE: READ|WRITE width=N guest=XXXXXXXX`.
 
 No guest-memory mapping rule is relaxed by this change.
+
+
+### Phase 4C-I probe revision B
+
+The first 4C-I hardware attempt reached the confirmed startup callback and then
+stalled instead of reproducing H's later bounded fault. That run is treated as
+a diagnostic-harness failure, not new title behavior.
+
+Revision B fixes two probe issues:
+
+- guest-access instrumentation is anchored to exact accessor function bodies;
+- after the driver's `setjmp` escape point is armed, the first rejected guest
+  access records address/width/direction and immediately escapes as
+  `GUEST_FAULT` instead of allowing translated execution to continue.
+
+Guest address validity is unchanged. No additional region is mapped.
+
+Build tag:
+
+```text
+P4C-FAULTPROBE-20261019-B
+```
