@@ -116,12 +116,18 @@ def _skip_ws(mask: str, pos: int, step: int = 1) -> int:
 
 
 def _is_unary_address_of(mask: str, amp_pos: int) -> bool:
-    """Distinguish unary address-of from binary bitwise AND.
+    """Distinguish unary address-of from binary/logical AND.
 
     Examples:
-        foo(&MEM32(x))      -> unary address-of
-        eax = eax & MEM32(x) -> binary bitwise AND
+        foo(&MEM32(x))        -> unary address-of
+        eax = eax & MEM32(x)  -> binary bitwise AND
+        if (eax && MEM8(x))   -> logical AND
     """
+    # If this '&' is literally the second character of '&&', it is the
+    # logical-AND operator immediately preceding the MEM expression.
+    if amp_pos > 0 and mask[amp_pos - 1] == "&":
+        return False
+
     prev = _skip_ws(mask, amp_pos - 1, -1)
     if prev < 0:
         return True
