@@ -1359,3 +1359,37 @@ build\phase4c_native_startup\vmreserve_aa_xdk\phase4c-aa-manifest.json
 Build tag: `P4C-VMRESERVE-AA-20261019-A`.
 
 The AA main/env cookie is `0x50434141` (`PCAA`).
+
+
+## Phase 4C-AB — ordinal 291 RtlInitializeCriticalSection
+
+Phase 4C-AA passed on hardware. The title reserved a 1 MiB guest virtual range
+at `0x03F00000`, then immediately committed the first 4 KiB at the same VA.
+Both ordinal-184 calls returned STATUS_SUCCESS and startup advanced with
+`fault=0` to `ICALL_SAFE target=0x80000123`.
+
+`0x80000123` is ordinal 291, `RtlInitializeCriticalSection`. The live
+frame is 8 bytes total: the translated dummy return plus one 4-byte stdcall
+argument.
+
+AB preserves the proven reserve/commit page state and continues ordinal 291
+using the production runtime's maintained serialized-guest semantics: no host
+critical-section mapping, EAX=0, and stdcall cleanup.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-AB.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\rtl291_ab_xdk\main.cpp
+build\phase4c_native_startup\rtl291_ab_xdk\phase4c_env.cpp
+build\phase4c_native_startup\rtl291_ab_xdk\phase4c-ab-manifest.json
+```
+
+Build tag: `P4C-RTL291-AB-20261019-A`.
+
+The AB main/env cookie is `0x50434142` (`PCAB`).
