@@ -588,7 +588,7 @@ build\phase4c_native_startup\fault_probe_xdk\phase4c_env.cpp
 Build tag:
 
 ```text
-P4C-FAULTPROBE-20261019-A
+P4C-FAULTPROBE-20261019-B
 ```
 
 Expected additional xbWatson evidence:
@@ -599,3 +599,16 @@ FAULT ACCESS: READ|WRITE width=N guest=XXXXXXXX translated_caller=0022C4DF
 
 The probe records only the first rejected access and otherwise preserves the
 existing guest validity rules.
+
+
+### 4C-I Build A superseded
+
+The first 4C-I probe hung immediately after entering `0x002295D6`. The issue
+was in the diagnostic transform, not evidence of a new title behavior: accessor
+names were located by loose textual search and could match earlier helper uses.
+
+4C-I Build B uses exact accessor-body matching and writes first-fault telemetry
+immediately from the rejecting accessor:
+`FAULT ACCESS IMMEDIATE: READ|WRITE width=N guest=XXXXXXXX`.
+
+No guest-memory mapping rule is relaxed by this change.
