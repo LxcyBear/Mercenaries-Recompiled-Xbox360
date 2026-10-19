@@ -852,3 +852,38 @@ Expected live evidence includes:
 HalRegisterShutdownNotification LIVE FRAME: registration=XXXXXXXX register_raw=XXXXXXXX register=N esp=XXXXXXXX saved_esp=XXXXXXXX
 PASS: ordinal 47 HalRegisterShutdownNotification matched production no-callback semantics
 ```
+
+
+## Phase 4C-N hardware result — PASS
+
+```text
+[Merc360:P4C] HalRegisterShutdownNotification LIVE FRAME: registration=003134C0 register_raw=00000001 register=1 esp=008BFEFC saved_esp=008BFF08
+[Merc360:P4C] PASS: ordinal 47 HalRegisterShutdownNotification matched production no-callback semantics
+[Merc360:P4C] DIRECT FRONTIER: caller=0022C28B target=0022F128 esp=008BFF04
+[Merc360:P4C] BOUNDARY: kind=DIRECT_FRONTIER caller=0022C28B target=0022F128 esp=008BFF04 saved_esp=008BFF04 ticks=29 trace=9
+[Merc360:P4C] ... fault=0
+[Merc360:P4C] PHASE 4C-N HAL SHUTDOWN-REGISTRATION RESULT: PASS
+```
+
+## Phase 4C-O — promote live direct target 0x0022F128
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-O.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\promoted_f128_xdk\main.cpp
+build\phase4c_native_startup\promoted_f128_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-DIRECTF128-20261019-A
+```
+
+Only `0x0022F128` is newly added beyond the N pack.
