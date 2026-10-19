@@ -1652,7 +1652,7 @@ VOID __cdecl main()
         FILE_ATTRIBUTE_NORMAL,
         NULL);
 
-    trace("PHASE 3K WIDER CONTROL + MIXED FP CLUSTER START");
+    trace("PHASE 3L BOUNDED BACKWARD-CONTROL CLUSTER START");
     trace("BUILD TAG: P3L-BOUNDEDLOOP-20261019-A");
     trace("Coverage policy: deterministic A/B state + full member coverage + real backward-edge execution under hard budget");
 
@@ -1675,9 +1675,9 @@ VOID __cdecl main()
     result = run_fixture();
 
     if (result)
-        trace("PHASE 3K WIDER CONTROL + MIXED FP CLUSTER RESULT: PASS");
+        trace("PHASE 3L BOUNDED BACKWARD-CONTROL CLUSTER RESULT: PASS");
     else
-        trace("PHASE 3K WIDER CONTROL + MIXED FP CLUSTER RESULT: FAIL");
+        trace("PHASE 3L BOUNDED BACKWARD-CONTROL CLUSTER RESULT: FAIL");
 
     free(g_ram);
     g_ram = NULL;
@@ -1716,7 +1716,7 @@ wait_for_exit:
         Sleep(33);
     }
 
-    trace("PHASE 3K WIDER CONTROL + MIXED FP CLUSTER END");
+    trace("PHASE 3L BOUNDED BACKWARD-CONTROL CLUSTER END");
 
     if (s_logFile != INVALID_HANDLE_VALUE)
     {
