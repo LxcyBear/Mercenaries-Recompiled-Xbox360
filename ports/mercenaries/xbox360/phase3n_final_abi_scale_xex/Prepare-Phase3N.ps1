@@ -102,7 +102,38 @@ try {
 
         Write-Host "[Phase3N] Lowering existing patched tree to explicit guest-memory ABI..."
         $lowerer = Join-Path $repoRoot "tools\recomp\lower_explicit_guest_memory.py"
-        Invoke-Python $lowerer $generatedRoot "--report" $loweringReport
+        $resumeLoweringReport = Join-Path $buildRoot "explicit-memory-lowering-resume.json"
+        $priorLowering = $null
+        if (Test-Path -LiteralPath $loweringReport -PathType Leaf) {
+            $priorLowering = Get-Content -LiteralPath $loweringReport -Raw | ConvertFrom-Json
+        }
+
+        Invoke-Python $lowerer $generatedRoot "--report" $resumeLoweringReport
+
+        $resumeLowering = Get-Content -LiteralPath $resumeLoweringReport -Raw | ConvertFrom-Json
+        if ($null -ne $priorLowering) {
+            $priorBulk = 0
+            if ($null -ne $priorLowering.PSObject.Properties["bulk_writes"]) {
+                $priorBulk = [int]$priorLowering.bulk_writes
+            }
+            $resumeBulk = 0
+            if ($null -ne $resumeLowering.PSObject.Properties["bulk_writes"]) {
+                $resumeBulk = [int]$resumeLowering.bulk_writes
+            }
+            [ordered]@{
+                files = [int]$resumeLowering.files
+                reads = [int]$priorLowering.reads + [int]$resumeLowering.reads
+                writes = [int]$priorLowering.writes + [int]$resumeLowering.writes
+                compound_writes = [int]$priorLowering.compound_writes + [int]$resumeLowering.compound_writes
+                incdec_writes = [int]$priorLowering.incdec_writes + [int]$resumeLowering.incdec_writes
+                bulk_writes = $priorBulk + $resumeBulk
+                source_bytes = [int64]$resumeLowering.source_bytes
+                resumed = $true
+            } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $loweringReport -Encoding UTF8
+        }
+        else {
+            Copy-Item -LiteralPath $resumeLoweringReport -Destination $loweringReport -Force
+        }
 
         Write-Host "[Phase3N] Auditing resumed post-lowering tree..."
         Invoke-Python "-m" "tools.recomp.audit_explicit_guest_memory" $generatedRoot
@@ -191,6 +222,7 @@ try {
             writes = [int]$lowering.writes
             compound_writes = [int]$lowering.compound_writes
             incdec_writes = [int]$lowering.incdec_writes
+            bulk_writes = if ($null -ne $lowering.PSObject.Properties["bulk_writes"]) { [int]$lowering.bulk_writes } else { 0 }
             source_bytes = [int64]$lowering.source_bytes
         }
         portability = [ordered]@{
@@ -216,7 +248,11 @@ try {
     Write-Host "[Phase3N] ===== STAGE A SUMMARY ====="
     Write-Host ("[Phase3N] Generated functions: {0}" -f $portability.function_bodies)
     Write-Host ("[Phase3N] Recompiler: {0}/{1} translated, failures={2}, raw unresolved={3}, residual unresolved={4}" -f $translated, $total, $failed, $unresolved, $residualUnresolved)
-    Write-Host ("[Phase3N] Explicit lowering: reads={0}, writes={1}, compound={2}, inc/dec={3}" -f $lowering.reads, $lowering.writes, $lowering.compound_writes, $lowering.incdec_writes)
+    $bulkWrites = 0
+    if ($null -ne $lowering.PSObject.Properties["bulk_writes"]) {
+        $bulkWrites = [int]$lowering.bulk_writes
+    }
+    Write-Host ("[Phase3N] Explicit lowering: reads={0}, writes={1}, compound={2}, inc/dec={3}, bulk={4}" -f $lowering.reads, $lowering.writes, $lowering.compound_writes, $lowering.incdec_writes, $bulkWrites)
     Write-Host ("[Phase3N] Gate-3-fatal portability hits: {0}" -f $fatal)
     Write-Host ("[Phase3N] Generated tree SHA256: {0}" -f $treeSha256)
     Write-Host ("[Phase3N] Report: {0}" -f $gateReport)
