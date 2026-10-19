@@ -423,29 +423,59 @@ def lower_file_to_temp(path: Path) -> tuple[Path, dict]:
         "reads": 0,
     }
     output = []
-    for line_number, (line, mask_line) in enumerate(
-            zip(source_lines, mask_lines), 1):
+    i = 0
+    while i < len(source_lines):
+        line_number = i + 1
+        line = source_lines[i]
+        mask_line = mask_lines[i]
         active = list(MACRO_RE.finditer(mask_line))
         if not active:
             output.append(line)
+            i += 1
             continue
 
+        # Fast path: almost every generated instruction is contained on one
+        # physical line. If a MEM(...) expression or write statement wraps,
+        # grow only this fragment until it is syntactically complete.
+        fragment = line
+        end = i
+
         # Refuse a rare cross-line block-comment ambiguity instead of letting
-        # the line-local masker reinterpret text hidden by the full-file mask.
+        # a fragment-local masker reinterpret text hidden by the full-file mask.
         local_active = list(MACRO_RE.finditer(_mask_noncode(line)))
         if len(local_active) != len(active):
             raise LoweringError(
                 f"line {line_number}: cross-line comment around guest-memory "
                 "syntax requires explicit handling")
 
-        try:
-            lowered_line, stats = lower_source(line)
-        except LoweringError as exc:
-            raise LoweringError(f"line {line_number}: {exc}") from exc
+        while True:
+            try:
+                lowered_fragment, stats = lower_source(fragment)
+                break
+            except LoweringError as exc:
+                message = str(exc)
+                incomplete = (
+                    "unmatched '('" in message or
+                    "write has no terminating semicolon" in message
+                )
+                if not incomplete:
+                    raise LoweringError(
+                        f"line {line_number}: {exc}") from exc
+                end += 1
+                if end >= len(source_lines):
+                    raise LoweringError(
+                        f"line {line_number}: incomplete multi-line guest-memory "
+                        f"expression at end of file: {exc}") from exc
+                if end - i >= 64:
+                    raise LoweringError(
+                        f"line {line_number}: guest-memory expression spans more "
+                        "than 64 physical lines") from exc
+                fragment += source_lines[end]
 
         for key in totals:
             totals[key] += stats[key]
-        output.append(lowered_line)
+        output.append(lowered_fragment)
+        i = end + 1
 
     lowered = "".join(output)
     if newline == "\r\n":
