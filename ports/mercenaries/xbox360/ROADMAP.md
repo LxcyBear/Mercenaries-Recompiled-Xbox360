@@ -59,26 +59,27 @@ Covered imported service paths:
 - `KeWaitForSingleObject`
 - `KeStallExecutionProcessor`
 
-## Active
-
 ### Phase 4B-A2 — Integrate hardware-proven timing/sync backend
-**Status: runtime patch landed; verification active.**
+**Status: PASS.**
 
-The six timing/synchronization paths are being routed through
+The six timing/synchronization paths are routed through
 `src/platform/kernel_time_sync.*` via `merc_platform_*` calls.
 
-Target verification split:
+Verification result:
 - 11 remaining direct semantic host-backed imports
 - 6 Phase-4B platform-bound imports
 - 0 ABI metadata errors
 - 0 statically referenced fallbacks
+- 7,722 precise deadline/phase cases: PASS
+- guest-kernel ABI regression: PASS
+- Phase-4B platform-boundary regressions: PASS
 
 Gate:
 `ports/mercenaries/xbox360/phase4b_native_time_sync_xex/Verify-Phase4B-A2.ps1`
 
-Phase 4B-A is complete only when the hardware proof and A2 runtime regressions are both green.
+Phase 4B-A/A2 is complete.
 
-## Next
+## Active
 
 ### Phase 4B-B — Native file/handle service slice
 Convert and hardware-prove the cohesive file/handle surface, expected to include:
@@ -98,6 +99,8 @@ Goals:
 3. prove representative create/open/read/write/query/close behavior on Xenon;
 4. rerun the exact retail surface audit and regressions;
 5. reduce the remaining direct host-backed count without weakening fallbacks or ABI checks.
+
+## Next
 
 ### Phase 4B-C — Remaining memory/protection and residual host surface
 Expected focus:

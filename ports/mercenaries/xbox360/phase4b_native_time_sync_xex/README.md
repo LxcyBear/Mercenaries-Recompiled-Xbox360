@@ -1,6 +1,6 @@
 # Phase 4B-A — Native Xenon timing/synchronization gate
 
-**Status: Phase 4B-A hardware PASS; Phase 4B-A2 runtime platformization ready for verification.**
+**Status: Phase 4B-A hardware PASS; Phase 4B-A2 runtime platformization PASS.**
 
 Phase 4A is locked: the verified Mercenaries retail XBE imports 111 kernel
 symbols, the translated guest path exposes 74 explicit bridges and 11 guest
@@ -153,3 +153,33 @@ fallback_refs=0
 
 It also runs the guest wait-deadline regression, the guest-kernel ABI metadata
 regression, and the Phase-4B time/sync platform-boundary regression.
+
+
+## Phase 4B-A2 final result
+
+The complete A2 verifier passed on October 19, 2026.
+
+Final surface/accounting result:
+
+```text
+imports=111
+guest_bridge=74
+data=11
+fallback=26
+arg_missing=0
+arg_mismatch=0
+host_surface=11
+platform_bound=6
+fallback_referenced=0
+fallback_refs=0
+```
+
+Regression result:
+
+- MSVC wait-deadline regression: 7,722 precise deadline/phase cases PASS;
+- canonical guest-kernel ABI metadata: PASS;
+- Phase-4B hardware-proven backend primitive check: PASS;
+- runtime platform-boundary routing check: PASS.
+
+Phase 4B-A/A2 is complete. The active next slice is Phase 4B-B:
+native file/handle services.
