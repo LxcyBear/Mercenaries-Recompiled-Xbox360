@@ -39,7 +39,8 @@ class Disassembler:
                  force: bool = False,
                  extra_sections: Optional[list] = None,
                  seed_functions: Optional[list] = None,
-                 protected_seed_functions: Optional[list] = None):
+                 protected_seed_functions: Optional[list] = None,
+                 rejected_function_addresses: Optional[list] = None):
         self.xbe_path = xbe_path
         self.analysis_json = analysis_json
         self.output_dir = output_dir or config.DEFAULT_OUTPUT_DIR
@@ -50,6 +51,7 @@ class Disassembler:
         self.extra_sections = extra_sections or []
         self.seed_functions = seed_functions or []
         self.protected_seed_functions = protected_seed_functions or []
+        self.rejected_function_addresses = rejected_function_addresses or []
 
         # Components (initialized during run)
         self.image: Optional[BinaryImage] = None
@@ -71,11 +73,11 @@ class Disassembler:
         cache = AnalysisCache(self.output_dir)
         if not self.force:
             json_path = self._find_analysis_json()
-            if json_path and cache.is_valid(self.xbe_path, json_path,
-                                             self.text_only,
-                                             self.extra_sections,
-                                             self.seed_functions,
-                                             self.protected_seed_functions):
+            if json_path and cache.is_valid(
+                    self.xbe_path, json_path, self.text_only,
+                    self.extra_sections, self.seed_functions,
+                    self.protected_seed_functions,
+                    self.rejected_function_addresses):
                 last_time = cache.get_last_run_time()
                 print(f"Cache hit - results unchanged (last run: "
                       f"{last_time:.1f}s)")
@@ -167,7 +169,8 @@ class Disassembler:
         if self.verbose:
             print("\nPhase 5: Detecting functions...")
         self.func_detector = FunctionDetector(
-            self.engine, self.image, self.xrefs, self.labels)
+            self.engine, self.image, self.xrefs, self.labels,
+            rejected_function_addresses=self.rejected_function_addresses)
 
         # Add seed functions from vtable scanner or other sources
         if self.seed_functions:
@@ -215,9 +218,11 @@ class Disassembler:
             # Save cache
             json_path = self._find_analysis_json()
             if json_path:
-                cache.save(self.xbe_path, json_path, self.text_only, elapsed,
-                           self.extra_sections, self.seed_functions,
-                           self.protected_seed_functions)
+                cache.save(
+                    self.xbe_path, json_path, self.text_only, elapsed,
+                    self.extra_sections, self.seed_functions,
+                    self.protected_seed_functions,
+                    self.rejected_function_addresses)
 
             if self.verbose:
                 print(f"\n  Output written to {self.output_dir}/")
