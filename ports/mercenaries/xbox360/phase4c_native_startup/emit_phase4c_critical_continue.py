@@ -539,8 +539,8 @@ def main() -> int:
     driver = driver.replace(old_escape_pass, new_escape_pass)
 
     driver = driver.replace(
-        "PHASE 4C-E BOUNDED REAL STARTUP RESULT",
-        "PHASE 4C-E FIRST TITLE-THREAD EXECUTION RESULT",
+        "PHASE 4C-B BOUNDED REAL STARTUP RESULT",
+        "PHASE 4C-F CRITICAL-SECTION CONTINUATION RESULT",
     )
 
     generated_main = (
