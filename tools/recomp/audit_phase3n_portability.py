@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 from collections import Counter
 import json
 from pathlib import Path
@@ -54,6 +55,90 @@ def line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+UNRESOLVED_STUB_RE = re.compile(
+    r"void\s+(sub_[0-9A-Fa-f]{8})\s*\(\s*void\s*\)\s*\{[^\n]*?"
+    r"/\*\s*0x([0-9A-Fa-f]{8}):\s*not detected;\s*minimal guest ret\s*\*/"
+)
+
+
+def extract_unresolved_entries(text: str) -> list[dict]:
+    entries = []
+    for match in UNRESOLVED_STUB_RE.finditer(text):
+        entries.append({
+            "name": match.group(1),
+            "address": int(match.group(2), 16),
+            "address_hex": f"0x{int(match.group(2), 16):08X}",
+            "line": line_number(text, match.start()),
+        })
+    return entries
+
+
+def load_function_ranges(path: Path) -> list[dict]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    rows = []
+    for item in raw:
+        try:
+            start = int(str(item["start"]), 0)
+            end = int(str(item["end"]), 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        rows.append({
+            "start": start,
+            "end": end,
+            "name": item.get("name", f"sub_{start:08X}"),
+        })
+    rows.sort(key=lambda row: row["start"])
+    return rows
+
+
+def classify_unresolved(entries: list[dict], functions_path: Path | None) -> dict:
+    if not functions_path:
+        return {"counts": {}, "entries": entries}
+    functions = load_function_ranges(functions_path)
+    starts = [row["start"] for row in functions]
+    counts = Counter()
+    classified = []
+
+    for entry in entries:
+        addr = entry["address"]
+        row = dict(entry)
+        idx = bisect.bisect_right(starts, addr) - 1
+
+        if idx >= 0 and functions[idx]["start"] == addr:
+            row["classification"] = "known_function_start"
+            row["function"] = functions[idx]["name"]
+        elif idx >= 0 and functions[idx]["start"] < addr < functions[idx]["end"]:
+            parent = functions[idx]
+            row["classification"] = "mid_function"
+            row["parent_start"] = f"0x{parent['start']:08X}"
+            row["parent_end"] = f"0x{parent['end']:08X}"
+            row["parent_name"] = parent["name"]
+            row["offset"] = addr - parent["start"]
+        elif idx >= 0 and addr == functions[idx]["end"]:
+            parent = functions[idx]
+            row["classification"] = "boundary_continuation"
+            row["parent_start"] = f"0x{parent['start']:08X}"
+            row["parent_end"] = f"0x{parent['end']:08X}"
+            row["parent_name"] = parent["name"]
+            if idx + 1 < len(functions):
+                row["next_start"] = f"0x{functions[idx + 1]['start']:08X}"
+                row["gap_to_next"] = functions[idx + 1]["start"] - addr
+        else:
+            next_idx = idx + 1
+            row["classification"] = "gap_or_outside"
+            if idx >= 0:
+                row["previous_end"] = f"0x{functions[idx]['end']:08X}"
+                row["previous_name"] = functions[idx]["name"]
+            if next_idx < len(functions):
+                row["next_start"] = f"0x{functions[next_idx]['start']:08X}"
+                row["next_name"] = functions[next_idx]["name"]
+
+        counts[row["classification"]] += 1
+        classified.append(row)
+
+    return {"counts": dict(counts), "entries": classified}
+
+
 def scan_file(path: Path) -> dict:
     text = path.read_text(encoding="utf-8", errors="replace")
     code = _mask_noncode(text)
@@ -81,20 +166,22 @@ def scan_file(path: Path) -> dict:
     ))
 
     failed_stubs = len(re.findall(r"/\*\s*FAILED:", text))
-    residual_unresolved_stubs = len(re.findall(r"minimal guest ret", text))
+    unresolved_entries = extract_unresolved_entries(text)
+    residual_unresolved_stubs = len(unresolved_entries)
     return {
         "path": str(path),
         "bytes": len(text.encode("utf-8")),
         "functions": functions,
         "failed_stubs": failed_stubs,
         "residual_unresolved_stubs": residual_unresolved_stubs,
+        "unresolved_entries": unresolved_entries,
         "fatal": fatal,
         "platform": dict(platform),
         "surfaces": dict(surfaces),
     }
 
 
-def scan_tree(root: Path) -> dict:
+def scan_tree(root: Path, functions_path: Path | None = None) -> dict:
     files = sorted(root.glob("recomp_*.c"))
     if not files:
         raise FileNotFoundError(f"no recomp_*.c files in {root}")
@@ -112,6 +199,13 @@ def scan_tree(root: Path) -> dict:
     unresolved_files = [
         row["path"] for row in rows if "stubs_unresolved" in Path(row["path"]).name
     ]
+    unresolved_entries = []
+    for row in rows:
+        for entry in row["unresolved_entries"]:
+            unresolved_entries.append({"file": row["path"], **entry})
+    unresolved_classification = classify_unresolved(
+        unresolved_entries, functions_path
+    )
     return {
         "root": str(root),
         "file_count": len(rows),
@@ -122,6 +216,7 @@ def scan_tree(root: Path) -> dict:
             row["residual_unresolved_stubs"] for row in rows
         ),
         "unresolved_stub_files": unresolved_files,
+        "unresolved_classification": unresolved_classification,
         "fatal_count": len(fatal),
         "fatal": fatal,
         "platform_surfaces": dict(platform),
@@ -134,10 +229,12 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("generated_root", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--functions", type=Path,
+                        help="functions.json used to classify unresolved targets")
     args = parser.parse_args(argv)
 
     try:
-        report = scan_tree(args.generated_root)
+        report = scan_tree(args.generated_root, args.functions)
     except (OSError, UnicodeError) as exc:
         print(f"FAIL: Phase 3N portability audit: {exc}", file=sys.stderr)
         return 1
@@ -159,6 +256,31 @@ def main(argv=None) -> int:
             f"{key}={value}" for key, value in sorted(
                 report["platform_surfaces"].items()) if value
         ) or "none")
+
+    unresolved_info = report.get("unresolved_classification", {})
+    unresolved_counts = unresolved_info.get("counts", {})
+    if unresolved_counts:
+        print("Residual unresolved classification: " + ", ".join(
+            f"{key}={value}" for key, value in sorted(unresolved_counts.items())
+        ))
+        for entry in unresolved_info.get("entries", []):
+            details = ""
+            if entry.get("classification") == "mid_function":
+                details = (
+                    f" parent={entry.get('parent_name')}+0x{entry.get('offset', 0):X}"
+                )
+            elif entry.get("classification") == "boundary_continuation":
+                details = f" parent={entry.get('parent_name')}"
+            elif entry.get("classification") == "gap_or_outside":
+                details = (
+                    f" prev={entry.get('previous_name', '-')}"
+                    f" next={entry.get('next_name', '-')}"
+                )
+            print(
+                "  unresolved "
+                f"{entry['address_hex']} {entry['name']}: "
+                f"{entry.get('classification', 'unclassified')}{details}"
+            )
 
     if report["fatal"]:
         print("FAIL: Gate-3-fatal generated portability leaks remain",
