@@ -515,7 +515,7 @@ def lower_file_to_temp(path: Path) -> tuple[Path, dict]:
                         "than 64 physical lines") from exc
                 fragment += source_lines[end]
 
-        for key in totals:
+        for key in ("writes", "compound_writes", "incdec_writes", "reads"):
             totals[key] += stats[key]
         output.append(lowered_fragment)
         i = end + 1
@@ -599,7 +599,8 @@ def main(argv=None):
         f"{report['files']} files, {report['reads']} reads, "
         f"{report['writes']} writes "
         f"({report['compound_writes']} compound, "
-        f"{report['incdec_writes']} inc/dec)"
+        f"{report['incdec_writes']} inc/dec, "
+        f"{report.get('bulk_writes', 0)} bulk guest stores)"
     )
     return 0
 
