@@ -741,3 +741,41 @@ other import token unchanged, and preserves Build-B immediate first-fault
 provenance.
 
 Build tag: `P4C-KDATA3-20261019-A`.
+
+
+#### Phase 4C-K — initialized startup kernel-data thunk set
+**Status: PASS on real Xbox 360 hardware.**
+
+```text
+DATA THUNK FIXUP: ordinal=156 slot=002DBD58 old=8000009C new=0087E020
+DATA THUNK FIXUP: ordinal=322 slot=002DBE0C old=80000142 new=0087E000
+DATA THUNK FIXUP: ordinal=324 slot=002DBE14 old=80000144 new=0087E010
+
+PASS: startup data imports 156/322/324 point at initialized guest kernel data
+
+DIRECT FRONTIER:
+  caller=0022C4DF
+  target=0022C47B
+  esp=008BFF4C
+  saved_esp=008BFF4C
+  ticks=24
+  fault=0
+```
+
+This proves the startup callback advanced beyond both previously observed raw
+DATA-import failures. The next blocker is no longer missing kernel data; it is
+the deliberately bounded translated direct-call frontier at `0x0022C47B`.
+
+#### Phase 4C-L — promote first live direct frontier
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-L.ps1`
+
+4C-L preserves the 49-body proven pack and adds only
+`0x0022C47B`, the exact target observed on real hardware in 4C-K.
+Calls from that function to translated targets not already packed remain
+`DIRECT_FRONTIER` escapes. Startup DATA relocations 156/322/324 and
+immediate first-fault provenance remain active.
+
+Build tag: `P4C-DIRECTC47B-20261019-A`.
