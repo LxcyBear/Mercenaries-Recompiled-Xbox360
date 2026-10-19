@@ -329,7 +329,10 @@ def lower_tree(root: Path) -> dict:
     }
     per_file = []
     for path in files:
-        stats = lower_file(path)
+        try:
+            stats = lower_file(path)
+        except LoweringError as exc:
+            raise LoweringError(f"{path.name}: {exc}") from exc
         stats["file"] = path.name
         stats["bytes"] = path.stat().st_size
         total["source_bytes"] += stats["bytes"]
