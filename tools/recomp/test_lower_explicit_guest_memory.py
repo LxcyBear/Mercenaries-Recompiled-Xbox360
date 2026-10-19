@@ -144,6 +144,41 @@ class LowerExplicitGuestMemoryTests(unittest.TestCase):
             self.assertIn("eax = GUEST_READ32(edi);", out)
             self.assertGreaterEqual(stats["reads"], 3)
 
+
+    def test_raw_xbox_ptr_memset_is_lowered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recomp_test.c"
+            path.write_text(
+                "    memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx);\n",
+                encoding="utf-8",
+            )
+            temp, stats = lower_file_to_temp(path)
+            try:
+                out = temp.read_text(encoding="utf-8")
+            finally:
+                temp.unlink()
+            self.assertNotIn("XBOX_PTR(", out)
+            self.assertIn("GUEST_WRITE8((edi) + _guest_memset_i", out)
+            self.assertEqual(stats["bulk_writes"], 1)
+
+    def test_bulk_and_scalar_lowering_share_stats_safely(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recomp_test.c"
+            path.write_text(
+                "    memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx);\n"
+                "    eax = MEM32(esi);\n",
+                encoding="utf-8",
+            )
+            temp, stats = lower_file_to_temp(path)
+            try:
+                out = temp.read_text(encoding="utf-8")
+            finally:
+                temp.unlink()
+            self.assertIn("GUEST_WRITE8((edi) + _guest_memset_i", out)
+            self.assertIn("eax = GUEST_READ32(esi);", out)
+            self.assertEqual(stats["bulk_writes"], 1)
+            self.assertEqual(stats["reads"], 1)
+
     def test_address_of_lvalue_is_rejected(self):
         with self.assertRaises(LoweringError):
             self.lower("foo(&MEM32(eax));")
