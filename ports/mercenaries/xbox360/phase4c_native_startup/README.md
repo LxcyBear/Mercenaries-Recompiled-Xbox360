@@ -1266,3 +1266,44 @@ Phase 4C-Y now embeds the same guest-visible contract:
 
 Hardware output will include `CRT memmove LIVE FRAME` and a matching PASS
 before startup continues to the next real boundary.
+
+
+## Phase 4C-Z — continue ordinal 184 NtAllocateVirtualMemory
+
+Phase 4C-Y passed on hardware. The translated CRT entry `0x00238C00`
+executed with maintained `recomp_crt_memmove` semantics, copying 48 bytes
+from `0x008BFF14` to `0x008BFE70`, returning the destination, and
+preserving the cdecl cleanup contract. Startup then advanced with `fault=0`
+to `ICALL_SAFE target=0x800000B8`.
+
+`0x800000B8` is kernel ordinal 184, `NtAllocateVirtualMemory`. The live
+stack delta is 24 bytes: the recompiler dummy return plus 20 bytes of stdcall
+arguments.
+
+Z validates that frame and continues the production bridge's supported startup
+modes:
+
+- MEM_RESERVE|MEM_COMMIT: allocate a page-rounded range from the bounded guest
+  title heap, zero it, and write back BaseAddress/RegionSize;
+- MEM_COMMIT inside an existing valid guest range: validate and return success;
+- invalid pointer/size/type combinations: return the corresponding NTSTATUS;
+- reserve-without-commit: stop explicitly at VM_UNSUPPORTED because the focused
+  Phase-4C harness does not yet maintain per-page inaccessible state.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-Z.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\vmalloc184_xdk\main.cpp
+build\phase4c_native_startup\vmalloc184_xdk\phase4c_env.cpp
+build\phase4c_native_startup\vmalloc184_xdk\phase4c-z-manifest.json
+```
+
+Build tag: `P4C-NTALLOC184-20261019-A`.
+
+The Z main/env cookie is `0x50435A31` (`PCZ1`).
