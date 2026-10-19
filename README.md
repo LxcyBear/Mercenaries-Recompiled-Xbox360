@@ -35,7 +35,8 @@ Snapshot: 2026-10-19.
 | 4C-A | **Complete PASS** | Retail entry `0x0022964A` resolves exactly to `xbe_entry_point`; direct closure is 40 translated bodies, depth 8, 5,918 guest bytes, 111,376 generated-source bytes, 0 missing direct dependencies, 14 dynamic/indirect-boundary bodies. |
 | 4C-B | **Hardware PASS** | Real retail-derived `xbe_entry_point` executed on Xbox 360 and reached the first live boundary with fault=0: caller `0x0022B4D7`, target `0x800000FF` = kernel ordinal 255 `PsCreateSystemThreadEx`. |
 | 4C-C | **Hardware PASS** | Live ordinal-255 frame captured on Xbox 360: StartRoutine `0x0022B43F`, ctx1 `0x002295D6`, ctx2 `0x00000000`, exact 44-byte frame, fault=0. |
-| 4C-D | **Preflight ready** | Analyze only the hardware-observed first title-thread routine `0x0022B43F`, measure its translated closure/dynamic boundaries/helper surface, then emit the next bounded execution slice from that evidence. |
+| 4C-D | **Complete PASS** | Hardware-observed `0x0022B43F` resolves exactly; closure is 6 bodies, depth 2, 460 guest bytes, 8,556 generated-source bytes, 0 missing translated dependencies, 5 dynamic-boundary bodies. |
+| 4C-E | **Package prep ready** | Continuous Xenon slice: real XBE entry -> ordinal 255 -> hardware-observed title thread `0x0022B43F`; pack is 43 unique translated bodies and stops at the first subsequent live ICALL/ITAIL boundary. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
