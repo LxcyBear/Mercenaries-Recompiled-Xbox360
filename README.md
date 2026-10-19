@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3J — first dependency-closed translated function cluster.
+> **Last roadmap review:** October 18, 2026 · **Current focus:** Phase 3K — wider real control-flow/flags and mixed ABI coverage.
 >
 > **Active development:** [Xbox 360 foundation — Draft PR #1](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/pull/1). Prototype sources are on the PR branch, **not** on `master` until reviewed and merged.
 
@@ -54,7 +54,7 @@ Each phase has independently checkable checkpoints below.
 | **0 — Foundation and audit** | **In progress** | Portable memory tests PASS and guest memory access/lvalue audit documented |
 | **1 — Native XDK bootstrap** | **COMPLETE** | Diagnostic XEX builds, runs on a real 360, logs heartbeats, detects input, and exits cleanly by input or timeout |
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
-| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A/3B/3C/3D/3E/3F/3G/3H/3I hardware PASS; 3J closure selector/harness ready** | Real-console instruction/call/stack/FP fixtures agree with reference |
+| **3 — PPC recompilation + x86 guest ABI** | **In progress — 3A through 3J hardware PASS; 3K wider control-flow/flags + mixed ABI next** | Real-console instruction/call/stack/FP fixtures agree with reference |
 | 4 — Native platform + kernel services | Not started | Required file, input, thread, timing, handle and guest callback fixtures PASS |
 | 5 — Xenos graphics + first frame | Not started | Verified first frame, then main menu, then 3D rendering |
 | 6 — Audio, movies and streaming | Not started | Audio/video/streaming timing and resource tests PASS |
@@ -69,12 +69,13 @@ also executed successfully on modified Xbox 360 hardware and matched an
 independent reference across six controlled inputs.
 
 **Present blockers:** the explicit PowerPC-safe guest-memory ABI plus bounded
-real translated function, direct-call, tail-call and indirect-call paths are
-now proven on modified Xbox 360 hardware. Remaining Phase 3 blockers are
-broader multi-function state continuity, wider flags/FP and exceptional-path
-coverage, full post-patch generated-tree audit, and compiler/linker/runtime
-scale limits. D3D11, Win32, DXGI and host-audio dependencies still need Xbox
-360-native replacements in later phases.
+real translated function, direct-call, tail-call, indirect-call, composed slice,
+and automatically selected dependency-closed cluster paths are now proven on
+modified Xbox 360 hardware. Remaining Phase 3 blockers are wider real
+control-flow/flags coverage, mixed FP/SIMD/x87 and exceptional-path coverage,
+full post-patch generated-tree audit, and compiler/linker/runtime scale limits.
+D3D11, Win32, DXGI and host-audio dependencies still need Xbox 360-native
+replacements in later phases.
 
 ### Immediate next tests
 
@@ -230,9 +231,13 @@ executes as Xbox 360 PowerPC.
       ICALL and a final direct CALL; all three cases repeated deterministically
       with matching full-RAM checkpoint hashes, intact canaries/markers and no
       guest-memory faults.
-- [ ] Execute the first dependency-closed translated function cluster selected
-      from a real Mercenaries call graph, then widen toward guarded game-entry
-      execution.
+- [x] Execute the first dependency-closed translated function cluster selected
+      automatically from a real Mercenaries call graph: root `0x000B2080`,
+      6 members, dependency depth 2, deterministic 12-profile suite coverage
+      `6/6`, exact root-return ESP, no guest-memory faults, matching A/B
+      traces/full-RAM hashes, and clean XAPI return on modified Xbox 360 hardware.
+- [ ] Widen to the next real translated cluster with broader control-flow/flags
+      and mixed ABI/FP surfaces, then continue toward guarded game-entry execution.
 
 **Gate 3:** reproducible real-hardware guest ABI fixture suite PASS with
 reference comparisons.
@@ -1519,6 +1524,33 @@ unexecuted test PASS.**
   - any still-missing member VAs
 - Build B tag: `P3J-CLOSURE-20261018-B`.
 - **Phase 3J remains in progress.**
+
+### 2026-10-18 — Phase 3J COMPLETE — dependency-closed cluster hardware PASS
+
+- Build `P3J-CLOSURE-20261018-B` passed on modified Xbox 360 hardware.
+- Automatically selected root: `0x000B2080`.
+- Static closure: **6 translated retail functions**, dependency depth **2**.
+- Selected member VAs:
+  - `0x000AE4E0`
+  - `0x000AE510`
+  - `0x000AE540`
+  - `0x000B14D0`
+  - `0x000B2080` (root)
+  - `0x00209720`
+- The 12-profile deterministic suite reached union coverage **6/6**
+  (`mask=0x0000003F`).
+- Multiple individual profiles (including profiles 2, 3, 5, 7, 8, 9, 10 and
+  11) independently executed all six members.
+- Every A/B profile pair matched translated trace, final architecture and the
+  complete 64 MiB guest-RAM hash.
+- Every profile remained free of guest-memory faults, preserved high-RAM
+  canaries and returned with exact guest ESP `0x008B4004`.
+- Final markers:
+  - `SUITE COVERAGE: 6/6 mask=0000003F expected=0000003F`
+  - `PHASE 3J DEPENDENCY-CLOSED TRANSLATED CLUSTER RESULT: PASS`
+  - `[XAPI RETURN VALUE] 0`
+- **Phase 3J is complete.**
+- **Next:** Phase 3K — widen to real branch/flags and mixed ABI/FP surfaces.
 
 ### How future updates are recorded
 
