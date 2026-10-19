@@ -1256,25 +1256,34 @@ static inline double x87_round_integral(double value) {
     case 3u: rounded = trunc(value); break;
     default: rounded = nearbyint(value); break;
     }
-    if (rounded != value)
-        g_x87_status_word |= 0x20u;
+    if (isfinite(value) && rounded != value)
+        g_x87_status_word |= 0x20u; /* PE: inexact result */
     return rounded;
 }
 static inline int16_t X87_FIST16(double value) {
     double rounded = x87_round_integral(value);
-    return (!isfinite(rounded) || rounded < -32768.0 || rounded >= 32768.0)
-        ? INT16_MIN : (int16_t)rounded;
+    if (!isfinite(rounded) || rounded < -32768.0 || rounded >= 32768.0) {
+        g_x87_status_word |= 0x0001u; /* IE: invalid conversion */
+        return INT16_MIN;
+    }
+    return (int16_t)rounded;
 }
 static inline int32_t X87_FIST32(double value) {
     double rounded = x87_round_integral(value);
-    return (!isfinite(rounded) || rounded < -2147483648.0 || rounded >= 2147483648.0)
-        ? INT32_MIN : (int32_t)rounded;
+    if (!isfinite(rounded) || rounded < -2147483648.0 || rounded >= 2147483648.0) {
+        g_x87_status_word |= 0x0001u; /* IE: invalid conversion */
+        return INT32_MIN;
+    }
+    return (int32_t)rounded;
 }
 static inline int64_t X87_FIST64(double value) {
     double rounded = x87_round_integral(value);
-    return (!isfinite(rounded) || rounded < -9223372036854775808.0 ||
-            rounded >= 9223372036854775808.0)
-        ? INT64_MIN : (int64_t)rounded;
+    if (!isfinite(rounded) || rounded < -9223372036854775808.0 ||
+            rounded >= 9223372036854775808.0) {
+        g_x87_status_word |= 0x0001u; /* IE: invalid conversion */
+        return INT64_MIN;
+    }
+    return (int64_t)rounded;
 }
 
 /* ================================================================
