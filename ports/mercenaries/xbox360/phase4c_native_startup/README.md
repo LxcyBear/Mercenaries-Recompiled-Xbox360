@@ -522,3 +522,31 @@ hardware gate. 4C-H therefore uses a bounded direct-call frontier:
 
 This lets hardware reveal the actually executed callback path without
 speculatively importing unrelated late-startup subsystems.
+
+
+## Phase 4C-H — bounded startup callback frontier
+
+Preparation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-H.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\callback_frontier_xdk\main.cpp
+build\phase4c_native_startup\callback_frontier_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-CALLBACK-20261019-A
+```
+
+The callback `0x002295D6` is now hardware-confirmed executable startup code.
+The H package keeps the proven 43-body path, enters that callback using the
+observed 8-byte indirect-call frame, and adds only its direct depth-1 translated
+slice. Any translated direct call outside the slice becomes a
+`DIRECT_FRONTIER` boundary while preserving the real call-site stack state.
