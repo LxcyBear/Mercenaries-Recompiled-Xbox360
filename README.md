@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C — first real translated Mercenaries startup path after Phase 4B service migration PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-A — retail entry-rooted startup preflight for entry `0x0022964A` after Phase 4B service migration PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -110,9 +110,13 @@ phases.
     `platform_bound=15`, `guest_native=2`, with ABI/fallback, timing,
     file/handle and all six guest-memory ownership regressions green. Phase 4B
     service migration is complete.
-13. **Phase 4C:** link and execute the first real retail-derived translated
-    Mercenaries startup path with the migrated Xenon service layer and add
-    deterministic xbWatson checkpoints for the first live failure boundary.
+13. **Phase 4C-A:** analyze the locked Phase-3N-A generated tree from retail
+    entry `0x0022964A`, build the complete direct translated dependency
+    closure, and identify dynamic/indirect boundaries before emitting the first
+    native startup XEX.
+14. **Phase 4C-B:** link/execute the first bounded real retail-derived startup
+    slice with deterministic xbWatson checkpoints and capture the first live
+    failure boundary.
 
 ### Evidence policy
 
@@ -1781,6 +1785,19 @@ unexecuted test PASS.**
 - **Phase 4B service migration is complete.**
 - **Next:** Phase 4C — execute the first real retail-derived translated
   Mercenaries startup path on Xbox 360 hardware.
+
+### 2026-10-19 — Phase 4C-A startup preflight ready
+
+- Active branch: `xbox360/phase4c-native-startup`.
+- The preflight roots at the verified retail entry `0x0022964A`.
+- It consumes the exact locked Phase-3N-A generated tree and refuses to run
+  unless the final Phase-4B service audit remains
+  **0 direct / 15 platform-bound / 2 guest-native**.
+- It emits an entry-rooted direct translated closure manifest, missing
+  dependency report, and dynamic/indirect boundary list without executing
+  retail code.
+- **Next evidence:** use that manifest to build the first bounded native
+  startup XEX.
 
 ### How future updates are recorded
 
