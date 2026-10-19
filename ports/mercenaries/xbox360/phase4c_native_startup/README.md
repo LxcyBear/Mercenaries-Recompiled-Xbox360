@@ -394,3 +394,53 @@ captured contexts `0x002295D6` and `0x00000000`. It then stops at the first
 subsequent dynamic/kernel boundary. The ctx1 routine itself is deliberately not
 pre-packed; if the title thread invokes it indirectly, that exact target becomes
 the next hardware boundary.
+
+
+## Phase 4C-E hardware result — PASS
+
+The continuous entry-to-title-thread XEX advanced beyond the real
+`PsCreateSystemThreadEx` handoff and reached:
+
+```text
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=0022B363 target=80000115 esp=008BFF3C saved_esp=008BFF44 ticks=11 trace=5
+[Merc360:P4C] BOUNDARY REGISTERS: eax=00000000 ecx=00000000 edx=00000008 ebx=00312FC0 esi=00000000 edi=0070000C seh_ebp=008BFF8C fault=0
+[Merc360:P4C] trace[0]=0022964A
+[Merc360:P4C] trace[1]=0022B4D7
+[Merc360:P4C] trace[2]=0022B43F
+[Merc360:P4C] trace[3]=00239BE8
+[Merc360:P4C] trace[4]=0022B363
+[Merc360:P4C] PHASE 4C-E FIRST TITLE-THREAD EXECUTION RESULT: PASS
+```
+
+Target `0x80000115` is Xbox kernel ordinal 277:
+`RtlEnterCriticalSection`.
+
+The observed stack delta is exactly `0x8` bytes, matching one dword argument
+plus the synthetic CALL return slot.
+
+## Phase 4C-F — critical-section continuation
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-F.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\crit_continue_xdk\main.cpp
+build\phase4c_native_startup\crit_continue_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-CRITCONT-20261019-A
+```
+
+The package preserves the 43-body hardware-proven continuous startup slice.
+When ordinal 277 is reached, it validates the 8-byte frame, logs the live guest
+critical-section address, applies the repository's maintained serialized-guest
+no-op semantics, restores the simulated stack exactly to `saved_esp`, and
+continues until the next live ICALL/ITAIL boundary.
