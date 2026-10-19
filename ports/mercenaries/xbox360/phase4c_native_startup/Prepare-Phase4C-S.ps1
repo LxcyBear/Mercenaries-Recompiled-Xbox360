@@ -44,7 +44,7 @@ foreach ($requiredText in @(
     "P4C-DIRECT30060-20261019-A",
     "PASS: hardware-observed direct target 00230060 is packed for translated execution",
     "PASS: Phase 4C-S main/env build cookie matches",
-    "PHASE 4C-S PROMOTED C5A4 RESULT"
+    "PHASE 4C-S PROMOTED 30060 RESULT"
 )) {
     if ($mainText -notlike "*$requiredText*") {
         throw "Generated Phase 4C-S main.cpp is missing marker: $requiredText"
