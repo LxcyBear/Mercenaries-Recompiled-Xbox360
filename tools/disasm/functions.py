@@ -67,11 +67,15 @@ class FunctionDetector:
     """
 
     def __init__(self, engine: DisasmEngine, image: BinaryImage,
-                 xrefs: XRefTracker, labels: LabelManager):
+                 xrefs: XRefTracker, labels: LabelManager,
+                 rejected_function_addresses=None):
         self.engine = engine
         self.image = image
         self.xrefs = xrefs
         self.labels = labels
+        self.rejected_function_addresses = set(
+            rejected_function_addresses or ()
+        )
 
         # Candidate function starts: address -> (confidence, method)
         self._candidates: Dict[int, Tuple[float, str]] = {}
@@ -123,6 +127,8 @@ class FunctionDetector:
 
     def _add_candidate(self, addr: int, confidence: float, method: str) -> None:
         """Add a function start candidate, keeping highest confidence."""
+        if addr in self.rejected_function_addresses:
+            return
         existing = self._candidates.get(addr)
         if existing is None or confidence > existing[0]:
             self._candidates[addr] = (confidence, method)
