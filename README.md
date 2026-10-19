@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-H — execute the hardware-confirmed startup callback 0x002295D6 through a bounded direct-call frontier after Phase 4C-G hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-I — diagnose the first guest-memory fault after real startup callback entry in Phase 4C-H.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -142,9 +142,13 @@ phases.
     The next live ICALL target is `0x002295D6`, exactly matching the ctx1
     value captured from `PsCreateSystemThreadEx`; hardware has therefore
     confirmed ctx1 as executable title-startup code.
-20. **Phase 4C-H:** enter `0x002295D6` with a depth-1 bounded translated
-    frontier so the next live startup dependency is discovered without
-    recursively importing the callback's enormous full static closure.
+20. **Phase 4C-H:** real Xbox 360 hardware entered callback `0x002295D6`
+    and reached translated function `0x0022C4DF`, then stopped on a
+    deterministic `GUEST_FAULT` observed at translated VA `0x0022C4FF`.
+    The stack remained balanced; this gate is blocked, not passed.
+21. **Phase 4C-I:** preserve that exact path and capture the first rejected
+    guest address, READ/WRITE direction, width, and caller without relaxing
+    guest-memory validity.
 
 ### Evidence policy
 
@@ -1982,6 +1986,20 @@ unexecuted test PASS.**
 - **Phase 4C-G hardware result: PASS.**
 - **Next:** Phase 4C-H enters that callback with a bounded direct-call frontier.
 - Build tag: `P4C-CALLBACK-20261019-A`.
+
+### 2026-10-19 — Phase 4C-H enters real startup callback, exposes guest fault
+
+- Real Xenon entered the hardware-confirmed callback `0x002295D6`.
+- Callback trace advanced to `0x0022C4DF`.
+- Execution then stopped at a deterministic `GUEST_FAULT`, observed at
+  translated VA `0x0022C4FF`.
+- Fault boundary stack was balanced:
+  `esp=0x008BFF48`, `saved_esp=0x008BFF48`.
+- Guest fault flag was 1, so **Phase 4C-H is not a PASS**.
+- The current harness did not preserve the rejected guest address itself.
+- **Next:** Phase 4C-I records the first rejected guest address, access width,
+  direction, and caller without changing guest-memory validity.
+- Build tag: `P4C-FAULTPROBE-20261019-A`.
 
 ### How future updates are recorded
 
