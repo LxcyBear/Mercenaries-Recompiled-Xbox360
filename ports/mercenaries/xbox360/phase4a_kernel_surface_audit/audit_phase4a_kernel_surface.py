@@ -48,6 +48,21 @@ HOST_SURFACE_TOKENS = (
     "GetLastError", "SetLastError", "ExitProcess", "DebugBreak",
 )
 
+# Logging/diagnostic helpers are a shared platform concern, not semantic
+# dependencies of every guest kernel import that emits a trace message.
+HOST_SURFACE_DIAGNOSTIC_HELPERS = {
+    "xbox_log",
+}
+
+
+def host_api_calls(masked_body: str) -> list[str]:
+    """Return actual host API call expressions, not identifier substrings."""
+    return [
+        token
+        for token in HOST_SURFACE_TOKENS
+        if re.search(r"(?<![A-Za-z0-9_])" + re.escape(token) + r"\s*\(", masked_body)
+    ]
+
 
 def mask_noncode(text: str) -> str:
     out = list(text)
@@ -223,7 +238,7 @@ def runtime_surface_for_bridge(
         if root_path is None:
             root_path = path
 
-        hits = [tok for tok in HOST_SURFACE_TOKENS if tok in raw_body]
+        hits = host_api_calls(masked_body)
         if hits:
             host_hits.update(hits)
             if symbol != runtime_target:
@@ -233,7 +248,10 @@ def runtime_surface_for_bridge(
             r"\b((?:xbox|bridge)_[A-Za-z0-9_]+)\s*\(", masked_body
         ):
             callee = match.group(1)
-            if callee not in visited:
+            if (
+                callee not in visited
+                and callee not in HOST_SURFACE_DIAGNOSTIC_HELPERS
+            ):
                 queue.append(callee)
 
     return root_path, sorted(host_hits), sorted(set(host_via))
