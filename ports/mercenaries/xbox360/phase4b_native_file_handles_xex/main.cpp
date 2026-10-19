@@ -13,6 +13,10 @@
 
 #define P4B_FILE_BUILD_TAG "P4B-FILE-20261019-A"
 
+#ifndef INVALID_FILE_ATTRIBUTES
+#define INVALID_FILE_ATTRIBUTES ((DWORD)0xFFFFFFFFu)
+#endif
+
 static HANDLE s_logFile = INVALID_HANDLE_VALUE;
 static int s_failures = 0;
 
