@@ -63,7 +63,13 @@ def instrument_first_fault_support(support):
     expanded = """static int s_accessFault = 0;
 static DWORD s_phase4cFaultAddress = 0u;
 static DWORD s_phase4cFaultWidth = 0u;
-static DWORD s_phase4cFaultWrite = 0u;"""
+static DWORD s_phase4cFaultWrite = 0u;
+static int s_phase4cFaultEscapeArmed = 0;
+
+static void phase4c_escape(
+    DWORD kind,
+    DWORD target,
+    DWORD savedEsp);"""
     if decl not in support:
         raise SystemExit("[Phase4C-I] s_accessFault declaration marker changed")
     support = support.replace(decl, expanded, 1)
@@ -89,6 +95,17 @@ static DWORD s_phase4cFaultWrite = 0u;"""
         trace(line);
     }
     s_accessFault = 1;
+
+    /*
+     * Boundary kind 6 is PHASE4C_BOUNDARY_GUEST_FAULT. The enum and the
+     * phase4c_escape definition are emitted later in this translation unit,
+     * so use the stable numeric value here after a forward declaration.
+     *
+     * Do not longjmp before the driver has established setjmp; preparation
+     * accesses still retain the old flag-only behavior.
+     */
+    if (s_phase4cFaultEscapeArmed)
+        phase4c_escape(6u, address, g_esp);
 }
 
 """
@@ -886,7 +903,7 @@ def main() -> int:
         "thread_context1": f"0x{THREAD_CTX1:08X}",
         "thread_context2": f"0x{THREAD_CTX2:08X}",
         "startup_callback": f"0x{STARTUP_CALLBACK:08X}",
-        "diagnostic_goal": "first_rejected_guest_access_provenance",
+        "diagnostic_goal": "immediate_first_rejected_guest_access_provenance",
         "callback_direct_depth": CALLBACK_DIRECT_DEPTH,
         "callback_members": len(callback_members),
         "callback_new_members": len(callback_members - entry_members - thread_members),
@@ -929,7 +946,7 @@ def main() -> int:
     )
     driver = driver.replace(
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
-        "Policy: reproduce the callback fault and capture the first rejected guest access",
+        "Policy: capture and immediately escape on the first rejected guest access",
     )
     driver = driver.replace("PHASE 4C-B", "PHASE 4C-I")
     driver = driver.replace(
@@ -937,7 +954,8 @@ def main() -> int:
         "    s_accessFault = 0;\n"
         "    s_phase4cFaultAddress = 0u;\n"
         "    s_phase4cFaultWidth = 0u;\n"
-        "    s_phase4cFaultWrite = 0u;\n",
+        "    s_phase4cFaultWrite = 0u;\n"
+        "    s_phase4cFaultEscapeArmed = 0;\n",
         1,
     )
     driver = driver.replace(
@@ -995,6 +1013,26 @@ def main() -> int:
         "PHASE 4C-B BOUNDED REAL STARTUP RESULT",
         "PHASE 4C-I FIRST-FAULT PROVENANCE RESULT",
     )
+    driver = driver.replace(
+        "    if (escaped == 0)\n"
+        "    {{\n"
+        "        {root_name}();",
+        "    if (escaped == 0)\n"
+        "    {{\n"
+        "        s_phase4cFaultEscapeArmed = 1;\n"
+        "        {root_name}();",
+        1,
+    )
+    driver = driver.replace(
+        "    else\n"
+        "    {{\n"
+        "        sprintf(",
+        "    else\n"
+        "    {{\n"
+        "        s_phase4cFaultEscapeArmed = 0;\n"
+        "        sprintf(",
+        1,
+    )
 
     generated_main = (
         support
@@ -1036,8 +1074,9 @@ def main() -> int:
     print(f"[Phase4C-I] main: {args.out_dir / 'main.cpp'}")
     print(f"[Phase4C-I] env:  {args.out_dir / 'phase4c_env.cpp'}")
     print(
-        "[Phase4C-I] Runtime policy: reproduce the Phase 4C-H callback path and "
-        "capture address/width/direction for the first rejected guest access."
+        "[Phase4C-I] Runtime policy: reproduce the Phase 4C-H callback path, "
+        "capture address/width/direction for the first rejected guest access, "
+        "and escape immediately from that accessor."
     )
     return 0
 
