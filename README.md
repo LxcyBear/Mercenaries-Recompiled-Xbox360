@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-T — continue live ordinal 24 ExQueryNonVolatileSetting after Phase 4C-S hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-U — continue live ordinal 301 RtlNtStatusToDosError after Phase 4C-T hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -181,9 +181,13 @@ phases.
 31. **Done:** Phase 4C-S promoted and executed `0x00230060`; the S main/env
     cookie matched and startup advanced with `fault=0` to
     `ITAIL caller=0x00230060 target=0x80000018`.
-32. **Phase 4C-T:** validate and continue ordinal 24
-    `ExQueryNonVolatileSetting` using the locked five-argument stdcall ABI
-    and existing guest EEPROM/XConfig semantics.
+32. **Done:** Phase 4C-T validated and continued ordinal 24
+    `ExQueryNonVolatileSetting`; the live frame was `XC_MISC` with a 4-byte
+    value buffer, returned STATUS_SUCCESS, and startup advanced with `fault=0`
+    to `ICALL_SAFE caller=0x00230060 target=0x8000012D`.
+33. **Phase 4C-U:** validate and continue ordinal 301
+    `RtlNtStatusToDosError` using the locked one-argument stdcall ABI and
+    existing runtime bridge mapping.
 
 ### Evidence policy
 
@@ -2207,6 +2211,24 @@ unexecuted test PASS.**
 - **Phase 4C-S hardware result: PASS.**
 - **Next:** Phase 4C-T validates and continues ordinal 24 in-place.
 - Build tag: `P4C-NV24-20261019-A`.
+
+### 2026-10-19 — Phase 4C-T ExQueryNonVolatileSetting PASS
+
+- T main/env link-time build cookie matched on hardware.
+- The proven startup chain remained intact through ordinal 113 and the promoted
+  `0x00230060` function.
+- Live ordinal-24 tail frame:
+  `ret=0`, `index=0x11 (XC_MISC)`, value length 4.
+- The guest EEPROM continuation returned STATUS_SUCCESS and cleaned the
+  24-byte tail frame to `ESP=0x008BFED8`.
+- New boundary:
+  `ICALL_SAFE caller=0x00230060 target=0x8000012D`.
+- Target `0x8000012D` is kernel ordinal 301,
+  `RtlNtStatusToDosError`.
+- Boundary state remained clean: `fault=0`.
+- **Phase 4C-T hardware result: PASS.**
+- **Next:** Phase 4C-U validates and continues ordinal 301 in-place.
+- Build tag: `P4C-RTL301-20261019-A`.
 
 ### How future updates are recorded
 
