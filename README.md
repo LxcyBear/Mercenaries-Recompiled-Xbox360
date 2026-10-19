@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-I Build B — hardened first-fault provenance after Probe A exposed a diagnostic harness bug.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-J — relocate the hardware-proven XboxHardwareInfo data import after Phase 4C-I first-fault provenance PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -146,9 +146,13 @@ phases.
     and reached translated function `0x0022C4DF`, then stopped on a
     deterministic `GUEST_FAULT` observed at translated VA `0x0022C4FF`.
     The stack remained balanced; this gate is blocked, not passed.
-21. **Phase 4C-I:** preserve that exact path and capture the first rejected
-    guest address, READ/WRITE direction, width, and caller without relaxing
-    guest-memory validity.
+21. **Done:** Phase 4C-I Build B captured the first rejected guest access on
+    real Xbox 360 hardware: READ32 `0x80000142` from translated caller
+    `0x0022C4DF`. Ordinal `0x142` = decimal 322 =
+    `XboxHardwareInfo`, a guest-visible DATA export.
+22. **Phase 4C-J:** emulate the original-Xbox loader for that one proven data
+    import by replacing raw token `0x80000142` with initialized guest
+    `XboxHardwareInfo` at `0x0087E000`, then continue the callback path.
 
 ### Evidence policy
 
@@ -2012,6 +2016,20 @@ unexecuted test PASS.**
   `FAULT ACCESS IMMEDIATE: READ|WRITE width=N guest=XXXXXXXX`.
 - Guest mapping/validity semantics are unchanged.
 - Active build tag: `P4C-FAULTPROBE-20261019-B`.
+
+### 2026-10-19 — Phase 4C-I first-fault provenance PASS
+
+- Hardened Build B captured the callback's first rejected guest access:
+  **READ32 `0x80000142`**.
+- Translated caller: `0x0022C4DF`.
+- `0x142` is kernel ordinal **322**, `XboxHardwareInfo`, a DATA export.
+- The production bridge already maps ordinal 322 to guest kernel-data storage.
+- Phase-2E already initializes `XboxHardwareInfo` at guest VA
+  `0x0087E000`; the missing step is data-import thunk relocation.
+- **Phase 4C-I diagnostic result: PASS.**
+- **Next:** Phase 4C-J relocates only ordinal 322, validates the exact
+  111-import table/terminator and hardware-info readback, then resumes startup.
+- Build tag: `P4C-HWINFO-20261019-A`.
 
 ### How future updates are recorded
 
