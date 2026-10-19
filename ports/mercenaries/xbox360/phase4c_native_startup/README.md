@@ -1209,3 +1209,37 @@ P4C-D980-CLOSURE-20261019-A
 ```
 
 The X main/env cookie is `0x50435831` (`PCX1`).
+
+
+## Phase 4C-Y — hardware-observed root 0x00238C00
+
+Phase 4C-X passed on hardware. The translated root `0x0022D980` executed,
+control re-entered `0x00239BE8`, and the path advanced with `fault=0` to
+`DIRECT_FRONTIER caller=0x00239BE8 target=0x00238C00`. The hardware trace
+reached 15 translated entries.
+
+Y keeps all proven continuations, retains the `0x0022F0FB` and
+`0x0022D980` promotions, and adds only the hardware-observed translated root
+`0x00238C00`. Deeper direct callees remain explicit boundaries.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-Y.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\root_38c00_xdk\main.cpp
+build\phase4c_native_startup\root_38c00_xdk\phase4c_env.cpp
+build\phase4c_native_startup\root_38c00_xdk\phase4c-y-manifest.json
+```
+
+Build tag:
+
+```text
+P4C-DIRECT38C00-20261019-A
+```
+
+The Y main/env cookie is `0x50435931` (`PCY1`).
