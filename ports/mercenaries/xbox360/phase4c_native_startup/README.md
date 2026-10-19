@@ -550,3 +550,52 @@ The H package keeps the proven 43-body path, enters that callback using the
 observed 8-byte indirect-call frame, and adds only its direct depth-1 translated
 slice. Any translated direct call outside the slice becomes a
 `DIRECT_FRONTIER` boundary while preserving the real call-site stack state.
+
+
+## Phase 4C-H hardware result — callback entered, guest fault exposed
+
+The bounded callback package reached genuine callback execution:
+
+```text
+[Merc360:P4C] STARTUP CALLBACK LIVE FRAME: target=002295D6 arg0=00000000 esp=008BFF50 saved_esp=008BFF58
+[Merc360:P4C] PASS: entering hardware-confirmed translated startup callback 002295D6
+[Merc360:P4C] BOUNDARY: kind=GUEST_FAULT caller=0022C4DF target=0022C4FF esp=008BFF48 saved_esp=008BFF48 ticks=19 trace=7
+[Merc360:P4C] ... fault=1
+[Merc360:P4C] trace[5]=002295D6
+[Merc360:P4C] trace[6]=0022C4DF
+[Merc360:P4C] PHASE 4C-H BOUNDED REAL STARTUP RESULT: FAIL
+```
+
+This is not a 4C-H PASS, but it proves the real startup callback executes on
+Xenon. The next blocker is guest-memory state/mapping rather than the earlier
+thread handoff or critical-section ABI.
+
+## Phase 4C-I — first-fault provenance
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-I.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\fault_probe_xdk\main.cpp
+build\phase4c_native_startup\fault_probe_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-FAULTPROBE-20261019-A
+```
+
+Expected additional xbWatson evidence:
+
+```text
+FAULT ACCESS: READ|WRITE width=N guest=XXXXXXXX translated_caller=0022C4DF
+```
+
+The probe records only the first rejected access and otherwise preserves the
+existing guest validity rules.
