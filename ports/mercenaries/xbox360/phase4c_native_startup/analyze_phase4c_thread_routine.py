@@ -107,6 +107,7 @@ def main() -> int:
         calls.discard(row["name"])
         calls -= translated_names
         calls -= emitter_mod.STANDARD_CALLS
+        calls -= set(emitter_mod.DEFINE_RE.findall(row["source"]))
         if calls:
             helper_hits[f"0x{va:08X} {row['name']}"] = sorted(calls)
 
