@@ -192,6 +192,53 @@ def find_symbol_source(
     return None
 
 
+def runtime_surface_for_bridge(
+    runtime_target: str,
+    sources: dict[Path, str],
+    masked_sources: dict[Path, str],
+):
+    """Inspect the callable path the translated guest actually enters.
+
+    Follow bridge_* and xbox_* helpers conservatively so legacy resolver
+    implementations that are bypassed by kernel_bridge.c do not inflate the
+    Phase-4B host-surface count.
+    """
+    queue = [runtime_target]
+    visited: set[str] = set()
+    host_hits: set[str] = set()
+    host_via: list[str] = []
+    root_path = None
+
+    while queue:
+        symbol = queue.pop(0)
+        if symbol in visited:
+            continue
+        visited.add(symbol)
+
+        path, raw_body, masked_body = find_function_body(
+            symbol, sources, masked_sources
+        )
+        if raw_body is None:
+            continue
+        if root_path is None:
+            root_path = path
+
+        hits = [tok for tok in HOST_SURFACE_TOKENS if tok in raw_body]
+        if hits:
+            host_hits.update(hits)
+            if symbol != runtime_target:
+                host_via.append(symbol)
+
+        for match in re.finditer(
+            r"\b((?:xbox|bridge)_[A-Za-z0-9_]+)\s*\(", masked_body
+        ):
+            callee = match.group(1)
+            if callee not in visited:
+                queue.append(callee)
+
+    return root_path, sorted(host_hits), sorted(set(host_via))
+
+
 def prototype_for(header: str, symbol: str) -> str | None:
     pos = header.find(symbol)
     if pos < 0:
@@ -379,6 +426,7 @@ def main() -> int:
 
         source = None
         host_hits: list[str] = []
+        host_via: list[str] = []
         review_hints: list[str] = []
         expected_args = None
         signature = None
@@ -391,13 +439,18 @@ def main() -> int:
                     source = str(source_path.relative_to(repo)).replace("\\", "/")
                 else:
                     counts["source_definition_missing"] += 1
-        elif symbol:
-            source_path, raw_body, masked_body = find_function_body(symbol, sources, masked_sources)
-            if raw_body is not None:
+        elif runtime_kind == "bridge":
+            source_path, host_hits, host_via = runtime_surface_for_bridge(
+                runtime_target, sources, masked_sources
+            )
+            if source_path is not None:
                 counts["source_callable"] += 1
                 source = str(source_path.relative_to(repo)).replace("\\", "/")
-                host_hits = [tok for tok in HOST_SURFACE_TOKENS if tok in raw_body]
-                review_hints = semantic_review_hints(masked_body)
+                _, _, masked_body = find_function_body(
+                    runtime_target, sources, masked_sources
+                )
+                if masked_body is not None:
+                    review_hints = semantic_review_hints(masked_body)
                 if host_hits:
                     counts["host_surface_flagged"] += 1
                 if review_hints:
@@ -405,15 +458,23 @@ def main() -> int:
             else:
                 counts["source_definition_missing"] += 1
 
-            signature = prototype_for(header_text, symbol)
-            if signature:
-                expected_args = expected_cleanup(signature)
-        elif imp.ordinal == 232:
-            # NtUserIoApcDispatcher is implemented directly in kernel_bridge.c.
-            expected_args = 12
-            source = "src/kernel/kernel_bridge.c"
-        elif runtime_kind != "data":
-            counts["source_definition_missing"] += 1
+            if symbol:
+                signature = prototype_for(header_text, symbol)
+                if signature:
+                    expected_args = expected_cleanup(signature)
+            elif imp.ordinal == 232:
+                # NtUserIoApcDispatcher is bridge-only.
+                expected_args = 12
+        else:
+            # Return-zero fallbacks never enter the legacy xbox_* resolver
+            # implementation, so host APIs in that old source are irrelevant
+            # to the translated guest runtime path.
+            if symbol:
+                signature = prototype_for(header_text, symbol)
+                if signature:
+                    expected_args = expected_cleanup(signature)
+            elif imp.ordinal == 232:
+                expected_args = 12
 
         actual_args = arg_bytes.get(imp.ordinal)
         abi_match = None
@@ -446,6 +507,7 @@ def main() -> int:
             "abi_match": abi_match,
             "static_generated_refs": refs,
             "host_surface_tokens": host_hits,
+            "host_surface_via": host_via,
             "review_hints": review_hints,
         })
 
@@ -497,7 +559,10 @@ def main() -> int:
         if row["abi_match"] is False:
             flags.append("ABI_MISMATCH")
         if row["host_surface_tokens"]:
-            flags.append("HOST=" + ",".join(row["host_surface_tokens"]))
+            host_flag = "HOST=" + ",".join(row["host_surface_tokens"])
+            if row["host_surface_via"]:
+                host_flag += " via " + ",".join(row["host_surface_via"])
+            flags.append(host_flag)
         if row["review_hints"]:
             flags.append("REVIEW=" + ",".join(row["review_hints"]))
         suffix = " {" + "; ".join(flags) + "}" if flags else ""
