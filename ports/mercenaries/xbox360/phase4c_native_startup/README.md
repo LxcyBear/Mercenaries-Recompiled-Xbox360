@@ -1517,3 +1517,33 @@ build\phase4c_native_startup\direct_ceee_af_xdk\phase4c-af-manifest.json
 Build tag: `P4C-DIRECTCEEE-AF-20261019-A`.
 
 The AF main/env cookie is `0x50434146` (`PCAF`).
+
+
+## Phase 4C-AF — hardware PASS and Phase 4 closure
+
+Build `P4C-DIRECTCEEE-AF-20261019-A` passed on real Xbox 360 hardware.
+
+The translated startup path executed through `0x0022CEEE` and then continued
+through three already-packed translated functions without another manual root
+promotion:
+
+```text
+0x0022CEEE
+ -> 0x00239C23
+ -> 0x0022C27A
+ -> 0x0022BD2D
+ -> ICALL_SAFE 0x800000CA
+```
+
+The boundary remained `fault=0` and the live trace reached 23 translated
+entries. `0x800000CA` is xboxkrnl ordinal 202, `NtOpenFile`; its observed
+stack delta is 28 bytes, exactly matching six stdcall arguments plus the
+translated synthetic return slot.
+
+This satisfies the Phase-4 exit criterion: a real retail-derived translated
+startup path is executing through the migrated Xenon service layer with
+deterministic hardware checkpoints. The next live dependency is not startup
+scaffolding but a real storage/content request.
+
+**Phase 4 is complete.** Further work continues on
+`xbox360/phase5-native-subsystems`.
