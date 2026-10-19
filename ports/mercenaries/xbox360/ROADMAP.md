@@ -314,3 +314,25 @@ two-source package under `build/phase4c_native_startup/thread_xdk`. It packs
 the maintained startup roots `0x0022B43F` and `0x002295D6` plus their direct
 generated closures. Runtime still validates the actual ordinal-255 StartRoutine
 before entering it.
+
+
+### 4C-C scope correction
+
+The first 4C-C emitter recursively packed both maintained startup candidates and
+therefore pulled a very large portion of the title graph into the XDK package
+before hardware had identified the live StartRoutine. Its helper-surface audit
+correctly refused to emit.
+
+4C-C is now intentionally narrower:
+
+- reuse the exact 40-body 4C-B translated entry closure;
+- intercept only `0x800000FF` / ordinal 255;
+- require the already hardware-proven 44-byte frame shape;
+- decode and log all ten `PsCreateSystemThreadEx` arguments;
+- capture the actual StartRoutine, context1, and context2;
+- stop successfully at a `THREAD_TARGET` evidence boundary.
+
+Build tag: `P4C-THREAD-20261019-B`.
+
+The following phase will package only the StartRoutine actually observed on
+hardware, avoiding speculative expansion into renderer/audio/XACT/XInput code.
