@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-V — execute a bounded direct translated closure rooted at 0x0022F0FB after Phase 4C-U hardware PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-W — continue live ordinal 149 KeSetTimer after Phase 4C-V hardware PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -189,9 +189,12 @@ phases.
     `RtlNtStatusToDosError`; STATUS_SUCCESS mapped to DOS error 0 with the
     expected 8-byte frame, and startup advanced with `fault=0` to
     `DIRECT_FRONTIER caller=0x00230060 target=0x0022F0FB`.
-34. **Phase 4C-V:** promote a bounded depth-2 direct translated closure rooted
-    at `0x0022F0FB` (cap 16 members) so multiple safe direct callees can
-    execute in one hardware run while deeper/dynamic boundaries remain fenced.
+34. **Done:** Phase 4C-V executed the bounded direct closure rooted at
+    `0x0022F0FB`; the live path advanced with `fault=0` to
+    `ICALL_SAFE caller=0x0022F0FB target=0x80000095`.
+35. **Phase 4C-W:** validate and continue ordinal 149 `KeSetTimer` using the
+    locked 16-byte stdcall ABI, the proven Xbox 360 system-time path, and the
+    existing guest-KTIMER semantics.
 
 ### Evidence policy
 
@@ -2250,6 +2253,22 @@ unexecuted test PASS.**
 - **Next:** Phase 4C-V promotes a bounded depth-2 direct closure rooted at
   `0x0022F0FB` to reduce one-function-per-boot churn.
 - Build tag: `P4C-F0FB-CLOSURE-20261019-A`.
+
+### 2026-10-19 — Phase 4C-V direct closure PASS
+
+- V main/env build cookie matched on hardware.
+- The proven startup chain remained intact through ordinals 24 and 301.
+- Promoted translated target `0x0022F0FB` executed, extending the trace to
+  13 translated functions.
+- New boundary:
+  `ICALL_SAFE caller=0x0022F0FB target=0x80000095`.
+- Target `0x80000095` is kernel ordinal 149, `KeSetTimer`.
+- The live stack delta is 20 bytes, matching the locked ABI:
+  dummy return + 16 bytes of stdcall arguments.
+- Boundary state remained clean: `fault=0`.
+- **Phase 4C-V hardware result: PASS.**
+- **Next:** Phase 4C-W validates and continues ordinal 149 in-place.
+- Build tag: `P4C-TIMER149-20261019-A`.
 
 ### How future updates are recorded
 
