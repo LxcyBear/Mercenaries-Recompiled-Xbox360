@@ -193,7 +193,7 @@ guest-native + 0 direct host-backed.
 Begin linking/executing the real translated Mercenaries startup path with the migrated Xenon service layer.
 
 #### Phase 4C-A — Retail entry-rooted startup preflight
-**Status: ready.**
+**Status: PASS.**
 
 Entry:
 `0x0022964A`
@@ -203,10 +203,36 @@ Gate:
 
 The preflight reuses the exact locked Phase-3N-A generated tree and refuses to
 continue unless the Phase-4B final service audit remains
-`0 direct / 15 platform-bound / 2 guest-native`. It walks the full direct
-translated dependency closure from the retail entry, reports missing translated
-dependencies and dynamic/indirect boundaries, and emits the manifest used to
-construct the first native startup XEX. No retail code is executed by 4C-A.
+`0 direct / 15 platform-bound / 2 guest-native`.
+
+Result:
+- retail entry: `0x0022964A`;
+- exact translated symbol: `xbe_entry_point`;
+- 40 directly reachable translated bodies;
+- maximum direct-call depth 8;
+- 5,918 guest code bytes;
+- 111,376 generated source bytes;
+- 0 missing direct translated dependencies;
+- 14 bodies containing dynamic/indirect dispatch boundaries.
+
+No retail code was executed by 4C-A.
+
+#### Phase 4C-B — First bounded real translated startup execution
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-B.ps1`
+
+The local emitter combines:
+- the exact Phase-2E retail XBE loader/TIB/TLS/stack/kernel-data environment;
+- the hardware-proven Phase-3N translated ABI/runtime support;
+- all 40 entry-rooted translated bodies from the locked local generated tree.
+
+The first runtime intentionally escapes at the first live `RECOMP_ICALL`,
+`RECOMP_ICALL_SAFE`, `RECOMP_ITAIL`, or `RECOMP_ITAIL_SAFE` boundary.
+That makes the first dynamic target, caller, stack and register state the next
+deterministic xbWatson evidence instead of silently stubbing unresolved startup
+behavior.
 
 Required evidence:
 - real retail-derived translated entry/startup code executes;
