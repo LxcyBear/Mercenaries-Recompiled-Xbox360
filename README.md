@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-D — analyze the hardware-observed first title-thread routine after Phase 4C-C live handoff PASS.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 4C-E — first continuous execution through the hardware-observed title-thread routine after Phase 4C-D preflight PASS.
 >
 > **Active development:** [Phase 4C — native translated startup](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase4c-native-startup). Active port sources remain isolated on Xbox 360 feature branches; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -122,9 +122,13 @@ phases.
 15. **Done:** Phase 4C-C captured the live ordinal-255 frame on real Xbox 360
     hardware: StartRoutine `0x0022B43F`, ctx1 `0x002295D6`, ctx2
     `0x00000000`, exact 44-byte frame, `fault=0`.
-16. **Phase 4C-D:** analyze only the hardware-observed StartRoutine
-    `0x0022B43F`, measure its direct translated closure, dynamic boundaries
-    and helper surface, then emit the first bounded title-thread execution XEX.
+16. **Done:** Phase 4C-D proved the hardware-observed StartRoutine
+    `0x0022B43F` is an exact translated function with a six-body direct
+    closure, depth 2, 460 guest bytes, 8,556 generated-source bytes,
+    0 missing direct translated dependencies and 5 dynamic-boundary bodies.
+17. **Phase 4C-E:** build the 43-body union of the proven entry closure and
+    live title-thread closure, execute continuously through ordinal 255 into
+    `0x0022B43F`, and capture the first subsequent live ICALL/ITAIL boundary.
 
 ### Evidence policy
 
@@ -1900,6 +1904,22 @@ unexecuted test PASS.**
 - **Phase 4C-C hardware result: PASS.**
 - **Next:** Phase 4C-D analyzes only `0x0022B43F` before building the first
   translated title-thread execution slice.
+
+### 2026-10-19 — Phase 4C-D first title-thread preflight PASS
+
+- Hardware-observed StartRoutine `0x0022B43F` resolves as an exact translated
+  function.
+- Direct closure: **6 bodies**, maximum depth **2**.
+- Reachable retail guest code: **460 bytes**.
+- Generated source: **8,556 bytes**.
+- Missing direct translated dependencies: **0**.
+- Dynamic/indirect-boundary bodies: **5**.
+- Three of the six bodies already belong to the hardware-proven entry closure,
+  so the Phase 4C-E continuous package contains **43 unique translated bodies**.
+- **Next:** execute from real `xbe_entry_point` through ordinal 255 into
+  `0x0022B43F` with the hardware-captured contexts and stop at the next live
+  dynamic/kernel boundary.
+- Build tag: `P4C-THREADRUN-20261019-A`.
 
 ### How future updates are recorded
 
