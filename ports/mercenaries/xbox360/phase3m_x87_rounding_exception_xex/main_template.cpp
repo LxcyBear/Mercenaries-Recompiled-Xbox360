@@ -53,7 +53,7 @@ typedef __int64            int64_t;
 #define CANARY_COUNT       8u
 
 #define TRACE_CAPACITY     256u
-#define PROFILE_COUNT      16u
+#define PROFILE_COUNT      17u
 #define EXEC_BUDGET        4096u
 
 static DWORD s_execBudget = 0u;
@@ -63,6 +63,8 @@ static DWORD s_lastBackedgeFrom = 0u;
 static DWORD s_lastBackedgeTo = 0u;
 static DWORD s_x87RoundCount = 0u;
 static DWORD s_x87InvalidCount = 0u;
+static DWORD s_activeProfile = 0u;
+static int s_phase3mExternalEventInjected = 0;
 
 static BYTE* g_ram = NULL;
 static HANDLE s_logFile = INVALID_HANDLE_VALUE;
@@ -306,13 +308,38 @@ static void trace_func(DWORD va)
     s_lastBackedgeTo = (DWORD)(toVa); \
 } while (0)
 
+static int phase3m_budget_tick(DWORD va)
+{
+    ++s_execBudget;
+
+    /*
+     * Profile 16 models one external producer event after sub_0020A2B0 has
+     * completed setup and before the root begins consuming queued entries.
+     * Retail sub_0020D450 gates sub_0020BDC0 on guest byte 0x7AC7A0, while
+     * sub_0020D2B0 clears that byte during setup. In the isolated closure no
+     * selected member can set it nonzero; the full game expects outside state
+     * to do so. Inject once at root safe point 0x000A5BD2 without modifying any
+     * translated function's semantics.
+     */
+    if (s_activeProfile == 16u &&
+        !s_phase3mExternalEventInjected &&
+        va == 0x000A5BD2u)
+    {
+        GUEST_WRITE8(0x007AC7A0u, 1u);
+        s_phase3mExternalEventInjected = 1;
+    }
+
+    if (s_execBudget > EXEC_BUDGET)
+    {
+        s_budgetExceeded = 1;
+        return 0;
+    }
+
+    return 1;
+}
+
 #define RECOMP_BUDGET_TICK(va) do { \
-    (void)(va); \
-    ++s_execBudget; \
-    if (s_execBudget > EXEC_BUDGET) { \
-        s_budgetExceeded = 1; \
-        return; \
-    } \
+    if (!phase3m_budget_tick((DWORD)(va))) return; \
 } while (0)
 
 static void trace(const char* line)
@@ -1283,6 +1310,8 @@ static void seed_case(DWORD profileIndex)
     s_lastBackedgeTo = 0u;
     s_x87RoundCount = 0u;
     s_x87InvalidCount = 0u;
+    s_activeProfile = profileIndex % PROFILE_COUNT;
+    s_phase3mExternalEventInjected = 0;
     reset_trace();
 }
 
@@ -1425,6 +1454,7 @@ typedef struct RunResult
     DWORD lastBackedgeTo;
     DWORD x87RoundCount;
     DWORD x87InvalidCount;
+    int externalEventInjected;
 
     DWORD traceCount;
     DWORD trace[TRACE_CAPACITY];
@@ -1505,6 +1535,7 @@ static void capture_result(DWORD caseIndex, RunResult* result)
     result->lastBackedgeTo = s_lastBackedgeTo;
     result->x87RoundCount = s_x87RoundCount;
     result->x87InvalidCount = s_x87InvalidCount;
+    result->externalEventInjected = s_phase3mExternalEventInjected;
 
     result->fpTop = g_fp_top;
     result->x87ControlWord = g_x87_control_word;
@@ -1589,6 +1620,7 @@ static int architecture_matches(const RunResult* a, const RunResult* b)
         a->lastBackedgeTo == b->lastBackedgeTo &&
         a->x87RoundCount == b->x87RoundCount &&
         a->x87InvalidCount == b->x87InvalidCount &&
+        a->externalEventInjected == b->externalEventInjected &&
         a->coverageMask == b->coverageMask &&
         a->coveredMembers == b->coveredMembers &&
         a->fpTop == b->fpTop &&
@@ -1682,6 +1714,14 @@ static int run_case(
         a.backedgeCount == b.backedgeCount,
         "PASS: backward-edge execution count is deterministic across A/B",
         "FAIL: backward-edge execution count diverges across A/B");
+
+    if (profileIndex == 16u)
+    {
+        ok &= check(
+            a.externalEventInjected && b.externalEventInjected,
+            "PASS: external producer event injected at post-setup root safe point",
+            "FAIL: external producer event was not injected");
+    }
 
     ok &= check(
         a.canaryOk && b.canaryOk,
@@ -1895,9 +1935,9 @@ VOID __cdecl main()
         FILE_ATTRIBUTE_NORMAL,
         NULL);
 
-    trace("PHASE 3L BOUNDED BACKWARD-CONTROL CLUSTER START");
-    trace("BUILD TAG: P3M-X87ROUND-20261019-A");
-    trace("Coverage policy: x87 helper reference checks + deterministic retail rounding execution + full mixed-state/RAM equality");
+    trace("PHASE 3M X87 ROUNDING + EXCEPTION CLUSTER START");
+    trace("BUILD TAG: P3M-X87ROUND-20261019-B");
+    trace("Coverage policy: x87 helper checks + 17-profile deterministic retail closure; profile 16 injects one external producer event at 0x000A5BD2");
 
     sprintf(
         line,
@@ -1919,9 +1959,9 @@ VOID __cdecl main()
     result &= run_fixture();
 
     if (result)
-        trace("PHASE 3L BOUNDED BACKWARD-CONTROL CLUSTER RESULT: PASS");
+        trace("PHASE 3M X87 ROUNDING + EXCEPTION CLUSTER RESULT: PASS");
     else
-        trace("PHASE 3L BOUNDED BACKWARD-CONTROL CLUSTER RESULT: FAIL");
+        trace("PHASE 3M X87 ROUNDING + EXCEPTION CLUSTER RESULT: FAIL");
 
     free(g_ram);
     g_ram = NULL;
@@ -1960,7 +2000,7 @@ wait_for_exit:
         Sleep(33);
     }
 
-    trace("PHASE 3L BOUNDED BACKWARD-CONTROL CLUSTER END");
+    trace("PHASE 3M X87 ROUNDING + EXCEPTION CLUSTER END");
 
     if (s_logFile != INVALID_HANDLE_VALUE)
     {
