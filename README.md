@@ -43,7 +43,8 @@ Snapshot: 2026-10-19.
 | 4C-I | **Hardware diagnostic PASS** | Build B proved the first rejected callback access is READ32 guest `0x80000142` from `0x0022C4DF`; `0x142` = ordinal 322 = `XboxHardwareInfo` DATA export. |
 | 4C-J | **Hardware PASS** | Ordinal-322 `XboxHardwareInfo` thunk relocated at live slot `0x002DBE0C`; startup advanced past the old fault and next rejected access is READ16 `0x80000148` with ECX=`0x80000144`, proving raw ordinal 324 `XboxKrnlVersion` is being dereferenced at offset +4 (Build). |
 | 4C-K | **Hardware PASS** | Relocated startup DATA imports 156/322/324; all three exact thunk slots fixed, `fault=0`, callback advanced beyond both prior data faults to `DIRECT_FRONTIER 0x0022C47B` from caller `0x0022C4DF`. |
-| 4C-L | **Package prep ready** | Promote only the hardware-observed direct target `0x0022C47B` into the translated pack; deeper direct calls remain deterministic frontiers and all startup data relocations/fault provenance remain active. |
+| 4C-L | **Hardware PASS** | Promoted `0x0022C47B` executed on Xenon; next dependency is READ32 `0x8001003C` from `0x0022C47B`, with balanced stack and deterministic first-fault capture. |
+| 4C-M | **Package prep ready** | Model the original-Xbox kernel image header page at `0x80010000` as a separate synthetic 4 KiB PE-header surface (MZ, `e_lfanew=0x80`, PE signature, i386, zero sections), preserving all prior startup evidence. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
