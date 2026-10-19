@@ -317,7 +317,7 @@ def main() -> int:
         "/*__P3NB_FORWARD_DECLS__*/": forward_decls,
         "/*__P3NB_EXEC_BODIES__*/": "\n\n".join(exec_bodies),
         "/*__P3NB_SCALE_BODIES__*/": "\n\n".join(scale_bodies),
-        "/*__P3NB_SCALE_ANCHORS__*/": anchor_rows,
+        "__P3NB_SCALE_ANCHORS__": anchor_rows,
         "__P3NB_ROOT_NAME__": f"sub_{EXEC_ROOT:08X}",
         "__P3NB_ROOT_VA__": f"0x{EXEC_ROOT:08X}u",
         "__P3NB_MEMBER_COUNT__": str(len(EXEC_MEMBERS)),
