@@ -1101,3 +1101,38 @@ P4C-RTL301-20261019-A
 ```
 
 The U main/env cookie is `0x50435531` (`PCU1`).
+
+
+## Phase 4C-V — bounded direct closure rooted at 0x0022F0FB
+
+Phase 4C-U passed on hardware. Ordinal 301 `RtlNtStatusToDosError`
+received STATUS_SUCCESS, returned DOS error 0 with the expected 8-byte frame,
+and startup advanced with `fault=0` to
+`DIRECT_FRONTIER caller=0x00230060 target=0x0022F0FB`.
+
+V accelerates the direct path: instead of promoting only the root, preparation
+computes a bounded depth-2 translated direct closure rooted at `0x0022F0FB`,
+capped at 16 members. Calls outside that proven slice remain explicit
+`DIRECT_FRONTIER` boundaries, while all dynamic/kernel boundaries stay fenced.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-V.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\f0fb_closure_xdk\main.cpp
+build\phase4c_native_startup\f0fb_closure_xdk\phase4c_env.cpp
+build\phase4c_native_startup\f0fb_closure_xdk\phase4c-v-manifest.json
+```
+
+Build tag:
+
+```text
+P4C-F0FB-CLOSURE-20261019-A
+```
+
+The V main/env cookie is `0x50435631` (`PCV1`).
