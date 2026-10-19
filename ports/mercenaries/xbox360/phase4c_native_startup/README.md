@@ -1184,9 +1184,9 @@ Phase 4C-W passed on hardware. Ordinal 149 `KeSetTimer` received the expected
 `0x00869580`, returned FALSE for the prior-active state, and startup advanced
 with `fault=0` to `DIRECT_FRONTIER caller=0x0022F0FB target=0x0022D980`.
 
-X retains the proven `0x0022F0FB` closure and computes a second bounded
-depth-2 translated direct closure rooted at `0x0022D980`, capped at 16
-members. Calls beyond that slice remain explicit boundaries.
+X retains the proven `0x0022F0FB` closure and promotes only the
+hardware-observed translated root `0x0022D980`. Deeper direct callees remain
+explicit boundaries so unsupported speculative descendants cannot block package emission.
 
 Run:
 
