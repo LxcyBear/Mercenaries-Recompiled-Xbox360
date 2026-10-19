@@ -48,7 +48,7 @@ not a scheduler benchmark.
 ## Build marker
 
 ```text
-P4B-TIMESYNC-20261019-A
+P4B-TIMESYNC-20261019-B
 ```
 
 A successful xbWatson run must include:
