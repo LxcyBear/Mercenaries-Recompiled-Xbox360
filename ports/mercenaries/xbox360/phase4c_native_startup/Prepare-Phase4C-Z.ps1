@@ -96,12 +96,12 @@ foreach ($requiredText in @(
 }
 
 foreach ($requiredText in @(
-    "PHASE 4C-Y RETAIL ENVIRONMENT PREP START",
-    "PHASE 4C-Y EXACT RETAIL VERIFICATION: PASS",
-    "PHASE 4C-Y EXECUTION ENVIRONMENT RESULT: PASS",
+    "PHASE 4C-Z RETAIL ENVIRONMENT PREP START",
+    "PHASE 4C-Z EXACT RETAIL VERIFICATION: PASS",
+    "PHASE 4C-Z EXECUTION ENVIRONMENT RESULT: PASS",
     "phase4c_env_build_cookie",
     "50435A31",
-    "PHASE 4C-Y RETAIL ENVIRONMENT PREP END"
+    "PHASE 4C-Z RETAIL ENVIRONMENT PREP END"
 )) {
     if ($envText -notlike "*$requiredText*") {
         throw "Generated Phase 4C-Z phase4c_env.cpp is missing marker: $requiredText"
@@ -142,6 +142,6 @@ Write-Host "[Phase4C-Z] Continued kernel target: 0x800000B8 ordinal 184 NtAlloca
 Write-Host "[Phase4C-Z] Build BOTH freshly generated sources in the same XDK project:"
 Write-Host "[Phase4C-Z]   $main"
 Write-Host "[Phase4C-Z]   $env"
-Write-Host "[Phase4C-Z] The Y cookie must be 0x50435A31 (PCZ1); stale X/W environment objects must fail closed."
+Write-Host "[Phase4C-Z] The Z cookie must be 0x50435A31 (PCZ1); stale Y/X environment objects must fail closed."
 Write-Host "[Phase4C-Z] Keep the exact supported retail default.xbe beside the XEX."
 Write-Host "[Phase4C-Z] Expected build tag: P4C-NTALLOC184-20261019-A"
