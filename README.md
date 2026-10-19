@@ -48,7 +48,8 @@ Snapshot: 2026-10-19.
 | 4C-N | **Hardware PASS** | Live ordinal 47 frame validated: registration `0x003134C0`, Register=1, exact 12-byte frame; production no-callback semantics returned cleanly and startup advanced with `fault=0` to `DIRECT_FRONTIER 0x0022F128` from `0x0022C28B`. |
 | 4C-O | **Hardware PASS** | Promoted `0x0022F128` executed on Xenon; next boundary is `ICALL_SAFE 0x8000006B` from `0x0022F128`, `fault=0`, 16-byte frame. Ordinal 107 = `KeInitializeDpc`. |
 | 4C-P | **Hardware PASS** | Live ordinal 107 `KeInitializeDpc` frame validated: DPC `0x00869580`, routine `0x0022F116`, context 0; production KDPC initialization passed and startup advanced with `fault=0` to `ICALL_SAFE 0x80000071`. |
-| 4C-Q | **Package prep ready** | Continue ordinal 113 `KeInitializeTimerEx`: validate 12-byte frame, zero 40-byte guest KTIMER, set Type=`0x08+(TimerType&1)`, return `eax=0`, resume. Adds a main/env link-time build cookie to reject stale env sources. |
+| 4C-Q | **Hardware PASS** | Q main/env build cookie matched; live ordinal 113 `KeInitializeTimerEx` initialized timer `0x008695A0` with Type=0, returned cleanly, and startup advanced with `fault=0` to `DIRECT_FRONTIER 0x0022C5A4` from `0x0022F128`. |
+| 4C-R | **Package prep ready** | Promote only hardware-observed direct target `0x0022C5A4`; rotate the main/env build cookie for R and preserve every prior loader/kernel continuation invariant. |
 | 5 | Planned | Runtime subsystem bring-up driven by actual native startup blockers. |
 | 6 | Planned | First reproducible title-controlled interactive milestone. |
 | 7 | Planned | Gameplay, compatibility, stability, and performance hardening. |
