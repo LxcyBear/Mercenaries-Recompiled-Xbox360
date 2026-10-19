@@ -1272,3 +1272,25 @@ critical-section behavior: no native host lock mapping, EAX=0, stdcall cleanup.
 All AA VM reserve/commit state remains active.
 
 Build tag: `P4C-RTL291-AB-20261019-A`.
+
+
+#### Phase 4C-AB — RtlInitializeCriticalSection continuation
+**Status: HARDWARE PASS.**
+
+Build `P4C-RTL291-AB-20261019-A` validated the exact 8-byte ordinal-291
+frame, applied the maintained serialized-guest critical-section semantics,
+and advanced with `fault=0` to
+`DIRECT_FRONTIER caller=0x00238C00 target=0x0022D431`.
+
+#### Phase 4C-AC — promote live target 0x0022D431
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase4c_native_startup/Prepare-Phase4C-AC.ps1`
+
+AC preserves all AB invariants, including the working 1 MiB reserve -> 4 KiB
+commit state, and promotes only the exact hardware-observed translated target
+`0x0022D431`. Preparation fails explicitly if D431 is a mid-function/split
+entry rather than a generated function start.
+
+Build tag: `P4C-DIRECTD431-AC-20261019-A`.
