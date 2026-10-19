@@ -1035,3 +1035,36 @@ P4C-DIRECT30060-20261019-A
 ```
 
 S rotates the main/env build cookie and adds only `0x00230060` beyond R.
+
+
+## Phase 4C-T — continue ordinal 24 ExQueryNonVolatileSetting
+
+Phase 4C-S passed on hardware: translated target `0x00230060` executed and reached
+`ITAIL target=0x80000018` with `fault=0`. Ordinal 24 is
+`ExQueryNonVolatileSetting`.
+
+T preserves every previously proven startup member, validates the live
+5-argument stdcall tail frame, applies the existing guest EEPROM/XConfig
+semantics, consumes the 24-byte tail-call frame (dummy return + 20 argument
+bytes), and continues translated startup to the next real boundary.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-T.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\nv24_xdk\main.cpp
+build\phase4c_native_startup\nv24_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-NV24-20261019-A
+```
+
+The T main/env cookie is `0x50435431` (`PCT1`).
