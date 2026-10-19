@@ -44,7 +44,8 @@ The native Xbox 360 port has completed **Phase 3 - Recompiler ABI** on real Xeno
 | 4C-G | **Hardware PASS** | Ordinal 277/294 enter/leave pair executed on Xenon with balanced 8-byte frames; next live ICALL is `0x002295D6`, proving the thread ctx1 is the executable startup callback. |
 | 4C-H | **Blocked after real callback entry** | Callback `0x002295D6` executed on hardware and reached `0x0022C4DF`; next stop was `GUEST_FAULT` at translated VA `0x0022C4FF`, with `esp == saved_esp`. |
 | 4C-I | **Hardware diagnostic PASS** | First rejected guest access is READ32 `0x80000142` from translated caller `0x0022C4DF`; ordinal 322 resolves to guest-visible DATA export `XboxHardwareInfo`. |
-| 4C-J | **Package prep ready** | Relocate only the ordinal-322 data thunk to synthetic kernel data `0x0087E000`, verify exact 111-import/zero-terminator shape and hardware-info readback, then continue to the next live boundary. |
+| 4C-J | **Hardware PASS** | Live ordinal-322 data relocation succeeded at thunk slot `0x002DBE0C`; callback advanced to READ16 `0x80000148` with ECX=`0x80000144`, identifying ordinal 324 `XboxKrnlVersion` +4. |
+| 4C-K | **Package prep ready** | Relocate initialized startup data exports 156/322/324 to Phase-2E kernel-data VAs, validate the exact 111-import table and initialized bytes, and continue with immediate first-fault capture. |
 
 This table is the continuation of the Phase-3 hardware map: later phases should only advance when their stated evidence gate passes.
 
