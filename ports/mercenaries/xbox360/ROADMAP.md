@@ -1217,3 +1217,22 @@ an explicit `VM_UNSUPPORTED` boundary until per-page inaccessible state is
 modeled in the focused startup harness.
 
 Build tag: `P4C-NTALLOC184-20261019-A`.
+
+
+#### Phase 4C-Z — NtAllocateVirtualMemory continuation
+**Status: HARDWARE PASS / next required VM mode identified.**
+
+Build `P4C-NTALLOC184-20261019-A` validated the exact 24-byte live frame and
+captured a real `NtAllocateVirtualMemory` request for a 1 MiB
+`MEM_RESERVE`, `PAGE_READWRITE` region with no base hint. The boundary
+remained `fault=0` and stopped explicitly at `VM_UNSUPPORTED` because the
+focused startup arena does not yet model reserved-but-uncommitted guest pages.
+
+#### Phase 4C-AA — reserved guest virtual-memory state
+**Status: next blocker.**
+
+Add explicit reserve/commit page state for the hardware-observed ordinal-184
+path, retain the reserved VA for subsequent commits, and continue startup.
+This is the remaining platform/runtime behavior presently blocking native
+startup; Phase 5 begins once the native startup path is established and starts
+demanding its real runtime subsystems.
