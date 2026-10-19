@@ -95,6 +95,15 @@ class LowerExplicitGuestMemoryTests(unittest.TestCase):
         self.assertEqual(
             out, "g_mm1 = (uint64_t)(g_mm1 & GUEST_READ64(esp));")
 
+
+    def test_logical_and_read_is_not_address_of(self):
+        out = self.lower(
+            "if (MEM32(esi + 8) == 1u && MEM8(esi + 4)) {")
+        self.assertEqual(
+            out,
+            "if (GUEST_READ32(esi + 8) == 1u && GUEST_READ8(esi + 4)) {",
+        )
+
     def test_address_of_lvalue_is_rejected(self):
         with self.assertRaises(LoweringError):
             self.lower("foo(&MEM32(eax));")
