@@ -806,3 +806,49 @@ P4C-KHDR-20261019-A
 The kernel page remains separate from title RAM. The synthetic header readback
 must prove MZ, `e_lfanew=0x80`, PE signature, i386 machine, and zero sections
 before translated startup executes.
+
+
+## Phase 4C-M hardware result — PASS
+
+```text
+[Merc360:P4C] KERNEL HEADER MODEL: base=80010000 e_lfanew=00000080 sections=0 size=4096
+[Merc360:P4C] PASS: synthetic xboxkrnl PE header is readable through the fenced kernel-image page
+[Merc360:P4C] PHASE 4C-M KERNEL HEADER PREP RESULT: PASS
+[Merc360:P4C] BOUNDARY: kind=ICALL_SAFE caller=0022C28B target=8000002F esp=008BFEFC saved_esp=008BFF08 ticks=28 trace=9
+[Merc360:P4C] ... fault=0
+[Merc360:P4C] trace[7]=0022C47B
+[Merc360:P4C] trace[8]=0022C28B
+[Merc360:P4C] PHASE 4C-M KERNEL HEADER RESULT: PASS
+```
+
+Kernel target `0x8000002F` is ordinal 47,
+`HalRegisterShutdownNotification`. The observed 12-byte frame matches the
+production ABI exactly: 8 argument bytes plus one translated synthetic return.
+
+## Phase 4C-N — HalRegisterShutdownNotification continuation
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-N.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\hal47_xdk\main.cpp
+build\phase4c_native_startup\hal47_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-HAL47-20261019-A
+```
+
+Expected live evidence includes:
+
+```text
+HalRegisterShutdownNotification LIVE FRAME: registration=XXXXXXXX register_raw=XXXXXXXX register=N esp=XXXXXXXX saved_esp=XXXXXXXX
+PASS: ordinal 47 HalRegisterShutdownNotification matched production no-callback semantics
+```
