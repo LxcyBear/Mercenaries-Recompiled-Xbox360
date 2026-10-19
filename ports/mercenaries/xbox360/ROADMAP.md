@@ -135,8 +135,6 @@ Gate:
 
 Phase 4B-B/B2 is complete.
 
-## Active
-
 ### Phase 4B-C — Remaining memory/protection and residual host surface
 **Status: PASS on real Xbox 360 hardware.**
 
@@ -162,7 +160,7 @@ Build A passed all substantive guest-owned memory/protection semantics; its lone
 Phase 4B-C hardware proof is complete.
 
 ### Phase 4B-C2 — Final memory/protection runtime integration
-**Status: runtime patch landed; verification active.**
+**Status: PASS.**
 
 The real guest bridge now:
 - allocates virtual memory from the page-rounded/page-backed guest allocator;
@@ -170,17 +168,26 @@ The real guest bridge now:
 - releases virtual memory through the same tracked guest allocator;
 - applies `MmSetAddressProtect` to page-granular guest protection metadata.
 
-Final verification target:
+Final verification result:
 - 0 direct semantic host-backed imports;
 - 15 Phase-4B platform-bound imports;
 - 2 guest-native memory/protection imports;
 - 0 ABI metadata errors;
 - 0 referenced fallbacks;
-- all timing, file/handle and memory-boundary regressions green.
+- 7,722-case timing/deadline regression: PASS;
+- guest-kernel ABI regression: PASS;
+- time/sync platform-boundary regression: PASS;
+- file/handle platform-boundary regression: PASS;
+- six guest-memory ownership regressions: PASS.
 
 Gate:
 `ports/mercenaries/xbox360/phase4b_native_memory_protection_xex/Verify-Phase4B-C2.ps1`
 
+**Phase 4B service migration is complete.** The 17 semantic host-backed paths
+from the locked Phase-4A baseline now account as 15 platform-bound + 2
+guest-native + 0 direct host-backed.
+
+## Active
 
 ### Phase 4C — Native translated-game startup path
 Begin linking/executing the real translated Mercenaries startup path with the migrated Xenon service layer.
