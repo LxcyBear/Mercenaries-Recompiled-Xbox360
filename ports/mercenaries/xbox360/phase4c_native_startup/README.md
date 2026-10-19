@@ -1243,3 +1243,26 @@ P4C-DIRECT38C00-20261019-A
 ```
 
 The Y main/env cookie is `0x50435931` (`PCY1`).
+
+
+### Phase 4C-Y support dependency — recomp_crt_memmove
+
+The root-only Y preparation exposed one genuine non-direct dependency from
+`0x00238C00`: `recomp_crt_memmove`.
+
+This is not a guessed shim. The maintained production port already implements
+the exact cdecl helper in `ports/mercenaries/src/recomp_manual.c`, and
+`tools/recomp/test_crt_memmove_native.py` exercises the real CRT entry across
+overlapping-copy cases and ABI preservation.
+
+Phase 4C-Y now embeds the same guest-visible contract:
+
+- arguments: destination/source/length at ESP+4/+8/+12;
+- cdecl cleanup: consume only the translated dummy return slot;
+- overlap-safe `memmove`;
+- return destination in EAX;
+- preserve caller EBX/ESI/EDI/SEH-EBP;
+- reject out-of-range guest copies through the existing Phase-4C fault fence.
+
+Hardware output will include `CRT memmove LIVE FRAME` and a matching PASS
+before startup continues to the next real boundary.
