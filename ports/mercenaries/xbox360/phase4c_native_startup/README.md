@@ -973,3 +973,39 @@ PASS: ordinal 113 KeInitializeTimerEx matched production guest-KTIMER initializa
 
 The Q build cookie makes a stale environment project item a link-time failure
 instead of merely a cosmetic log-label mismatch.
+
+
+## Phase 4C-Q hardware result — PASS
+
+```text
+[Merc360:P4C] PASS: Phase 4C-Q main/env build cookie matches
+[Merc360:P4C] KeInitializeTimerEx LIVE FRAME: timer=008695A0 type_raw=00000000 type=0 esp=008BFEE8 saved_esp=008BFEF4
+[Merc360:P4C] PASS: ordinal 113 KeInitializeTimerEx matched production guest-KTIMER initialization semantics
+[Merc360:P4C] DIRECT FRONTIER: caller=0022F128 target=0022C5A4 esp=008BFEDC
+[Merc360:P4C] BOUNDARY: kind=DIRECT_FRONTIER caller=0022F128 target=0022C5A4 esp=008BFEDC saved_esp=008BFEDC ticks=33 trace=10
+[Merc360:P4C] ... fault=0
+[Merc360:P4C] PHASE 4C-Q KEINITIALIZETIMEREX RESULT: PASS
+```
+
+## Phase 4C-R — promote live direct target 0x0022C5A4
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase4c_native_startup\Prepare-Phase4C-R.ps1"
+```
+
+Output:
+
+```text
+build\phase4c_native_startup\promoted_c5a4_xdk\main.cpp
+build\phase4c_native_startup\promoted_c5a4_xdk\phase4c_env.cpp
+```
+
+Build tag:
+
+```text
+P4C-DIRECTC5A4-20261019-A
+```
+
+R rotates the main/env build cookie and adds only `0x0022C5A4` beyond Q.
