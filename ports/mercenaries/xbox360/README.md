@@ -85,6 +85,18 @@ hardware** using the user's VS17 + XDK setup. Startup, heartbeats, controller
 detection, A-button exit, independent 15-second timeout, and clean XAPI return
 value 0 are all confirmed. Phase 1 is complete.
 
+## Phase 3 completion
+
+**Phase 3 is complete on real Xbox 360 hardware (October 19, 2026).** The final
+3N-B gate compiled and linked a 128-function audited translated-code scale pack
+(54,952 bytes of original guest code; 726,329 bytes of generated C), proved all
+anchors live in the loaded XEX, passed the maintained x87 rounding/exception
+preflight, passed six independent-reference executions of retail function
+0x00208F30, and exited with XAPI return value 0.
+
+Phase 4A is now active: inventory Mercenaries' exact retail kernel/platform
+surface and convert the startup-critical subset to native Xbox 360 services.
+
 ## Milestones / required proof
 
 | Phase | Concrete exit criterion |
