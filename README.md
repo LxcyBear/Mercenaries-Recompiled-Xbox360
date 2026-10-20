@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AO — continue cache-volume setup through ordinal 196 `NtDeviceIoControlFile` after Phase 5AN-B hardware PASS opened Partition5 and advanced fault-free to token `0x800000C4`.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AO-B — continue cache-volume setup through ordinal 196 `NtDeviceIoControlFile`; P5AO-A hardware proved the live call-site frame is 52 bytes, so P5AO-B locates the canonical 44-byte argument window inside that padded frame.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -76,17 +76,16 @@ entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
 **Present blockers:** Phase 4 and Phase 5A through 5AN have passed their
-hardware gates. Phase 5AN-B completed the cache-storage batch on real hardware:
-Partition0 raw read/write at offset `0x800` both succeed, exact cache-root
-mapping works without a trailing slash, `\\Device\\Harddisk0\\Partition5`
-opens natively as `game:\\merc360-partition5`, and translated root
-`0x0022C5C6` continues with `fault=0`. The next live boundary is
-`ICALL_SAFE target=0x800000C4`, kernel ordinal 196
-`NtDeviceIoControlFile`, immediately after the cache volume opens. Phase 5AO
-batches the two disk controls used by Xbox utility/cache mounting:
-`IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)` and
-`IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`, with unknown/asynchronous
-device-control forms still fenced at `STORAGE_IO`.
+hardware gates. P5AO-A reached ordinal 196 `NtDeviceIoControlFile` on real
+hardware but fenced on a call-frame contract mismatch: the canonical Xbox API
+is a 10-argument / 44-byte translated frame, while this Mercenaries call site
+presents a 52-byte live frame. P5AO-B now accepts canonical 44-byte calls and,
+for the 52-byte hardware form, scans the only three possible 44-byte windows
+and proceeds only when exactly one matches a tracked cache-volume handle plus
+a known cache IOCTL. Raw 13-dword frame contents are logged for proof.
+The batched controls remain `IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)`
+and `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`; unknown/asynchronous forms
+remain fenced at `STORAGE_IO`.
 
 ### Immediate next tests
 
@@ -320,15 +319,18 @@ device-control forms still fenced at `STORAGE_IO`.
     `ICALL_SAFE target=0x800000C4` (ordinal 196
     `NtDeviceIoControlFile`). Build:
     `P5AN-CACHE-PARTITION-BATCH-20261020-B`.
-65. **Phase 5AO active:** add a synchronous 44-byte ordinal-196
-    `NtDeviceIoControlFile` continuation for tracked cache-volume handles.
-    Batch `IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)` and
-    `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`; unknown/asynchronous
-    controls remain fenced with full live-frame diagnostics. Hardware gate
+65. **Phase 5AO-B active / partial hardware proof:** P5AO-A confirmed the
+    live ordinal-196 call from `0x0022C5C6` uses a 52-byte caller frame rather
+    than the canonical 44-byte translated frame. P5AO-B accepts both forms and
+    uniquely identifies the canonical argument window inside the 52-byte form
+    using the tracked cache handle plus known IOCTL code. It still batches
+    `IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)` and
+    `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`; ambiguous, unknown, or
+    asynchronous forms remain fenced with raw-frame diagnostics. Hardware gate
     requires at least one successful ordinal-196 compatibility continuation
     and a boundary newer than `0x800000C4`. Gate:
     `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AO.ps1`.
-    Build tag: `P5AO-CACHE-DEVICE-IO-20261020-A`.
+    Build tag: `P5AO-CACHE-DEVICE-IO-20261020-B`.
 
 ### Evidence policy
 
@@ -2893,6 +2895,20 @@ unexecuted test PASS.**
 - **Phase 5AN cache-partition batch: PASS.**
 - **Next:** Phase 5AO handles the cache-mount disk geometry and partition-info
   device controls in one batch and fences any unknown control code.
+
+### 2026-10-20 — Phase 5AO-A partial hardware proof: live frame is 52 bytes
+
+- Build `P5AO-CACHE-DEVICE-IO-20261020-A` reached the newly armed ordinal 196
+  `NtDeviceIoControlFile` continuation on real Xbox 360 hardware.
+- The prior P5AN cache proof remained green: Partition0 read/write succeeded,
+  exact Partition5 root mapping succeeded, and the cache handle opened.
+- The ordinal-196 handler fenced before argument decode because hardware showed
+  `esp=0x008BFD24`, `saved_esp=0x008BFD58`, delta `52`, while P5AO-A
+  expected the canonical 44-byte translated frame.
+- **P5AO-A: partial proof, not pass.**
+- **P5AO-B:** accepts 44-byte calls and uniquely locates the canonical 44-byte
+  argument window inside the observed 52-byte frame; raw 13-dword frame data
+  is logged, and ambiguous layouts remain fenced.
 
 ### How future updates are recorded
 
