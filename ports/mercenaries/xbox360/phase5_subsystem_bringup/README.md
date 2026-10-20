@@ -2093,3 +2093,33 @@ Build: `P5AV-SYMLINK215-SAVEDESP-20261020-A`
 
 Cookie: `P5AV / 0x50354156`.
 
+## Phase 5AV hardware pass / Phase 5AW XeImageFileName relocation
+
+5AV successfully repaired the caller-specific ordinal-215 translated frame,
+queried `\??\D:` as `\Device\CdRom0`, and closed symbolic-link token
+`0x53000001`.
+
+The next translated code at `0x00239C23` performs a 16-bit read through
+kernel thunk token `0x80000146`. Ordinal 326 is the data export
+`XeImageFileName`, so Phase 5AW models it as an Xbox ANSI_STRING rather than
+as callable code.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AW.ps1"
+```
+
+Expected preparation/runtime markers include:
+
+```text
+DATA THUNK FIXUP: ordinal=326 ... new=0087E040
+PASS: Phase 5AW XeImageFileName initialized ordinal=326 ...
+PASS: startup data imports 40/41/42(optional)/156/164/322/324/326 relocated ...
+```
+
+The previous `0x80000146` guest fault is excluded from the 5AW progress gate,
+so a PASS must represent execution beyond that point.
+
+Build: `P5AW-XEIMAGEFILENAME-DATA-20261020-A`
+
