@@ -1211,6 +1211,24 @@ static void phase5d_io_delete_symbolic_link(uint32_t savedEsp)
     returnSlot = GUEST_READ32(callEsp + 0u);
     linkVa = GUEST_READ32(callEsp + 4u);
 
+    if (s_accessFault)
+    {
+        phase4c_escape(
+            PHASE4C_BOUNDARY_GUEST_FAULT,
+            0x80000045u,
+            savedEsp);
+        return;
+    }
+
+    sprintf(
+        line,
+        "IoDeleteSymbolicLink LIVE FRAME: ret=%08X link_ptr=%08X esp=%08X saved_esp=%08X",
+        (unsigned int)returnSlot,
+        (unsigned int)linkVa,
+        (unsigned int)callEsp,
+        (unsigned int)savedEsp);
+    trace(line);
+
     if (returnSlot != 0u ||
         !phase5d_copy_guest_ansi_string(
             linkVa, link, sizeof(link), NULL, NULL, NULL))
