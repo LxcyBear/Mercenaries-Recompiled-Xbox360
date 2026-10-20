@@ -2123,3 +2123,23 @@ so a PASS must represent execution beyond that point.
 
 Build: `P5AW-XEIMAGEFILENAME-DATA-20261020-A`
 
+## Phase 5AW hardware pass / Phase 5AX frontier promotion
+
+5AW proved the ordinal-326 `XeImageFileName` data relocation and continued
+past the former `0x80000146` read fault. The next clean hardware boundary is:
+
+```text
+DIRECT FRONTIER: caller=00239D6C target=0023E600 fault=0
+```
+
+Phase 5AX promotes `0x0023E600` with a bounded depth-2/cap-16 closure and
+requires the root to execute before a newer boundary can PASS.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AX.ps1"
+```
+
+Build: `P5AX-FRONTIER23E600-20261020-A`
+
