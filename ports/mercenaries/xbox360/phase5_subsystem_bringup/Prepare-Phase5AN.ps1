@@ -279,7 +279,7 @@ foreach ($requiredText in @(
     "PASS: Phase 5AN main/env build cookie matches",
     "PHASE 5AN CACHE PARTITION BATCH RESULT"
 )) {
-    if ($mainText -notlike "*$requiredText*") {
+    if (-not $mainText.Contains($requiredText)) {
         throw "Generated Phase 5AN main.cpp is missing marker: $requiredText"
     }
 }
@@ -292,7 +292,7 @@ foreach ($requiredText in @(
     "5035414E",
     "PHASE 5AN RETAIL ENVIRONMENT PREP END"
 )) {
-    if ($envText -notlike "*$requiredText*") {
+    if (-not $envText.Contains($requiredText)) {
         throw "Generated Phase 5AN phase5_env.cpp is missing marker: $requiredText"
     }
 }
