@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5L — execute maintained Xbox SetLastError root 0x0022B178 after Phase 5K XBE-section-scan hardware PASS.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AI — relocate kernel DATA export ordinal 164 `LaunchDataPage` after Phase 5AH hardware PASS advanced to READ32 `0x800000A4` from translated caller `0x002294AE`.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5K PASS; Phase 5L maintained SetLastError continuation active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AH hardware PASS; Phase 5AI LaunchDataPage relocation active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,13 +75,18 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5J have passed on hardware.
-The complete native title-storage environment remains intact. Translated root
-`0x0022F026` now executes, initializes live `ANSI_STRING` values for
-`$XTINFO` and `.text`, and reaches `0x80000117` = ordinal 279
-`RtlEqualString` with a correct 16-byte full frame, a 48-entry translated
-trace and `fault=0`. Phase 5K services that maintained string-comparison
-primitive and continues the XBE/image-inspection path.
+**Present blockers:** Phase 4 and Phase 5A through 5AH have passed their
+hardware gates. The complete native title-storage environment remains intact
+through Partition1 volume setup, D:/T:/U: mounts, TDATA/UDATA title directories,
+TitleMeta/TitleImage/SaveImage handling, XBE-section inspection, persistent
+title state and the exact Partition0 root probe. Phase 5AH proved the second
+ordinal 301 `RtlNtStatusToDosError` call is repeatable:
+`STATUS_UNSUCCESSFUL (0xC0000001) -> ERROR_GEN_FAILURE (31)`, after which
+translated execution advanced to caller `0x002294AE` and faulted on READ32
+`0x800000A4`. Ordinal 164 is the guest-visible DATA export
+`LaunchDataPage`, so Phase 5AI relocates that import to initialized guest
+kernel data at `0x0087E030` with an initial NULL pointer and resumes the real
+startup path.
 
 ### Immediate next tests
 
@@ -262,14 +267,26 @@ primitive and continues the XBE/image-inspection path.
     name using maintained ordinal 279 `RtlEqualString` semantics, correctly
     found no match, and reached `DIRECT_FRONTIER target=0x0022B178` with
     `fault=0`.
-56. **Phase 5L:** execute hardware-observed root `0x0022B178` through its
-    reviewed maintained Xbox `SetLastError` implementation from
-    `recomp_manual.c`, retaining the complete native storage/title-data/RTL
-    comparison stack. This function is intentionally `--manual-function` in
-    the full recompile pipeline; the frozen Stage-3 generated tree is not
-    mutated. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5L.ps1`.
-    Build tag: `P5L-DIRECTB178-20261020-A`.
+56. **Done:** Phase 5L and the subsequent hardware-driven Phase 5
+    continuations advanced beyond maintained `SetLastError` through native
+    TitleMeta/TitleImage/SaveImage information/write handling, persistent title
+    state, and translated root `0x0022A3B9`.
+57. **Done:** Phase 5AG opened exact
+    `\\Device\\Harddisk0\\partition0` through the isolated
+    `game:\\merc360-partition0` sandbox, then captured the first raw probe:
+    512-byte `NtReadFile` at offset `0x800` returned
+    `STATUS_UNSUCCESSFUL` and exposed a second ordinal-301 status conversion.
+58. **Done:** Phase 5AH made ordinal 301 `RtlNtStatusToDosError` repeatable.
+    Real hardware mapped `0xC0000001 -> 31`, executed maintained
+    `SetLastError(31)`, and advanced to a new deterministic READ32 fault at
+    `0x800000A4` from translated caller `0x002294AE`. Build:
+    `P5AH-RTLSTATUS301-REPEATABLE-20261020-A`.
+59. **Phase 5AI active:** relocate ordinal 164 `LaunchDataPage`, a kernel
+    DATA export pointer, to guest kernel-data VA `0x0087E030`, initialized
+    NULL. Hardware gate: pass caller `0x002294AE` without dereferencing raw
+    token `0x800000A4` and capture the next real boundary. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AI.ps1`.
+    Build tag: `P5AI-LAUNCHDATAPAGE-DATA-20261020-A`.
 
 ### Evidence policy
 
@@ -2653,6 +2670,46 @@ unexecuted test PASS.**
 - **Phase 5K: PASS.**
 - **Next:** Phase 5L reviewed maintained `SetLastError` continuation at `0x0022B178`.
 - Build tag: `P5L-DIRECTB178-20261020-A`.
+
+### 2026-10-20 — Phase 5L through 5AG native title-state progression
+
+- Phase 5L executed the reviewed maintained Xbox `SetLastError` root
+  `0x0022B178` and preserved the complete native storage/title-data/RTL path.
+- Hardware-driven continuations then carried the real translated startup path
+  through TitleMeta/TitleImage/SaveImage information and write handling,
+  XBE image-section bookkeeping, persistent title state and root
+  `0x0022A3B9`.
+- Phase 5AG build `P5AG-PARTITION0-NATIVE-20261020-A` successfully opened
+  `\\Device\\Harddisk0\\partition0` as
+  `game:\\merc360-partition0` and returned a valid tagged handle.
+- Retail immediately issued a 512-byte `NtReadFile` at byte offset
+  `0x800`; the directory-backed diagnostic sandbox returned
+  `STATUS_UNSUCCESSFUL (0xC0000001)`.
+- That failure exposed a legitimate second call to ordinal 301
+  `RtlNtStatusToDosError`.
+- **Phase 5AG proof: PASS; next dependency captured.**
+
+### 2026-10-20 — Phase 5AH repeatable status conversion PASS
+
+- Build `P5AH-RTLSTATUS301-REPEATABLE-20261020-A` passed on real Xbox 360
+  hardware with XAPI return 0.
+- The original startup conversion remained correct:
+  `STATUS_SUCCESS -> ERROR_SUCCESS`, call 1.
+- After the Partition0 offset-`0x800` probe failed, the same ordinal executed
+  again and correctly mapped
+  `STATUS_UNSUCCESSFUL (0xC0000001) -> ERROR_GEN_FAILURE (31)`, call 2.
+- Maintained `SetLastError` then stored `0x1F`, proving the failure path
+  continued through translated code instead of escaping at the kernel thunk.
+- Execution advanced through translated roots
+  `0x0022C215 -> 0x0022946C -> 0x0022BA47 -> 0x0022958F -> 0x002294AE`.
+- New deterministic boundary:
+  `GUEST_FAULT READ32 0x800000A4` from caller `0x002294AE`.
+- `0x800000A4` is ordinal 164 `LaunchDataPage`, a kernel DATA export
+  pointer rather than callable code.
+- **Phase 5AH: PASS.**
+- **Next:** Phase 5AI relocates ordinal 164 to guest VA `0x0087E030`,
+  initialized NULL, and resumes to the next hardware boundary.
+- Build tag: `P5AI-LAUNCHDATAPAGE-DATA-20261020-A`.
 
 ### How future updates are recorded
 
