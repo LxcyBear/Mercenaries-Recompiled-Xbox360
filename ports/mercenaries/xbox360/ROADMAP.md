@@ -2952,3 +2952,27 @@ The hardware gate requires actual entry into `0x0023E600` and rejects the old
 Build tag: `P5AX-FRONTIER23E600-20261020-A`.
 Cookie: `P5AX / 0x50354158`.
 
+#### Phase 5AX — 0x0023E600 closure hardware result
+**Status: HARDWARE ADVANCE / ORDINAL-289 CALLER ABI FOUND.**
+
+Build `P5AX-FRONTIER23E600-20261020-A` packed and executed the new
+`0x0023E600` translated root. Hardware advanced to translated caller
+`0x0022A7A4`, where ordinal 289 `RtlInitAnsiString` presented a 16-byte
+saved-ESP delta instead of its canonical 12-byte guest frame. The boundary was
+fault-free (`fault=0`) and the run reached 166 trace entries / 2741 ticks.
+
+#### Phase 5AY — caller 0x0022A7A4 RtlInitAnsiString repair
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AY.ps1`
+
+5AY preserves the normal two-argument ordinal-289 ABI and repairs only the exact
+hardware-observed caller/frame `0x0022A7A4`, delta 16 -> 12. Validation requires
+a zero synthetic return slot, a bounded writable 8-byte ANSI_STRING destination,
+and a NULL or guest-readable source. On success, execution resumes at
+`savedEsp - 4` and the repair counter is mandatory for hardware PASS.
+
+Build tag: `P5AY-RTLANSI-A7A4-20261020-A`.
+Cookie: `P5AY / 0x50354159`.
+
