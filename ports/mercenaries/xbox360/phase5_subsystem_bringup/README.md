@@ -2022,3 +2022,42 @@ Build: `P5AT-NTOPENSYMLINK203-CAPTURE-20261020-A`
 
 Cookie: `P5AT / 0x50354154`.
 
+## Phase 5AT hardware result / Phase 5AU symbolic-link object continuation
+
+**5AT PASS on real Xbox 360 hardware.**
+
+The captured ordinal-203 request is exact:
+
+```text
+NtOpenSymbolicLinkObject
+caller = 0022B7B2
+path   = \??\D:
+target = \Device\CdRom0
+fault  = 0
+```
+
+The 12-byte translated frame matched two stdcall arguments plus the synthetic
+return slot.
+
+### Phase 5AU
+
+5AU deliberately batches the natural object-manager sequence into one hardware
+build:
+
+- ordinal 203 `NtOpenSymbolicLinkObject`: open only a link already created
+  by retail through `IoCreateSymbolicLink`;
+- ordinal 215 `NtQuerySymbolicLinkObject`: return the exact stored target
+  through the guest ANSI_STRING;
+- ordinal 187 `NtClose`: recognize/release the tagged symbolic-link object
+  handle without calling host `CloseHandle`.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AU.ps1"
+```
+
+Build: `P5AU-SYMLINKOBJ203-215-NATIVE-20261020-A`
+
+Cookie: `P5AU / 0x50354155`.
+
