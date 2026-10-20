@@ -6946,7 +6946,7 @@ def main() -> int:
         "promoted_direct_members": [
             f"0x{va:08X}" for va in sorted(promoted_direct_members)
         ],
-        "diagnostic_goal": "service_repeatable_RtlNtStatusToDosError301_after_partition0_probe_and_continue",
+        "diagnostic_goal": "relocate_LaunchDataPage_ordinal_164_data_export_and_continue_past_002294AE",
         "data_thunk_fixups": [
             {"ordinal": 156, "name": "KeTickCount", "guest_data_va": "0x0087E020"},
             {"ordinal": 164, "name": "LaunchDataPage", "guest_data_va": "0x0087E030", "initial_value": "NULL"},
@@ -7620,7 +7620,7 @@ extern "C" DWORD phase5ai_env_build_cookie(void)
     (args.out_dir / "main.cpp").write_text(generated_main, encoding="utf-8")
     (args.out_dir / "phase5_env.cpp").write_text(env_source, encoding="utf-8")
 
-    print("[Phase5AI] RTLSTATUS301 REPEATABLE PACKAGE READY")
+    print("[Phase5AI] LAUNCHDATAPAGE DATA-EXPORT PACKAGE READY")
     print(
         f"[Phase5AI] Entry closure={len(entry_members)} bodies; "
         f"thread closure={len(thread_members)} bodies; "
