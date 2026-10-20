@@ -854,6 +854,8 @@ static uint32_t s_phase5apPartition0UnchangedWriteCount;
 static uint32_t s_phase5apPartition0BackingReady;
 static const char s_phase5apPartition0BackingPath[] =
     "game:\\merc360-partition0\\partition0-config.bin";
+static int phase5ap_partition0_backing_load(void);
+static int phase5ap_partition0_backing_flush(void);
 static uint32_t s_phase5apCacheRootOpenCount;
 static uint32_t s_phase5apNtDeviceIoControlCallCount;
 static uint32_t s_phase5apNtDeviceIoControlSuccessCount;
@@ -9394,6 +9396,8 @@ extern "C" DWORD phase5ap_env_build_cookie(void)
             )
 
     for marker in (
+        "static int phase5ap_partition0_backing_load(void);",
+        "static int phase5ap_partition0_backing_flush(void);",
         "static int phase5ap_partition0_backing_load(void)",
         "static int phase5ap_partition0_backing_flush(void)",
         "partition0-config.bin",
