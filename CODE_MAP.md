@@ -289,7 +289,10 @@ Phase 5BB files:
 - `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BB.ps1`
 - `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bb_frontier22dda4.py`
 
-Policy: validate exact function-start/generated-body identity against the
-refreshed Phase-3N baseline, package depth-2/cap-16 closure, require actual root
-entry, and exclude the old `0x0022DDA4` boundary from PASS.
+Policy: validate exact function-start identity against the refreshed Phase-3N
+baseline, recognize `0x0022DDA4` as a reviewed support-owned manual heap
+helper, and pack the coherent `DDA4/E51F/E713` allocate/free/realloc family.
+The family reuses the Phase-4C deterministic title heap
+`0x008C1000..0x009C0000`. Require actual DDA4 entry plus a maintained
+allocation call before PASS, and exclude the old `0x0022DDA4` boundary.
 
