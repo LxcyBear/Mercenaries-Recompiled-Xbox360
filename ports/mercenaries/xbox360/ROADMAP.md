@@ -2857,3 +2857,41 @@ remain bounded failures rather than guessed aliases.
 Build tag: `P5AU-SYMLINKOBJ203-215-NATIVE-20261020-A`.
 Cookie: `P5AU / 0x50354155`.
 
+#### Phase 5AU — symbolic-link object open hardware proof
+**Status: PARTIAL HARDWARE PASS / NEXT ABI REPAIR IDENTIFIED.**
+
+Build `P5AU-SYMLINKOBJ203-215-NATIVE-20261020-A` successfully opened the
+retail-created `\??\D:` symbolic link and returned guest object token
+`0x53000001` for target `\Device\CdRom0`.
+
+The immediately-following ordinal-215 call exposed a translated-stack
+discrepancy:
+
+```text
+caller    = 0x0022B7B2
+target    = 0x800000D7  (NtQuerySymbolicLinkObject)
+call ESP  = 0x008BEC64
+saved ESP = 0x008BEC78
+delta     = 20 bytes
+Xbox ABI  = 16 bytes including synthetic return slot
+fault     = 0
+```
+
+The failure is therefore a bounded saved-ESP/frame issue, not a symbolic-link
+object-model failure.
+
+#### Phase 5AV — ordinal-215 caller-specific saved-ESP repair
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AV.ps1`
+
+5AV keeps the real three-argument Xbox ABI for ordinal 215. Only hardware-
+observed caller `0x0022B7B2` with the exact 20-byte translated frame is
+eligible for repair. The standard arguments must validate against the live
+`0x53xxxxxx` symbolic-link handle and bounded guest ANSI_STRING before the
+runtime resumes at `savedEsp - 4`.
+
+Build tag: `P5AV-SYMLINK215-SAVEDESP-20261020-A`.
+Cookie: `P5AV / 0x50354156`.
+
