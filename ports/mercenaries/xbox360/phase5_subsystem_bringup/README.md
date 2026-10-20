@@ -1052,3 +1052,55 @@ Build: `P5S-DIRECT23DD56-20261020-A`
 Cookie: `P5S1 / 0x50355331`.
 
 Link-time guard symbol: `phase5s_env_build_cookie`.
+
+
+## Phase 5S hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The promoted root `0x0023DD56` executed as:
+
+```text
+trace[59] = 0x0023DD56
+```
+
+and immediately reached the next clean direct frontier:
+
+```text
+caller    = 0x0023DD56
+target    = 0x0023F8CB
+esp       = 0x008BF758
+saved_esp = 0x008BF758
+fault     = 0
+trace     = 60
+```
+
+Harness result: `PHASE 5S DIRECT23DD56 RESULT: PASS`.
+
+## Phase 5T — direct root 0x0023F8CB
+
+5T promotes only `0x0023F8CB` at depth zero while retaining the complete
+Phase-5 storage/runtime stack plus roots `0x00239B78`, `0x0023DDDD`,
+`0x0023DD7B`, `0x0023DDA0`, and `0x0023DD56`. The package requires an
+exact function start and a frozen Stage-3 generated body. Split/mid-function
+targets and missing bodies fail preparation explicitly.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5T.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_23f8cb_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_23f8cb_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_23f8cb_xdk\phase5t-manifest.json
+```
+
+Build: `P5T-DIRECT23F8CB-20261020-A`
+
+Cookie: `P5T1 / 0x50355431`.
+
+Link-time guard symbol: `phase5t_env_build_cookie`.
