@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5K — service live ordinal 279 RtlEqualString after Phase 5J hardware PASS.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5L — execute translated root 0x0022B178 after Phase 5K XBE-section-scan hardware PASS.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5J PASS; Phase 5K RTL section-name comparison active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5K PASS; Phase 5L post-section-scan retail helper active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -258,11 +258,15 @@ primitive and continues the XBE/image-inspection path.
 54. **Done:** Phase 5J executed translated root `0x0022F026`, initialized
     `$XTINFO` and `.text` ANSI strings, and reached ordinal 279
     `RtlEqualString` at `0x80000117` with a 48-entry trace and `fault=0`.
-55. **Phase 5K:** apply maintained Xbox `RtlEqualString` semantics with
-    bounded guest-memory comparison and live operand previews, then resume.
-    Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5K.ps1`.
-    Build tag: `P5K-RTLEQUAL279-20261020-A`.
+55. **Done:** Phase 5K compared `$XTINFO` against every loaded XBE section
+    name using maintained ordinal 279 `RtlEqualString` semantics, correctly
+    found no match, and reached `DIRECT_FRONTIER target=0x0022B178` with
+    `fault=0`.
+56. **Phase 5L:** promote only hardware-observed post-section-scan translated
+    root `0x0022B178`, retaining the complete native storage/title-data/RTL
+    comparison stack. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5L.ps1`.
+    Build tag: `P5L-DIRECTB178-20261020-A`.
 
 ### Evidence policy
 
@@ -2631,6 +2635,21 @@ unexecuted test PASS.**
 - **Phase 5J: PASS.**
 - **Next:** Phase 5K maintained `RtlEqualString` continuation.
 - Build tag: `P5K-RTLEQUAL279-20261020-A`.
+
+### 2026-10-20 — Phase 5K XBE section scan PASS
+
+- Build `P5K-RTLEQUAL279-20261020-A` passed on real Xbox 360 hardware.
+- The complete native Partition1, D:/T:, TDATA/UDATA and RTL string stack
+  remained intact.
+- `0x0022F026` compared `$XTINFO` against all 14 loaded XBE section names.
+- Every comparison correctly returned false; the retail XBE has no
+  `$XTINFO` section.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x0022F026 target=0x0022B178`.
+- The translated trace remained 48 entries and `fault=0`.
+- **Phase 5K: PASS.**
+- **Next:** Phase 5L exact-root promotion of `0x0022B178`.
+- Build tag: `P5L-DIRECTB178-20261020-A`.
 
 ### How future updates are recorded
 
