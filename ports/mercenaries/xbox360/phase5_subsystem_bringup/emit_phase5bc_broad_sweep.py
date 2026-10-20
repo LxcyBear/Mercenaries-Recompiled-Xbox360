@@ -23,7 +23,7 @@ from pathlib import Path
 SWEEP_ROOT = 0x00237052
 SWEEP_DIRECT_DEPTH = 6
 SWEEP_DIRECT_CAP = 256
-BUILD_TAG = "P5BC-BROADSWEEP237052-20261020-B"
+BUILD_TAG = "P5BC-BROADSWEEP237052-20261020-C"
 
 
 def load_module(path: Path, name: str):
@@ -240,10 +240,19 @@ def insert_pack_members(
             rendered = rendered_by_va[va]
             calls = set(base.CALL_RE.findall(base.mask_noncode(rendered)))
             calls.discard(row["name"])
+
+            # Generated translated bodies can carry function-local helper
+            # macros (notably the x87 fp_push/fp_pop/fp_top/fp_st family).
+            # They are definitions, not unresolved runtime dependencies.
+            # Phase 5BB already accounts for these with DEFINE_RE; preserve
+            # that rule in the broad-sweep dependency audit.
+            local_supplied = set(supplied)
+            local_supplied.update(base.DEFINE_RE.findall(rendered))
+
             missing = sorted(
                 name
                 for name in calls
-                if name not in supplied and name not in base.STANDARD_CALLS
+                if name not in local_supplied and name not in base.STANDARD_CALLS
             )
             if not missing:
                 continue
