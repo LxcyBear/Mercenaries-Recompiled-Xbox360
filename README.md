@@ -321,7 +321,7 @@ while preserving child-path mapping and the translated closure.
     Hardware gate now additionally requires at least one successful cache-root
     native open. Gate:
     `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AN.ps1`.
-    Build tag: `P5AN-CACHE-PARTITION-BATCH-20261020-A`.
+    Build tag: `P5AN-CACHE-PARTITION-BATCH-20261020-B`.
 
 ### Evidence policy
 
@@ -2851,7 +2851,7 @@ unexecuted test PASS.**
 
 ### 2026-10-20 — Phase 5AN partial hardware proof: Partition0 writeback PASS
 
-- Build `P5AN-CACHE-PARTITION-BATCH-20261020-A` ran on real Xbox 360
+- Build `P5AN-CACHE-PARTITION-BATCH-20261020-B` ran on real Xbox 360
   hardware with an 84-body translated pack.
 - Exact retail XBE verification and execution-environment setup remained green.
 - Partition0 raw read at offset `0x800`, length `512` returned
@@ -2867,6 +2867,7 @@ unexecuted test PASS.**
 - Active fix batches exact-root handling for Partition3/4/5 while preserving
   existing trailing-slash/child-path mappings; the hardware PASS gate now
   requires a successful cache-root native open.
+- Corrected exact-root build identity is now `P5AN-CACHE-PARTITION-BATCH-20261020-B` so stale `-A` deployments are unambiguous in xbWatson.
 
 ### How future updates are recorded
 
