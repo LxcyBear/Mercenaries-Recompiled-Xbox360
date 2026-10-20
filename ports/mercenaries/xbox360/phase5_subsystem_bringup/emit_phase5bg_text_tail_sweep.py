@@ -2,7 +2,7 @@
 """Phase 5BG: sweep the remaining retail title .text tail after 5BF.
 
 5BF hardware proved four generic packed ICALL_SAFE promotions in one launch,
-including 0x002471C0, then stopped fault-free at 0x002471C0 from caller
+including 0x0023F22B, then stopped fault-free at 0x002471C0 from caller
 0x0022B3F1.
 
 5BG keeps 0x002471C0 mandatory and pre-packs support-clean exact generated
@@ -80,23 +80,23 @@ def instrument_new_root(rendered: str, name: str) -> str:
 
 def relabel(main_text: str, env_text: str) -> tuple[str, str]:
     main_text = main_text.replace(
-        "P5BG-TEXTTAIL2471C0-20261020-A",
+        "P5BF-FORWARDSWEEP23F22B-20261020-A",
         BUILD_TAG,
     )
     env_text = env_text.replace(
-        "P5BG-TEXTTAIL2471C0-20261020-A",
+        "P5BF-FORWARDSWEEP23F22B-20261020-A",
         BUILD_TAG,
     )
     main_text = main_text.replace(
-        "phase5bg_env_build_cookie",
+        "phase5bf_env_build_cookie",
         "phase5bg_env_build_cookie",
     )
     env_text = env_text.replace(
-        "phase5bg_env_build_cookie",
+        "phase5bf_env_build_cookie",
         "phase5bg_env_build_cookie",
     )
-    main_text = main_text.replace("50354247", "50354247")
-    env_text = env_text.replace("50354247", "50354247")
+    main_text = main_text.replace("50354246", "50354247")
+    env_text = env_text.replace("50354246", "50354247")
     main_text = main_text.replace("PHASE 5BF", "PHASE 5BG")
     env_text = env_text.replace("PHASE 5BF", "PHASE 5BG")
     main_text = main_text.replace("Phase 5BF", "Phase 5BG")
@@ -190,7 +190,7 @@ def main() -> int:
 
         base_main = temp_dir / "main.cpp"
         base_env = temp_dir / "phase5_env.cpp"
-        base_manifest_path = temp_dir / "phase5bg-manifest.json"
+        base_manifest_path = temp_dir / "phase5bf-manifest.json"
         for required in (base_main, base_env, base_manifest_path):
             if not required.exists():
                 raise SystemExit(
@@ -304,7 +304,7 @@ def main() -> int:
 
     required_main_markers = (
         BUILD_TAG,
-        "case 0x002471C0u: return sub_0023F22B;",
+        "case 0x002471C0u: return sub_002471C0;",
         "s_phase5bgTailRootEntered = 1;",
         "s_phase5bgTailRootEntered &&",
         "PASS: Phase 5BG broad-sweep ICALL_SAFE",
@@ -378,14 +378,14 @@ def main() -> int:
         f"0x{va:08X}" for va in sorted(new_direct_frontiers)
     ]
 
-    (args.out_dir / "phase5bf-manifest.json").write_text(
+    (args.out_dir / "phase5bg-manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n",
         encoding="utf-8",
     )
 
     total_new_source = sum(len(rendered_by_va[va]) for va in new_members)
     print(
-        "[Phase5BG] FORWARD SWEEP PACK: "
+        "[Phase5BG] TITLE .TEXT TAIL SWEEP PACK: "
         f"base={len(old_members)} direct_candidates={len(direct_members - old_members)} "
         f"regional_candidates={len(regional)} candidate_new={len(candidate_new_members)} "
         f"pruned={len(pruned_members)} packed_new={len(new_members)} "
@@ -396,7 +396,7 @@ def main() -> int:
         "+ exact packed direct continuation"
     )
     print(
-        "[Phase5BG] REGION: 0x0023E000-0x00245FFF, mandatory root 0x002471C0"
+        "[Phase5BG] REGION: 0x00246000-0x0025561F (retail .text tail), mandatory root 0x002471C0"
     )
     print("[Phase5BG] EMIT RESULT: PASS")
     return 0
