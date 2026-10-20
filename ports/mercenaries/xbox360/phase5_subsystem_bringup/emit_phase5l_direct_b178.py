@@ -1,4 +1,4 @@
-"""Phase 5L: execute the post-XBE-section-scan retail helper at 0x0022B178.
+"""Phase 5L: execute reviewed manual SetLastError root 0x0022B178.
 
 Phase 5K passed on real Xbox 360 hardware. The complete native title-storage
 and mount stack remained intact. Translated root 0x0022F026 initialized the
@@ -7,11 +7,15 @@ RtlInitAnsiString + RtlEqualString, found no match, and then reached
 DIRECT_FRONTIER caller=0x0022F026 target=0x0022B178 with fault=0 and a
 48-entry translated trace.
 
-Phase 5L preserves the entire hardware-proven startup/storage/mount/string
-stack, retains every previously promoted translated root, and promotes only
-the exact hardware-observed function start 0x0022B178. Deeper direct callees
-remain explicit frontiers. Preparation fails closed if 0x0022B178 is a
-split/mid-function target or lacks a generated translated body.
+0x0022B178 is intentionally excluded from the generated Stage-3 tree by
+Recompile.ps1 --manual-function. The maintained production implementation in
+ports/mercenaries/src/recomp_manual.c is the Xbox SetLastError wrapper: it
+stores the observable last-error value in stable runtime state instead of
+dereferencing the flattened Xbox FS-backed TIB.
+
+Phase 5L injects only that reviewed maintained body into the hardware pack.
+Every other missing translated body still fails closed. Deeper direct callees
+remain explicit frontiers.
 """
 
 from __future__ import annotations
@@ -693,6 +697,8 @@ static uint32_t s_phase5kRtlEqualStringLastString1;
 static uint32_t s_phase5kRtlEqualStringLastString2;
 static uint32_t s_phase5kRtlEqualStringLastCaseInsensitive;
 static uint32_t s_phase5kRtlEqualStringLastResult;
+static uint32_t s_phase5lXboxLastError;
+static uint32_t s_phase5lSetLastErrorCount;
 
 #define PHASE5D_SYMLINK_CAP 32u
 typedef struct Phase5DSymbolicLink
@@ -4427,6 +4433,42 @@ def main() -> int:
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated_root, by_name)
 
+    manual_b178_row = by_va.get(LIVE_DIRECT_FRONTIER_TARGET_16)
+    if manual_b178_row is None:
+        raise SystemExit(
+            "[Phase5L] maintained manual target 0x0022B178 is absent from the function inventory"
+        )
+    if manual_b178_row["name"] != "sub_0022B178":
+        raise SystemExit(
+            "[Phase5L] maintained manual target 0x0022B178 name changed: "
+            + str(manual_b178_row["name"])
+        )
+
+    # Recompile.ps1 deliberately passes --manual-function 0x0022B178.
+    # Mirror the maintained production body from recomp_manual.c here rather
+    # than mutating the frozen Stage-3 generated tree or silently re-lifting it.
+    generated[LIVE_DIRECT_FRONTIER_TARGET_16] = {
+        "name": "sub_0022B178",
+        "file": "<maintained-manual:recomp_manual.c>",
+        "source": """void sub_0022B178(void)
+{
+    uint32_t _phase5l_last_error;
+    char _phase5l_line[256];
+    RECOMP_TRACE_FUNC(0x0022B178u);
+    _phase5l_last_error = GUEST_READ32(g_esp + 4u);
+    s_phase5lXboxLastError = _phase5l_last_error;
+    ++s_phase5lSetLastErrorCount;
+    sprintf(
+        _phase5l_line,
+        "PASS: Phase 5L maintained SetLastError value=%08X calls=%u new_esp=%08X",
+        (unsigned int)_phase5l_last_error,
+        (unsigned int)s_phase5lSetLastErrorCount,
+        (unsigned int)(g_esp + 8u));
+    trace(_phase5l_line);
+    g_esp += 8u;
+}""",
+    }
+
     entry_members = {
         int(str(row["address"]), 0)
         for row in entry_report["closure"]["members"]
@@ -4566,11 +4608,9 @@ def main() -> int:
             "[Phase5L] target 0x0022B178 is absent from the function inventory"
         )
 
-    if LIVE_DIRECT_FRONTIER_TARGET_16 not in generated:
-        row = by_va[LIVE_DIRECT_FRONTIER_TARGET_16]
+    if generated[LIVE_DIRECT_FRONTIER_TARGET_16].get("file") != "<maintained-manual:recomp_manual.c>":
         raise SystemExit(
-            "[Phase5L] target 0x0022B178 is an exact function start "
-            f"({row['name']}) but has no generated translated body"
+            "[Phase5L] target 0x0022B178 must use the reviewed maintained manual body"
         )
 
     promoted_closure_members = set(
@@ -4782,6 +4822,15 @@ def main() -> int:
             f"0x{va:08X}" for va in sorted(prior_root_f026_members)
         ],
         "promoted_direct_frontier_target_16": f"0x{LIVE_DIRECT_FRONTIER_TARGET_16:08X}",
+        "promoted_direct_frontier_target_16_mode": "manual-maintained",
+        "manual_maintained_root_16": {
+            "address": "0x0022B178",
+            "name": "sub_0022B178",
+            "production_source": "ports/mercenaries/src/recomp_manual.c",
+            "semantic_name": "SetLastError",
+            "abi": "stdcall one uint32 argument; preserve EAX; g_esp += 8",
+            "state_policy": "stable runtime last-error value instead of flattened Xbox FS-backed TIB",
+        },
         "promoted_closure_depth": PROMOTED_CLOSURE_DEPTH,
         "promoted_closure_cap": PROMOTED_CLOSURE_CAP,
         "promoted_closure_members": [
@@ -4977,7 +5026,7 @@ def main() -> int:
         "promoted_direct_members": [
             f"0x{va:08X}" for va in sorted(promoted_direct_members)
         ],
-        "diagnostic_goal": "service_live_storage_request_ordinal_202_NtOpenFile_and_continue",
+        "diagnostic_goal": "execute_reviewed_manual_SetLastError_0022B178_and_continue",
         "data_thunk_fixups": [
             {"ordinal": 156, "name": "KeTickCount", "guest_data_va": "0x0087E020"},
             {"ordinal": 322, "name": "XboxHardwareInfo", "guest_data_va": "0x0087E000"},
@@ -5141,6 +5190,8 @@ extern "C" DWORD phase5l_env_build_cookie(void)
         "    s_phase5kRtlEqualStringLastString2 = 0u;\n"
         "    s_phase5kRtlEqualStringLastCaseInsensitive = 0u;\n"
         "    s_phase5kRtlEqualStringLastResult = 0u;\n"
+        "    s_phase5lXboxLastError = 0u;\n"
+        "    s_phase5lSetLastErrorCount = 0u;\n"
         "    ZeroMemory(s_phase5dSymbolicLinks, sizeof(s_phase5dSymbolicLinks));\n"
         "    ZeroMemory(s_phase5bHandles, sizeof(s_phase5bHandles));\n",
         1,
@@ -5184,7 +5235,7 @@ extern "C" DWORD phase5l_env_build_cookie(void)
         "    trace(\"PASS: hardware-observed next retail direct root 002370B8 is packed for translated execution\");\n"
         "    trace(\"PASS: hardware-observed next retail direct root 0022BE8C is packed for translated execution\");\n"
         "    trace(\"PASS: hardware-observed post-storage direct root 0022F026 is packed for translated execution\");\n"
-        "    trace(\"PASS: hardware-observed post-section-scan direct root 0022B178 is packed for translated execution\");\n"
+        "    trace(\"PASS: hardware-observed root 0022B178 uses maintained manual SetLastError execution\");\n"
         "    trace(\"PASS: Phase 5L ordinal 202 NtOpenFile native continuation armed\");\n"
         "    trace(\"PASS: Phase 5L ordinal 218 NtQueryVolumeInformationFile native continuation armed\");\n"
         "    trace(\"PASS: Phase 5L ordinal 187 NtClose native continuation armed\");\n"
@@ -5257,6 +5308,7 @@ extern "C" DWORD phase5l_env_build_cookie(void)
             s_phase5hNtCreateFileCallCount > 0u &&
             s_phase5iRtlInitAnsiStringCount > 0u &&
             s_phase5kRtlEqualStringCount > 0u &&
+            s_phase5lSetLastErrorCount > 0u &&
             s_phase4cCallbackEntered &&
             s_traceCount > 0u &&
             s_trace[0] == 0x{root_va:08X}u &&
@@ -5422,7 +5474,7 @@ extern "C" DWORD phase5l_env_build_cookie(void)
         f"members={len(prior_safe_root_members)}"
     )
     print(
-        f"[Phase5L] New hardware-observed root: 0x{LIVE_DIRECT_FRONTIER_TARGET_16:08X}; "
+        f"[Phase5L] New maintained-manual hardware root: 0x{LIVE_DIRECT_FRONTIER_TARGET_16:08X}; "
         f"depth={PROMOTED_CLOSURE_DEPTH}; members={len(promoted_closure_members)}"
     )
     print(
@@ -5449,7 +5501,7 @@ extern "C" DWORD phase5l_env_build_cookie(void)
     print(f"[Phase5L] env:  {args.out_dir / 'phase5_env.cpp'}")
     print(
         "[Phase5L] Runtime policy: preserve the proven startup path, keep "
-        "the complete hardware-proven title-storage/XBE-section-scan path live, execute translated root 0x0022B178, and continue to the next real runtime boundary."
+        "the complete hardware-proven title-storage/XBE-section-scan path live, execute reviewed manual SetLastError root 0x0022B178, and continue to the next real runtime boundary."
     )
     return 0
 
