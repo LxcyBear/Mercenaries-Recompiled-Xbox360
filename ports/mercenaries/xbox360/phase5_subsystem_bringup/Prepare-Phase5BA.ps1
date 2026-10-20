@@ -22,6 +22,16 @@ foreach ($required in @($python,$generatedRoot,$functionsPath,$entryReport,$thre
     if (-not (Test-Path -LiteralPath $required)) { throw "Required Phase 5BA input is missing: $required" }
 }
 
+# Phase 5AZ hardware discovered 0x0023D550 as a real indirect guest-code
+# entry. It is now a reviewed manual seed, but existing Phase-3N build output
+# predates that seed until Prepare-Phase3N.ps1 is rerun. Fail here with an
+# actionable message instead of letting the emitter report a vague inventory
+# miss.
+$functionsText = Get-Content -LiteralPath $functionsPath -Raw
+if ($functionsText -notmatch '(?i)0x0023D550') {
+    throw "Phase 5BA requires the refreshed Phase-3N function inventory containing hardware-proven seed 0x0023D550. Run .\ports\mercenaries\xbox360\phase3n_final_abi_scale_xex\Prepare-Phase3N.ps1, then rerun Prepare-Phase5BA.ps1."
+}
+
 if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
