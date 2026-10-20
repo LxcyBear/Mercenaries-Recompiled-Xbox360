@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AO-B — continue cache-volume setup through ordinal 196 `NtDeviceIoControlFile`; P5AO-A hardware proved the live call-site frame is 52 bytes, so P5AO-B locates the canonical 44-byte argument window inside that padded frame.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AP — persist the synthetic Partition0 config device across launches after Phase 5AO-B hardware PASS completed both cache IOCTLs and reached an intentional quick reboot.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AN hardware PASS; Phase 5AO cache device-control batch active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AO hardware PASS; Phase 5AP persistent Partition0/reboot handshake active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,17 +75,19 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5AN have passed their
-hardware gates. P5AO-A reached ordinal 196 `NtDeviceIoControlFile` on real
-hardware but fenced on a call-frame contract mismatch: the canonical Xbox API
-is a 10-argument / 44-byte translated frame, while this Mercenaries call site
-presents a 52-byte live frame. P5AO-B now accepts canonical 44-byte calls and,
-for the 52-byte hardware form, scans the only three possible 44-byte windows
-and proceeds only when exactly one matches a tracked cache-volume handle plus
-a known cache IOCTL. Raw 13-dword frame contents are logged for proof.
-The batched controls remain `IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)`
-and `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`; unknown/asynchronous forms
-remain fenced at `STORAGE_IO`.
+**Present blockers:** Phase 4 and Phase 5A through 5AO have passed their
+hardware gates. P5AO-B completed both cache-mount device controls on real
+hardware: `0x00070000` succeeded from the observed 52-byte padded call-site
+frame and `0x00074004` succeeded from the canonical 44-byte frame. Retail
+then closed Partition5, set last error `0x70`, allocated/persisted
+`LaunchDataPage`, and requested `HalReturnToFirmware(2)` (quick reboot)
+back to the same title. The current synthetic Partition0 config device is
+reinitialized to zeros on every XEX launch, so its successful sector
+`0x800` write cannot survive that reboot. Phase 5AP makes the bounded
+512 KiB Partition0 model persistent at
+`game:\merc360-partition0\partition0-config.bin` and uses a two-launch
+hardware test to determine whether preserving the retail-written cache metadata
+breaks the reinitialization/reboot loop.
 
 ### Immediate next tests
 
@@ -319,18 +321,25 @@ remain fenced at `STORAGE_IO`.
     `ICALL_SAFE target=0x800000C4` (ordinal 196
     `NtDeviceIoControlFile`). Build:
     `P5AN-CACHE-PARTITION-BATCH-20261020-B`.
-65. **Phase 5AO-B active / partial hardware proof:** P5AO-A confirmed the
-    live ordinal-196 call from `0x0022C5C6` uses a 52-byte caller frame rather
-    than the canonical 44-byte translated frame. P5AO-B accepts both forms and
-    uniquely identifies the canonical argument window inside the 52-byte form
-    using the tracked cache handle plus known IOCTL code. It still batches
-    `IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)` and
-    `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`; ambiguous, unknown, or
-    asynchronous forms remain fenced with raw-frame diagnostics. Hardware gate
-    requires at least one successful ordinal-196 compatibility continuation
-    and a boundary newer than `0x800000C4`. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AO.ps1`.
-    Build tag: `P5AO-CACHE-DEVICE-IO-20261020-B`.
+65. **Done:** Phase 5AO-B passed on real hardware. The first ordinal-196
+    `NtDeviceIoControlFile` call used the 52-byte padded caller frame with
+    the canonical argument window at offset 0 and successfully handled
+    `IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)`. The immediately following
+    canonical 44-byte call successfully handled
+    `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`. Retail then requested
+    `HalReturnToFirmware(2)` with a persisted LaunchDataPage for the same
+    title. Build: `P5AO-CACHE-DEVICE-IO-20261020-B`.
+66. **Phase 5AP active:** persist the bounded 512 KiB synthetic Partition0
+    config device at
+    `game:\merc360-partition0\partition0-config.bin`. Writes compare the
+    incoming range against existing state and log changed versus unchanged
+    writes, then flush the complete backing before reporting success. Hardware
+    test is intentionally two-pass with the **same XEX**: first launch may
+    create/flush the backing and reach quick reboot; second launch must reload
+    the file without regeneration/rebuild so retail sees its prior cache-table
+    write. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AP.ps1`.
+    Build tag: `P5AP-PARTITION0-PERSIST-20261020-A`.
 
 ### Evidence policy
 
@@ -2909,6 +2918,25 @@ unexecuted test PASS.**
 - **P5AO-B:** accepts 44-byte calls and uniquely locates the canonical 44-byte
   argument window inside the observed 52-byte frame; raw 13-dword frame data
   is logged, and ambiguous layouts remain fenced.
+
+### 2026-10-20 — Phase 5AO-B cache device-control PASS
+
+- Build `P5AO-CACHE-DEVICE-IO-20261020-B` passed on real Xbox 360 hardware.
+- Exact retail identity/environment and the full prior storage/cache proof
+  remained green.
+- The first ordinal-196 call exposed raw 52-byte frame data; the canonical
+  44-byte argument window was uniquely identified at offset 0.
+- `IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)` completed successfully.
+- The next ordinal-196 call used the canonical 44-byte frame and
+  `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)` completed successfully.
+- Retail then closed the cache handle, set last error `0x70`, allocated and
+  persisted a LaunchDataPage, and requested `HalReturnToFirmware(2)`.
+- The launch page identified the same Mercenaries title, consistent with a
+  quick-reboot/relaunch handshake.
+- **Phase 5AO cache device-control batch: PASS.**
+- **Next:** Phase 5AP persists Partition0 across XEX launches and reruns the
+  same build twice to test whether retail cache metadata survives the reboot
+  boundary and allows startup to advance.
 
 ### How future updates are recorded
 
