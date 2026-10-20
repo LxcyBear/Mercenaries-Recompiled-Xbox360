@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AK — expanded guest-safe memory-services batch after Phase 5AJ hardware PASS serviced ordinal 165 and advanced to ordinal 178 `MmPersistContiguousMemory` (`0x800000B2`).
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AL — model original-Xbox `\\Device\\Harddisk0\\Partition0` as a bounded 512 KiB config device after Phase 5AK hardware PASS reached ordinal 49 `HalReturnToFirmware` following the failed raw offset-0x800 probe.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AJ hardware PASS; Phase 5AK expanded memory-services batch active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AK hardware PASS; Phase 5AL Partition0 config-device model active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,17 +75,21 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5AJ have passed their
-hardware gates. Phase 5AJ proved the new subsystem-batching strategy on real
-hardware: ordinal 165 `MmAllocateContiguousMemory` consumed a 4096-byte
-request, returned guest VA `0x03EFF000`, and execution continued with
-`fault=0` to `ICALL_SAFE target=0x800000B2`, ordinal 178
-`MmPersistContiguousMemory`. Phase 5AK expands the memory batch to include
-176/177/178/179/183 plus tracked ordinal 199 `NtFreeVirtualMemory`, while
-retaining the already-proven 165/166/167/171/172/173/175/180/181/182/184
-surface. Ordinal 168 `MmClaimGpuInstanceMemory` remains intentionally fenced
-because its fixed RAMIN placement overlaps the focused high-RAM reservation
-model and should not be guessed before hardware demands it.
+**Present blockers:** Phase 4 and Phase 5A through 5AK have passed their
+hardware gates. Phase 5AK serviced the observed ordinal 178
+`MmPersistContiguousMemory` no-op after a successful 4096-byte contiguous
+allocation at guest `0x03EFF000`, then immediately reached
+`ICALL_SAFE target=0x80000031` (ordinal 49 `HalReturnToFirmware`) with
+`fault=0`. The call order
+`LaunchDataPage -> MmAllocateContiguousMemory(0x1000) ->
+MmPersistContiguousMemory(..., TRUE) -> HalReturnToFirmware` is the standard
+Xbox soft-launch/reboot pattern, so ordinal 49 is treated as a symptom rather
+than the next subsystem. The preceding Partition0 raw read still returns
+`STATUS_UNSUCCESSFUL` for offset `0x800`, length `512`; Phase 5AL fixes
+that root cause by modeling original-Xbox
+`\\Device\\Harddisk0\\Partition0` as a bounded zero-initialized 512 KiB
+fixed-structure config device and traps any residual firmware-return request
+only to record its launch parameters.
 
 ### Immediate next tests
 
@@ -291,13 +295,20 @@ model and should not be guessed before hardware demands it.
     request, returned guest VA `0x03EFF000`, and advanced immediately to
     ordinal 178 `MmPersistContiguousMemory` with `fault=0`. Build:
     `P5AJ-MM-CLUSTER-20261020-A`.
-61. **Phase 5AK active:** expand the memory-services batch with
-    176/177/178/179/183 and tracked ordinal 199 `NtFreeVirtualMemory`,
-    retaining all P5AJ memory calls and ordinal 184 VM allocation. Only
-    ordinal 168 `MmClaimGpuInstanceMemory` remains intentionally fenced.
-    Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AK.ps1`.
-    Build tag: `P5AK-MM-SERVICES-20261020-A`.
+61. **Done:** Phase 5AK serviced the expanded memory-services path on real
+    hardware. Ordinal 165 returned guest `0x03EFF000`; ordinal 178
+    `MmPersistContiguousMemory` consumed that 4096-byte page with
+    `Persist=TRUE`; execution then reached ordinal 49
+    `HalReturnToFirmware` with `fault=0`. Build:
+    `P5AK-MM-SERVICES-20261020-A`.
+62. **Phase 5AL active:** replace the directory-backed Partition0 probe with a
+    bounded 512 KiB zero-initialized config-device model. All synchronous raw
+    reads inside the config area are serviced in memory; the observed hardware
+    probe at byte offset `0x800`, length `512` must return success. If
+    ordinal 49 is still reached, trap it without executing firmware return and
+    log the routine plus `LaunchDataPage` fields/path. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AL.ps1`.
+    Build tag: `P5AL-PARTITION0-CONFIG-20261020-A`.
 
 ### Evidence policy
 
@@ -2760,6 +2771,28 @@ unexecuted test PASS.**
 - **Next:** Phase 5AK expands the batch across the remaining straightforward
   memory persistence/protection/map/unmap/free services instead of returning
   to one-address-per-build iteration.
+
+### 2026-10-20 — Phase 5AK expanded memory-services batch PASS
+
+- Build `P5AK-MM-SERVICES-20261020-A` passed on real Xbox 360 hardware.
+- The exact retail-XBE identity, Phase-2E execution environment, startup data
+  relocations, storage/title-state chain and repeatable status mapping all
+  remained intact.
+- Ordinal 165 `MmAllocateContiguousMemory` again serviced the 4096-byte
+  request and returned guest VA `0x03EFF000`.
+- Ordinal 178 `MmPersistContiguousMemory` then executed with
+  base `0x03EFF000`, size `4096`, `Persist=1`, matching the production
+  no-op semantics.
+- Execution advanced with `fault=0` to
+  `ICALL_SAFE caller=0x002294AE target=0x80000031`.
+- `0x80000031` is ordinal 49 `HalReturnToFirmware`.
+- Because this follows the exact Xbox launch-page allocation/persistence
+  sequence, the firmware return is treated as the fallback outcome of the
+  still-failing Partition0 raw read, not as a normal service to execute.
+- **Phase 5AK memory-services batch: PASS.**
+- **Next:** Phase 5AL models Partition0 as its actual fixed-structure config
+  device so the offset-`0x800` raw read can succeed, and records any residual
+  soft-launch request without actually rebooting the diagnostic XEX.
 
 ### How future updates are recorded
 
