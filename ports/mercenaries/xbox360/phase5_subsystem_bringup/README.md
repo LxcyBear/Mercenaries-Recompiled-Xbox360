@@ -1806,3 +1806,54 @@ Build: `P5AE-DIRECT22A604-20261020-A`
 Cookie: `P5AE / 0x50354145`.
 
 Link-time guard symbol: `phase5ae_env_build_cookie`.
+
+
+## Phase 5AE hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The persistent title-state branch remains stable and exact translated root
+`0x0022A604` executed. It immediately reached:
+
+```text
+caller    = 0x0022A604
+target    = 0x0022A3B9
+esp       = 0x008BFDCC
+saved_esp = 0x008BFDCC
+trace     = 63
+fault     = 0
+```
+
+Harness result:
+`PHASE 5AE DIRECT22A604 RESULT: PASS`.
+
+## Phase 5AF — direct root 0x0022A3B9
+
+5AF promotes only the newly observed frontier `0x0022A3B9` at depth zero and
+retains `0x0022A604` plus every previously proven native continuation.
+
+The preparation gate validates `0x0022A3B9` against the frozen function
+inventory. If it is an exact generated function start, it is packed and given
+explicit root-entry instrumentation. If it falls inside another function, the
+gate fails with the containing range instead of silently promoting a
+mid-function address.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AF.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_22a3b9_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_22a3b9_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_22a3b9_xdk\phase5af-manifest.json
+```
+
+Build: `P5AF-DIRECT22A3B9-20261020-A`
+
+Cookie: `P5AF / 0x50354146`.
+
+Link-time guard symbol: `phase5af_env_build_cookie`.
