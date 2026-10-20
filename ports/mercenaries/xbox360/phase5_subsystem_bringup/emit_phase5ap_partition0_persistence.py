@@ -9411,7 +9411,7 @@ extern "C" DWORD phase5ap_env_build_cookie(void)
         "Partition0 backing FLUSHED",
         "changed_writes=%u",
         "s_phase5apPartition0BackingReady > 0u",
-        "phase4c_reset_architecture();\\n\\n    if (!phase5ap_partition0_backing_load())",
+        "phase4c_reset_architecture();\n\n    if (!phase5ap_partition0_backing_load())",
         "PASS: Phase 5AP Partition0 backing initialization complete",
         "static void phase5ap_nt_device_io_control_file(uint32_t savedEsp)",
         "_phase4c_target == 0x800000C4u",
