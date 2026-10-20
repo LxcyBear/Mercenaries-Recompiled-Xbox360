@@ -2226,3 +2226,44 @@ instrumentation is authoritative.
 Build tag: `P5W-DIRECT22F08D-20261020-A`.
 Cookie: `P5W1 / 0x50355731`.
 Link-time guard: `phase5w_env_build_cookie`.
+
+
+#### Phase 5W — TitleImage-path direct root 0x0022F08D hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5W-DIRECT22F08D-20261020-A` validated the state-aware proof model.
+The persisted `TitleMeta.xbx` remained at EOF 48, `TitleImage.xbx` was
+opened and queried at EOF 0, and translated root `0x0022F08D` executed as
+trace entry 58. Retail then reached a new kernel boundary with `fault=0`:
+
+```text
+caller=0x0022F08D
+target=0x80000147
+kind=ICALL_SAFE
+esp=0x008BFBB0
+saved_esp=0x008BFBB8
+trace=59
+```
+
+Ordinal `0x147 / 327` is `XeLoadSection@4`; the observed 8-byte full frame
+matches one 4-byte argument plus the synthetic return slot.
+
+Harness result: `PHASE 5W DIRECT22F08D RESULT: PASS`.
+
+#### Phase 5X — native XeLoadSection ordinal 327
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5X.ps1`
+
+5X preserves the complete state-aware TitleMeta/TitleImage path and services
+ordinal-327 `XeLoadSection`. The Phase-2E environment already preloads all
+retail XBE section bytes and zero-fill, so 5X implements the kernel bookkeeping
+layer: validate an exact 0x38-byte section-table entry, increment
+`SectionReferenceCount`, update distinct shared head/tail page counters on
+the 0->1 transition, return `STATUS_SUCCESS`, and resume retail execution.
+Malformed/non-table pointers remain fenced.
+
+Build tag: `P5X-XELOADSECTION327-NATIVE-20261020-A`.
+Cookie: `P5X1 / 0x50355831`.
+Link-time guard: `phase5x_env_build_cookie`.
