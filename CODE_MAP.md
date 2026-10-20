@@ -182,3 +182,18 @@ services ordinals 203 and 215 against the guest link table, and extends
 `NtClose` for that handle class. Native file handles remain in the existing
 `0x48xxxxxx` table.
 
+### Phase-5 ordinal-215 translated-frame repair
+
+5AU hardware validated `NtOpenSymbolicLinkObject(\??\D:)` and returned
+symbolic-link object token `0x53000001`. The next call from
+`0x0022B7B2` is ordinal 215 `NtQuerySymbolicLinkObject`, but the translated
+callsite reports a 20-byte frame instead of the 16-byte Xbox ABI frame.
+
+Phase 5AV files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AV.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5av_symlink215_savedesp.py`
+
+Repair policy: exact caller `0x0022B7B2` + target `0x800000D7` + observed
+20-byte frame only; validate the normal ordinal-215 arguments, record the extra
+dword, and resume at `savedEsp - 4`. No global ABI change.
+
