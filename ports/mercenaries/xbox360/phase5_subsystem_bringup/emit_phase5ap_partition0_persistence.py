@@ -8778,7 +8778,6 @@ extern "C" DWORD phase5ap_env_build_cookie(void)
         "    s_phase5apPartition0ChangedWriteCount = 0u;\n"
         "    s_phase5apPartition0UnchangedWriteCount = 0u;\n"
         "    s_phase5apPartition0BackingReady = 0u;\n"
-        "    if (!phase5ap_partition0_backing_load()) { trace(\"FAIL: Phase 5AP Partition0 backing initialization failed\"); goto shutdown_env; }\n"
         "    s_phase5apPartition0RawReadCount = 0u;\n"
         "    s_phase5apPartition0RawReadBytes = 0u;\n"        "    s_phase5apPartition0RawWriteCount = 0u;\n"
         "    s_phase5apPartition0RawWriteBytes = 0u;\n"
@@ -8864,6 +8863,12 @@ extern "C" DWORD phase5ap_env_build_cookie(void)
     driver = driver.replace(
         "    phase4c_reset_architecture();\n",
         "    phase4c_reset_architecture();\n\n"
+        "    if (!phase5ap_partition0_backing_load())\n"
+        "    {\n"
+        "        trace(\"FAIL: Phase 5AP Partition0 backing initialization failed\");\n"
+        "        goto shutdown_env;\n"
+        "    }\n"
+        "    trace(\"PASS: Phase 5AP Partition0 backing initialization complete\");\n"
         "    if (!phase4c_fix_startup_data_thunks())\n"
         "    {\n"
         "        trace(\"PHASE 5AP STARTUP DATA-THUNK PREP RESULT: FAIL\");\n"
@@ -9406,6 +9411,8 @@ extern "C" DWORD phase5ap_env_build_cookie(void)
         "Partition0 backing FLUSHED",
         "changed_writes=%u",
         "s_phase5apPartition0BackingReady > 0u",
+        "phase4c_reset_architecture();\\n\\n    if (!phase5ap_partition0_backing_load())",
+        "PASS: Phase 5AP Partition0 backing initialization complete",
         "static void phase5ap_nt_device_io_control_file(uint32_t savedEsp)",
         "_phase4c_target == 0x800000C4u",
         "NtDeviceIoControlFile LIVE FRAME:",
