@@ -1723,3 +1723,38 @@ Build tag: `P5K-RTLEQUAL279-20261020-A`.
 Cookie: `P5K1 / 0x50354B31`.
 
 Link-time guard: `phase5k_env_build_cookie`.
+
+
+#### Phase 5K — XBE section scan hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5K-RTLEQUAL279-20261020-A` retained the complete native title-storage
+stack and serviced ordinal 279 `RtlEqualString`.
+
+Retail helper `0x0022F026` compared `$$XTINFO` case-insensitively against
+all 14 loaded XBE section names. Every comparison returned false, matching the
+actual supported retail section table.
+
+The next live dependency is:
+
+```text
+DIRECT_FRONTIER caller=0x0022F026 target=0x0022B178
+fault=0
+trace=48
+```
+
+#### Phase 5L — promote post-section-scan root 0x0022B178
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5L.ps1`
+
+5L retains all proven native storage, D:/T: mounts, title-data setup and RTL
+section-name scanning, and promotes only the exact hardware-observed translated
+root `0x0022B178`.
+
+Build tag: `P5L-DIRECTB178-20261020-A`.
+
+Cookie: `P5L1 / 0x50354C31`.
+
+Link-time guard: `phase5l_env_build_cookie`.
