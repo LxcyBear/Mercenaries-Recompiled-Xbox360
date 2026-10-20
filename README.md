@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5E — execute post-mount translated root 0x0022C1C0 after Phase 5D hardware PASS.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5F — execute translated retail root 0x002370B8 after Phase 5E hardware PASS.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A/5B/5C/5D storage + mount gates PASS; Phase 5E post-mount retail helper active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5E PASS; Phase 5F next retail helper active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,12 +75,11 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A/5B/5C/5D have passed on hardware.
-The native-backed Partition1 lifecycle completes end-to-end, and retail code
-now creates the exact optical-disc namespace `\\??\\D: -> \\Device\\CdRom0`
-with STATUS_SUCCESS. Translated execution then advances with `fault=0` to the
-ordinary retail direct frontier `0x0022C1C0` from caller `0x0022BD2D`. Phase
-5E promotes only that exact post-mount helper while retaining the complete
+**Present blockers:** Phase 4 and Phase 5A through 5E have passed on hardware.
+The native-backed Partition1 lifecycle and `D:` optical-disc mount remain
+intact, translated root `0x0022C1C0` now executes successfully, and the title
+advances with `fault=0` to `DIRECT_FRONTIER target=0x002370B8`. Phase 5F
+promotes only that exact next retail helper while retaining the complete
 storage/mount stack. Graphics, input, audio/movie and async/runtime remain
 later Phase-5 blockers.
 
@@ -238,11 +237,13 @@ later Phase-5 blockers.
 48. **Done:** Phase 5D handled ordinal 67 `IoCreateSymbolicLink` on hardware,
     creating `\\??\\D: -> \\Device\\CdRom0` with STATUS_SUCCESS, then
     advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022C1C0`.
-49. **Phase 5E:** promote only hardware-observed post-mount translated root
-    `0x0022C1C0`, retaining the complete native storage + symbolic-link stack.
-    Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5E.ps1`.
-    Build tag: `P5E-DIRECTC1C0-20261020-A`.
+49. **Done:** Phase 5E executed translated root `0x0022C1C0` with the full
+    native storage + symbolic-link stack intact and advanced with `fault=0` to
+    `DIRECT_FRONTIER target=0x002370B8`; the trace reached 24 translated entries.
+50. **Phase 5F:** promote only hardware-observed translated root `0x002370B8`,
+    retaining all proven Phase-5 storage/mount behavior. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5F.ps1`.
+    Build tag: `P5F-DIRECT370B8-20261020-A`.
 
 ### Evidence policy
 
@@ -2525,6 +2526,18 @@ unexecuted test PASS.**
 - **Phase 5D: PASS.**
 - **Next:** Phase 5E exact-root promotion of `0x0022C1C0`.
 - Build tag: `P5E-DIRECTC1C0-20261020-A`.
+
+### 2026-10-20 — Phase 5E direct C1C0 PASS
+
+- Build `P5E-DIRECTC1C0-20261020-A` passed on real Xbox 360 hardware.
+- The complete native Partition1 + `D:` mount stack remained intact.
+- Translated root `0x0022C1C0` executed successfully.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x0022C1C0 target=0x002370B8`.
+- The translated trace reached 24 entries with `fault=0`.
+- **Phase 5E: PASS.**
+- **Next:** Phase 5F exact-root promotion of `0x002370B8`.
+- Build tag: `P5F-DIRECT370B8-20261020-A`.
 
 ### How future updates are recorded
 
