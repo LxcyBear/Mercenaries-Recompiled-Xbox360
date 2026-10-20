@@ -311,7 +311,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
     throw "Generated Phase 5AO manifest is missing: $manifest"
 }
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-if ($manifestJson.phase -ne "5AN" -or $manifestJson.build_tag -ne "P5AO-CACHE-DEVICE-IO-20261020-A") {
+if ($manifestJson.phase -ne "5AO" -or $manifestJson.build_tag -ne "P5AO-CACHE-DEVICE-IO-20261020-A") {
     throw "Phase 5AO manifest identity mismatch"
 }
 $cacheStorage = $manifestJson.phase5ao_cache_storage
@@ -718,6 +718,6 @@ Write-Host "[Phase5AO] Build BOTH freshly generated sources in the same XDK proj
 Write-Host "[Phase5AO]   $main"
 Write-Host "[Phase5AO]   $env"
 Write-Host "[Phase5AO] Link-time guard: main requires phase5ao_env_build_cookie from the matching generated environment source."
-Write-Host "[Phase5AO] The 5AN cookie must be 0x5035414F (P5AO)."
+Write-Host "[Phase5AO] The 5AO cookie must be 0x5035414F (P5AO)."
 Write-Host "[Phase5AO] Keep the exact supported retail default.xbe beside the XEX."
 Write-Host "[Phase5AO] Expected build tag: P5AO-CACHE-DEVICE-IO-20261020-A"
