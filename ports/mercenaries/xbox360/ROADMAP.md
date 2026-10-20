@@ -2316,3 +2316,47 @@ instrumentation and does not depend on fixed trace indexes.
 Build tag: `P5Y-DIRECT22F0CC-20261020-A`.
 Cookie: `P5Y1 / 0x50355931`.
 Link-time guard: `phase5y_env_build_cookie`.
+
+
+#### Phase 5Y — post-XeLoadSection direct root 0x0022F0CC hardware proof
+**Status: HARDWARE ROOT PASS; next kernel ABI shape captured as unresolved.**
+
+Build `P5Y-DIRECT22F0CC-20261020-A` preserved the exact supported retail
+environment and the native ordinal-327 `XeLoadSection` continuation.
+`$$XTIMAGE` again loaded successfully with section references `0 -> 1`.
+Translated root `0x0022F0CC` then executed as trace entry 59.
+
+The next live dependency is ordinal-236 `NtWriteFile`, but this call site
+presents a different full-frame shape from the already proven TitleMeta write:
+
+```text
+caller=0x0022F0CC
+target=0x800000EC
+esp=0x008BFBA0
+saved_esp=0x008BFBC0
+frame_delta=32
+fault=0
+```
+
+The existing native continuation requires the previously proven 36-byte full
+frame, so it fenced the call as `KERNEL_FRAME`. The final 5Y harness result is
+therefore `FAIL`, but the 5Y direct-root exit criterion itself is satisfied:
+`0x0022F0CC` executed and exposed the next nonfaulting kernel dependency.
+
+#### Phase 5Z — compact NtWriteFile frame capture
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5Z.ps1`
+
+5Z retains all 74 translated bodies, native storage bridges, and the proven
+`XeLoadSection` bookkeeping continuation. The original 36-byte
+`NtWriteFile` path remains unchanged. For the hardware-observed 32-byte form
+from caller `0x0022F0CC`, 5Z performs no native write: it captures stack
+words from offsets `+0x00` through `+0x28`, records the caller/frame size,
+and stops at a deliberate kernel-frame boundary. That exact capture is the
+5Z PASS criterion.
+
+Build tag: `P5Z-NTWRITEFILE236-COMPACT-CAPTURE-20261020-A`.
+Cookie: `P5Z1 / 0x50355A31`.
+Link-time guard: `phase5z_env_build_cookie`.
