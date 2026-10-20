@@ -402,3 +402,58 @@ build\phase5_subsystem_bringup\ntcreatefile_native_xdk\phase5h-manifest.json
 Build: `P5H-NTCREATE190-NATIVE-20261020-A`
 
 Cookie: `P5H1 / 0x50354831`.
+
+
+## Phase 5H hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The full native storage/mount stack remained intact. Ordinal 190
+`NtCreateFile` then opened/created the first live title-storage directory:
+
+```text
+xbox        = \Device\Harddisk0\partition1\TDATA
+native      = game:\merc360-partition1\TDATA
+disposition = 3  (FILE_OPEN_IF)
+status      = 0x00000000
+token       = 0x48000001
+```
+
+The tagged handle was closed successfully. No `NtReadFile` call was reached
+in this run.
+
+Translated execution then advanced with `fault=0` to
+`ICALL_SAFE target=0x80000121`, ordinal 289 `RtlInitAnsiString`. The
+observed full frame is 12 bytes.
+
+## Phase 5I — RtlInitAnsiString continuation
+
+5I matches the maintained Xbox `ANSI_STRING` initialization semantics:
+
+```text
+USHORT Length
+USHORT MaximumLength
+ULONG  Buffer   (guest VA)
+```
+
+The source C string is scanned through bounded guest reads with the maintained
+`0xFFFE` clamp, and a bounded printable preview is logged before execution
+continues.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5I.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\rtl_init_ansi_xdk\main.cpp
+build\phase5_subsystem_bringup\rtl_init_ansi_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\rtl_init_ansi_xdk\phase5i-manifest.json
+```
+
+Build: `P5I-RTLINITANSI289-20261020-A`
+
+Cookie: `P5I1 / 0x50354931`.
