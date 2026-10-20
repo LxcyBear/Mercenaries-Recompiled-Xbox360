@@ -2455,3 +2455,59 @@ execution with an explicit root-entry flag.
 Build tag: `P5AB-DIRECT22F0AE-20261020-A`.
 Cookie: `P5AB / 0x50354142`.
 Link-time guard: `phase5ab_env_build_cookie`.
+
+
+#### Phase 5AB — persistent TitleImage branch / SaveImage discovery
+**Status: hardware path discovery; overall harness result FAIL at a deliberately fenced write shape.**
+
+Build `P5AB-DIRECT22F0AE-20261020-A` preserved the exact retail environment
+and confirmed that the Phase-5AA TitleImage write persisted. Retail observed:
+
+```text
+TitleImage.xbx EOF = 10240
+SaveImage.xbx  EOF = 0
+XeLoadSection index = 12
+section name = $$XSIMAGE
+section VA = 0x00877540
+section size = 0x1000
+```
+
+The same translated caller `0x0022F0CC` then reached ordinal-236
+`NtWriteFile` with the already-classified one-dword-short saved-ESP shape,
+but the 5AA repair guard still allowed only the `$$XTIMAGE` payload. The
+handler correctly fenced the new `$$XSIMAGE` case before native I/O:
+
+```text
+buffer=0x00877540
+length=0x1000
+ByteOffset=NULL
+fault=0
+boundary=KERNEL_FRAME
+```
+
+The promoted root `0x0022F0AE` was therefore not reached in this run.
+
+#### Phase 5AC — proven image-section NtWriteFile continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AC.ps1`
+
+5AC retains root `0x0022F0AE` and extends the caller-`0x0022F0CC`
+saved-ESP repair to exactly two hardware-supported image-section/file pairs:
+
+```text
+$$XTIMAGE -> TitleImage.xbx  section=11 VA=0x00874D40 length=0x2800
+$$XSIMAGE -> SaveImage.xbx   section=12 VA=0x00877540 length=0x1000
+```
+
+The compact path additionally requires a successful matching
+`XeLoadSection`, the exact section header/index/VA/length, the expected
+native file-path suffix, synchronous event/APC/context fields, and
+`ByteOffset=NULL`. All other compact forms remain fenced.
+
+Build tag:
+`P5AC-NTWRITEFILE236-IMAGESECTIONS-NATIVE-20261020-A`.
+
+Cookie: `P5AC / 0x50354143`.
+Link-time guard: `phase5ac_env_build_cookie`.
