@@ -2094,3 +2094,47 @@ generated set lacks a body. Deeper direct callees remain fenced.
 Build tag: `P5T-DIRECT23F8CB-20261020-A`.
 Cookie: `P5T1 / 0x50355431`.
 Link-time guard: `phase5t_env_build_cookie`.
+
+
+#### Phase 5T — post-TitleMeta direct root 0x0023F8CB hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5T-DIRECT23F8CB-20261020-A` preserved the complete native
+`TitleMeta.xbx` metadata continuation. Root `0x0023F8CB` entered the
+TitleMeta serialization loop and repeatedly alternated with `0x0023DD56`.
+The translated trace advanced to 119 before reaching a new kernel boundary
+with `fault=0`:
+
+```text
+caller=0x0023F8CB
+target=0x800000EC
+kind=ICALL_SAFE
+esp=0x008BFC18
+saved_esp=0x008BFC3C
+trace=119
+```
+
+Ordinal `0xEC / 236` is `NtWriteFile`; its Xbox `@32` ABI matches the
+observed 36-byte full frame exactly.
+
+Harness result: `PHASE 5T DIRECT23F8CB RESULT: PASS`.
+
+#### Phase 5U — native NtWriteFile ordinal 236
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5U.ps1`
+
+5U retains the complete Phase-5 storage/runtime stack and post-TitleMeta
+direct-root chain through `0x0023F8CB`. It services synchronous ordinal-236
+`NtWriteFile` through the existing tagged native Xenon HANDLE table using a
+real `WriteFile` call and writes guest `IO_STATUS_BLOCK.Status` plus the
+transferred byte count.
+
+Supported byte-offset forms are absolute offsets,
+`FILE_USE_FILE_POINTER_POSITION`, and `FILE_WRITE_TO_END_OF_FILE`.
+Event/APC forms and other negative/special offsets remain fenced.
+
+Build tag: `P5U-NTWRITEFILE236-NATIVE-20261020-A`.
+Cookie: `P5U1 / 0x50355531`.
+Link-time guard: `phase5u_env_build_cookie`.
