@@ -1687,3 +1687,39 @@ hardware-observed translated root `0x0022F026`.
 Build tag: `P5J-DIRECTF026-20261020-A`.
 
 Cookie: `P5J1 / 0x50354A31`.
+
+
+#### Phase 5J — XBE section-name path hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5J-DIRECTF026-20261020-A` passed with the phase-specific
+main/environment linker cookie, retained the complete native title-storage
+stack, and executed translated root `0x0022F026`.
+
+The live path initialized `ANSI_STRING` values for `$$XTINFO` and
+`.text`, then reached:
+
+```text
+ICALL_SAFE caller=0x0022F026 target=0x80000117
+fault=0
+trace=48
+```
+
+Target `0x80000117` is ordinal 279 `RtlEqualString`; the observed full
+frame is 16 bytes.
+
+#### Phase 5K — maintained RtlEqualString continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5K.ps1`
+
+5K performs bounded guest-memory `ANSI_STRING` equality with the maintained
+case-insensitive behavior, logs bounded previews of both live operands, returns
+the BOOLEAN result in EAX, and resumes the retail XBE/image-inspection path.
+
+Build tag: `P5K-RTLEQUAL279-20261020-A`.
+
+Cookie: `P5K1 / 0x50354B31`.
+
+Link-time guard: `phase5k_env_build_cookie`.
