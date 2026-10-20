@@ -2406,3 +2406,52 @@ execution. Any other 32-byte observation remains fenced.
 Build tag: `P5AA-NTWRITEFILE236-XTIMAGE-NATIVE-20261020-A`.
 Cookie: `P5AA / 0x50354141`.
 Link-time guard: `phase5aa_env_build_cookie`.
+
+
+#### Phase 5AA — native TitleImage NtWriteFile hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5AA-NTWRITEFILE236-XTIMAGE-NATIVE-20261020-A` preserved the exact
+supported retail environment and validated the caller-specific saved-ESP
+repair discovered by 5Z. The live ordinal-236 request from caller
+`0x0022F0CC` matched the captured frame exactly:
+
+```text
+handle=0x48000002
+IOSB=0x008BFC1C
+buffer=0x00874D40
+length=0x2800
+ByteOffset=NULL
+savedEsp=0x008BFBC0
+resumeEsp=0x008BFBC4
+```
+
+The bridge wrote all 10,240 bytes successfully with `status=0`. Retail then
+continued to a new direct frontier with no guest fault:
+
+```text
+caller=0x0022F0CC
+target=0x0022F0AE
+esp=0x008BFBBC
+trace=60
+fault=0
+```
+
+Harness result: `PHASE 5AA NTWRITEFILE236 XTIMAGE NATIVE RESULT: PASS`.
+
+#### Phase 5AB — post-TitleImage-write direct root 0x0022F0AE
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AB.ps1`
+
+5AB retains the complete native file/storage path, the proven
+`XeLoadSection` continuation, and both NtWriteFile forms. Since
+`TitleImage.xbx` is now persistent state, the gate does not require
+`XeLoadSection` or the 0x2800-byte write to repeat on every boot. It promotes
+only exact hardware-observed root `0x0022F0AE` at depth zero and proves
+execution with an explicit root-entry flag.
+
+Build tag: `P5AB-DIRECT22F0AE-20261020-A`.
+Cookie: `P5AB / 0x50354142`.
+Link-time guard: `phase5ab_env_build_cookie`.
