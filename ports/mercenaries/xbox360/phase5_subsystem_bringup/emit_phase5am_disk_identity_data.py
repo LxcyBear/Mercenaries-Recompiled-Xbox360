@@ -7571,7 +7571,7 @@ def main() -> int:
         "data_thunk_fixups": [
             {"ordinal": 40, "name": "HalDiskCachePartitionCount", "guest_data_va": "0x0087E4A0", "initial_value": 3},
             {"ordinal": 41, "name": "HalDiskModelNumber", "guest_data_va": "0x0087E420", "optional_import": True},
-            {"ordinal": 42, "name": "HalDiskSerialNumber", "guest_data_va": "0x0087E460", "optional_import": true},
+            {"ordinal": 42, "name": "HalDiskSerialNumber", "guest_data_va": "0x0087E460", "optional_import": True},
             {"ordinal": 156, "name": "KeTickCount", "guest_data_va": "0x0087E020"},
             {"ordinal": 164, "name": "LaunchDataPage", "guest_data_va": "0x0087E030", "initial_value": "NULL"},
             {"ordinal": 322, "name": "XboxHardwareInfo", "guest_data_va": "0x0087E000"},
