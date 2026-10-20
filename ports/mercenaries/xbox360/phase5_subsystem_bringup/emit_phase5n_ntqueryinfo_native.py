@@ -5468,7 +5468,7 @@ extern "C" DWORD phase5n_env_build_cookie(void)
     )
     driver = driver.replace(
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
-        "Policy: preserve Phase 5L state and capture live ordinal 211 NtQueryInformationFile",
+        "Policy: preserve Phase 5M state and service ordinal 211 NtQueryInformationFile class 34 natively",
     )
     driver = driver.replace("PHASE 4C-B", "PHASE 5N")
     cookie_decl = 'extern "C" DWORD phase4c_env_entry(void);\n'
