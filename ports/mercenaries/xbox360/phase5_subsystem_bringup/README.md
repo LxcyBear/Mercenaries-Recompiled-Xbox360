@@ -514,3 +514,63 @@ build\phase5_subsystem_bringup\direct_f026_xdk\phase5j-manifest.json
 Build: `P5J-DIRECTF026-20261020-A`
 
 Cookie: `P5J1 / 0x50354A31`.
+
+
+## Phase 5J hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The phase-specific main/environment link guard passed, proving the generated
+5J sources were matched correctly. The complete native storage, D:/T: mount,
+TDATA/UDATA title-id hierarchy, NtCreateFile/NtClose, and RTL ANSI-string
+stack remained intact.
+
+Translated root `0x0022F026` executed and initialized:
+
+```text
+$$XTINFO
+.text
+```
+
+as live Xbox `ANSI_STRING` values. Execution then reached:
+
+```text
+ICALL_SAFE
+caller = 0x0022F026
+target = 0x80000117
+fault  = 0
+trace  = 48
+```
+
+`0x80000117` is ordinal 279 `RtlEqualString`. The observed full frame is
+16 bytes, exactly three stdcall arguments plus the synthetic return.
+
+## Phase 5K — maintained RtlEqualString continuation
+
+5K matches the maintained Xbox `RtlEqualString` semantics: both guest
+`ANSI_STRING` lengths must match, bytes are compared directly or with ASCII
+case folding when `CaseInsensitive` is nonzero, and the BOOLEAN result is
+returned in EAX.
+
+The first 128 printable bytes of both live operands are logged so the hardware
+trace shows exactly which XBE/image section names retail code is comparing.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5K.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\rtl_equal_string_xdk\main.cpp
+build\phase5_subsystem_bringup\rtl_equal_string_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\rtl_equal_string_xdk\phase5k-manifest.json
+```
+
+Build: `P5K-RTLEQUAL279-20261020-A`
+
+Cookie: `P5K1 / 0x50354B31`.
+
+Link-time guard symbol: `phase5k_env_build_cookie`.
