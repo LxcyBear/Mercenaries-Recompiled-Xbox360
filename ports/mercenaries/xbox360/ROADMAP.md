@@ -1884,3 +1884,46 @@ remain fenced.
 Build tag: `P5N-NTQUERYINFO211-NATIVE-20261020-A`.
 Cookie: `P5N1 / 0x50354E31`.
 Link-time guard: `phase5n_env_build_cookie`.
+
+
+#### Phase 5N — native NtQueryInformationFile class 34 hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5N-NTQUERYINFO211-NATIVE-20261020-A` serviced the captured
+`TitleMeta.xbx` class-34 request successfully:
+
+```text
+handle=0x48000002
+class=34
+length=56
+status=0x00000000
+eof=0
+allocation=0
+attributes=0x00000080
+```
+
+The native path was
+`game:\merc360-partition1\UDATA\4c410015\TitleMeta.xbx`.
+Retail execution resumed with `fault=0` and immediately reached:
+
+```text
+DIRECT_FRONTIER caller=0x00239C23 target=0x00239B78
+esp=0x008BFC18 trace=54
+```
+
+#### Phase 5O — post-TitleMeta direct root 0x00239B78
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5O.ps1`
+
+5O retains every hardware-proven Phase-5 subsystem and promotes only exact
+hardware-observed translated root `0x00239B78` at depth zero. Preparation
+fails closed if the address is not an exact function start or if the frozen
+Stage-3 generated set has no body. Deeper direct callees remain fenced.
+
+Build tag: `P5O-DIRECT239B78-20261020-A`.
+
+Cookie: `P5O1 / 0x50354F31`.
+
+Link-time guard: `phase5o_env_build_cookie`.
