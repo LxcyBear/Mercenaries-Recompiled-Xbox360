@@ -305,3 +305,52 @@ build\phase5_subsystem_bringup\direct_370b8_xdk\phase5f-manifest.json
 Build: `P5F-DIRECT370B8-20261020-A`
 
 Cookie: `P5F1 / 0x50354631`.
+
+
+## Phase 5F hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The full native storage and optical-disc mount stack remained intact.
+Translated root `0x002370B8` executed and opened a substantially larger
+already-packed retail initialization path. The translated trace expanded from
+24 to 45 entries before reaching:
+
+```text
+DIRECT_FRONTIER
+caller = 0x0023A3CE
+target = 0x0022BE8C
+fault  = 0
+trace  = 45
+```
+
+The observed path included repeated execution through `0x0023F150` and
+`0x0023A3CE`, consistent with a real initialization loop/state-check path
+rather than another single-function hop.
+
+## Phase 5G — next retail translated helper
+
+5G retains the complete native storage/mount stack and every previously proven
+translated root, then promotes only the exact hardware-observed root
+`0x0022BE8C`.
+
+Preparation fails explicitly if `0x0022BE8C` is a split/mid-function target
+or lacks a generated translated body.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5G.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_be8c_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_be8c_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_be8c_xdk\phase5g-manifest.json
+```
+
+Build: `P5G-DIRECTBE8C-20261020-A`
+
+Cookie: `P5G1 / 0x50354731`.
