@@ -1375,3 +1375,65 @@ Build: `P5X-XELOADSECTION327-NATIVE-20261020-A`
 Cookie: `P5X1 / 0x50355831`.
 
 Link-time guard symbol: `phase5x_env_build_cookie`.
+
+
+## Phase 5X hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The native ordinal-327 bridge received an exact XBE section-table entry for
+section 11, `$$XTIMAGE`:
+
+```text
+section    = 0x000105D8
+index      = 11
+name       = $$XTIMAGE
+VA         = 0x00874D40
+virtual    = 10240 bytes
+file       = 0x0030E000
+file size  = 10240 bytes
+references = 0 -> 1
+```
+
+The continuation completed and retail reached:
+
+```text
+caller = 0x0022F08D
+target = 0x0022F0CC
+esp    = 0x008BFBB8
+trace  = 59
+fault  = 0
+```
+
+Harness result: `PHASE 5X XELOADSECTION327 NATIVE RESULT: PASS`.
+
+## Phase 5Y — direct root 0x0022F0CC
+
+5Y preserves the native `XeLoadSection` implementation and promotes only the
+new hardware-observed direct target `0x0022F0CC` at depth zero. The emitter
+requires the address to be an exact frozen function start with a generated
+body; otherwise preparation stops instead of guessing a split/mid-function
+continuation.
+
+The runtime proof remains state-aware and uses explicit entry instrumentation
+for `0x0022F0CC`.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5Y.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_22f0cc_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_22f0cc_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_22f0cc_xdk\phase5y-manifest.json
+```
+
+Build: `P5Y-DIRECT22F0CC-20261020-A`
+
+Cookie: `P5Y1 / 0x50355931`.
+
+Link-time guard symbol: `phase5y_env_build_cookie`.
