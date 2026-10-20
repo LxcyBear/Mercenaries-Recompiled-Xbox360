@@ -2224,3 +2224,25 @@ powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_sub
 
 Build: `P5BA-ICALL23D550-20261020-A`
 
+## Phase 5BA hardware pass / Phase 5BB direct frontier
+
+5BA proved the new packed guest ICALL path. Hardware entered `0x0023D550`,
+continued through several translated functions, and reached:
+
+```text
+DIRECT FRONTIER: caller=0022B5EF target=0022DDA4 esp=008BFF14
+BOUNDARY: kind=DIRECT_FRONTIER ... fault=0
+```
+
+Phase 5BB validates `0x0022DDA4` against the refreshed Phase-3N inventory
+generated after the 0x0023D550 manual seed. If valid, it packages a
+depth-2/cap-16 closure and requires actual root entry before PASS.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5BB.ps1"
+```
+
+Build: `P5BB-FRONTIER22DDA4-20261020-A`
+
