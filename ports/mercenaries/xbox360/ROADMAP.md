@@ -1526,3 +1526,28 @@ a split/mid-function target or missing generated body.
 Build tag: `P5E-DIRECTC1C0-20261020-A`.
 
 Cookie: `P5E1 / 0x50354531`.
+
+
+#### Phase 5E — post-mount translated helper hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5E-DIRECTC1C0-20261020-A` retained the complete native storage and
+`D:` mount stack, executed translated root `0x0022C1C0`, and advanced with
+`fault=0` to
+`DIRECT_FRONTIER caller=0x0022C1C0 target=0x002370B8`.
+
+The translated hardware trace reached 24 entries.
+
+#### Phase 5F — promote next retail root 0x002370B8
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5F.ps1`
+
+5F retains the complete native storage/mount stack and promotes only the exact
+hardware-observed translated root `0x002370B8`. Preparation fails closed for
+a split/mid-function target or missing generated body.
+
+Build tag: `P5F-DIRECT370B8-20261020-A`.
+
+Cookie: `P5F1 / 0x50354631`.
