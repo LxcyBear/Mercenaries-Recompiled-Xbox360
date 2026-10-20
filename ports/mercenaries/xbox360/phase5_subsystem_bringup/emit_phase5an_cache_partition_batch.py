@@ -1124,8 +1124,11 @@ static int phase5b_translate_storage_path(
 {
     static const char partition0Root[] = "\\Device\\Harddisk0\\partition0";
     static const char partition1[] = "\\Device\\Harddisk0\\partition1\\";
+    static const char partition3Root[] = "\\Device\\Harddisk0\\partition3";
     static const char partition3[] = "\\Device\\Harddisk0\\partition3\\";
+    static const char partition4Root[] = "\\Device\\Harddisk0\\partition4";
     static const char partition4[] = "\\Device\\Harddisk0\\partition4\\";
+    static const char partition5Root[] = "\\Device\\Harddisk0\\partition5";
     static const char partition5[] = "\\Device\\Harddisk0\\partition5\\";
     static const char cdrom0[] = "\\Device\\CdRom0\\";
     uint32_t consumed = 0u;
@@ -1180,6 +1183,14 @@ static int phase5b_translate_storage_path(
                 remainder);
         }
     }
+    else if (phase5d_string_equal_ci(xboxPath, partition3Root))
+    {
+        written = _snprintf(
+            nativePath,
+            nativeCapacity - 1u,
+            "game:\\merc360-partition3");
+        if (virtualRoot) *virtualRoot = 1;
+    }
     else if (phase5b_prefix_equal_ci(xboxPath, partition3, &consumed))
     {
         remainder = xboxPath + consumed;
@@ -1190,6 +1201,14 @@ static int phase5b_translate_storage_path(
             remainder);
         if (virtualRoot && remainder[0] == '\0') *virtualRoot = 1;
     }
+    else if (phase5d_string_equal_ci(xboxPath, partition4Root))
+    {
+        written = _snprintf(
+            nativePath,
+            nativeCapacity - 1u,
+            "game:\\merc360-partition4");
+        if (virtualRoot) *virtualRoot = 1;
+    }
     else if (phase5b_prefix_equal_ci(xboxPath, partition4, &consumed))
     {
         remainder = xboxPath + consumed;
@@ -1199,6 +1218,14 @@ static int phase5b_translate_storage_path(
             remainder[0] ? "game:\\merc360-partition4\\%s" : "game:\\merc360-partition4",
             remainder);
         if (virtualRoot && remainder[0] == '\0') *virtualRoot = 1;
+    }
+    else if (phase5d_string_equal_ci(xboxPath, partition5Root))
+    {
+        written = _snprintf(
+            nativePath,
+            nativeCapacity - 1u,
+            "game:\\merc360-partition5");
+        if (virtualRoot) *virtualRoot = 1;
     }
     else if (phase5b_prefix_equal_ci(xboxPath, partition5, &consumed))
     {
@@ -4112,8 +4139,11 @@ static void phase5b_nt_open_file(uint32_t savedEsp)
     if (status == 0u)
     {
         ++s_phase5bNtOpenFileHandledCount;
-        if (phase5b_prefix_equal_ci(path, "\\Device\\Harddisk0\\partition3\\", NULL) ||
+        if (phase5d_string_equal_ci(path, "\\Device\\Harddisk0\\partition3") ||
+            phase5b_prefix_equal_ci(path, "\\Device\\Harddisk0\\partition3\\", NULL) ||
+            phase5d_string_equal_ci(path, "\\Device\\Harddisk0\\partition4") ||
             phase5b_prefix_equal_ci(path, "\\Device\\Harddisk0\\partition4\\", NULL) ||
+            phase5d_string_equal_ci(path, "\\Device\\Harddisk0\\partition5") ||
             phase5b_prefix_equal_ci(path, "\\Device\\Harddisk0\\partition5\\", NULL))
         {
             ++s_phase5anCacheRootOpenCount;
@@ -8367,6 +8397,7 @@ extern "C" DWORD phase5an_env_build_cookie(void)
             s_phase5anDiskIdentityDataReady > 0u &&
             s_phase5anDiskIdentitySeen40 == 1u &&
             s_phase5anRoot22C5C6Entered &&
+            s_phase5anCacheRootOpenCount > 0u &&
             s_phase5cVolumeQueryCount > 0u &&
             s_phase5dSymbolicLinkCreateCount > 0u &&
             s_phase5hNtCreateFileCallCount > 0u &&
@@ -8769,6 +8800,16 @@ extern "C" DWORD phase5an_env_build_cookie(void)
         raise SystemExit(
             "[Phase5AN] generated main lost promoted cache-root instrumentation"
         )
+    for marker in (
+        'partition3Root[] = "\\\\Device\\\\Harddisk0\\\\partition3"',
+        'partition4Root[] = "\\\\Device\\\\Harddisk0\\\\partition4"',
+        'partition5Root[] = "\\\\Device\\\\Harddisk0\\\\partition5"',
+        "s_phase5anCacheRootOpenCount > 0u",
+    ):
+        if marker not in generated_main:
+            raise SystemExit(
+                f"[Phase5AN] generated main lost exact cache-root marker: {marker}"
+            )
     if "s_phase4cBoundaryTarget != 0x0022C5C6u" not in generated_main:
         raise SystemExit(
             "[Phase5AN] generated main still accepts old 0x0022C5C6 frontier"
