@@ -28,7 +28,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Write-Host "[Phase5AO] CACHE VOLUME DEVICE-CONTROL CONTINUATION"
 Write-Host "[Phase5AO] Phase 5AN-B hardware PASS opened Partition5 and advanced to ICALL_SAFE token 0x800000C4 (ordinal 196)."
 Write-Host "[Phase5AO] Ordinal 196 is NtDeviceIoControlFile; cache-mount compatibility handles IOCTL 0x00070000 and 0x00074004."
-Write-Host "[Phase5AO] Preserving proven Partition0/cache-root behavior and adding a synchronous 44-byte device-control frame handler."
+Write-Host "[Phase5AO] Preserving proven Partition0/cache-root behavior; canonical ordinal-196 ABI is 44 bytes, hardware caller frame is 52 bytes with 8 caller-owned bytes."
 Write-Host "[Phase5AO] Unknown/asynchronous device-control forms remain fenced at STORAGE_IO with full frame logging."
 Write-Host "[Phase5AO] Depth-2 closure support: cache-prep + tracked audio fallback/free shims are supplied without replacing retail allocator/free behavior."
 Write-Host "[Phase5AO] Unknown kernel/device behavior remains fenced at the next real boundary."
@@ -105,7 +105,7 @@ $mainText = Get-Content -LiteralPath $main -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
 foreach ($requiredText in @(
-    "P5AO-CACHE-DEVICE-IO-20261020-A",
+    "P5AO-CACHE-DEVICE-IO-20261020-B",
     "PASS: ordinal 149 KeSetTimer continuation armed",
     "PASS: bounded direct closure rooted at 0022D980 is packed for translated execution",
     "PASS: hardware-observed direct root 00238C00 is packed for translated execution",
@@ -171,6 +171,11 @@ foreach ($requiredText in @(
     "static void phase5ao_nt_device_io_control_file(uint32_t savedEsp)",
     "_phase4c_target == 0x800000C4u",
     "NtDeviceIoControlFile LIVE FRAME:",
+    "NtDeviceIoControlFile FRAME52 RAW0:",
+    "NtDeviceIoControlFile FRAME52 RAW1:",
+    "NtDeviceIoControlFile FRAME52 AMBIGUOUS:",
+    "expected=44-or-52",
+    "arg_offset=%u",
     "0x00070000u",
     "0x00074004u",
     "s_phase5aoNtDeviceIoControlSuccessCount > 0u",
@@ -311,7 +316,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
     throw "Generated Phase 5AO manifest is missing: $manifest"
 }
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-if ($manifestJson.phase -ne "5AO" -or $manifestJson.build_tag -ne "P5AO-CACHE-DEVICE-IO-20261020-A") {
+if ($manifestJson.phase -ne "5AO" -or $manifestJson.build_tag -ne "P5AO-CACHE-DEVICE-IO-20261020-B") {
     throw "Phase 5AO manifest identity mismatch"
 }
 $cacheStorage = $manifestJson.phase5ao_cache_storage
@@ -331,7 +336,13 @@ $deviceIo = $manifestJson.phase5ao_cache_device_io
 if ([int]$deviceIo.ordinal -ne 196 -or
     $deviceIo.name -ne "NtDeviceIoControlFile" -or
     $deviceIo.token -ne "0x800000C4" -or
-    [int]$deviceIo.frame_bytes -ne 44 -or
+    [int]$deviceIo.canonical_frame_bytes -ne 44 -or
+    [int]$deviceIo.hardware_frame_bytes -ne 52 -or
+    [int]$deviceIo.hardware_extra_bytes -ne 8 -or
+    @($deviceIo.accepted_frame_bytes).Count -ne 2 -or
+    [int]$deviceIo.accepted_frame_bytes[0] -ne 44 -or
+    [int]$deviceIo.accepted_frame_bytes[1] -ne 52 -or
+    $deviceIo.frame_policy -notlike "*exactly one canonical 44-byte argument window*tracked cache handle*known IOCTL*" -or
     -not [bool]$deviceIo.synchronous_only -or
     [int]$deviceIo.cache_size -ne 1044480 -or
     [int]$deviceIo.bytes_per_sector -ne 512 -or
@@ -708,7 +719,7 @@ if ([int]$manifestJson.continued_support_helper_memmove.arg_bytes -ne 12 -or
 }
 Write-Host ""
 Write-Host "[Phase5AO] READY"
-Write-Host "[Phase5AO] Hardware target: retain P5AN-B cache-root success and continue through ordinal 196 cache device-control calls."
+Write-Host "[Phase5AO] Hardware target: identify the unique canonical 44-byte argument window inside the observed 52-byte frame, then continue the cache IOCTL."
 Write-Host "[Phase5AO] Cache Partition3/4/5 exact roots (with or without trailing slash) and child paths are mapped proactively; stop only at the next genuinely new boundary."
 Write-Host "[Phase5AO] Retained regression: ordinal 301 remains repeatable and STATUS_UNSUCCESSFUL still maps to ERROR_GEN_FAILURE (31)."
 Write-Host "[Phase5AO] Hardware PASS gate: prior cache proof + at least one successful NtDeviceIoControlFile compatibility continuation + a genuinely newer boundary."
@@ -720,4 +731,4 @@ Write-Host "[Phase5AO]   $env"
 Write-Host "[Phase5AO] Link-time guard: main requires phase5ao_env_build_cookie from the matching generated environment source."
 Write-Host "[Phase5AO] The 5AO cookie must be 0x5035414F (P5AO)."
 Write-Host "[Phase5AO] Keep the exact supported retail default.xbe beside the XEX."
-Write-Host "[Phase5AO] Expected build tag: P5AO-CACHE-DEVICE-IO-20261020-A"
+Write-Host "[Phase5AO] Expected build tag: P5AO-CACHE-DEVICE-IO-20261020-B"
