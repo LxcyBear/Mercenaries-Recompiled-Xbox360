@@ -9,8 +9,8 @@ P5AO batches the two disk controls used by Xbox utility/cache mounting:
   * IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)
   * IOCTL_DISK_GET_PARTITION_INFO (0x00074004)
 
-The handler validates the 44-byte synchronous frame and a tracked cache-volume
-handle, writes guest-endian compatibility payloads, updates IO_STATUS_BLOCK,
+The handler validates the canonical 44-byte synchronous argument frame and a
+tracked cache-volume handle, writes guest-endian compatibility payloads, updates IO_STATUS_BLOCK,
 and resumes translated execution. P5AO-A hardware proved this caller presents a
 52-byte live frame, so P5AO-B accepts either the canonical 44-byte frame or a
 52-byte frame containing one uniquely identifiable 44-byte argument window.
