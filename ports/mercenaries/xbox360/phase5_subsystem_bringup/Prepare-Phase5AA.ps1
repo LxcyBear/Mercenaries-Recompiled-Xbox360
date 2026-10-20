@@ -28,7 +28,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Write-Host "[Phase5AA] NTWRITEFILE ORDINAL 236 TITLEIMAGE NATIVE CONTINUATION"
 Write-Host "[Phase5AA] Phase 5Z hardware proved caller 0x0022F0CC carries all eight standard NtWriteFile arguments."
 Write-Host "[Phase5AA] The only mismatch is translated savedEsp one dword short: callEsp+32 instead of callEsp+36."
-Write-Host "[Phase5AA] Repairing only caller 0x0022F0CC, validating the exact $XTIMAGE frame, writing 0x2800 bytes, and resuming."
+Write-Host '[Phase5AA] Repairing only caller 0x0022F0CC, validating the exact $XTIMAGE frame, writing 0x2800 bytes, and resuming.'
 Write-Host "[Phase5AA] The previously proven ordinary 36-byte NtWriteFile path remains unchanged."
 Write-Host "[Phase5AA] Main/env link-time cookie symbol is phase5aa_env_build_cookie / P5AA."
 Write-Host ""
@@ -139,7 +139,7 @@ foreach ($requiredText in @(
     "s_phase5aaRoot22F08DEntered = 1;",
     "s_phase5aaRoot22F0CCEntered = 1;",
     "PASS: Phase 5AA ordinal 236 NtWriteFile 36-byte native continuation armed",
-    "PASS: Phase 5AA caller 0022F0CC NtWriteFile saved-ESP repair armed for proven $XTIMAGE frame",
+    'PASS: Phase 5AA caller 0022F0CC NtWriteFile saved-ESP repair armed for proven $XTIMAGE frame',
     "NtWriteFile SAVEDESP REPAIR PROBE:",
     "PASS: Phase 5AA NtWriteFile caller 0022F0CC saved-ESP repair",
     "s_phase5aaNtWriteFileSavedEspRepairSuccessCount > 0u",
@@ -449,7 +449,7 @@ if ([int]$manifestJson.continued_support_helper_memmove.arg_bytes -ne 12 -or
 Write-Host ""
 Write-Host "[Phase5AA] READY"
 Write-Host "[Phase5AA] Phase 5Z evidence locked: caller 0x0022F0CC has the standard eight NtWriteFile arguments through +0x20."
-Write-Host "[Phase5AA] Exact repaired path: buffer=0x00874D40 ($XTIMAGE), length=0x2800, ByteOffset=NULL."
+Write-Host '[Phase5AA] Exact repaired path: buffer=0x00874D40 ($XTIMAGE), length=0x2800, ByteOffset=NULL.'
 Write-Host "[Phase5AA] Resume policy: only this caller's savedEsp is advanced by one dword to the true 36-byte stdcall end."
 Write-Host "[Phase5AA] Native WriteFile and guest IO_STATUS_BLOCK update are enabled for the repaired call."
 Write-Host "[Phase5AA] Existing 36-byte NtWriteFile and XeLoadSection continuations remain armed."
