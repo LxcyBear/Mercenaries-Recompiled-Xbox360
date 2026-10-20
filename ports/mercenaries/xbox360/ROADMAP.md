@@ -3066,10 +3066,13 @@ Gate:
 `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BB.ps1`
 
 5BB validates `0x0022DDA4` against the freshly-regenerated Phase-3N function
-inventory. If it is an exact generated function start, a bounded depth-2 /
-cap-16 closure is packed and actual root entry is required. If it is absent or
-falls inside another function, the emitter fails closed with the exact reason;
-no blind manual seed is added.
+inventory. Hardware/preparation review confirmed it is an exact function start
+but intentionally has no generated body because `Recompile.ps1` marks it as a
+reviewed manual `RtlAllocateHeap` helper. The Phase-4C donor already owns the
+deterministic 16-byte-aligned title heap at `0x008C1000..0x009C0000`.
+5BB therefore packs the maintained manual heap family together:
+`0x0022DDA4` allocate, `0x0022E51F` free, and `0x0022E713` realloc.
+Actual DDA4 entry plus a nonzero maintained allocation call count are required.
 
 Build tag: `P5BB-FRONTIER22DDA4-20261020-A`.
 Cookie: `P5BB / 0x50354242`.
