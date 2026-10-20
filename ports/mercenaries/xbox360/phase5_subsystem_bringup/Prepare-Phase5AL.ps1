@@ -97,9 +97,6 @@ foreach ($requiredText in @(
     "game:\\merc360-partition0",
     "s_phase5ahPartition0OpenSuccessCount > 0u",
     "PASS: Phase 5AL ordinal 301 RtlNtStatusToDosError repeatable mapping",
-    "s_phase5ahNtStatusMapCount >= 2u",
-    "s_phase4cNtStatusInput == 0xC0000001u",
-    "s_phase4cNtStatusDosError == 31u",
     "case 0xC0000001u: dosError = 31u;",
     "case 164u: return 0x0087E030u; /* LaunchDataPage pointer export */",
     "GUEST_READ32(0x0087E030u) != 0u",
@@ -578,15 +575,14 @@ Write-Host ""
 Write-Host "[Phase5AL] READY"
 Write-Host "[Phase5AL] Hardware target: Partition0 offset 0x800 length 512 must return STATUS_SUCCESS / 512 bytes."
 Write-Host "[Phase5AL] Best case: reboot path disappears and execution advances. If ordinal 49 remains, the trap will print its routine and launch target."
-Write-Host "[Phase5AL] Phase 5AG evidence locked: Partition0 root native open succeeded and caller 0x0022B1A6 reached ordinal 301 with STATUS_UNSUCCESSFUL."
-Write-Host "[Phase5AL] Fix: ordinal 301 dispatch is repeatable; the old one-shot !s_phase4cNtStatusMapped guard is gone."
-Write-Host "[Phase5AL] Production table: STATUS_UNSUCCESSFUL (0xC0000001) maps to ERROR_GEN_FAILURE (31)."
-Write-Host "[Phase5AL] Hardware PASS gate requires at least two ordinal-301 calls and last input/output C0000001 -> 31."
+Write-Host "[Phase5AL] Retained regression: ordinal 301 remains repeatable and STATUS_UNSUCCESSFUL still maps to ERROR_GEN_FAILURE (31)."
+Write-Host "[Phase5AL] New hardware PASS gate: Partition0 raw-read count > 0 and NtReadFile success count > 0."
+Write-Host "[Phase5AL] The old second-ordinal-301 requirement is intentionally removed because a successful Partition0 read should bypass that recovery path."
 Write-Host "[Phase5AL] Exact Partition0 sandbox and all 77 translated bodies remain retained."
 Write-Host "[Phase5AL] Build BOTH freshly generated sources in the same XDK project:"
 Write-Host "[Phase5AL]   $main"
 Write-Host "[Phase5AL]   $env"
 Write-Host "[Phase5AL] Link-time guard: main requires phase5al_env_build_cookie from the matching generated environment source."
-Write-Host "[Phase5AL] The 5AI cookie must be 0x5035414C (P5AL)."
+Write-Host "[Phase5AL] The 5AL cookie must be 0x5035414C (P5AL)."
 Write-Host "[Phase5AL] Keep the exact supported retail default.xbe beside the XEX."
 Write-Host "[Phase5AL] Expected build tag: P5AL-PARTITION0-CONFIG-20261020-A"
