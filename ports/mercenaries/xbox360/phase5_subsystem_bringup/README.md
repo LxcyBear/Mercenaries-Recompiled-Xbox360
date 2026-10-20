@@ -643,3 +643,82 @@ Build: `P5L-DIRECTB178-20261020-A`
 Cookie: `P5L1 / 0x50354C31`.
 
 Link-time guard symbol: `phase5l_env_build_cookie`.
+
+
+## Phase 5L hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The complete native Partition1, D:/T:, TDATA/UDATA, file-handle and RTL
+section-scan path remained intact. The maintained support-owned
+`sub_0022B178` / Xbox `SetLastError` implementation executed with:
+
+```text
+value   = 0x00000490
+calls   = 1
+new_esp = 0x008BFC14
+```
+
+Startup continued substantially farther after B178. The image-section scan
+found the real `$$XTIMAGE` and `$$XSIMAGE` sections, then title-storage code
+successfully created/opened:
+
+```text
+\Device\Harddisk0\partition1\UDATA\4c410015\TitleMeta.xbx
+    -> game:\merc360-partition1\UDATA\4c410015\TitleMeta.xbx
+token = 0x48000002
+status = 0x00000000
+```
+
+The translated trace reached 54 entries and stopped cleanly with `fault=0`
+at:
+
+```text
+ICALL_SAFE
+caller    = 0x00239C23
+target    = 0x800000D3
+esp       = 0x008BFC24
+saved_esp = 0x008BFC3C
+```
+
+Target `0x800000D3` is original-Xbox ordinal 211
+`NtQueryInformationFile`. The 24-byte live frame is exactly five stdcall
+arguments plus the translated synthetic return.
+
+## Phase 5M — NtQueryInformationFile capture
+
+5M keeps the complete 5L-proven runtime stack live and captures the exact
+ordinal-211 request before implementing any `FILE_INFORMATION_CLASS`
+semantics. It records:
+
+```text
+FileHandle
+IoStatusBlock
+FileInformation
+Length
+FileInformationClass
+```
+
+The capture then exits through a dedicated `FILE_INFORMATION` boundary.
+This intentionally avoids guessing which Xbox information structure
+Mercenaries expects.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5M.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\ntqueryinfo_capture_xdk\main.cpp
+build\phase5_subsystem_bringup\ntqueryinfo_capture_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\ntqueryinfo_capture_xdk\phase5m-manifest.json
+```
+
+Build: `P5M-NTQUERYINFO211-CAPTURE-20261020-A`
+
+Cookie: `P5M1 / 0x50354D31`.
+
+Link-time guard symbol: `phase5m_env_build_cookie`.
