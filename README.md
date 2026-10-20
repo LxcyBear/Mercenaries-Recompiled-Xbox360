@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AP pass 2 — first hardware launch successfully created/flushed persistent Partition0 state with `changed=1` and reached the expected quick reboot; relaunch the same XEX without rebuilding to prove the backing is reloaded.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AQ — P5AP pass 2 reloaded persistent Partition0 state, produced `changed=0`, mounted `Z:`, avoided the quick-reboot path, and reached new direct frontier `0x0022F0D6`; batch-promote that frontier now.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AO hardware PASS; Phase 5AP persistent Partition0/reboot handshake active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AP hardware PASS; Phase 5AQ post-persistence closure active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,18 +75,18 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5AO have passed their
-hardware gates. P5AP pass 1 is now hardware-proven: the persistent Partition0
-backing was created, the retail sector write at offset `0x800` changed state,
-the complete 512 KiB backing flushed successfully, both cache IOCTLs still
-passed, and retail again requested `HalReturnToFirmware(2)` for the same
-title. The only remaining P5AP question is whether that persisted cache
-metadata changes the next boot. The required next test is therefore a second
-launch of the **same P5AP XEX without regeneration or rebuild**. That run must
-show `Partition0 backing LOADED`; if startup skips or changes the cache
-reconfiguration/reboot sequence, persistence broke the loop. If retail repeats
-the write with `changed=0` and still requests quick reboot, persistence is
-working and some other retail condition is driving the reboot.
+**Present blockers:** Phase 4 and Phase 5A through 5AP have passed their
+hardware gates. P5AP pass 2 reloaded the full 512 KiB Partition0 backing,
+re-read sector `0x800`, rewrote identical bytes with `changed=0`, and
+therefore proved persistence across XEX launches. Retail then skipped the
+first-boot cache IOCTL / quick-reboot branch, opened
+`\\Device\\Harddisk0\\Partition5\\`, queried the existing cache volume,
+created `\\??\\Z:`, and reached a new fault-free direct frontier
+`0x0022F0D6` from caller `0x0022BD2D`. The P5AP harness printed FAIL only
+because its old pass gate required the first-boot IOCTL path; that stale gate
+has been corrected. Phase 5AQ now promotes `0x0022F0D6` with a bounded
+depth-2/cap-16 translated closure and requires actual root entry plus a newer
+boundary.
 
 ### Immediate next tests
 
@@ -328,18 +328,22 @@ working and some other retail condition is driving the reboot.
     `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`. Retail then requested
     `HalReturnToFirmware(2)` with a persisted LaunchDataPage for the same
     title. Build: `P5AO-CACHE-DEVICE-IO-20261020-B`.
-66. **Phase 5AP active / pass 1 hardware proof:** first launch of
-    `P5AP-PARTITION0-PERSIST-20261020-A` created
-    `game:\merc360-partition0\partition0-config.bin`, flushed the full
-    512 KiB backing, and recorded the observed `0x800` / 512-byte retail
-    write as `changed=1`. Both cache device controls remained green and the
-    title reached the expected `HalReturnToFirmware(2)` quick-reboot request.
-    **Pass 2 is still required:** relaunch the same XEX without regeneration
-    or rebuild and require `Partition0 backing LOADED`. A repeated write
-    should then report `changed=0` if the persisted sector is identical.
-    Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AP.ps1`.
-    Build tag: `P5AP-PARTITION0-PERSIST-20261020-A`.
+66. **Done:** Phase 5AP completed its two-launch persistence proof on real
+    hardware. Pass 1 created/flushed the 512 KiB Partition0 backing with the
+    sector-`0x800` write logged as `changed=1`. Pass 2, using the same XEX,
+    reloaded all 524,288 bytes, rewrote that sector as `changed=0`, skipped
+    the first-boot cache IOCTL/reboot path, opened/queryed Partition5, created
+    `\\??\\Z:`, and advanced fault-free to direct frontier
+    `0x0022F0D6` from caller `0x0022BD2D`. The old harness FAIL label was a
+    stale first-boot-only gate and has been corrected. Build:
+    `P5AP-PARTITION0-PERSIST-20261020-A`.
+67. **Phase 5AQ active:** preserve persistent Partition0 and batch-promote the
+    new post-persistence root `0x0022F0D6` with a bounded depth-2/cap-16
+    translated closure. Hardware gate requires backing LOADED, the unchanged
+    sector rewrite, actual entry into `0x0022F0D6`, and a boundary newer than
+    that root. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AQ.ps1`.
+    Build tag: `P5AQ-POST-PERSIST-CLOSURE-20261020-A`.
 
 ### Evidence policy
 
@@ -2956,6 +2960,27 @@ unexecuted test PASS.**
 - **Next:** launch the same P5AP XEX again with no regeneration or rebuild and
   verify `Partition0 backing LOADED` before evaluating the new frontier or
   any repeated `changed=0` write/reboot behavior.
+
+### 2026-10-20 — Phase 5AP pass 2: persistence breaks cache reboot loop
+
+- The exact same `P5AP-PARTITION0-PERSIST-20261020-A` XEX was launched a
+  second time without regeneration/rebuild.
+- Partition0 backing loaded successfully with all `524288` bytes and zero
+  padding.
+- The retail sector-`0x800` / 512-byte write repeated with `changed=0`,
+  proving the first launch's metadata survived.
+- Retail did **not** repeat the first-boot geometry/partition-info IOCTL branch
+  and did **not** request the prior quick reboot.
+- Instead it opened `\\Device\\Harddisk0\\Partition5\\`, queried volume
+  information, and created `\\??\\Z:`.
+- Execution reached new fault-free direct frontier `0x0022F0D6` from caller
+  `0x0022BD2D`.
+- The emitted P5AP result label said FAIL only because the gate still required
+  first-boot `NtDeviceIoControlFile` success; source gate was corrected to
+  accept the persisted second-boot branch.
+- **Phase 5AP persistent Partition0 / reboot handshake: PASS.**
+- **Next:** Phase 5AQ promotes `0x0022F0D6` with a depth-2/cap-16 translated
+  closure and rejects that old frontier as acceptable progress.
 
 ### How future updates are recorded
 
