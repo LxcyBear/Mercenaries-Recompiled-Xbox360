@@ -6270,7 +6270,7 @@ def main() -> int:
             "iosb_policy": "write NTSTATUS and transferred-byte count to guest IO_STATUS_BLOCK",
             "hardware_frame_36": "proven native write path from 0x0023F8CB",
             "caller_0022F0CC": "all eight standard arguments proven by Phase 5Z raw capture; translated savedEsp is one dword short",
-            "caller_0022F0CC_repair": "require exact $XTIMAGE shape buffer=0x00874D40 length=0x2800 ByteOffset=NULL; resumeEsp=savedEsp+4",
+            "caller_0022F0CC_repair": "require exact $$XTIMAGE shape buffer=0x00874D40 length=0x2800 ByteOffset=NULL; resumeEsp=savedEsp+4",
         },
         "phase5_xe_load_section": {
             "target": "0x80000147",
@@ -6680,7 +6680,7 @@ extern "C" DWORD phase5aa_env_build_cookie(void)
         "    trace(\"PASS: Phase 5AA ordinal 190 NtCreateFile native continuation armed\");\n"
         "    trace(\"PASS: Phase 5AA ordinal 219 NtReadFile synchronous continuation armed\");\n"
         "    trace(\"PASS: Phase 5AA ordinal 236 NtWriteFile 36-byte native continuation armed\");\n"
-        "    trace(\"PASS: Phase 5AA caller 0022F0CC NtWriteFile saved-ESP repair armed for proven $XTIMAGE frame\");\n"
+        "    trace(\"PASS: Phase 5AA caller 0022F0CC NtWriteFile saved-ESP repair armed for proven $$XTIMAGE frame\");\n"
         "    trace(\"PASS: Phase 5AA ordinal 289 RtlInitAnsiString continuation armed\");\n"
         "    trace(\"PASS: Phase 5AA ordinal 279 RtlEqualString continuation armed\");\n"
         "    trace(\"PASS: Phase 5AA ordinal 211 NtQueryInformationFile class-34 native continuation armed\");\n"
@@ -6874,7 +6874,7 @@ extern "C" DWORD phase5aa_env_build_cookie(void)
         support
         + "\n"
         + boundary
-        + "\n\n/* Phase 5AA: native $XTIMAGE NtWriteFile with caller 0x0022F0CC saved-ESP repair */\n"
+        + "\n\n/* Phase 5AA: native $$XTIMAGE NtWriteFile with caller 0x0022F0CC saved-ESP repair */\n"
         + "\n".join(forward_decls)
         + "\n\n"
         + pack_lookup_source(member_vas, generated)
