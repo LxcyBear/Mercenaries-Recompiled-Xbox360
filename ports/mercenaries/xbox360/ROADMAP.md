@@ -2770,3 +2770,51 @@ phase gate.
 Build tag: `P5AH-RTLSTATUS301-REPEATABLE-20261020-A`.
 Cookie: `P5AH / 0x50354148`.
 Link-time guard: `phase5ah_env_build_cookie`.
+
+#### Phase 5AS — post-persistence 0x0022BBC8 closure hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5AS-DIRECT-22BBC8-20261020-A` retained the persistent Partition0
+second-boot proof, required two successful ordinal-24
+`ExQueryNonVolatileSetting` calls, and executed the bounded depth-2/cap-16
+closure rooted at `0x0022BBC8`.
+
+Hardware advanced through:
+
+```text
+0x0022F0D6
+0x00230060
+0x0022BBC8
+0x00237830
+0x0022B74E
+0x0022B7B2
+```
+
+The next fault-free boundary is:
+
+```text
+kind   = ICALL_SAFE
+caller = 0x0022B7B2
+target = 0x800000CB
+fault  = 0
+```
+
+Harness result: `PHASE 5AS POST-PERSIST CLOSURE RESULT: PASS`.
+
+Ordinal 203 / `0x800000CB` is `NtOpenSymbolicLinkObject`.
+
+#### Phase 5AT — NtOpenSymbolicLinkObject live-frame capture
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AT.ps1`
+
+5AT retains the complete 5AS translated/native path and captures the
+hardware-live two-argument `NtOpenSymbolicLinkObject` frame
+(`PHANDLE`, `POBJECT_ATTRIBUTES`) from caller `0x0022B7B2`. It decodes
+the guest `OBJECT_ATTRIBUTES` / `ANSI_STRING` name and stops at an explicit
+storage-open boundary without fabricating a symbolic-link handle.
+
+Build tag: `P5AT-NTOPENSYMLINK203-CAPTURE-20261020-A`.
+Cookie: `P5AT / 0x50354154`.
+
