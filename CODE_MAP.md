@@ -359,3 +359,25 @@ follow-on function-pointer targets in the same startup subsystem when they are
 present. Unsupported side branches remain fenced; the mandatory runtime seed,
 guest faults, ABI/frame anomalies, kernel/device unknowns, heap exhaustion and
 the execution-budget watchdog remain hard stops.
+
+
+### Phase-5BE forward regional sweep
+
+Phase 5BD hardware passed. The generic dispatcher consumed both
+`0x00237052` and `0x00237801` in one run, a second maintained heap
+allocation of 128 bytes succeeded at `0x008C1100`, and execution advanced
+through `0x00238533 -> 0x00238507 -> 0x002384E0 -> 0x0022B5EF ->
+0x0022DDA4` before reaching the next fault-free safe indirect target
+`0x00239055`. That target sits only 0x55 bytes beyond the 5BD regional
+window, so the stop is treated as a sweep-boundary miss rather than a new
+runtime failure.
+
+Phase 5BE files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BE.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5be_forward_sweep.py`
+
+5BE keeps `0x00239055` mandatory, adds its bounded depth-6 direct closure,
+and pre-packs a support-clean forward band covering
+`0x00239000..0x0023DFFF`, capped at 256 additional functions. The proven
+generic packed ICALL/direct dispatcher remains unchanged; unsupported side
+branches stay fenced and the mandatory seed is never pruned or guessed.
