@@ -340,7 +340,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
     throw "Generated Phase 5AS manifest is missing: $manifest"
 }
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-if ($manifestJson.phase -ne "5AR" -or $manifestJson.build_tag -ne "P5AS-DIRECT-22BBC8-20261020-A") {
+if ($manifestJson.phase -ne "5AS" -or $manifestJson.build_tag -ne "P5AS-DIRECT-22BBC8-20261020-A") {
     throw "Phase 5AS manifest identity mismatch"
 }
 $postPersist = $manifestJson.phase5as_post_persistence_frontier
