@@ -101,7 +101,7 @@ $mainText = Get-Content -LiteralPath $main -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
 foreach ($requiredText in @(
-    "P5BC-BROADSWEEP237052-20261020-B",
+    "P5BC-BROADSWEEP237052-20261020-C",
     "case 0x00237052u: return sub_00237052;",
     "s_phase5bcSweepRootEntered = 1;",
     "PASS: Phase 5BC broad-sweep ICALL_SAFE",
@@ -132,7 +132,7 @@ foreach ($requiredText in @(
 
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($manifestJson.phase -ne "5BC" -or
-    $manifestJson.build_tag -ne "P5BC-BROADSWEEP237052-20261020-B") {
+    $manifestJson.build_tag -ne "P5BC-BROADSWEEP237052-20261020-C") {
     throw "Phase 5BC manifest identity mismatch"
 }
 
@@ -194,5 +194,5 @@ Write-Host "[Phase5BC] Build BOTH freshly generated sources:"
 Write-Host "[Phase5BC]   $main"
 Write-Host "[Phase5BC]   $env"
 Write-Host "[Phase5BC] Link-time cookie: phase5bc_env_build_cookie = 0x50354243 (P5BC)."
-Write-Host "[Phase5BC] Expected build tag: P5BC-BROADSWEEP237052-20261020-B"
+Write-Host "[Phase5BC] Expected build tag: P5BC-BROADSWEEP237052-20261020-C"
 Write-Host "[Phase5BC] If hardware stops, send the complete xbWatson log; one run may now cross multiple old-style frontiers."
