@@ -5179,7 +5179,7 @@ def main() -> int:
 
     env_source = base.build_env_source(
         args.phase2e_source.read_text(encoding="utf-8")
-    ).replace("PHASE 4C-B", "PHASE 5L")
+    ).replace("PHASE 4C-B", "PHASE 5M")
     env_source = env_source.replace("[Merc360:P4C-ENV]", "[Merc360:P5-ENV]")
     for stale_phase in (
         "PHASE 4C-N",
@@ -5201,7 +5201,7 @@ def main() -> int:
         "PHASE 4C-AE",
         "PHASE 4C-AF",
     ):
-        env_source = env_source.replace(stale_phase, "PHASE 5L")
+        env_source = env_source.replace(stale_phase, "PHASE 5M")
     env_source += """
 extern "C" DWORD phase5m_env_build_cookie(void)
 {
@@ -5227,7 +5227,7 @@ extern "C" DWORD phase5m_env_build_cookie(void)
         "PHASE 4C-AE",
         "PHASE 4C-AF",
     ):
-        env_source = env_source.replace(stale_phase, "PHASE 5L")
+        env_source = env_source.replace(stale_phase, "PHASE 5M")
 
     driver = base.driver_source(root_name, root_va, len(member_vas))
     driver = driver.replace(
@@ -5238,7 +5238,7 @@ extern "C" DWORD phase5m_env_build_cookie(void)
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
         "Policy: preserve Phase 5L state and capture live ordinal 211 NtQueryInformationFile",
     )
-    driver = driver.replace("PHASE 4C-B", "PHASE 5L")
+    driver = driver.replace("PHASE 4C-B", "PHASE 5M")
     cookie_decl = 'extern "C" DWORD phase4c_env_entry(void);\n'
     if cookie_decl not in driver:
         raise SystemExit("[Phase5M] env-entry declaration marker changed")
@@ -5247,7 +5247,7 @@ extern "C" DWORD phase5m_env_build_cookie(void)
         cookie_decl + 'extern "C" DWORD phase5m_env_build_cookie(void);\n',
         1,
     )
-    env_pass_marker = """    trace("PHASE 5L ENVIRONMENT RESULT: PASS");
+    env_pass_marker = """    trace("PHASE 5M ENVIRONMENT RESULT: PASS");
 
     g_ram = phase4c_env_guest_base();"""
     if env_pass_marker not in driver:
@@ -5260,7 +5260,7 @@ extern "C" DWORD phase5m_env_build_cookie(void)
         goto shutdown_env;
     }
     trace("PASS: Phase 5M main/env build cookie matches");
-    trace("PHASE 5L ENVIRONMENT RESULT: PASS");
+    trace("PHASE 5M ENVIRONMENT RESULT: PASS");
 
     g_ram = phase4c_env_guest_base();""",
         1,
@@ -5314,17 +5314,17 @@ extern "C" DWORD phase5m_env_build_cookie(void)
         "    phase4c_reset_architecture();\n\n"
         "    if (!phase4c_fix_startup_data_thunks())\n"
         "    {\n"
-        "        trace(\"PHASE 5L STARTUP DATA-THUNK PREP RESULT: FAIL\");\n"
+        "        trace(\"PHASE 5M STARTUP DATA-THUNK PREP RESULT: FAIL\");\n"
         "        goto shutdown_env;\n"
         "    }\n"
-        "    trace(\"PHASE 5L STARTUP DATA-THUNK PREP RESULT: PASS\");\n"
+        "    trace(\"PHASE 5M STARTUP DATA-THUNK PREP RESULT: PASS\");\n"
         "    trace(\"PASS: hardware-observed direct target 0022C47B is packed for translated execution\");\n"
         "    if (!phase4c_init_kernel_header_page())\n"
         "    {\n"
-        "        trace(\"PHASE 5L KERNEL HEADER PREP RESULT: FAIL\");\n"
+        "        trace(\"PHASE 5M KERNEL HEADER PREP RESULT: FAIL\");\n"
         "        goto shutdown_env;\n"
         "    }\n"
-        "    trace(\"PHASE 5L KERNEL HEADER PREP RESULT: PASS\");\n"
+        "    trace(\"PHASE 5M KERNEL HEADER PREP RESULT: PASS\");\n"
         "    trace(\"PASS: ordinal 47 HalRegisterShutdownNotification continuation armed\");\n"
         "    trace(\"PASS: hardware-observed direct target 0022F128 is packed for translated execution\");\n"
         "    trace(\"PASS: ordinal 107 KeInitializeDpc continuation armed\");\n"
@@ -5488,12 +5488,12 @@ extern "C" DWORD phase5m_env_build_cookie(void)
         raise SystemExit("[Phase5M] boundary PASS marker changed")
     driver = driver.replace(old_escape_pass, new_escape_pass)
 
-    result_marker = "PHASE 5L BOUNDED REAL STARTUP RESULT"
+    result_marker = "PHASE 5M BOUNDED REAL STARTUP RESULT"
     if result_marker not in driver:
         raise SystemExit("[Phase5M] generated result label marker changed")
     driver = driver.replace(
         result_marker,
-        "PHASE 5L DIRECTB178 RESULT",
+        "PHASE 5M NTQUERYINFO211 CAPTURE RESULT",
         1,
     )
     arm_marker = f"""    if (escaped == 0)
