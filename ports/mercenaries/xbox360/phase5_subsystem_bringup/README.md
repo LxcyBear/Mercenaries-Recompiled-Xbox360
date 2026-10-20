@@ -2234,9 +2234,14 @@ DIRECT FRONTIER: caller=0022B5EF target=0022DDA4 esp=008BFF14
 BOUNDARY: kind=DIRECT_FRONTIER ... fault=0
 ```
 
-Phase 5BB validates `0x0022DDA4` against the refreshed Phase-3N inventory
-generated after the 0x0023D550 manual seed. If valid, it packages a
-depth-2/cap-16 closure and requires actual root entry before PASS.
+Phase 5BB validates `0x0022DDA4` against the refreshed Phase-3N inventory.
+It is an exact function start but deliberately lacks generated C because the
+recompile pipeline marks it as the maintained manual `RtlAllocateHeap` helper.
+The Phase-4C support donor already implements the matching title-heap allocator
+and free path. 5BB now treats that code as support-owned and batches the manual
+heap family `DDA4/E51F/E713` (allocate/free/realloc) over the same
+`0x008C1000..0x009C0000` arena. No additional Phase-3N regeneration is
+required for this fix.
 
 Run:
 
