@@ -163,6 +163,11 @@ foreach ($requiredText in @(
     "game:\\merc360-partition3",
     "game:\\merc360-partition4",
     "game:\\merc360-partition5",
+    "partition3Root[]",
+    "partition4Root[]",
+    "partition5Root[]",
+    "s_phase5anCacheRootOpenCount > 0u",
+    "PASS: Phase 5AN cache partition native open",
     "case 0x0022C5C6u: return sub_0022C5C6;",
     "s_phase5anRoot22C5C6Entered = 1;",
     "s_phase4cBoundaryTarget != 0x0022C5C6u",
@@ -679,7 +684,7 @@ if ([int]$manifestJson.continued_support_helper_memmove.arg_bytes -ne 12 -or
 Write-Host ""
 Write-Host "[Phase5AN] READY"
 Write-Host "[Phase5AN] Hardware target: Partition0 writeback at offset 0x800/512 must succeed, then execute root 0x0022C5C6 and its bounded closure."
-Write-Host "[Phase5AN] Cache Partition3/4/5 opens are mapped proactively; stop only at the next genuinely new boundary."
+Write-Host "[Phase5AN] Cache Partition3/4/5 exact roots (with or without trailing slash) and child paths are mapped proactively; stop only at the next genuinely new boundary."
 Write-Host "[Phase5AN] Retained regression: ordinal 301 remains repeatable and STATUS_UNSUCCESSFUL still maps to ERROR_GEN_FAILURE (31)."
 Write-Host "[Phase5AN] Hardware PASS gate: Partition0 read+write success + disk identity + entry into promoted cache root 0x0022C5C6."
 Write-Host "[Phase5AN] Direct frontier 0x0022C5C6 is explicitly rejected as an acceptable stop because it is now packed."
