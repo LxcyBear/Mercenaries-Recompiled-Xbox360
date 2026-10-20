@@ -786,3 +786,61 @@ Build: `P5N-NTQUERYINFO211-NATIVE-20261020-A`
 Cookie: `P5N1 / 0x50354E31`.
 
 Link-time guard symbol: `phase5n_env_build_cookie`.
+
+
+## Phase 5N hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The native class-34 `NtQueryInformationFile` continuation returned real
+metadata for the tagged `TitleMeta.xbx` handle:
+
+```text
+handle     = 0x48000002
+class      = 34
+length     = 56
+status     = 0x00000000
+eof        = 0
+allocation = 0
+attributes = 0x00000080
+```
+
+After the successful query, translated retail execution continued and reached
+a new direct frontier with no guest fault:
+
+```text
+caller    = 0x00239C23
+target    = 0x00239B78
+esp       = 0x008BFC18
+saved_esp = 0x008BFC18
+fault     = 0
+trace     = 54
+```
+
+## Phase 5O — direct root 0x00239B78
+
+5O promotes only the newly observed direct target at depth zero. The package
+requires `0x00239B78` to be an exact function start with a frozen Stage-3
+generated body. Split/mid-function targets and missing bodies fail preparation
+explicitly. Calls beyond the one promoted root remain `DIRECT_FRONTIER`
+boundaries.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5O.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_239b78_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_239b78_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_239b78_xdk\phase5o-manifest.json
+```
+
+Build: `P5O-DIRECT239B78-20261020-A`
+
+Cookie: `P5O1 / 0x50354F31`.
+
+Link-time guard symbol: `phase5o_env_build_cookie`.
