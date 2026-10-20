@@ -8248,7 +8248,7 @@ def main() -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     manifest = {
-        "phase": "5AR",
+        "phase": "5AS",
         "build_tag": "P5AS-DIRECT-22BBC8-20261020-A",
         "entry": f"0x{root_va:08X}",
         "thread_start": f"0x{THREAD_START:08X}",
