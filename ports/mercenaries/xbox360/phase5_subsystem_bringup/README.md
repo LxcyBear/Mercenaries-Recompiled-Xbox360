@@ -1104,3 +1104,78 @@ Build: `P5T-DIRECT23F8CB-20261020-A`
 Cookie: `P5T1 / 0x50355431`.
 
 Link-time guard symbol: `phase5t_env_build_cookie`.
+
+
+## Phase 5T hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The promoted root `0x0023F8CB` executed inside a repeated TitleMeta loop with
+`0x0023DD56`. The trace advanced from the first `0x0023F8CB` entry at 60
+to a new kernel boundary at trace 119:
+
+```text
+BOUNDARY kind = ICALL_SAFE
+caller        = 0x0023F8CB
+target        = 0x800000EC
+esp           = 0x008BFC18
+saved_esp     = 0x008BFC3C
+fault         = 0
+trace         = 119
+```
+
+Xbox kernel ordinal 236 is `NtWriteFile@32`; the 36-byte observed full frame
+matches 32 argument bytes plus the synthetic return slot.
+
+Harness result: `PHASE 5T DIRECT23F8CB RESULT: PASS`.
+
+## Phase 5U — native NtWriteFile continuation
+
+5U adds a synchronous native bridge for ordinal 236 while retaining every
+previous Phase-5 continuation and translated root. The bridge decodes:
+
+```text
+handle
+event
+APC routine
+APC context
+IO_STATUS_BLOCK
+buffer
+length
+byte offset
+```
+
+The synchronous form resolves the tagged guest handle to its native Xenon
+HANDLE, applies supported byte-offset semantics, performs a real `WriteFile`,
+writes guest `IO_STATUS_BLOCK.Status` and `Information`, restores the
+stdcall stack, and resumes retail execution.
+
+Supported offset forms:
+
+```text
+absolute offset
+FILE_USE_FILE_POINTER_POSITION
+FILE_WRITE_TO_END_OF_FILE
+```
+
+Async event/APC forms and other negative/special offsets remain fenced.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5U.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\ntwritefile_native_xdk\main.cpp
+build\phase5_subsystem_bringup\ntwritefile_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\ntwritefile_native_xdk\phase5u-manifest.json
+```
+
+Build: `P5U-NTWRITEFILE236-NATIVE-20261020-A`
+
+Cookie: `P5U1 / 0x50355531`.
+
+Link-time guard symbol: `phase5u_env_build_cookie`.
