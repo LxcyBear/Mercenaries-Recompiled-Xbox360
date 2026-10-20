@@ -8755,7 +8755,7 @@ def main() -> int:
     env_source += """
 extern "C" DWORD phase5ar_env_build_cookie(void)
 {
-    return 0x50354151u; /* P5AI */
+    return 0x50354152u; /* P5AR */
 }
 """
     for stale_phase in (
@@ -8804,7 +8804,7 @@ extern "C" DWORD phase5ar_env_build_cookie(void)
         raise SystemExit("[Phase5AR] environment PASS marker changed")
     driver = driver.replace(
         env_pass_marker,
-        """    if (phase5ar_env_build_cookie() != 0x50354151u)
+        """    if (phase5ar_env_build_cookie() != 0x50354152u)
     {
         trace("FAIL: Phase 5AR environment build cookie mismatch");
         goto shutdown_env;
