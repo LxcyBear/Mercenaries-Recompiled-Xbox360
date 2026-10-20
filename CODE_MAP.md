@@ -215,3 +215,17 @@ Guest data layout:
 Ordinal 326 is relocated in the retail kernel thunk table before translated
 execution. The old `0x80000146` fault is explicitly excluded from PASS.
 
+### Phase-5 frontier 0x0023E600
+
+Phase 5AW hardware consumed the relocated ordinal-326 `XeImageFileName`
+guest data object and advanced to a fault-free direct call from
+`0x00239D6C` to `0x0023E600`.
+
+Phase 5AX files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AX.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5ax_frontier23e600.py`
+
+Policy: exact-function-start validation, generated-body validation, then bounded
+depth-2/cap-16 closure promotion. Actual root entry is required and the old
+`0x0023E600` boundary is excluded from PASS.
+
