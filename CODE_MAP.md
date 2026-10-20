@@ -243,3 +243,20 @@ Policy: retain ordinal-289's normal two-argument ABI globally. Repair only exact
 caller `0x0022A7A4` with observed frame 16, validate the canonical stack
 arguments, resume at `savedEsp-4`, and require a repair proof before PASS.
 
+### Phase-5 Xbox ObDosDevices file namespace
+
+5AY hardware proved the `0x0022A7A4` RtlInitAnsiString repair and exposed the
+next dependency: ordinal 190 `NtCreateFile` receives
+`OBJECT_ATTRIBUTES.RootDirectory=0xFFFFFFFD` with
+`t:\\$u\\contentmeta.xbx`.
+
+`0xFFFFFFFD` is modeled as the Xbox `ObDosDevices` pseudo-root. Phase 5AZ
+therefore permits this exact root for NtCreateFile/NtOpenFile and routes
+drive-letter paths through the guest-created `\\??\\X:` symbolic-link
+table before native sandbox translation. Ordinary nonzero relative root handles
+remain fenced.
+
+Phase 5AZ files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AZ.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5az_obdosdevices.py`
+
