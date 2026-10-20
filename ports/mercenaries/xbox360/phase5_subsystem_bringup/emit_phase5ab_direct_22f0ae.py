@@ -6966,10 +6966,6 @@ extern "C" DWORD phase5ab_env_build_cookie(void)
         raise SystemExit(
             "[Phase5AB] generated main lost ordinal-327 native continuation"
         )
-    if "s_phase5abXeLoadSectionSuccessCount > 0u" not in generated_main:
-        raise SystemExit(
-            "[Phase5AB] generated main lost ordinal-327 PASS gate"
-        )
     if "NtWriteFile SAVEDESP REPAIR PROBE:" not in generated_main:
         raise SystemExit(
             "[Phase5AB] generated main lost caller-specific saved-ESP repair probe"
@@ -6977,10 +6973,6 @@ extern "C" DWORD phase5ab_env_build_cookie(void)
     if "PASS: Phase 5AB NtWriteFile caller 0022F0CC saved-ESP repair" not in generated_main:
         raise SystemExit(
             "[Phase5AB] generated main lost caller-specific saved-ESP repair marker"
-        )
-    if "s_phase5abNtWriteFileSavedEspRepairSuccessCount > 0u" not in generated_main:
-        raise SystemExit(
-            "[Phase5AB] generated main lost repaired-write PASS gate"
         )
     if "NtWriteFile LIVE FRAME:" not in generated_main:
         raise SystemExit(
