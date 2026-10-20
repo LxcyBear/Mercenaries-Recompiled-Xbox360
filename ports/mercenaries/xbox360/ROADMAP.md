@@ -2186,3 +2186,43 @@ hardware proof is independent of preceding loop iteration count.
 Build tag: `P5V-DIRECT22BDA5-20261020-A`.
 Cookie: `P5V1 / 0x50355631`.
 Link-time guard: `phase5v_env_build_cookie`.
+
+
+#### Phase 5V — post-write direct root 0x0022BDA5 hardware proof
+**Status: HARDWARE PASS (harness false-negative identified).**
+
+Build `P5V-DIRECT22BDA5-20261020-A` ran against the persistent state created by
+5U. `TitleMeta.xbx` now reports EOF 48 / allocation 16384, so retail skips
+the prior metadata serialization/write loop. Root `0x0022BDA5` executed as
+trace entry 54, after which retail created/opened `TitleImage.xbx`, queried
+its class-34 metadata successfully, and reached a new clean direct frontier:
+
+```text
+caller=0x00239C23
+target=0x0022F08D
+esp=0x008BFBBC
+trace=58
+fault=0
+```
+
+The emitted 5V harness printed `FAIL` only because its pass expression still
+required the pre-persistence fixed trace sequence through entries 54..60.
+That trace-index assumption is invalid once `TitleMeta.xbx` persists. The
+actual hardware exit criterion for 5V was satisfied: `0x0022BDA5` executed
+and continued to a new nonfaulting boundary.
+
+#### Phase 5W — TitleImage-path direct root 0x0022F08D
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5W.ps1`
+
+5W retains the complete prior native storage/runtime stack, including
+ordinal-236 `NtWriteFile`, and promotes only exact hardware-observed root
+`0x0022F08D` at depth zero. Its hardware proof is persistent-state aware:
+fixed historical trace indexes are removed and explicit root-entry
+instrumentation is authoritative.
+
+Build tag: `P5W-DIRECT22F08D-20261020-A`.
+Cookie: `P5W1 / 0x50355731`.
+Link-time guard: `phase5w_env_build_cookie`.
