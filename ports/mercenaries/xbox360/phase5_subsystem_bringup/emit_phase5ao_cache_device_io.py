@@ -11,8 +11,10 @@ P5AO batches the two disk controls used by Xbox utility/cache mounting:
 
 The handler validates the 44-byte synchronous frame and a tracked cache-volume
 handle, writes guest-endian compatibility payloads, updates IO_STATUS_BLOCK,
-and resumes translated execution. Unknown/asynchronous device controls remain
-fenced at STORAGE_IO so the next hardware boundary is evidence-driven.
+and resumes translated execution. P5AO-A hardware proved this caller presents a
+52-byte live frame, so P5AO-B accepts either the canonical 44-byte frame or a
+52-byte frame containing one uniquely identifiable 44-byte argument window.
+Unknown/asynchronous device controls remain fenced at STORAGE_IO.
 """
 
 from __future__ import annotations
@@ -3889,6 +3891,11 @@ static void phase5ao_nt_device_io_control_file(uint32_t savedEsp)
     const uint32_t bytesPerSector = 512u;
     const uint32_t ioctlGeometry = 0x00070000u;
     const uint32_t ioctlPartitionInfo = 0x00074004u;
+    uint32_t frameBytes;
+    uint32_t argBase;
+    uint32_t candidateOffset;
+    uint32_t candidateCount = 0u;
+    uint32_t candidateBase = 0u;
     uint32_t returnSlot;
     uint32_t handleToken;
     uint32_t eventToken;
@@ -3902,18 +3909,22 @@ static void phase5ao_nt_device_io_control_file(uint32_t savedEsp)
     uint32_t outputLength;
     uint32_t status = 0u;
     uint32_t information = 0u;
+    uint32_t raw[13];
+    uint32_t rawCount = 0u;
+    uint32_t i;
     HANDLE nativeHandle;
     const char* handlePath;
-    char line[960];
+    char line[1024];
 
-    if (savedEsp != callEsp + 44u)
+    frameBytes = savedEsp - callEsp;
+    if (frameBytes != 44u && frameBytes != 52u)
     {
         sprintf(
             line,
-            "NtDeviceIoControlFile FRAME MISMATCH: esp=%08X saved_esp=%08X delta=%u expected=44",
+            "NtDeviceIoControlFile FRAME MISMATCH: esp=%08X saved_esp=%08X delta=%u expected=44-or-52",
             (unsigned int)callEsp,
             (unsigned int)savedEsp,
-            (unsigned int)(savedEsp - callEsp));
+            (unsigned int)frameBytes);
         trace(line);
         phase4c_escape(
             PHASE4C_BOUNDARY_KERNEL_FRAME,
@@ -3922,17 +3933,117 @@ static void phase5ao_nt_device_io_control_file(uint32_t savedEsp)
         return;
     }
 
-    returnSlot = GUEST_READ32(callEsp + 0u);
-    handleToken = GUEST_READ32(callEsp + 4u);
-    eventToken = GUEST_READ32(callEsp + 8u);
-    apcRoutine = GUEST_READ32(callEsp + 12u);
-    apcContext = GUEST_READ32(callEsp + 16u);
-    ioStatusVa = GUEST_READ32(callEsp + 20u);
-    controlCode = GUEST_READ32(callEsp + 24u);
-    inputBufferVa = GUEST_READ32(callEsp + 28u);
-    inputLength = GUEST_READ32(callEsp + 32u);
-    outputBufferVa = GUEST_READ32(callEsp + 36u);
-    outputLength = GUEST_READ32(callEsp + 40u);
+    rawCount = frameBytes / 4u;
+    for (i = 0u; i < rawCount; ++i)
+        raw[i] = GUEST_READ32(callEsp + i * 4u);
+
+    if (s_accessFault)
+    {
+        phase4c_escape(
+            PHASE4C_BOUNDARY_GUEST_FAULT,
+            0x800000C4u,
+            savedEsp);
+        return;
+    }
+
+    if (frameBytes == 52u)
+    {
+        sprintf(
+            line,
+            "NtDeviceIoControlFile FRAME52 RAW0: d0=%08X d1=%08X d2=%08X d3=%08X d4=%08X d5=%08X d6=%08X",
+            (unsigned int)raw[0],
+            (unsigned int)raw[1],
+            (unsigned int)raw[2],
+            (unsigned int)raw[3],
+            (unsigned int)raw[4],
+            (unsigned int)raw[5],
+            (unsigned int)raw[6]);
+        trace(line);
+        sprintf(
+            line,
+            "NtDeviceIoControlFile FRAME52 RAW1: d7=%08X d8=%08X d9=%08X d10=%08X d11=%08X d12=%08X",
+            (unsigned int)raw[7],
+            (unsigned int)raw[8],
+            (unsigned int)raw[9],
+            (unsigned int)raw[10],
+            (unsigned int)raw[11],
+            (unsigned int)raw[12]);
+        trace(line);
+
+        /*
+         * Hardware P5AO-A observed eight caller-owned bytes around the
+         * canonical 44-byte NtDeviceIoControlFile frame. Do not guess which
+         * side owns them: locate the one 44-byte window whose return slot,
+         * tracked cache handle and known cache IOCTL are simultaneously valid.
+         */
+        for (candidateOffset = 0u; candidateOffset <= 8u; candidateOffset += 4u)
+        {
+            uint32_t candidateReturn =
+                GUEST_READ32(callEsp + candidateOffset + 0u);
+            uint32_t candidateHandle =
+                GUEST_READ32(callEsp + candidateOffset + 4u);
+            uint32_t candidateIoStatus =
+                GUEST_READ32(callEsp + candidateOffset + 20u);
+            uint32_t candidateCode =
+                GUEST_READ32(callEsp + candidateOffset + 24u);
+            const char* candidatePath =
+                phase5b_read_handle_path(candidateHandle);
+
+            if (!s_accessFault &&
+                candidateReturn == 0u &&
+                candidateIoStatus != 0u &&
+                phase5ao_is_cache_native_path(candidatePath) &&
+                (candidateCode == ioctlGeometry ||
+                 candidateCode == ioctlPartitionInfo))
+            {
+                ++candidateCount;
+                candidateBase = callEsp + candidateOffset;
+            }
+        }
+
+        if (s_accessFault)
+        {
+            phase4c_escape(
+                PHASE4C_BOUNDARY_GUEST_FAULT,
+                0x800000C4u,
+                savedEsp);
+            return;
+        }
+
+        if (candidateCount != 1u)
+        {
+            sprintf(
+                line,
+                "NtDeviceIoControlFile FRAME52 AMBIGUOUS: candidates=%u esp=%08X saved_esp=%08X",
+                (unsigned int)candidateCount,
+                (unsigned int)callEsp,
+                (unsigned int)savedEsp);
+            trace(line);
+            phase4c_escape(
+                PHASE4C_BOUNDARY_KERNEL_FRAME,
+                0x800000C4u,
+                savedEsp);
+            return;
+        }
+
+        argBase = candidateBase;
+    }
+    else
+    {
+        argBase = callEsp;
+    }
+
+    returnSlot = GUEST_READ32(argBase + 0u);
+    handleToken = GUEST_READ32(argBase + 4u);
+    eventToken = GUEST_READ32(argBase + 8u);
+    apcRoutine = GUEST_READ32(argBase + 12u);
+    apcContext = GUEST_READ32(argBase + 16u);
+    ioStatusVa = GUEST_READ32(argBase + 20u);
+    controlCode = GUEST_READ32(argBase + 24u);
+    inputBufferVa = GUEST_READ32(argBase + 28u);
+    inputLength = GUEST_READ32(argBase + 32u);
+    outputBufferVa = GUEST_READ32(argBase + 36u);
+    outputLength = GUEST_READ32(argBase + 40u);
 
     if (s_accessFault)
     {
@@ -3948,7 +4059,9 @@ static void phase5ao_nt_device_io_control_file(uint32_t savedEsp)
 
     sprintf(
         line,
-        "NtDeviceIoControlFile LIVE FRAME: ret=%08X handle=%08X event=%08X apc=%08X context=%08X iosb=%08X code=%08X input=%08X input_len=%u output=%08X output_len=%u esp=%08X saved_esp=%08X",
+        "NtDeviceIoControlFile LIVE FRAME: frame=%u arg_offset=%u ret=%08X handle=%08X event=%08X apc=%08X context=%08X iosb=%08X code=%08X input=%08X input_len=%u output=%08X output_len=%u esp=%08X saved_esp=%08X",
+        (unsigned int)frameBytes,
+        (unsigned int)(argBase - callEsp),
         (unsigned int)returnSlot,
         (unsigned int)handleToken,
         (unsigned int)eventToken,
@@ -4086,8 +4199,10 @@ static void phase5ao_nt_device_io_control_file(uint32_t savedEsp)
 
     sprintf(
         line,
-        "PASS: Phase 5AO NtDeviceIoControlFile cache continuation path=%s code=%08X status=%08X information=%u calls=%u successes=%u geometry=%u partition_info=%u new_esp=%08X",
+        "PASS: Phase 5AO NtDeviceIoControlFile cache continuation path=%s frame=%u arg_offset=%u code=%08X status=%08X information=%u calls=%u successes=%u geometry=%u partition_info=%u new_esp=%08X",
         handlePath ? handlePath : "<unknown>",
+        (unsigned int)frameBytes,
+        (unsigned int)(argBase - callEsp),
         (unsigned int)controlCode,
         (unsigned int)status,
         (unsigned int)information,
@@ -7821,7 +7936,7 @@ def main() -> int:
 
     manifest = {
         "phase": "5AO",
-        "build_tag": "P5AO-CACHE-DEVICE-IO-20261020-A",
+        "build_tag": "P5AO-CACHE-DEVICE-IO-20261020-B",
         "entry": f"0x{root_va:08X}",
         "thread_start": f"0x{THREAD_START:08X}",
         "thread_context1": f"0x{THREAD_CTX1:08X}",
@@ -8200,7 +8315,7 @@ def main() -> int:
         "promoted_direct_members": [
             f"0x{va:08X}" for va in sorted(promoted_direct_members)
         ],
-        "diagnostic_goal": "continue_cache_mount_through_ntdeviceiocontrolfile_geometry_and_partition_info",
+        "diagnostic_goal": "continue_cache_mount_through_ntdeviceiocontrolfile_with_hardware_proven_52_byte_padded_callsite_frame",
         "phase5ao_support_shims": {
             "recomp_prepare_empty_cache_volume": {
                 "signature": "int(void)",
@@ -8223,7 +8338,11 @@ def main() -> int:
             "ordinal": 196,
             "name": "NtDeviceIoControlFile",
             "token": "0x800000C4",
-            "frame_bytes": 44,
+            "canonical_frame_bytes": 44,
+            "hardware_frame_bytes": 52,
+            "accepted_frame_bytes": [44, 52],
+            "hardware_extra_bytes": 8,
+            "frame_policy": "locate exactly one canonical 44-byte argument window in 52-byte hardware frame using tracked cache handle + known IOCTL",
             "synchronous_only": True,
             "cache_size": 1044480,
             "bytes_per_sector": 512,
@@ -8389,7 +8508,7 @@ extern "C" DWORD phase5ao_env_build_cookie(void)
     driver = base.driver_source(root_name, root_va, len(member_vas))
     driver = driver.replace(
         "P4C-STARTUP-20261019-A",
-        "P5AO-CACHE-DEVICE-IO-20261020-A",
+        "P5AO-CACHE-DEVICE-IO-20261020-B",
     )
     driver = driver.replace(
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
@@ -9056,6 +9175,11 @@ extern "C" DWORD phase5ao_env_build_cookie(void)
         "static void phase5ao_nt_device_io_control_file(uint32_t savedEsp)",
         "_phase4c_target == 0x800000C4u",
         "NtDeviceIoControlFile LIVE FRAME:",
+        "NtDeviceIoControlFile FRAME52 RAW0:",
+        "NtDeviceIoControlFile FRAME52 RAW1:",
+        "NtDeviceIoControlFile FRAME52 AMBIGUOUS:",
+        "expected=44-or-52",
+        "arg_offset=%u",
         "code=%08X",
         "0x00070000u",
         "0x00074004u",
