@@ -2573,3 +2573,55 @@ the next previously-unhandled runtime boundary from the current retail state.
 Build tag: `P5AD-XEUNLOADSECTION328-NATIVE-20261020-A`.
 Cookie: `P5AD / 0x50354144`.
 Link-time guard: `phase5ad_env_build_cookie`.
+
+
+#### Phase 5AD — persistent-state branch hardware pass / root 0x0022A604 discovery
+**Status: HARDWARE PASS (XeUnloadSection bridge armed but not exercised).**
+
+Build `P5AD-XEUNLOADSECTION328-NATIVE-20261020-A` ran against the exact
+supported retail XBE with the 75-body translated pack. The persistent title
+assets are now all observed as populated:
+
+```text
+TitleMeta.xbx  EOF = 48
+TitleImage.xbx EOF = 10240
+SaveImage.xbx  EOF = 4096
+```
+
+Because `SaveImage.xbx` was already populated, retail skipped the
+`$$XSIMAGE` load/write/unload path entirely. The ordinal-328
+`XeUnloadSection` continuation therefore remained armed but was not invoked
+in this run and is not yet hardware-proven.
+
+Retail closed the remaining title handles, created the `U:` symbolic link to
+the title's UDATA directory, then reached a new clean direct frontier:
+
+```text
+caller=0x00239C23
+target=0x0022A604
+esp=0x008BFF00
+trace=62
+fault=0
+```
+
+Harness result: `PHASE 5AD XEUNLOADSECTION328 NATIVE RESULT: PASS`.
+
+#### Phase 5AE — persistent-state direct root 0x0022A604
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AE.ps1`
+
+5AE retains all prior storage/image-section continuations and the unexercised
+ordinal-328 XeUnloadSection bridge, retains root `0x0022F0AE`, and promotes
+only hardware-observed root `0x0022A604` at depth zero. The new root has
+explicit entry instrumentation and the PASS gate requires that entry before
+accepting a later nonfaulting boundary.
+
+If `0x0022A604` is not an exact frozen function start, preparation stops with
+the containing function range so an explicit mid-function split can be added
+instead of guessing.
+
+Build tag: `P5AE-DIRECT22A604-20261020-A`.
+Cookie: `P5AE / 0x50354145`.
+Link-time guard: `phase5ae_env_build_cookie`.
