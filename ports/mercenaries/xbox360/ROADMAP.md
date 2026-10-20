@@ -1852,3 +1852,35 @@ Build tag: `P5N-NTQUERYINFO211-NATIVE-20261020-A`.
 Cookie: `P5N1 / 0x50354E31`.
 
 Link-time guard: `phase5n_env_build_cookie`.
+
+
+#### Phase 5M — NtQueryInformationFile capture hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5M-NTQUERYINFO211-CAPTURE-20261020-A` preserved the complete 5L runtime stack and captured ordinal 211 with `fault=0`:
+
+```text
+handle=0x48000002 iosb=0x008BFEB4 info=0x008BFE68 len=56 class=34
+caller=0x00239C23 trace=54
+```
+
+The handle is the native-backed token for `TitleMeta.xbx`. Class 34 is
+`FileNetworkOpenInformation`, and the 56-byte request matches
+`FILE_NETWORK_OPEN_INFORMATION`.
+
+#### Phase 5N — native NtQueryInformationFile class 34
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5N.ps1`
+
+5N remembers the native Xenon path associated with each tagged guest handle
+and services ordinal 211 class 34 from `GetFileAttributesExA`. It writes the
+56-byte guest `FILE_NETWORK_OPEN_INFORMATION` and sets
+`IO_STATUS_BLOCK.Information=56` on success. AllocationSize uses the proven
+16 KiB FATX-style unit; ChangeTime mirrors LastWriteTime. Unobserved classes
+remain fenced.
+
+Build tag: `P5N-NTQUERYINFO211-NATIVE-20261020-A`.
+Cookie: `P5N1 / 0x50354E31`.
+Link-time guard: `phase5n_env_build_cookie`.
