@@ -2267,3 +2267,52 @@ Malformed/non-table pointers remain fenced.
 Build tag: `P5X-XELOADSECTION327-NATIVE-20261020-A`.
 Cookie: `P5X1 / 0x50355831`.
 Link-time guard: `phase5x_env_build_cookie`.
+
+
+#### Phase 5X — native XeLoadSection ordinal 327 hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5X-XELOADSECTION327-NATIVE-20261020-A` preserved the exact supported
+retail environment and state-aware TitleMeta/TitleImage path. The live
+`XeLoadSection` request targeted XBE section 11:
+
+```text
+section=0x000105D8
+index=11
+name=$$XTIMAGE
+va=0x00874D40
+vsize=10240
+file=0x0030E000
+fsize=10240
+refs=0->1
+```
+
+The bookkeeping continuation returned successfully and retail advanced to a
+new direct frontier with no guest fault:
+
+```text
+caller=0x0022F08D
+target=0x0022F0CC
+esp=0x008BFBB8
+trace=59
+fault=0
+```
+
+Harness result: `PHASE 5X XELOADSECTION327 NATIVE RESULT: PASS`.
+
+#### Phase 5Y — post-XeLoadSection direct root 0x0022F0CC
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5Y.ps1`
+
+5Y retains the complete native storage/runtime stack plus the proven
+ordinal-327 `XeLoadSection` bookkeeping continuation and promotes only the
+hardware-observed direct target `0x0022F0CC` at depth zero. Preparation
+fails closed if the address is not an exact frozen function start or lacks a
+generated translated body. Hardware proof uses explicit root-entry
+instrumentation and does not depend on fixed trace indexes.
+
+Build tag: `P5Y-DIRECT22F0CC-20261020-A`.
+Cookie: `P5Y1 / 0x50355931`.
+Link-time guard: `phase5y_env_build_cookie`.
