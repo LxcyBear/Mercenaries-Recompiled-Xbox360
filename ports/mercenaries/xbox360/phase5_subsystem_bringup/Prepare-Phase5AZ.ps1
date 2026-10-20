@@ -375,7 +375,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
     throw "Generated Phase 5AZ manifest is missing: $manifest"
 }
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-if ($manifestJson.phase -ne "5AY" -or $manifestJson.build_tag -ne "P5AZ-OBDOSDEVICES-20261020-A") {
+if ($manifestJson.phase -ne "5AZ" -or $manifestJson.build_tag -ne "P5AZ-OBDOSDEVICES-20261020-A") {
     throw "Phase 5AZ manifest identity mismatch"
 }
 
@@ -889,6 +889,6 @@ Write-Host "[Phase5AZ] Build BOTH freshly generated sources in the same XDK proj
 Write-Host "[Phase5AZ]   $main"
 Write-Host "[Phase5AZ]   $env"
 Write-Host "[Phase5AZ] Link-time guard: main requires phase5az_env_build_cookie from the matching generated environment source."
-Write-Host "[Phase5AZ] The 5AY cookie must be 0x5035415A (P5AZ)."
+Write-Host "[Phase5AZ] The 5AZ cookie must be 0x5035415A (P5AZ)."
 Write-Host "[Phase5AZ] Keep the exact supported retail default.xbe beside the XEX."
 Write-Host "[Phase5AZ] Expected build tag: P5AZ-OBDOSDEVICES-20261020-A"
