@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AI — relocate kernel DATA export ordinal 164 `LaunchDataPage` after Phase 5AH hardware PASS advanced to READ32 `0x800000A4` from translated caller `0x002294AE`.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AJ — batched guest-safe memory-manager bring-up after Phase 5AI hardware PASS advanced to ordinal 165 `MmAllocateContiguousMemory` (`0x800000A5`) from translated caller `0x002294AE`.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AH hardware PASS; Phase 5AI LaunchDataPage relocation active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AI hardware PASS; Phase 5AJ batched memory-manager cluster active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,18 +75,18 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5AH have passed their
-hardware gates. The complete native title-storage environment remains intact
-through Partition1 volume setup, D:/T:/U: mounts, TDATA/UDATA title directories,
-TitleMeta/TitleImage/SaveImage handling, XBE-section inspection, persistent
-title state and the exact Partition0 root probe. Phase 5AH proved the second
-ordinal 301 `RtlNtStatusToDosError` call is repeatable:
-`STATUS_UNSUCCESSFUL (0xC0000001) -> ERROR_GEN_FAILURE (31)`, after which
-translated execution advanced to caller `0x002294AE` and faulted on READ32
-`0x800000A4`. Ordinal 164 is the guest-visible DATA export
-`LaunchDataPage`, so Phase 5AI relocates that import to initialized guest
-kernel data at `0x0087E030` with an initial NULL pointer and resumes the real
-startup path.
+**Present blockers:** Phase 4 and Phase 5A through 5AI have passed their
+hardware gates. Phase 5AI relocated ordinal 164 `LaunchDataPage` from raw
+token `0x800000A4` to guest kernel-data VA `0x0087E030`, initialized NULL.
+Real hardware then continued through the complete storage/title-state path and
+reached `ICALL_SAFE caller=0x002294AE target=0x800000A5` with `fault=0`.
+Ordinal 165 is `MmAllocateContiguousMemory`; the observed stack delta is 8
+bytes, matching one 4-byte stdcall argument plus the synthetic return slot.
+Phase 5AJ changes the iteration strategy from one-boundary-per-build to a
+coherent guest-safe memory-manager batch: ordinals
+165/166/167/171/172/173/175/180/181/182 are enabled together using the
+production bridge's guest-safe semantics, while hardware-sensitive GPU/MMIO
+exports remain fenced until actually observed.
 
 ### Immediate next tests
 
@@ -281,12 +281,18 @@ startup path.
     `SetLastError(31)`, and advanced to a new deterministic READ32 fault at
     `0x800000A4` from translated caller `0x002294AE`. Build:
     `P5AH-RTLSTATUS301-REPEATABLE-20261020-A`.
-59. **Phase 5AI active:** relocate ordinal 164 `LaunchDataPage`, a kernel
-    DATA export pointer, to guest kernel-data VA `0x0087E030`, initialized
-    NULL. Hardware gate: pass caller `0x002294AE` without dereferencing raw
-    token `0x800000A4` and capture the next real boundary. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AI.ps1`.
-    Build tag: `P5AI-LAUNCHDATAPAGE-DATA-20261020-A`.
+59. **Done:** Phase 5AI relocated ordinal 164 `LaunchDataPage` to guest
+    kernel-data VA `0x0087E030`, initialized NULL. Hardware proved the exact
+    thunk rewrite `0x800000A4 -> 0x0087E030`, preserved the complete prior
+    startup/storage path, and advanced with `fault=0` to
+    `ICALL_SAFE caller=0x002294AE target=0x800000A5`. Build:
+    `P5AI-LAUNCHDATAPAGE-DATA-20261020-A`.
+60. **Phase 5AJ active:** batch the production-bridged, guest-safe Xbox memory
+    manager surface instead of advancing one ordinal per build. Enabled:
+    165/166/167/171/172/173/175/180/181/182. GPU/MMIO-sensitive ordinals
+    168/177/178 remain fenced. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AJ.ps1`.
+    Build tag: `P5AJ-MM-CLUSTER-20261020-A`.
 
 ### Evidence policy
 
@@ -2710,6 +2716,26 @@ unexecuted test PASS.**
 - **Next:** Phase 5AI relocates ordinal 164 to guest VA `0x0087E030`,
   initialized NULL, and resumes to the next hardware boundary.
 - Build tag: `P5AI-LAUNCHDATAPAGE-DATA-20261020-A`.
+
+### 2026-10-20 — Phase 5AI LaunchDataPage relocation PASS
+
+- Build `P5AI-LAUNCHDATAPAGE-DATA-20261020-A` passed on real Xbox 360
+  hardware.
+- Startup data-thunk relocation added ordinal 164:
+  slot `0x002DBD48`, old token `0x800000A4`, new guest-data VA
+  `0x0087E030`.
+- Readback proved startup data imports 156/164/322/324 all point at initialized
+  guest kernel data, with `LaunchDataPage=NULL`.
+- The complete prior title-storage and Partition0/error-conversion path stayed
+  intact.
+- The old READ32 fault at `0x800000A4` disappeared.
+- New boundary:
+  `ICALL_SAFE caller=0x002294AE target=0x800000A5`, stack delta 8,
+  `fault=0`.
+- `0x800000A5` is ordinal 165 `MmAllocateContiguousMemory`.
+- **Phase 5AI: PASS.**
+- **Next:** Phase 5AJ batches the guest-safe Mm cluster instead of servicing
+  one memory ordinal per hardware build.
 
 ### How future updates are recorded
 
