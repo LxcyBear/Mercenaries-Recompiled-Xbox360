@@ -2895,3 +2895,34 @@ runtime resumes at `savedEsp - 4`.
 Build tag: `P5AV-SYMLINK215-SAVEDESP-20261020-A`.
 Cookie: `P5AV / 0x50354156`.
 
+#### Phase 5AV — ordinal-215 saved-ESP repair hardware result
+**Status: HARDWARE PASS / NEXT DATA IMPORT IDENTIFIED.**
+
+Build `P5AV-SYMLINK215-SAVEDESP-20261020-A` validated the exact
+`0x0022B7B2` saved-ESP repair for ordinal 215. The live query returned
+`\Device\CdRom0` through symbolic-link token `0x53000001`, then
+`NtClose` released the guest symbolic-link object successfully.
+
+Retail then advanced through `0x0022B545 -> 0x00239BE8 -> 0x00239C23` and
+faulted on a 16-bit read from `0x80000146`. Kernel export ordinal 326 is
+`XeImageFileName`, an ANSI_STRING/OBJECT_STRING data export.
+
+#### Phase 5AW — XeImageFileName guest data relocation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AW.ps1`
+
+5AW adds ordinal 326 to the startup kernel-data relocation surface:
+
+- guest ANSI_STRING: `0x0087E040`
+- guest path buffer: `0x0087E050`
+- value: `\Device\CdRom0\default.xbe`
+- Length / MaximumLength: `26 / 27`
+
+The hardware gate requires ordinal 326 to relocate exactly once and explicitly
+rejects `0x80000146` as an acceptable new fault.
+
+Build tag: `P5AW-XEIMAGEFILENAME-DATA-20261020-A`.
+Cookie: `P5AW / 0x50354157`.
+
