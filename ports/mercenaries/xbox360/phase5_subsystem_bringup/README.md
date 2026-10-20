@@ -2166,3 +2166,31 @@ powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_sub
 
 Build: `P5AY-RTLANSI-A7A4-20261020-A`
 
+## Phase 5AY hardware proof / Phase 5AZ ObDosDevices
+
+5AY successfully executed the guarded caller-local ordinal-289 repair:
+
+```text
+RtlInitAnsiString SAVEDESP REPAIR PROBE:
+caller=0022A7A4 ... esp=008BE9C8 saved_esp=008BE9D8
+PASS: ... 008BE9D8->008BE9D4 restores 12-byte ordinal-289 frame
+PASS: ... preview=t:\$u\contentmeta.xbx ... repairs=1
+```
+
+Execution then reached `NtCreateFile` with
+`OBJECT_ATTRIBUTES.RootDirectory=0xFFFFFFFD`. This is the Xbox
+`ObDosDevices` pseudo-root rather than a file/directory handle.
+
+Phase 5AZ accepts exactly that pseudo-root for NtCreateFile/NtOpenFile, then
+uses the existing guest `\\??\\X:` symbolic-link table so the observed
+`t:\$u\contentmeta.xbx` request resolves through the previously-created
+`T:` mapping.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AZ.ps1"
+```
+
+Build: `P5AZ-OBDOSDEVICES-20261020-A`
+
