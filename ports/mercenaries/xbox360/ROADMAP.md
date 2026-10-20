@@ -1551,3 +1551,34 @@ a split/mid-function target or missing generated body.
 Build tag: `P5F-DIRECT370B8-20261020-A`.
 
 Cookie: `P5F1 / 0x50354631`.
+
+
+#### Phase 5F — next retail helper hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5F-DIRECT370B8-20261020-A` retained the complete native
+storage/mount stack, executed translated root `0x002370B8`, and expanded the
+live translated trace from 24 to 45 entries.
+
+The path traversed repeated execution through already-packed retail helpers,
+including `0x0023F150` and `0x0023A3CE`, before reaching:
+
+```text
+DIRECT_FRONTIER caller=0x0023A3CE target=0x0022BE8C
+fault=0
+```
+
+#### Phase 5G — promote next retail root 0x0022BE8C
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5G.ps1`
+
+5G retains the full native storage/mount stack and every previously proven
+translated root, and promotes only the exact hardware-observed translated root
+`0x0022BE8C`. Preparation fails closed for a split/mid-function target or
+missing generated body.
+
+Build tag: `P5G-DIRECTBE8C-20261020-A`.
+
+Cookie: `P5G1 / 0x50354731`.
