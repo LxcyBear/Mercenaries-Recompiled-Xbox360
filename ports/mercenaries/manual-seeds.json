@@ -336,6 +336,10 @@
     "reason": "Retail atoi implementation tail-called by the CRT thunk at 0x00237768; required by RedComponentSet::ReadStringPairHI"
   },
   {
+    "start": "0x0023D550",
+    "reason": "Phase 5AZ real Xbox 360 hardware proved a fault-free ICALL_SAFE from translated caller 0x0022C452 to 0x0023D550 after ObDosDevices contentmeta fallback completed; promote this runtime-discovered indirect guest-code entry as a reviewed hard function boundary."
+  },
+  {
     "start": "0x00255694",
     "reason": "Retail XMV asynchronous refill callback passed to the decoder by 0x002557CC; issues the next overlapped movie-data read"
   },
