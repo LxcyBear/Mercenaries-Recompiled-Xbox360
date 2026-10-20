@@ -52,21 +52,35 @@ finally {
 
 if ($emitExit -ne 0) {
     $failedManifest = Join-Path $outDir "phase5an-manifest.json"
+    $reportedUnknown = $false
     if (Test-Path -LiteralPath $failedManifest) {
         try {
             $failedJson = Get-Content -LiteralPath $failedManifest -Raw | ConvertFrom-Json
-            if ($failedJson.unknown_direct_helpers) {
+            $unknownProps = @($failedJson.unknown_direct_helpers.PSObject.Properties)
+            if ($unknownProps.Count -gt 0) {
                 Write-Host ""
                 Write-Host "[Phase5AN] Remaining unresolved helper dependencies:"
-                $failedJson.unknown_direct_helpers.PSObject.Properties | ForEach-Object {
-                    Write-Host ("[Phase5AN]   {0}: {1}" -f $_.Name, ($_.Value -join ", "))
+                foreach ($prop in $unknownProps) {
+                    $names = @($prop.Value)
+                    Write-Host ("[Phase5AN]   {0}: {1}" -f $prop.Name, ($names -join ", "))
                 }
                 Write-Host ""
+                $reportedUnknown = $true
             }
         } catch {
             Write-Host "[Phase5AN] Could not decode failure manifest: $($_.Exception.Message)"
         }
     }
+
+    if (-not $reportedUnknown -and (Test-Path -LiteralPath $emitLog)) {
+        Write-Host ""
+        Write-Host "[Phase5AN] Emitter log tail:"
+        Get-Content -LiteralPath $emitLog -Tail 80 | ForEach-Object {
+            Write-Host $_
+        }
+        Write-Host ""
+    }
+
     throw "Phase 5AN cache-partition batch package emission failed (exit $emitExit). Full emitter output: $emitLog"
 }
 
