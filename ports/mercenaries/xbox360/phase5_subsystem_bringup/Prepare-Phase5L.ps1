@@ -26,7 +26,7 @@ if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 Write-Host "[Phase5L] MAINTAINED SETLASTERROR CONTINUATION"
-Write-Host "[Phase5L] Phase 5K hardware PASS compared $XTINFO against all 14 live XBE section names and reached DIRECT_FRONTIER 0x0022B178 with fault=0."
+Write-Host "[Phase5L] Phase 5K hardware PASS compared `$XTINFO against all 14 live XBE section names and reached DIRECT_FRONTIER 0x0022B178 with fault=0."
 Write-Host "[Phase5L] 0x0022B178 is intentionally manual in Recompile.ps1 and maps to the maintained SetLastError wrapper in recomp_manual.c."
 Write-Host "[Phase5L] Packaging only that reviewed manual body; every other missing generated function still fails closed."
 Write-Host "[Phase5L] Complete native storage, D:/T:, title-data, RTL string, and section-scan state remains active."
@@ -321,7 +321,7 @@ if ([int]$manifestJson.continued_support_helper_memmove.arg_bytes -ne 12 -or
 }
 Write-Host ""
 Write-Host "[Phase5L] READY"
-Write-Host "[Phase5L] Phase 5K evidence locked: $XTINFO was compared against all 14 XBE section names before frontier 0x0022B178."
+Write-Host "[Phase5L] Phase 5K evidence locked: `$XTINFO was compared against all 14 XBE section names before frontier 0x0022B178."
 Write-Host "[Phase5L] New maintained-manual root: 0x0022B178 = SetLastError"
 Write-Host "[Phase5L] Production source: ports/mercenaries/src/recomp_manual.c"
 Write-Host "[Phase5L] ABI: stdcall one uint32 argument; preserve EAX; g_esp += 8."
