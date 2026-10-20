@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 5C — service live ordinal 218 NtQueryVolumeInformationFile through native Xenon storage and continue the real boot path.
+> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 5D — honor live ordinal 67 IoCreateSymbolicLink mount setup and continue the real boot path.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A/5B storage gates PASS; Phase 5C native volume query active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A/5B/5C storage gates PASS; Phase 5D symbolic-link mount active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,14 +75,15 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 is complete and Phase 5A/5B have passed on hardware.
-The first live storage root now opens natively: `\\Device\\Harddisk0\\partition1\\`
-maps to `game:\\merc360-partition1`, returns STATUS_SUCCESS and tagged guest
-handle `0x48000001`, then translated execution immediately reaches ordinal 218
-`NtQueryVolumeInformationFile` with an exact 24-byte full frame and `fault=0`.
-Phase 5C now services that volume-size query from native Xenon storage and arms
-ordinal 187 `NtClose` for the same tagged handle lifecycle. Graphics, input,
-audio/movie and async/runtime dependencies remain later Phase-5 blockers.
+**Present blockers:** Phase 4 and Phase 5A/5B/5C have passed on hardware. The
+native-backed Partition1 lifecycle now completes end-to-end: `NtOpenFile`
+returns tagged handle `0x48000001`, `NtQueryVolumeInformationFile` class 3
+returns native free/total space, and `NtClose` releases the handle. The live
+path then reaches ordinal 67 `IoCreateSymbolicLink` at `0x80000043` with an
+exact 12-byte full frame and `fault=0`. Phase 5D now captures and honors the
+actual guest symbolic-link mount mapping and feeds that alias into subsequent
+storage path translation. Graphics, input, audio/movie and async/runtime
+remain later Phase-5 blockers.
 
 ### Immediate next tests
 
@@ -231,12 +232,16 @@ audio/movie and async/runtime dependencies remain later Phase-5 blockers.
     `game:\\merc360-partition1`, returned STATUS_SUCCESS and tagged guest
     handle `0x48000001`, then resumed to `ICALL_SAFE target=0x800000DA`
     (`NtQueryVolumeInformationFile`) with `fault=0`.
-47. **Phase 5C:** resolve the tagged handle, service
-    `XboxFileFsSizeInformation` from native Xenon `game:` free/total space,
-    write the guest FS_SIZE_INFORMATION + IO_STATUS_BLOCK, and resume. Ordinal
-    187 `NtClose` is also armed for the native handle lifecycle. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5C.ps1`.
-    Build tag: `P5C-VOLUME218-NATIVE-20261019-A`.
+47. **Done:** Phase 5C serviced `NtQueryVolumeInformationFile` class 3 with
+    native-backed free/total space, then successfully closed token `0x48000001`
+    through ordinal 187 `NtClose`. The next live boundary is
+    `0x80000043` = ordinal 67 `IoCreateSymbolicLink`, with `fault=0`.
+48. **Phase 5D:** decode the live guest symbolic-link name/target, record the
+    exact mapping, integrate `\\??\\X:` aliases into the storage path
+    translator, and resume. Ordinal 69 `IoDeleteSymbolicLink` is also armed.
+    Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5D.ps1`.
+    Build tag: `P5D-SYMLINK67-NATIVE-20261019-A`.
 
 ### Evidence policy
 
@@ -2488,6 +2493,23 @@ unexecuted test PASS.**
 - **Phase 5B: PASS.**
 - **Next:** Phase 5C native volume-size query + tagged-handle close support.
 - Build tag: `P5C-VOLUME218-NATIVE-20261019-A`.
+
+### 2026-10-19 — Phase 5C volume query PASS
+
+- Build `P5C-VOLUME218-NATIVE-20261019-A` passed on real Xbox 360 hardware.
+- `NtOpenFile` again returned native-backed token `0x48000001`.
+- `NtQueryVolumeInformationFile` class 3 returned:
+  - total allocation units: `243868976`;
+  - available allocation units: `55322560`;
+  - sectors per allocation unit: `32`;
+  - bytes per sector: `512`.
+- Ordinal 187 `NtClose` released token `0x48000001` successfully.
+- New live dependency: `0x80000043` = ordinal 67 `IoCreateSymbolicLink`.
+- Observed full frame: 12 bytes = two stdcall arguments + synthetic return.
+- Boundary remained `fault=0`.
+- **Phase 5C: PASS.**
+- **Next:** Phase 5D native guest symbolic-link mount continuation.
+- Build tag: `P5D-SYMLINK67-NATIVE-20261019-A`.
 
 ### How future updates are recorded
 
