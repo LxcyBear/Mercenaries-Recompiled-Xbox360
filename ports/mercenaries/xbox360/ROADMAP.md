@@ -2360,3 +2360,49 @@ and stops at a deliberate kernel-frame boundary. That exact capture is the
 Build tag: `P5Z-NTWRITEFILE236-COMPACT-CAPTURE-20261020-A`.
 Cookie: `P5Z1 / 0x50355A31`.
 Link-time guard: `phase5z_env_build_cookie`.
+
+
+#### Phase 5Z — NtWriteFile caller 0x0022F0CC ABI capture hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5Z-NTWRITEFILE236-COMPACT-CAPTURE-20261020-A` preserved the exact
+supported retail environment and complete state-aware TitleMeta/TitleImage
+path. The raw ordinal-236 stack capture proved that caller `0x0022F0CC`
+still supplies all eight standard `NtWriteFile` arguments:
+
+```text
++00 return     = 0x00000000
++04 handle     = 0x48000002
++08 event      = 0x00000000
++0C APC        = 0x00000000
++10 context    = 0x00000000
++14 IOSB       = 0x008BFC1C
++18 buffer     = 0x00874D40
++1C length     = 0x00002800
++20 ByteOffset = 0x00000000
+```
+
+The buffer/length exactly match XBE section 11 `$$XTIMAGE`
+(`VA=0x00874D40`, `VSIZE=0x2800`). The only mismatch is the translated
+safe-call continuation value: `savedEsp-callEsp=32`, one dword short of the
+true 36-byte full frame. No native I/O was issued in 5Z.
+
+Harness result:
+`PHASE 5Z NTWRITEFILE236 COMPACT CAPTURE RESULT: PASS`.
+
+#### Phase 5AA — native TitleImage NtWriteFile saved-ESP repair
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AA.ps1`
+
+5AA keeps the previously proven ordinary 36-byte `NtWriteFile` continuation
+unchanged. For caller `0x0022F0CC` only, it validates the exact Phase-5Z
+frame (`buffer=0x00874D40`, `length=0x2800`, `ByteOffset=NULL`), repairs
+the continuation ESP from `savedEsp` to `savedEsp+4`, performs the real
+native write, updates the guest `IO_STATUS_BLOCK`, and resumes retail
+execution. Any other 32-byte observation remains fenced.
+
+Build tag: `P5AA-NTWRITEFILE236-XTIMAGE-NATIVE-20261020-A`.
+Cookie: `P5AA / 0x50354141`.
+Link-time guard: `phase5aa_env_build_cookie`.
