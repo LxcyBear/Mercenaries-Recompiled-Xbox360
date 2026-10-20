@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5BF — Phase 5BE hardware PASS proved three generic packed ICALL promotions in one launch (`0x00237052`, `0x00237801`, `0x00239055`), completed a third real heap allocation, advanced through `0x0023D87C`, and reached fault-free safe ICALL frontier `0x0023F22B`; sweep the forward `0x0023E000..0x00245FFF` translated region now.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5BG — Phase 5BF hardware PASS proved four generic packed ICALL promotions in one launch (`0x00237052`, `0x00237801`, `0x00239055`, `0x0023F22B`) and reached fault-free safe ICALL frontier `0x002471C0`; sweep the remaining retail title `.text` tail `0x00246000..0x0025561F` now.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BE hardware PASS; Phase 5BF forward broad sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BF hardware PASS; Phase 5BG title `.text` tail sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,24 +75,21 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BE have passed their
+**Present blockers:** Phase 4 and Phase 5A through 5BF have passed their
 hardware gates. The persistent 512 KiB Partition0 backing remains stable across
 launches, including the sector-`0x800` unchanged rewrite, cache Partition5
-mount and `\\??\\Z:` creation. Phase 5BB crossed the support-owned
-`RtlAllocateHeap` boundary at `0x0022DDA4`, allocated 256 bytes at
-`0x008C1000`, and reached fault-free safe ICALL
-`0x0022C3FA -> 0x00237052`. Phase 5BC then changed the development method:
-exact generated targets already present in a bounded support-clean translated
-pack may continue automatically through the generic safe-ICALL dispatcher
-instead of requiring a bespoke one-address build. Phase 5BD and 5BE validated
-that strategy repeatedly on hardware. The 5BE run automatically consumed
-`0x00237052`, `0x00237801`, and `0x00239055`, completed additional
-128-byte and 2048-byte heap allocations at `0x008C1100` and `0x008C1180`,
-continued through `0x0023D87C`, and stopped cleanly at
-`ICALL_SAFE caller=0x0022DDA4 target=0x0023F22B` with `fault=0`. Phase
-5BF now keeps `0x0023F22B` mandatory while pre-packing a support-clean
-`0x0023E000..0x00245FFF` forward region, capped at 256 additional translated
-functions.
+mount and `\\??\\Z:` creation. Phase 5BC introduced the generic
+support-clean broad-sweep dispatcher so exact generated targets already present
+in the pack can continue automatically rather than requiring a bespoke
+one-address build. Phase 5BD, 5BE and 5BF have now validated that strategy on
+hardware. The 5BF run automatically consumed four safe indirect translated
+targets in one launch: `0x00237052`, `0x00237801`, `0x00239055`, and
+`0x0023F22B`. The existing maintained heap/VM/storage proofs remained stable,
+and execution then advanced through `0x0022B3F1` to the next clean
+`ICALL_SAFE target=0x002471C0` with `fault=0`. Phase 5BG keeps
+`0x002471C0` mandatory and widens the next sweep across the remaining retail
+title `.text` tail `0x00246000..0x0025561F`, capped at 256 additional
+support-clean translated functions.
 
 ### Immediate next tests
 
@@ -370,14 +367,22 @@ functions.
     `0x0023D87C` and stopped at fault-free
     `ICALL_SAFE caller=0x0022DDA4 target=0x0023F22B`. Build:
     `P5BE-FORWARDSWEEP239055-20261020-A`.
-71. **Phase 5BF active:** retain all 5BE proofs, keep hardware-observed
-    `0x0023F22B` mandatory, add its bounded depth-6 direct closure, and
-    pre-pack a support-clean forward band `0x0023E000..0x00245FFF` with a
-    cap of 256 additional functions. Unknown/unsupported side branches remain
-    fenced; guest faults, ABI/frame anomalies, heap exhaustion, kernel/device
-    unknowns and the execution-budget watchdog remain hard stops. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BF.ps1`.
-    Build tag: `P5BF-FORWARDSWEEP23F22B-20261020-A`.
+71. **Done:** Phase 5BF automatically consumed four packed
+    safe-ICALL targets in one launch: `0x00237052`, `0x00237801`,
+    `0x00239055`, and `0x0023F22B`. The startup path remained fault-free
+    through the inherited persistence/VM/heap infrastructure and advanced to
+    `ICALL_SAFE caller=0x0022B3F1 target=0x002471C0` with `fault=0`.
+    Build: `P5BF-FORWARDSWEEP23F22B-20261020-A`.
+72. **Phase 5BG active:** retain all 5BF proofs, keep hardware-observed
+    `0x002471C0` mandatory, add its bounded depth-6 direct closure, and
+    pre-pack support-clean exact generated functions across the remaining
+    retail title `.text` tail `0x00246000..0x0025561F` (the XMV section
+    begins at `0x00255620`), capped at 256 additional functions.
+    Unknown/unsupported side branches remain fenced; guest faults, ABI/frame
+    anomalies, heap exhaustion, kernel/device unknowns and the
+    execution-budget watchdog remain hard stops. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BG.ps1`.
+    Build tag: `P5BG-TEXTTAIL2471C0-20261020-A`.
 
 ### Evidence policy
 
