@@ -1,4 +1,4 @@
-"""Phase 5AZ: advance beyond the persistent-cache second-boot frontier.
+r"""Phase 5AZ: advance beyond the persistent-cache second-boot frontier.
 
 Phase 5AP passed as a two-launch hardware proof. On pass 2, the 512 KiB
 Partition0 backing reloaded, the sector 0x800 write was identical (changed=0),
