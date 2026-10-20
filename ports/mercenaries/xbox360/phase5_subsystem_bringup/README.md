@@ -574,3 +574,70 @@ Build: `P5K-RTLEQUAL279-20261020-A`
 Cookie: `P5K1 / 0x50354B31`.
 
 Link-time guard symbol: `phase5k_env_build_cookie`.
+
+
+## Phase 5K hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The complete native title-storage and mount stack remained intact. Retail
+helper `0x0022F026` used `RtlInitAnsiString` + `RtlEqualString` to scan
+all 14 loaded XBE section names for the search key `$$XTINFO`.
+
+Observed section names:
+
+```text
+.text
+XMV
+XACTENG
+D3D
+XGRPH
+DSOUND
+WMADEC
+XPP
+.rdata
+.data
+DOLBY
+$$XTIMAGE
+$$XSIMAGE
+.XTLID
+```
+
+All comparisons correctly returned false because this supported retail XBE has
+no `$$XTINFO` section. Execution then advanced with `fault=0` to:
+
+```text
+DIRECT_FRONTIER
+caller = 0x0022F026
+target = 0x0022B178
+trace  = 48
+```
+
+## Phase 5L — post-XBE-section-scan translated helper
+
+5L preserves the complete native Partition1, D:/T: mounts, title-data
+hierarchy and RTL string-comparison path, then promotes only the exact
+hardware-observed translated root `0x0022B178`.
+
+Preparation fails explicitly if B178 is a split/mid-function target or lacks a
+generated translated body.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5L.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_b178_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_b178_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_b178_xdk\phase5l-manifest.json
+```
+
+Build: `P5L-DIRECTB178-20261020-A`
+
+Cookie: `P5L1 / 0x50354C31`.
+
+Link-time guard symbol: `phase5l_env_build_cookie`.
