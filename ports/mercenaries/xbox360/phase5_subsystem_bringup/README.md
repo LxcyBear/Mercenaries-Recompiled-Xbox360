@@ -1179,3 +1179,66 @@ Build: `P5U-NTWRITEFILE236-NATIVE-20261020-A`
 Cookie: `P5U1 / 0x50355531`.
 
 Link-time guard symbol: `phase5u_env_build_cookie`.
+
+
+## Phase 5U hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The native ordinal-236 `NtWriteFile` bridge serviced the real
+`TitleMeta.xbx` write:
+
+```text
+handle     = 0x48000002
+buffer     = 0x008BFC48
+length     = 48
+offset_ptr = 0x00000000
+status     = 0x00000000
+bytes      = 48
+requested  = 48
+```
+
+The write was followed by a successful `NtClose`, then retail execution
+reached:
+
+```text
+caller = 0x0023F8CB
+target = 0x0022BDA5
+esp    = 0x008BFC28
+trace  = 119
+fault  = 0
+```
+
+Harness result: `PHASE 5U NTWRITEFILE236 NATIVE RESULT: PASS`.
+
+## Phase 5V — direct root 0x0022BDA5
+
+5V promotes only `0x0022BDA5` at depth zero while preserving the native
+`NtWriteFile` continuation and all previously proven Phase-5 runtime/storage
+work.
+
+The Phase-5 path is now stateful because 5U wrote persistent
+`TitleMeta.xbx` contents. Therefore 5V does not require a write on every run.
+Instead, the promoted root is instrumented with an explicit execution flag so
+hardware can prove `0x0022BDA5` ran even if the earlier TitleMeta loop changes
+iteration count.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5V.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_22bda5_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_22bda5_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_22bda5_xdk\phase5v-manifest.json
+```
+
+Build: `P5V-DIRECT22BDA5-20261020-A`
+
+Cookie: `P5V1 / 0x50355631`.
+
+Link-time guard symbol: `phase5v_env_build_cookie`.
