@@ -354,3 +354,51 @@ build\phase5_subsystem_bringup\direct_be8c_xdk\phase5g-manifest.json
 Build: `P5G-DIRECTBE8C-20261020-A`
 
 Cookie: `P5G1 / 0x50354731`.
+
+
+## Phase 5G hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The full native storage and optical-disc mount stack remained intact.
+Translated root `0x0022BE8C` executed successfully and reached the next live
+kernel dependency with `fault=0`:
+
+```text
+ICALL_SAFE
+caller = 0x0022BE8C
+target = 0x800000BE
+trace  = 46
+```
+
+`0x800000BE` is ordinal 190 `NtCreateFile`. The observed stack delta is
+40 bytes, exactly nine stdcall arguments plus the translated synthetic return.
+
+## Phase 5H — native NtCreateFile + synchronous NtReadFile
+
+5H reuses the proven guest symbolic-link/path translator and tagged Xenon
+handle table to service ordinal 190 `NtCreateFile` through native XDK
+`CreateFileA` semantics. It decodes the live guest `OBJECT_ATTRIBUTES` /
+`ANSI_STRING`, maps Xbox create dispositions, writes the guest handle and
+`IO_STATUS_BLOCK`, and resumes translated execution.
+
+Ordinal 219 `NtReadFile` is also armed for synchronous native-backed reads
+from tagged handles. Event/APC asynchronous forms remain explicitly fenced.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5H.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\ntcreatefile_native_xdk\main.cpp
+build\phase5_subsystem_bringup\ntcreatefile_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\ntcreatefile_native_xdk\phase5h-manifest.json
+```
+
+Build: `P5H-NTCREATE190-NATIVE-20261020-A`
+
+Cookie: `P5H1 / 0x50354831`.
