@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 19, 2026 · **Current focus:** Phase 5D — honor live ordinal 67 IoCreateSymbolicLink mount setup and continue the real boot path.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5E — execute post-mount translated root 0x0022C1C0 after Phase 5D hardware PASS.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A/5B/5C storage gates PASS; Phase 5D symbolic-link mount active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A/5B/5C/5D storage + mount gates PASS; Phase 5E post-mount retail helper active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,15 +75,14 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A/5B/5C have passed on hardware. The
-native-backed Partition1 lifecycle now completes end-to-end: `NtOpenFile`
-returns tagged handle `0x48000001`, `NtQueryVolumeInformationFile` class 3
-returns native free/total space, and `NtClose` releases the handle. The live
-path then reaches ordinal 67 `IoCreateSymbolicLink` at `0x80000043` with an
-exact 12-byte full frame and `fault=0`. Phase 5D now captures and honors the
-actual guest symbolic-link mount mapping and feeds that alias into subsequent
-storage path translation. Graphics, input, audio/movie and async/runtime
-remain later Phase-5 blockers.
+**Present blockers:** Phase 4 and Phase 5A/5B/5C/5D have passed on hardware.
+The native-backed Partition1 lifecycle completes end-to-end, and retail code
+now creates the exact optical-disc namespace `\\??\\D: -> \\Device\\CdRom0`
+with STATUS_SUCCESS. Translated execution then advances with `fault=0` to the
+ordinary retail direct frontier `0x0022C1C0` from caller `0x0022BD2D`. Phase
+5E promotes only that exact post-mount helper while retaining the complete
+storage/mount stack. Graphics, input, audio/movie and async/runtime remain
+later Phase-5 blockers.
 
 ### Immediate next tests
 
@@ -236,12 +235,14 @@ remain later Phase-5 blockers.
     native-backed free/total space, then successfully closed token `0x48000001`
     through ordinal 187 `NtClose`. The next live boundary is
     `0x80000043` = ordinal 67 `IoCreateSymbolicLink`, with `fault=0`.
-48. **Phase 5D:** decode the live guest symbolic-link name/target, record the
-    exact mapping, integrate `\\??\\X:` aliases into the storage path
-    translator, and resume. Ordinal 69 `IoDeleteSymbolicLink` is also armed.
+48. **Done:** Phase 5D handled ordinal 67 `IoCreateSymbolicLink` on hardware,
+    creating `\\??\\D: -> \\Device\\CdRom0` with STATUS_SUCCESS, then
+    advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022C1C0`.
+49. **Phase 5E:** promote only hardware-observed post-mount translated root
+    `0x0022C1C0`, retaining the complete native storage + symbolic-link stack.
     Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5D.ps1`.
-    Build tag: `P5D-SYMLINK67-NATIVE-20261019-A`.
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5E.ps1`.
+    Build tag: `P5E-DIRECTC1C0-20261020-A`.
 
 ### Evidence policy
 
@@ -2510,6 +2511,20 @@ unexecuted test PASS.**
 - **Phase 5C: PASS.**
 - **Next:** Phase 5D native guest symbolic-link mount continuation.
 - Build tag: `P5D-SYMLINK67-NATIVE-20261019-A`.
+
+### 2026-10-20 — Phase 5D symbolic-link mount PASS
+
+- Build `P5D-SYMLINK67-NATIVE-20261019-A` passed on real Xbox 360 hardware.
+- The full native Partition1 open/query/close lifecycle remained intact.
+- Ordinal 67 `IoCreateSymbolicLink` decoded and created:
+  - link: `\\??\\D:`;
+  - target: `\\Device\\CdRom0`;
+  - status: `0x00000000`.
+- Translated execution advanced with `fault=0` to
+  `DIRECT_FRONTIER caller=0x0022BD2D target=0x0022C1C0`.
+- **Phase 5D: PASS.**
+- **Next:** Phase 5E exact-root promotion of `0x0022C1C0`.
+- Build tag: `P5E-DIRECTC1C0-20261020-A`.
 
 ### How future updates are recorded
 
