@@ -1623,3 +1623,60 @@ Build: `P5AB-DIRECT22F0AE-20261020-A`
 Cookie: `P5AB / 0x50354142`.
 
 Link-time guard symbol: `phase5ab_env_build_cookie`.
+
+
+## Phase 5AB hardware result
+
+5AB confirmed that persistent title-image state changes the retail branch.
+`TitleImage.xbx` is now 10,240 bytes, so retail proceeds to
+`SaveImage.xbx`, finds it empty, loads XBE section 12 `$$XSIMAGE`, and
+prepares a 4,096-byte write from guest VA `0x00877540`.
+
+The call comes from the same translated caller `0x0022F0CC` and has the
+same one-dword-short saved-ESP behavior previously proven for `$$XTIMAGE`.
+5AB intentionally fences it because its repair allowlist still contained only
+the first image payload. No native write is issued and `fault=0`.
+
+## Phase 5AC — TitleImage + SaveImage write allowlist
+
+5AC replaces the single-payload repair guard with a narrow two-entry
+hardware-proven allowlist:
+
+```text
+section 11 $$XTIMAGE
+  file   = TitleImage.xbx
+  VA     = 0x00874D40
+  length = 0x2800
+
+section 12 $$XSIMAGE
+  file   = SaveImage.xbx
+  VA     = 0x00877540
+  length = 0x1000
+```
+
+The repair is accepted only after the corresponding successful
+`XeLoadSection` and only when the tagged handle path ends in the expected
+filename, all synchronous fields are null, and `ByteOffset=NULL`.
+The continuation still uses `resumeEsp=savedEsp+4`. Root
+`0x0022F0AE` remains packed as the next execution proof target.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AC.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\ntwritefile_image_sections_xdk\main.cpp
+build\phase5_subsystem_bringup\ntwritefile_image_sections_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\ntwritefile_image_sections_xdk\phase5ac-manifest.json
+```
+
+Build:
+`P5AC-NTWRITEFILE236-IMAGESECTIONS-NATIVE-20261020-A`
+
+Cookie: `P5AC / 0x50354143`.
+
+Link-time guard symbol: `phase5ac_env_build_cookie`.
