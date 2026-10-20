@@ -722,3 +722,67 @@ Build: `P5M-NTQUERYINFO211-CAPTURE-20261020-A`
 Cookie: `P5M1 / 0x50354D31`.
 
 Link-time guard symbol: `phase5m_env_build_cookie`.
+
+
+## Phase 5M hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The capture-only ordinal-211 gate preserved the complete Phase-5L path and
+observed the live request immediately after `TitleMeta.xbx` was opened:
+
+```text
+handle = 0x48000002
+iosb   = 0x008BFEB4
+info   = 0x008BFE68
+len    = 56
+class  = 34
+fault  = 0
+trace  = 54
+```
+
+Class 34 is `FileNetworkOpenInformation`, and the 56-byte request matches
+the exact `FILE_NETWORK_OPEN_INFORMATION` footprint.
+
+## Phase 5N — native FileNetworkOpenInformation continuation
+
+5N retains the tagged native handle and records the Xenon path associated with
+each guest handle token. The observed class-34 request is returned as:
+
+```text
++0x00 CreationTime      u64
++0x08 LastAccessTime    u64
++0x10 LastWriteTime     u64
++0x18 ChangeTime        u64
++0x20 AllocationSize    u64
++0x28 EndOfFile         u64
++0x30 FileAttributes    u32
++0x34 Reserved          u32
+total                   56 bytes
+```
+
+Native metadata comes from `GetFileAttributesExA`. ChangeTime mirrors
+LastWriteTime because that XAM-visible metadata surface has no distinct
+change-time field. AllocationSize rounds EOF to the 16 KiB FATX-style unit
+already used by the proven volume bridge. Unobserved information classes stay
+fenced at `FILE_INFORMATION`.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5N.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\ntqueryinfo_native_xdk\main.cpp
+build\phase5_subsystem_bringup\ntqueryinfo_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\ntqueryinfo_native_xdk\phase5n-manifest.json
+```
+
+Build: `P5N-NTQUERYINFO211-NATIVE-20261020-A`
+
+Cookie: `P5N1 / 0x50354E31`.
+
+Link-time guard symbol: `phase5n_env_build_cookie`.
