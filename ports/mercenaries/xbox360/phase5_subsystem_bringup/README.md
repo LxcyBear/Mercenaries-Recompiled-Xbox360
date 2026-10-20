@@ -2143,3 +2143,26 @@ powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_sub
 
 Build: `P5AX-FRONTIER23E600-20261020-A`
 
+## Phase 5AX hardware advance / Phase 5AY ordinal-289 repair
+
+5AX executed the promoted `0x0023E600` closure and reached a new kernel-frame
+boundary at translated caller `0x0022A7A4`:
+
+```text
+RtlInitAnsiString FRAME MISMATCH:
+esp=008BE9C8 saved_esp=008BE9D8 delta=16 expected=12
+BOUNDARY: kind=KERNEL_FRAME caller=0022A7A4 target=80000121 fault=0
+```
+
+Phase 5AY keeps the canonical two-argument `RtlInitAnsiString` ABI and applies
+a guarded `savedEsp - 4` repair only to that exact caller/frame after validating
+the normal return/destination/source slots.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AY.ps1"
+```
+
+Build: `P5AY-RTLANSI-A7A4-20261020-A`
+
