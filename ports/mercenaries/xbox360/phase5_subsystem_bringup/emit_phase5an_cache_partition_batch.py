@@ -7588,7 +7588,7 @@ def main() -> int:
 
     manifest = {
         "phase": "5AN",
-        "build_tag": "P5AN-CACHE-PARTITION-BATCH-20261020-A",
+        "build_tag": "P5AN-CACHE-PARTITION-BATCH-20261020-B",
         "entry": f"0x{root_va:08X}",
         "thread_start": f"0x{THREAD_START:08X}",
         "thread_context1": f"0x{THREAD_CTX1:08X}",
@@ -8134,7 +8134,7 @@ extern "C" DWORD phase5an_env_build_cookie(void)
     driver = base.driver_source(root_name, root_va, len(member_vas))
     driver = driver.replace(
         "P4C-STARTUP-20261019-A",
-        "P5AN-CACHE-PARTITION-BATCH-20261020-A",
+        "P5AN-CACHE-PARTITION-BATCH-20261020-B",
     )
     driver = driver.replace(
         "Policy: execute the real retail entry and stop at the first live dynamic/indirect boundary",
@@ -8313,7 +8313,7 @@ extern "C" DWORD phase5an_env_build_cookie(void)
         "    trace(\"PASS: hardware-observed post-XeLoadSection direct root 0022F0CC is packed for translated execution\");\n"
         "    trace(\"PASS: hardware-observed post-TitleImage-write direct root 0022F0AE is packed for translated execution\");\n"        "    trace(\"PASS: hardware-observed persistent-state direct root 0022A604 is packed for translated execution\");\n"        "    trace(\"PASS: hardware-observed next direct root 0022A3B9 is packed for translated execution\");\n"        "    trace(\"PASS: Phase 5AN cache-setup root 0022C5C6 plus bounded depth-2 closure is packed\");\n"
         "    trace(\"PASS: Phase 5AN Partition0 config read/write device semantics armed\");\n"
-        "    trace(\"PASS: Phase 5AN cache partition mappings armed for Partition3/4/5\");\n"
+        "    trace(\"PASS: Phase 5AN cache partition mappings armed for Partition3/4/5\");\n"        "    trace(\"PASS: Phase 5AN exact cache-root mappings armed for Partition3/4/5 (slash optional)\");\n"
         "    trace(\"PASS: Phase 5AN guest-safe Mm cluster armed: ordinals 165/166/167/171/172/173/175/176/177/178/179/180/181/182/183/184/199\");\n"
         "    trace(\"PASS: Phase 5AN hardware-sensitive Mm ordinal 168 remains fenced\");\n"
         "    trace(\"PASS: Phase 5AN ordinal 202 NtOpenFile native continuation armed\");\n"
