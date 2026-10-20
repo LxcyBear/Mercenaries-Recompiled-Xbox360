@@ -1494,3 +1494,35 @@ Ordinal 69 `IoDeleteSymbolicLink` is also armed.
 Build tag: `P5D-SYMLINK67-NATIVE-20261019-A`.
 
 Cookie: `P5D1 / 0x50354431`.
+
+
+#### Phase 5D — symbolic-link mount hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5D-SYMLINK67-NATIVE-20261019-A` preserved the native Partition1
+open/query/close lifecycle and successfully handled ordinal 67
+`IoCreateSymbolicLink`.
+
+Retail hardware evidence:
+
+```text
+\??\D: -> \Device\CdRom0
+status=0x00000000
+```
+
+Translated execution then advanced with `fault=0` to
+`DIRECT_FRONTIER caller=0x0022BD2D target=0x0022C1C0`.
+
+#### Phase 5E — promote post-mount root 0x0022C1C0
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5E.ps1`
+
+5E retains the complete native storage/mount stack and promotes only the exact
+hardware-observed translated root `0x0022C1C0`. Preparation fails closed for
+a split/mid-function target or missing generated body.
+
+Build tag: `P5E-DIRECTC1C0-20261020-A`.
+
+Cookie: `P5E1 / 0x50354531`.
