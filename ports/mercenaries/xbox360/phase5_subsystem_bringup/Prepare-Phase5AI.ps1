@@ -101,6 +101,8 @@ foreach ($requiredText in @(
     "s_phase4cNtStatusInput == 0xC0000001u",
     "s_phase4cNtStatusDosError == 31u",
     "case 0xC0000001u: dosError = 31u;",
+    "DATA THUNK FIXUP: ordinal=164",
+    "startup data imports 156/164/322/324 point at initialized guest kernel data; LaunchDataPage=NULL",
     "PASS: Phase 5AI ordinal 218 NtQueryVolumeInformationFile native continuation armed",
     "NtQueryVolumeInformationFile LIVE FRAME",
     "PASS: Phase 5AI NtQueryVolumeInformationFile native continuation",
@@ -217,6 +219,13 @@ if (-not (Test-Path -LiteralPath $manifest)) {
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($manifestJson.phase -ne "5AI" -or $manifestJson.build_tag -ne "P5AI-LAUNCHDATAPAGE-DATA-20261020-A") {
     throw "Phase 5AI manifest identity mismatch"
+}
+$launchDataFixup = @($manifestJson.data_thunk_fixups | Where-Object { [int]$_.ordinal -eq 164 })
+if ($launchDataFixup.Count -ne 1 -or
+    $launchDataFixup[0].name -ne "LaunchDataPage" -or
+    $launchDataFixup[0].guest_data_va -ne "0x0087E030" -or
+    $launchDataFixup[0].initial_value -ne "NULL") {
+    throw "Phase 5AI LaunchDataPage data-thunk manifest contract mismatch"
 }
 if ($manifestJson.promoted_direct_frontier_target_7 -ne "0x00238C00") {
     throw "Phase 5AI manifest 38C00 root mismatch"
