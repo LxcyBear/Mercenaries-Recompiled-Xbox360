@@ -25,7 +25,7 @@ foreach ($required in @($python,$generatedRoot,$functionsPath,$entryReport,$thre
 if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-Write-Host "[Phase5AI] REPEATABLE RTLNTSTATUSTODOSERROR ORDINAL 301"
+Write-Host "[Phase5AI] LAUNCHDATAPAGE DATA-EXPORT RELOCATION"
 Write-Host "[Phase5AI] Phase 5AH hardware PASS advanced to a guest READ fault at 0x800000A4 from caller 0x002294AE."
 Write-Host "[Phase5AI] Ordinal 164 is LaunchDataPage, a kernel data export pointer, not executable code."
 Write-Host "[Phase5AI] Relocating ordinal 164 to guest kernel data VA 0x0087E030 and initializing the pointer to NULL."
@@ -67,7 +67,7 @@ if ($emitExit -ne 0) {
             Write-Host "[Phase5AI] Could not decode failure manifest: $($_.Exception.Message)"
         }
     }
-    throw "Phase 5AI repeatable ordinal-301 package emission failed (exit $emitExit). Full emitter output: $emitLog"
+    throw "Phase 5AI LaunchDataPage data-relocation package emission failed (exit $emitExit). Full emitter output: $emitLog"
 }
 
 $main = Join-Path $outDir "main.cpp"
@@ -95,9 +95,9 @@ foreach ($requiredText in @(
     "PASS: Phase 5AI NtOpenFile native continuation",
     "PASS: Phase 5AI Partition0 root NtOpenFile native continuation",
     "game:\\merc360-partition0",
-    "s_phase5aiPartition0OpenSuccessCount > 0u",
+    "s_phase5ahPartition0OpenSuccessCount > 0u",
     "PASS: Phase 5AI ordinal 301 RtlNtStatusToDosError repeatable mapping",
-    "s_phase5aiNtStatusMapCount >= 2u",
+    "s_phase5ahNtStatusMapCount >= 2u",
     "s_phase4cNtStatusInput == 0xC0000001u",
     "s_phase4cNtStatusDosError == 31u",
     "case 0xC0000001u: dosError = 31u;",
@@ -147,24 +147,24 @@ foreach ($requiredText in @(
     "PASS: hardware-observed post-TitleImage-write direct root 0022F0AE is packed for translated execution",
     "PASS: hardware-observed persistent-state direct root 0022A604 is packed for translated execution",
     "PASS: hardware-observed next direct root 0022A3B9 is packed for translated execution",
-    "s_phase5aiRoot22BDA5Entered = 1;",
-    "s_phase5aiRoot22F08DEntered = 1;",
-    "s_phase5aiRoot22F0CCEntered = 1;",
-    "s_phase5aiRoot22F0AEEntered = 1;",
-    "s_phase5aiRoot22A604Entered = 1;",
-    "s_phase5aiRoot22A3B9Entered = 1;",
-    "s_phase5aiRoot22A3B9Entered &&",
+    "s_phase5ahRoot22BDA5Entered = 1;",
+    "s_phase5ahRoot22F08DEntered = 1;",
+    "s_phase5ahRoot22F0CCEntered = 1;",
+    "s_phase5ahRoot22F0AEEntered = 1;",
+    "s_phase5ahRoot22A604Entered = 1;",
+    "s_phase5ahRoot22A3B9Entered = 1;",
+    "s_phase5ahRoot22A3B9Entered &&",
     "PASS: Phase 5AI ordinal 236 NtWriteFile 36-byte native continuation armed",
     'PASS: Phase 5AI caller 0022F0CC NtWriteFile saved-ESP repair armed for proven $XTIMAGE/$XSIMAGE image-section frames',
-    "phase5ai_path_ends_with_ci",
-    "s_phase5aiNtWriteFileXsImageSuccessCount",
+    "phase5ah_path_ends_with_ci",
+    "s_phase5ahNtWriteFileXsImageSuccessCount",
     "NtWriteFile SAVEDESP REPAIR PROBE:",
     "PASS: Phase 5AI NtWriteFile caller 0022F0CC saved-ESP repair image=",
     "PASS: Phase 5AI ordinal 327 XeLoadSection native bookkeeping continuation armed",
     "PASS: Phase 5AI ordinal 328 XeUnloadSection native bookkeeping continuation armed",
     "XeUnloadSection LIVE FRAME:",
     "PASS: Phase 5AI XeUnloadSection native bookkeeping continuation",
-    "s_phase5aiXeUnloadSectionSuccessCount",
+    "s_phase5ahXeUnloadSectionSuccessCount",
     "XeLoadSection LIVE FRAME:",
     "PASS: Phase 5AI XeLoadSection native continuation",
     "sub_00239B78",
@@ -215,7 +215,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
     throw "Generated Phase 5AI manifest is missing: $manifest"
 }
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-if ($manifestJson.phase -ne "5AH" -or $manifestJson.build_tag -ne "P5AI-LAUNCHDATAPAGE-DATA-20261020-A") {
+if ($manifestJson.phase -ne "5AI" -or $manifestJson.build_tag -ne "P5AI-LAUNCHDATAPAGE-DATA-20261020-A") {
     throw "Phase 5AI manifest identity mismatch"
 }
 if ($manifestJson.promoted_direct_frontier_target_7 -ne "0x00238C00") {
@@ -527,6 +527,6 @@ Write-Host "[Phase5AI] Build BOTH freshly generated sources in the same XDK proj
 Write-Host "[Phase5AI]   $main"
 Write-Host "[Phase5AI]   $env"
 Write-Host "[Phase5AI] Link-time guard: main requires phase5ai_env_build_cookie from the matching generated environment source."
-Write-Host "[Phase5AI] The 5AH cookie must be 0x50354149 (P5AI)."
+Write-Host "[Phase5AI] The 5AI cookie must be 0x50354149 (P5AI)."
 Write-Host "[Phase5AI] Keep the exact supported retail default.xbe beside the XEX."
 Write-Host "[Phase5AI] Expected build tag: P5AI-LAUNCHDATAPAGE-DATA-20261020-A"
