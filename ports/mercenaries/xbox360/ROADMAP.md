@@ -2625,3 +2625,44 @@ instead of guessing.
 Build tag: `P5AE-DIRECT22A604-20261020-A`.
 Cookie: `P5AE / 0x50354145`.
 Link-time guard: `phase5ae_env_build_cookie`.
+
+
+#### Phase 5AE — persistent-state root 0x0022A604 hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5AE-DIRECT22A604-20261020-A` ran against the exact supported retail
+XBE with a 76-body translated pack. The persistent title-state branch again
+observed populated TitleMeta/TitleImage/SaveImage files and created the U:
+symbolic link.
+
+Exact promoted root `0x0022A604` executed on hardware and reached the next
+clean direct frontier:
+
+```text
+caller=0x0022A604
+target=0x0022A3B9
+esp=0x008BFDCC
+trace=63
+fault=0
+```
+
+Harness result: `PHASE 5AE DIRECT22A604 RESULT: PASS`.
+
+#### Phase 5AF — direct root 0x0022A3B9
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AF.ps1`
+
+5AF retains all previous roots and native continuations, retains
+`0x0022A604`, and promotes only hardware-observed frontier `0x0022A3B9`
+at depth zero. Preparation requires that address to be an exact generated
+function start; otherwise it stops and reports the containing range so a
+mid-function split can be added deliberately.
+
+The new root has explicit entry instrumentation and must execute before a later
+nonfaulting boundary can satisfy the hardware PASS gate.
+
+Build tag: `P5AF-DIRECT22A3B9-20261020-A`.
+Cookie: `P5AF / 0x50354146`.
+Link-time guard: `phase5af_env_build_cookie`.
