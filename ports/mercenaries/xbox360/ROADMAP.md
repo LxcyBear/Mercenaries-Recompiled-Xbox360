@@ -2718,3 +2718,55 @@ proof accidentally.
 Build tag: `P5AG-PARTITION0-NATIVE-20261020-A`.
 Cookie: `P5AG / 0x50354147`.
 Link-time guard: `phase5ag_env_build_cookie`.
+
+
+#### Phase 5AG — exact Partition0 root open hardware pass / repeatable ordinal-301 discovery
+**Status: Partition0 continuation HARDWARE PASS; overall harness result FAIL at a stale one-shot ordinal-301 gate.**
+
+Build `P5AG-PARTITION0-NATIVE-20261020-A` ran against the exact supported
+retail XBE with the 77-body pack. The exact Partition0 sandbox mapping worked:
+
+```text
+\Device\Harddisk0\partition0
+    -> game:\merc360-partition0
+status = 0
+token  = 0x48000001
+```
+
+Retail then issued `NtReadFile` on that handle for 512 bytes at byte offset
+`0x800`. The directory-backed sandbox returned `STATUS_UNSUCCESSFUL
+(0xC0000001)`, after which translated caller `0x0022B1A6` immediately
+called ordinal 301 `RtlNtStatusToDosError`.
+
+The maintained ordinal-301 bridge was unintentionally one-shot: its dispatch
+required `!s_phase4cNtStatusMapped`. The earlier startup conversion of
+`STATUS_SUCCESS` had already set that flag, so the second legitimate call
+escaped as `ICALL_SAFE` with `fault=0`.
+
+Final harness label:
+`PHASE 5AG PARTITION0 NATIVE RESULT: FAIL`.
+
+#### Phase 5AH — repeatable RtlNtStatusToDosError ordinal 301
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AH.ps1`
+
+5AH keeps the exact Partition0 mapping and all 77 translated bodies, removes
+the one-shot ordinal-301 dispatch guard, and aligns the maintained status
+mapping table with `src/kernel/kernel_rtl.c`.
+
+The new hardware proof requires at least two ordinal-301 calls and specifically
+requires the latest observed conversion to be:
+
+```text
+STATUS_UNSUCCESSFUL 0xC0000001
+    -> ERROR_GEN_FAILURE 31
+```
+
+Only after that proof may a later nonfaulting runtime boundary satisfy the
+phase gate.
+
+Build tag: `P5AH-RTLSTATUS301-REPEATABLE-20261020-A`.
+Cookie: `P5AH / 0x50354148`.
+Link-time guard: `phase5ah_env_build_cookie`.
