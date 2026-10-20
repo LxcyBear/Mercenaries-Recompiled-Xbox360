@@ -1960,3 +1960,36 @@ has no body. Deeper direct callees remain fenced for hardware discovery.
 Build tag: `P5P-DIRECT23DDDD-20261020-A`.
 Cookie: `P5P1 / 0x50355031`.
 Link-time guard: `phase5p_env_build_cookie`.
+
+
+#### Phase 5P — post-TitleMeta direct root 0x0023DDDD hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5P-DIRECT23DDDD-20261020-A` retained the native
+`TitleMeta.xbx` class-34 metadata continuation. Root `0x0023DDDD`
+executed as translated trace entry 55, then reached a new direct frontier with
+`fault=0`:
+
+```text
+caller=0x0023DDDD
+target=0x0023DD7B
+esp=0x008BF76C
+trace=56
+```
+
+Harness result: `PHASE 5P DIRECT23DDDD RESULT: PASS`.
+
+#### Phase 5Q — post-TitleMeta direct root 0x0023DD7B
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5Q.ps1`
+
+5Q retains roots `0x00239B78` and `0x0023DDDD`, then promotes only exact
+hardware-observed root `0x0023DD7B` at depth zero. Because the new target is
+only 0x62 bytes below the preceding root, preparation explicitly rejects a
+split/mid-function target. A missing frozen Stage-3 body also fails closed.
+
+Build tag: `P5Q-DIRECT23DD7B-20261020-A`.
+Cookie: `P5Q1 / 0x50355131`.
+Link-time guard: `phase5q_env_build_cookie`.
