@@ -166,3 +166,19 @@ Current Phase-5 hardware frontier (2026-10-20):
 - Active generated XDK package:
   `build/phase5_subsystem_bringup/post_persist_closure_xdk`.
 
+### Phase-5 symbolic-link object frontier
+
+Phase 5AT hardware proved that translated caller `0x0022B7B2` opens
+`\??\D:` through original-Xbox ordinal 203 `NtOpenSymbolicLinkObject`.
+That link was already created by the maintained `IoCreateSymbolicLink`
+continuation and resolves to `\Device\CdRom0`.
+
+Phase 5AU files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AU.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5au_symlink_object_native.py`
+
+5AU owns a separate `0x53xxxxxx` guest symbolic-link-object handle class,
+services ordinals 203 and 215 against the guest link table, and extends
+`NtClose` for that handle class. Native file handles remain in the existing
+`0x48xxxxxx` table.
+
