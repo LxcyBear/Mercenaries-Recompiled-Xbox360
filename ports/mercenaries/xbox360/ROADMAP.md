@@ -3026,7 +3026,9 @@ esp=008BFF40 saved_esp=008BFF44 fault=0
 ```
 
 #### Phase 5BA — packed ICALL frontier 0x0023D550
-**Status: package preparation ready.**
+**Status: package preparation ready after one Phase-3N inventory refresh.**
+
+Phase 5AZ hardware proved `0x0023D550` is a real indirect guest-code entry, so it has been added to `ports/mercenaries/manual-seeds.json`. Existing `build/phase3n_final_abi_scale` output predates that seed and must be regenerated once before 5BA emission.
 
 Gate:
 `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BA.ps1`
