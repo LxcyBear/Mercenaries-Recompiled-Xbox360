@@ -854,6 +854,24 @@ static uint32_t s_phase5anDiskIdentitySeen40;
 static uint32_t s_phase5anDiskIdentitySeen41;
 static uint32_t s_phase5anDiskIdentitySeen42;
 
+#define PHASE5AN_AUDIO_FALLBACK_CAP 16u
+typedef struct Phase5ANAudioFallbackAllocation
+{
+    uint32_t inUse;
+    uint32_t base;
+    uint32_t size;
+    uint32_t attributes;
+} Phase5ANAudioFallbackAllocation;
+
+static Phase5ANAudioFallbackAllocation
+    s_phase5anAudioFallback[PHASE5AN_AUDIO_FALLBACK_CAP];
+static uint32_t s_phase5anAudioFallbackAttemptCount;
+static uint32_t s_phase5anAudioFallbackSuccessCount;
+static uint32_t s_phase5anAudioFallbackFreeCount;
+static uint32_t s_phase5anAudioAllocFailureTestCount;
+static uint32_t s_phase5anCachePrepareCallCount;
+static uint32_t s_phase5anCachePrepareReadyCount;
+
 #define PHASE5D_SYMLINK_CAP 32u
 typedef struct Phase5DSymbolicLink
 {
@@ -5557,6 +5575,188 @@ static uint32_t phase5an_release_guest_pages(uint32_t base)
     return size;
 }
 
+
+/*
+ * Generated audio-wrapper support shims exposed by the depth-2 cache closure.
+ * Preserve the retail allocator/free paths: the test hook never forces a
+ * failure, the fallback runs only after the normal allocator returned NULL,
+ * and free claims only pointers allocated by this fallback table.
+ */
+int recomp_test_audio_alloc_failure(uint32_t attributes)
+{
+    char line[256];
+    ++s_phase5anAudioAllocFailureTestCount;
+    sprintf(
+        line,
+        "PASS: Phase 5AN audio alloc failure-test hook attributes=%08X calls=%u forced_failure=0",
+        (unsigned int)attributes,
+        (unsigned int)s_phase5anAudioAllocFailureTestCount);
+    trace(line);
+    return 0;
+}
+
+uint32_t recomp_audio_pool_fallback(uint32_t size, uint32_t attributes)
+{
+    uint32_t i;
+    uint32_t actual = 0u;
+    uint32_t base = 0u;
+    char line[384];
+
+    ++s_phase5anAudioFallbackAttemptCount;
+
+    if (size == 0u)
+    {
+        trace("PASS: Phase 5AN audio fallback ignored zero-byte allocation");
+        return 0u;
+    }
+
+    for (i = 0u; i < PHASE5AN_AUDIO_FALLBACK_CAP; ++i)
+        if (!s_phase5anAudioFallback[i].inUse)
+            break;
+
+    if (i >= PHASE5AN_AUDIO_FALLBACK_CAP)
+    {
+        trace("Phase 5AN audio fallback table exhausted");
+        return 0u;
+    }
+
+    base = phase5an_alloc_guest_pages(
+        size,
+        0x1000u,
+        0x4u,
+        &actual);
+    if (base == 0u)
+    {
+        sprintf(
+            line,
+            "Phase 5AN audio fallback allocation failed size=%u attributes=%08X attempts=%u",
+            (unsigned int)size,
+            (unsigned int)attributes,
+            (unsigned int)s_phase5anAudioFallbackAttemptCount);
+        trace(line);
+        return 0u;
+    }
+
+    s_phase5anAudioFallback[i].inUse = 1u;
+    s_phase5anAudioFallback[i].base = base;
+    s_phase5anAudioFallback[i].size = actual;
+    s_phase5anAudioFallback[i].attributes = attributes;
+    ++s_phase5anAudioFallbackSuccessCount;
+
+    sprintf(
+        line,
+        "PASS: Phase 5AN audio pool fallback size=%u rounded=%u attributes=%08X base=%08X slot=%u successes=%u",
+        (unsigned int)size,
+        (unsigned int)actual,
+        (unsigned int)attributes,
+        (unsigned int)base,
+        (unsigned int)i,
+        (unsigned int)s_phase5anAudioFallbackSuccessCount);
+    trace(line);
+    return base;
+}
+
+int recomp_audio_pool_free(uint32_t ptr)
+{
+    uint32_t i;
+    uint32_t freed;
+    char line[320];
+
+    if (ptr == 0u)
+        return 0;
+
+    for (i = 0u; i < PHASE5AN_AUDIO_FALLBACK_CAP; ++i)
+    {
+        if (!s_phase5anAudioFallback[i].inUse ||
+            s_phase5anAudioFallback[i].base != ptr)
+            continue;
+
+        freed = phase5an_release_guest_pages(ptr);
+        if (freed == 0u)
+        {
+            sprintf(
+                line,
+                "Phase 5AN audio fallback free failed ptr=%08X slot=%u",
+                (unsigned int)ptr,
+                (unsigned int)i);
+            trace(line);
+            return 0;
+        }
+
+        s_phase5anAudioFallback[i].inUse = 0u;
+        s_phase5anAudioFallback[i].base = 0u;
+        s_phase5anAudioFallback[i].size = 0u;
+        s_phase5anAudioFallback[i].attributes = 0u;
+        ++s_phase5anAudioFallbackFreeCount;
+
+        sprintf(
+            line,
+            "PASS: Phase 5AN audio pool fallback free ptr=%08X bytes=%u slot=%u frees=%u",
+            (unsigned int)ptr,
+            (unsigned int)freed,
+            (unsigned int)i,
+            (unsigned int)s_phase5anAudioFallbackFreeCount);
+        trace(line);
+        return 1;
+    }
+
+    return 0;
+}
+
+/*
+ * Cache preparation is deliberately prep-only. The helper is called before
+ * sub_0022C5C6's guest prologue, so returning nonzero would bypass the retail
+ * function without reproducing its guest epilogue. Ensure the isolated cache
+ * roots exist, then return 0 so the translated retail body runs normally.
+ */
+int recomp_prepare_empty_cache_volume(void)
+{
+    static const char* roots[3] = {
+        "game:\\merc360-partition3",
+        "game:\\merc360-partition4",
+        "game:\\merc360-partition5",
+    };
+    uint32_t i;
+    uint32_t ready = 0u;
+    char line[384];
+
+    ++s_phase5anCachePrepareCallCount;
+
+    for (i = 0u; i < 3u; ++i)
+    {
+        SetLastError(ERROR_SUCCESS);
+        if (CreateDirectoryA(roots[i], NULL))
+        {
+            ++ready;
+            continue;
+        }
+
+        if (GetLastError() == ERROR_ALREADY_EXISTS)
+        {
+            ++ready;
+            continue;
+        }
+
+        sprintf(
+            line,
+            "Phase 5AN cache prep root failure path=%s error=%u",
+            roots[i],
+            (unsigned int)GetLastError());
+        trace(line);
+    }
+
+    s_phase5anCachePrepareReadyCount = ready;
+    sprintf(
+        line,
+        "PASS: Phase 5AN cache prep helper calls=%u roots_ready=%u policy=continue-retail-body",
+        (unsigned int)s_phase5anCachePrepareCallCount,
+        (unsigned int)ready);
+    trace(line);
+
+    /* Do not short-circuit sub_0022C5C6; preserve its guest stack/epilogue. */
+    return 0;
+}
+
 static void phase5an_mm_allocate_contiguous(uint32_t savedEsp)
 {
     uint32_t c=g_esp,ret,size,actual=0u,va; char line[384];
@@ -7294,6 +7494,10 @@ def main() -> int:
         "phase5an_mm_query_address_protect",
         "phase5an_mm_unmap_io_space",
         "phase5an_nt_free_virtual_memory",
+        "recomp_test_audio_alloc_failure",
+        "recomp_audio_pool_fallback",
+        "recomp_audio_pool_free",
+        "recomp_prepare_empty_cache_volume",
         "phase5an_hal_return_to_firmware_trap",
         "recomp_crt_memmove",
         "phase4c_direct_frontier",
@@ -7733,7 +7937,25 @@ def main() -> int:
         "promoted_direct_members": [
             f"0x{va:08X}" for va in sorted(promoted_direct_members)
         ],
-        "diagnostic_goal": "complete_partition0_writeback_map_cache_partitions_and_batch_promote_0022C5C6",
+        "diagnostic_goal": "complete_partition0_writeback_cache_partition_batch_and_supply_depth2_cache_audio_support_shims",
+        "phase5an_support_shims": {
+            "recomp_prepare_empty_cache_volume": {
+                "signature": "int(void)",
+                "policy": "ensure Partition3/4/5 roots exist; return 0 so retail translated body executes"
+            },
+            "recomp_test_audio_alloc_failure": {
+                "signature": "int(uint32_t attributes)",
+                "policy": "diagnostic hook only; never force failure"
+            },
+            "recomp_audio_pool_fallback": {
+                "signature": "uint32_t(uint32_t size, uint32_t attributes)",
+                "policy": "page-backed guest fallback only after retail allocator returned NULL; tracked ownership"
+            },
+            "recomp_audio_pool_free": {
+                "signature": "int(uint32_t ptr)",
+                "policy": "consume only tracked fallback pointers; otherwise preserve retail free path"
+            }
+        },
         "phase5an_cache_storage": {
             "partition0_size": 524288,
             "partition0_mode": "bounded in-memory read/write config device",
@@ -7943,7 +8165,13 @@ extern "C" DWORD phase5an_env_build_cookie(void)
         "    s_phase5anHalReturnLaunchPage = 0u;\n"        "    s_phase5anDiskIdentityDataReady = 0u;\n"
         "    s_phase5anDiskIdentitySeen40 = 0u;\n"
         "    s_phase5anDiskIdentitySeen41 = 0u;\n"
-        "    s_phase5anDiskIdentitySeen42 = 0u;\n"
+        "    s_phase5anDiskIdentitySeen42 = 0u;\n"        "    ZeroMemory(s_phase5anAudioFallback, sizeof(s_phase5anAudioFallback));\n"
+        "    s_phase5anAudioFallbackAttemptCount = 0u;\n"
+        "    s_phase5anAudioFallbackSuccessCount = 0u;\n"
+        "    s_phase5anAudioFallbackFreeCount = 0u;\n"
+        "    s_phase5anAudioAllocFailureTestCount = 0u;\n"
+        "    s_phase5anCachePrepareCallCount = 0u;\n"
+        "    s_phase5anCachePrepareReadyCount = 0u;\n"
         "    s_phase5bNtOpenFileObjectAttributes = 0u;\n"
         "    s_phase5bNtOpenFilePathVa = 0u;\n"
         "    s_phase5bNtOpenFilePathLength = 0u;\n"
@@ -8515,6 +8743,19 @@ extern "C" DWORD phase5an_env_build_cookie(void)
         raise SystemExit(
             "[Phase5AN] generated main lost repeatable ordinal-301 instrumentation"
         )
+
+    for marker in (
+        "int recomp_test_audio_alloc_failure(uint32_t attributes)",
+        "uint32_t recomp_audio_pool_fallback(uint32_t size, uint32_t attributes)",
+        "int recomp_audio_pool_free(uint32_t ptr)",
+        "int recomp_prepare_empty_cache_volume(void)",
+        "PASS: Phase 5AN cache prep helper",
+        "PASS: Phase 5AN audio pool fallback",
+    ):
+        if marker not in generated_main:
+            raise SystemExit(
+                f"[Phase5AN] generated main lost support shim marker: {marker}"
+            )
 
     if "PASS: Phase 5AN Partition0 config raw write offset=" not in generated_main:
         raise SystemExit(
