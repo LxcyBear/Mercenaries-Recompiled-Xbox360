@@ -1242,3 +1242,68 @@ Build: `P5V-DIRECT22BDA5-20261020-A`
 Cookie: `P5V1 / 0x50355631`.
 
 Link-time guard symbol: `phase5v_env_build_cookie`.
+
+
+## Phase 5V hardware result
+
+**Hardware PASS; emitted harness PASS expression was stale.**
+
+The 5U write persisted `TitleMeta.xbx`, so on 5V the metadata query reports:
+
+```text
+EOF        = 48
+allocation = 16384
+status     = 0
+```
+
+Retail therefore takes a shorter path than the earlier zero-byte-file runs.
+The promoted root still executes:
+
+```text
+trace[54] = 0x0022BDA5
+```
+
+It then advances into `TitleImage.xbx` handling and reaches:
+
+```text
+caller    = 0x00239C23
+target    = 0x0022F08D
+esp       = 0x008BFBBC
+saved_esp = 0x008BFBBC
+trace     = 58
+fault     = 0
+```
+
+The logged `BOUNDED REAL STARTUP RESULT: FAIL` is a proof-harness
+false-negative: the 5V pass expression still expected the old fixed
+pre-persistence trace entries 54..60. The root execution and clean next
+boundary provide the required hardware proof.
+
+## Phase 5W — TitleImage-path root 0x0022F08D
+
+5W promotes only `0x0022F08D` at depth zero while retaining every previously
+proven Phase-5 continuation, including native `NtWriteFile`.
+
+The gate is explicitly state-aware. It does not require historical fixed trace
+positions or a write on every boot. Instead, the new translated root has an
+entry flag that is required by the runtime PASS condition.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5W.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_22f08d_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_22f08d_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_22f08d_xdk\phase5w-manifest.json
+```
+
+Build: `P5W-DIRECT22F08D-20261020-A`
+
+Cookie: `P5W1 / 0x50355731`.
+
+Link-time guard symbol: `phase5w_env_build_cookie`.
