@@ -262,3 +262,46 @@ build\phase5_subsystem_bringup\direct_c1c0_xdk\phase5e-manifest.json
 Build: `P5E-DIRECTC1C0-20261020-A`
 
 Cookie: `P5E1 / 0x50354531`.
+
+
+## Phase 5E hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The complete native storage and optical-disc mount path remained intact.
+Translated root `0x0022C1C0` executed successfully and advanced with
+`fault=0` to:
+
+```text
+DIRECT_FRONTIER
+caller = 0x0022C1C0
+target = 0x002370B8
+trace  = 24 translated entries
+```
+
+## Phase 5F — next retail translated helper
+
+5F preserves the complete native storage + symbolic-link stack and promotes
+only the exact hardware-observed translated root `0x002370B8`. Deeper direct
+callees remain fenced.
+
+Preparation fails explicitly if `0x002370B8` is a split/mid-function target
+or lacks a generated translated body.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5F.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_370b8_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_370b8_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_370b8_xdk\phase5f-manifest.json
+```
+
+Build: `P5F-DIRECT370B8-20261020-A`
+
+Cookie: `P5F1 / 0x50354631`.
