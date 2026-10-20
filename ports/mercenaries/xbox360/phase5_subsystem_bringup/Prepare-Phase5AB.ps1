@@ -26,7 +26,7 @@ if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 Write-Host "[Phase5AB] POST-TITLEIMAGE-WRITE DIRECT ROOT 0x0022F0AE"
-Write-Host "[Phase5AB] Phase 5AA hardware PASS wrote the full 0x2800-byte $XTIMAGE payload and continued to 0x0022F0AE with fault=0."
+Write-Host '[Phase5AB] Phase 5AA hardware PASS wrote the full 0x2800-byte $XTIMAGE payload and continued to 0x0022F0AE with fault=0.'
 Write-Host "[Phase5AB] Promoting exactly root 0x0022F0AE at depth 0; deeper callees remain fenced."
 Write-Host "[Phase5AB] TitleImage.xbx is now persistent state, so XeLoadSection/NtWriteFile are retained but are not required to repeat on every boot."
 Write-Host "[Phase5AB] Proof uses explicit root-entry instrumentation and no fixed trace positions."
@@ -144,11 +144,9 @@ foreach ($requiredText in @(
     'PASS: Phase 5AB caller 0022F0CC NtWriteFile saved-ESP repair armed for proven $$XTIMAGE frame',
     "NtWriteFile SAVEDESP REPAIR PROBE:",
     "PASS: Phase 5AB NtWriteFile caller 0022F0CC saved-ESP repair",
-    "s_phase5abNtWriteFileSavedEspRepairSuccessCount > 0u",
     "PASS: Phase 5AB ordinal 327 XeLoadSection native bookkeeping continuation armed",
     "XeLoadSection LIVE FRAME:",
     "PASS: Phase 5AB XeLoadSection native continuation",
-    "s_phase5abXeLoadSectionSuccessCount > 0u",
     "sub_00239B78",
     "sub_0023DDDD",
     "sub_0023DD7B",
