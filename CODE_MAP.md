@@ -279,3 +279,17 @@ depth-2/cap-16 closure, target-specific `RECOMP_ICALL_SAFE` packed dispatch,
 actual root-entry proof, and exclusion of the old `0x0023D550` boundary from
 PASS.
 
+### Phase-5 direct frontier 0x0022DDA4
+
+Phase 5BA hardware proved the runtime-discovered `0x0023D550` indirect entry
+and continued through `0x00238533`, `0x00238507`, `0x002384E0`, and
+`0x0022B5EF`. The next fault-free direct target is `0x0022DDA4`.
+
+Phase 5BB files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BB.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bb_frontier22dda4.py`
+
+Policy: validate exact function-start/generated-body identity against the
+refreshed Phase-3N baseline, package depth-2/cap-16 closure, require actual root
+entry, and exclude the old `0x0022DDA4` boundary from PASS.
+
