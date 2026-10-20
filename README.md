@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AL — model original-Xbox `\\Device\\Harddisk0\\Partition0` as a bounded 512 KiB config device after Phase 5AK hardware PASS reached ordinal 49 `HalReturnToFirmware` following the failed raw offset-0x800 probe.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AM — relocate HAL disk-identity DATA exports 40/41/42 after Phase 5AL hardware PASS made the Partition0 offset-0x800/512-byte raw read succeed and advanced to raw token `0x80000028`.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AK hardware PASS; Phase 5AL Partition0 config-device model active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AL hardware PASS; Phase 5AM HAL disk-identity data batch active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,21 +75,20 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5AK have passed their
-hardware gates. Phase 5AK serviced the observed ordinal 178
-`MmPersistContiguousMemory` no-op after a successful 4096-byte contiguous
-allocation at guest `0x03EFF000`, then immediately reached
-`ICALL_SAFE target=0x80000031` (ordinal 49 `HalReturnToFirmware`) with
-`fault=0`. The call order
-`LaunchDataPage -> MmAllocateContiguousMemory(0x1000) ->
-MmPersistContiguousMemory(..., TRUE) -> HalReturnToFirmware` is the standard
-Xbox soft-launch/reboot pattern, so ordinal 49 is treated as a symptom rather
-than the next subsystem. The preceding Partition0 raw read still returns
-`STATUS_UNSUCCESSFUL` for offset `0x800`, length `512`; Phase 5AL fixes
-that root cause by modeling original-Xbox
-`\\Device\\Harddisk0\\Partition0` as a bounded zero-initialized 512 KiB
-fixed-structure config device and traps any residual firmware-return request
-only to record its launch parameters.
+**Present blockers:** Phase 4 and Phase 5A through 5AL have passed their
+hardware gates. Phase 5AL fixed the actual storage root cause: the exact
+`\\Device\\Harddisk0\\Partition0` raw request at offset `0x800`,
+length `512`, now returns `STATUS_SUCCESS` with all 512 bytes from the
+bounded 512 KiB fixed-structure config-device model. The former
+`STATUS_UNSUCCESSFUL -> RtlNtStatusToDosError(31) -> LaunchDataPage ->
+MmAllocateContiguousMemory -> MmPersistContiguousMemory -> HalReturnToFirmware`
+fallback disappears. Retail execution instead advances directly from
+`0x0022A3B9` to READ32 `0x80000028`. Ordinal 40 is the DATA export
+`HalDiskCachePartitionCount`; adjacent ordinals 41/42 are also DATA exports
+(`HalDiskModelNumber` / `HalDiskSerialNumber`). Phase 5AM relocates this
+whole disk-identity cluster into the existing guest kernel-data page, with
+cache partition count 3 (X/Y/Z) and deterministic guest-only model/serial
+STRING objects.
 
 ### Immediate next tests
 
@@ -301,14 +300,20 @@ only to record its launch parameters.
     `Persist=TRUE`; execution then reached ordinal 49
     `HalReturnToFirmware` with `fault=0`. Build:
     `P5AK-MM-SERVICES-20261020-A`.
-62. **Phase 5AL active:** replace the directory-backed Partition0 probe with a
-    bounded 512 KiB zero-initialized config-device model. All synchronous raw
-    reads inside the config area are serviced in memory; the observed hardware
-    probe at byte offset `0x800`, length `512` must return success. If
-    ordinal 49 is still reached, trap it without executing firmware return and
-    log the routine plus `LaunchDataPage` fields/path. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AL.ps1`.
-    Build tag: `P5AL-PARTITION0-CONFIG-20261020-A`.
+62. **Done:** Phase 5AL modeled Partition0 as a bounded 512 KiB
+    fixed-structure config device. Real hardware opened the exact root, serviced
+    the offset-`0x800` / 512-byte raw read with `STATUS_SUCCESS`,
+    `bytes=512`, and eliminated the previous firmware-return fallback. The
+    next deterministic boundary is READ32 `0x80000028` from caller
+    `0x0022A3B9`. Build: `P5AL-PARTITION0-CONFIG-20261020-A`.
+63. **Phase 5AM active:** relocate HAL disk-identity DATA exports as one batch:
+    ordinal 40 `HalDiskCachePartitionCount` is required and initialized to
+    3 (X/Y/Z); optional imported ordinals 41/42
+    `HalDiskModelNumber`/`HalDiskSerialNumber` receive valid guest STRING
+    objects with deterministic synthetic buffers. Raw token `0x80000028` is
+    explicitly rejected as an acceptable next boundary. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AM.ps1`.
+    Build tag: `P5AM-DISK-IDENTITY-DATA-20261020-A`.
 
 ### Evidence policy
 
@@ -2793,6 +2798,27 @@ unexecuted test PASS.**
 - **Next:** Phase 5AL models Partition0 as its actual fixed-structure config
   device so the offset-`0x800` raw read can succeed, and records any residual
   soft-launch request without actually rebooting the diagnostic XEX.
+
+### 2026-10-20 — Phase 5AL Partition0 config-device PASS
+
+- Build `P5AL-PARTITION0-CONFIG-20261020-A` passed on real Xbox 360 hardware.
+- Exact retail verification, 77-body translated pack, startup data relocations,
+  native title-storage state and prior kernel continuations remained intact.
+- The exact Partition0 root open succeeded:
+  `\\Device\\Harddisk0\\partition0 -> game:\\merc360-partition0`.
+- The previously failing raw probe at byte offset `0x800`, length `512`,
+  now returned `STATUS_SUCCESS`, `bytes=512`, `error=0`.
+- Because that probe succeeded, the prior second ordinal-301 error mapping,
+  launch-page allocation/persistence and firmware-return fallback were no
+  longer reached.
+- New deterministic boundary:
+  `GUEST_FAULT READ32 0x80000028` from translated caller `0x0022A3B9`.
+- Ordinal 40 is `HalDiskCachePartitionCount`, a kernel DATA export
+  (`ULONG`), not a callable service. Adjacent ordinals 41/42 are the disk
+  model/serial STRING exports.
+- **Phase 5AL Partition0 config-device model: PASS.**
+- **Next:** Phase 5AM relocates the 40/41/42 disk-identity data cluster in one
+  build so startup does not fall back into one-data-export-per-test iteration.
 
 ### How future updates are recorded
 
