@@ -381,3 +381,14 @@ and pre-packs a support-clean forward band covering
 `0x00239000..0x0023DFFF`, capped at 256 additional functions. The proven
 generic packed ICALL/direct dispatcher remains unchanged; unsupported side
 branches stay fenced and the mandatory seed is never pruned or guessed.
+
+
+Phase 5BE hardware passed on 2026-10-20. The generic packed dispatcher
+consumed `0x00237052`, `0x00237801`, and `0x00239055` in the same
+hardware run. After entering `0x00239055`, the maintained heap allocated
+another 2048-byte block at `0x008C1180` with flags `0x8`, translated
+execution continued through `0x0023D87C`, and the first new hard stop was the
+fault-free safe indirect target `0x0023F22B` from caller `0x0022DDA4`.
+This extends the broad-sweep proof beyond the 5BE regional window and confirms
+that repeated exact packed ICALL promotion is stable across multiple heap-backed
+startup objects in one launch.
