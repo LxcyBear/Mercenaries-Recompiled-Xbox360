@@ -2061,3 +2061,36 @@ a body.
 Build tag: `P5S-DIRECT23DD56-20261020-A`.
 Cookie: `P5S1 / 0x50355331`.
 Link-time guard: `phase5s_env_build_cookie`.
+
+
+#### Phase 5S — post-TitleMeta direct root 0x0023DD56 hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5S-DIRECT23DD56-20261020-A` preserved the complete native
+`TitleMeta.xbx` metadata continuation. Root `0x0023DD56` executed as
+translated trace entry 59, then reached a new direct frontier with `fault=0`:
+
+```text
+caller=0x0023DD56
+target=0x0023F8CB
+esp=0x008BF758
+trace=60
+```
+
+Harness result: `PHASE 5S DIRECT23DD56 RESULT: PASS`.
+
+#### Phase 5T — post-TitleMeta direct root 0x0023F8CB
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5T.ps1`
+
+5T retains roots `0x00239B78`, `0x0023DDDD`, `0x0023DD7B`,
+`0x0023DDA0`, and `0x0023DD56`, then promotes only exact
+hardware-observed root `0x0023F8CB` at depth zero. Preparation fails closed
+if the target is not an exact function start or if the frozen Stage-3
+generated set lacks a body. Deeper direct callees remain fenced.
+
+Build tag: `P5T-DIRECT23F8CB-20261020-A`.
+Cookie: `P5T1 / 0x50355431`.
+Link-time guard: `phase5t_env_build_cookie`.
