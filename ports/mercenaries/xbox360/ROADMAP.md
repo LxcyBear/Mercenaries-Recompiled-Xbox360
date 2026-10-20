@@ -1927,3 +1927,36 @@ Build tag: `P5O-DIRECT239B78-20261020-A`.
 Cookie: `P5O1 / 0x50354F31`.
 
 Link-time guard: `phase5o_env_build_cookie`.
+
+
+#### Phase 5O — post-TitleMeta direct root 0x00239B78 hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5O-DIRECT239B78-20261020-A` retained the complete native
+`TitleMeta.xbx` class-34 metadata continuation. Root `0x00239B78` executed
+as translated trace entry 54, then reached a new direct frontier with
+`fault=0`:
+
+```text
+caller=0x00239B78
+target=0x0023DDDD
+esp=0x008BFBE0
+trace=55
+```
+
+Harness result: `PHASE 5O DIRECT239B78 RESULT: PASS`.
+
+#### Phase 5P — post-TitleMeta direct root 0x0023DDDD
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5P.ps1`
+
+5P retains root `0x00239B78` and promotes only exact hardware-observed
+translated root `0x0023DDDD` at depth zero. Preparation fails closed if the
+address is not an exact function start or if the frozen Stage-3 generated set
+has no body. Deeper direct callees remain fenced for hardware discovery.
+
+Build tag: `P5P-DIRECT23DDDD-20261020-A`.
+Cookie: `P5P1 / 0x50355031`.
+Link-time guard: `phase5p_env_build_cookie`.
