@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5H — service live ordinal 190 NtCreateFile through native Xenon storage after Phase 5G hardware PASS.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5I — service live ordinal 289 RtlInitAnsiString after Phase 5H hardware PASS.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5G PASS; Phase 5H native NtCreateFile active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5H PASS; Phase 5I RTL string initialization active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,14 +75,14 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5G have passed on hardware.
+**Present blockers:** Phase 4 and Phase 5A through 5H have passed on hardware.
 The native-backed Partition1 lifecycle and `D:` optical-disc mount remain
-intact, translated root `0x0022BE8C` now executes, and the live path reaches
-`ICALL_SAFE target=0x800000BE` = ordinal 190 `NtCreateFile` with a correct
-40-byte full frame, a 46-entry translated trace and `fault=0`. Phase 5H now
-services that create/open operation through native Xenon storage and also arms
-synchronous ordinal 219 `NtReadFile`. Graphics, input, audio/movie and broader
-async/runtime remain later Phase-5 blockers.
+intact. Ordinal 190 `NtCreateFile` now successfully opens/creates
+`\\Device\\Harddisk0\\partition1\\TDATA` as
+`game:\\merc360-partition1\\TDATA` with `FILE_OPEN_IF`, then closes the
+tagged handle. The live path next reaches `0x80000121` = ordinal 289
+`RtlInitAnsiString` with an exact 12-byte full frame and `fault=0`. Phase 5I
+services that maintained RTL string primitive and continues.
 
 ### Immediate next tests
 
@@ -248,12 +248,15 @@ async/runtime remain later Phase-5 blockers.
 51. **Done:** Phase 5G executed translated root `0x0022BE8C` with the full
     native storage/mount stack intact and reached `ICALL_SAFE target=0x800000BE`
     (ordinal 190 `NtCreateFile`) with a 46-entry trace and `fault=0`.
-52. **Phase 5H:** service ordinal 190 `NtCreateFile` through native Xenon/XDK
-    `CreateFileA` semantics using the proven symbolic-link/path translator and
-    tagged guest-handle table; also arm synchronous ordinal 219 `NtReadFile`.
+52. **Done:** Phase 5H serviced ordinal 190 `NtCreateFile` for
+    `\\Device\\Harddisk0\\partition1\\TDATA` using `FILE_OPEN_IF`,
+    returned STATUS_SUCCESS, closed the tagged handle, and reached ordinal 289
+    `RtlInitAnsiString` with `fault=0`.
+53. **Phase 5I:** apply maintained Xbox `RtlInitAnsiString` semantics using
+    bounded guest-string reads, log the live source string preview, and resume.
     Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5H.ps1`.
-    Build tag: `P5H-NTCREATE190-NATIVE-20261020-A`.
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5I.ps1`.
+    Build tag: `P5I-RTLINITANSI289-20261020-A`.
 
 ### Evidence policy
 
@@ -2577,6 +2580,21 @@ unexecuted test PASS.**
 - **Phase 5G: PASS.**
 - **Next:** Phase 5H native `NtCreateFile` + synchronous `NtReadFile`.
 - Build tag: `P5H-NTCREATE190-NATIVE-20261020-A`.
+
+### 2026-10-20 — Phase 5H TDATA NtCreateFile PASS
+
+- Build `P5H-NTCREATE190-NATIVE-20261020-A` passed on real Xbox 360 hardware.
+- Ordinal 190 `NtCreateFile` opened/created
+  `\\Device\\Harddisk0\\partition1\\TDATA`.
+- Native backing path: `game:\\merc360-partition1\\TDATA`.
+- Create disposition: `FILE_OPEN_IF`; status `0x00000000`.
+- Tagged handle `0x48000001` was closed successfully.
+- Ordinal 219 `NtReadFile` was armed but not reached in this run.
+- New live dependency: `0x80000121` = ordinal 289 `RtlInitAnsiString`.
+- Observed full frame: 12 bytes; boundary remained `fault=0`.
+- **Phase 5H: PASS.**
+- **Next:** Phase 5I maintained `RtlInitAnsiString` continuation.
+- Build tag: `P5I-RTLINITANSI289-20261020-A`.
 
 ### How future updates are recorded
 
