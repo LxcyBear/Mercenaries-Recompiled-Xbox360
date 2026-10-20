@@ -538,6 +538,15 @@ def rewrite_direct_frontier(base, source, generated, packed_vas):
 def phase5a_boundary(base):
     text = base.boundary_support()
 
+    # Phase 5L state is consumed by the support-owned B178 body below. Declare
+    # it before the donor body so the XDK compiler sees the symbols before
+    # their first use.
+    text = (
+        "static uint32_t s_phase5lXboxLastError;\n"
+        "static uint32_t s_phase5lSetLastErrorCount;\n\n"
+        + text
+    )
+
     # B178 is already a maintained helper in the Phase-4C support donor.
     # Instrument that one canonical body instead of emitting a duplicate body
     # from the translated pack. Keep the shared s_phase4cLastError state so
@@ -730,8 +739,6 @@ static uint32_t s_phase5kRtlEqualStringLastString1;
 static uint32_t s_phase5kRtlEqualStringLastString2;
 static uint32_t s_phase5kRtlEqualStringLastCaseInsensitive;
 static uint32_t s_phase5kRtlEqualStringLastResult;
-static uint32_t s_phase5lXboxLastError;
-static uint32_t s_phase5lSetLastErrorCount;
 
 #define PHASE5D_SYMLINK_CAP 32u
 typedef struct Phase5DSymbolicLink
@@ -5455,10 +5462,23 @@ extern "C" DWORD phase5l_env_build_cookie(void)
     )
 
     b178_definition = "static void sub_0022B178(void)"
+    phase5l_state_decl = "static uint32_t s_phase5lXboxLastError;"
+    phase5l_count_decl = "static uint32_t s_phase5lSetLastErrorCount;"
     if generated_main.count(b178_definition) != 1:
         raise SystemExit(
             "[Phase5L] generated main must contain exactly one support-owned "
             "sub_0022B178 definition"
+        )
+    if generated_main.count(phase5l_state_decl) != 1 or generated_main.count(phase5l_count_decl) != 1:
+        raise SystemExit(
+            "[Phase5L] generated main must contain exactly one declaration "
+            "for each Phase 5L SetLastError state variable"
+        )
+    b178_index = generated_main.index(b178_definition)
+    if generated_main.index(phase5l_state_decl) > b178_index or generated_main.index(phase5l_count_decl) > b178_index:
+        raise SystemExit(
+            "[Phase5L] SetLastError state declarations must precede the "
+            "support-owned B178 body"
         )
     if "s_phase4cLastError = GUEST_READ32(g_esp + 4u);" not in generated_main:
         raise SystemExit(
