@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AN — complete Partition0 read/write config-device semantics, map cache Partition3/4/5, and batch-promote translated root `0x0022C5C6` after Phase 5AM hardware PASS.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AO — continue cache-volume setup through ordinal 196 `NtDeviceIoControlFile` after Phase 5AN-B hardware PASS opened Partition5 and advanced fault-free to token `0x800000C4`.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AM hardware PASS; Phase 5AN cache-partition/storage batch active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AN hardware PASS; Phase 5AO cache device-control batch active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,17 +75,18 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5AM have passed their
-hardware gates. Phase 5AN is partially hardware-proven: the 512-byte
-Partition0 writeback at offset `0x800` now succeeds with
-`STATUS_SUCCESS`; the depth-2/cap-16 translated cache closure is packed,
-`0x0022C5C6` executes, and the cache-prep shim reports all three isolated
-cache roots ready. The first P5AN hardware run then reaches
-`NtOpenFile("\\Device\\Harddisk0\\Partition5")` without a trailing slash
-and stops at `STORAGE_OPEN`, because the mapper only accepted
-`Partition5\\...` prefix form. P5AN remains active with a batched exact-root
-fix for Partition3/4/5 (case-insensitive, with or without trailing slash),
-while preserving child-path mapping and the translated closure.
+**Present blockers:** Phase 4 and Phase 5A through 5AN have passed their
+hardware gates. Phase 5AN-B completed the cache-storage batch on real hardware:
+Partition0 raw read/write at offset `0x800` both succeed, exact cache-root
+mapping works without a trailing slash, `\\Device\\Harddisk0\\Partition5`
+opens natively as `game:\\merc360-partition5`, and translated root
+`0x0022C5C6` continues with `fault=0`. The next live boundary is
+`ICALL_SAFE target=0x800000C4`, kernel ordinal 196
+`NtDeviceIoControlFile`, immediately after the cache volume opens. Phase 5AO
+batches the two disk controls used by Xbox utility/cache mounting:
+`IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)` and
+`IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`, with unknown/asynchronous
+device-control forms still fenced at `STORAGE_IO`.
 
 ### Immediate next tests
 
@@ -310,18 +311,24 @@ while preserving child-path mapping and the translated closure.
     512-byte writeback at offset `0x800`, constructed Partition5 cache paths,
     and reached direct frontier `0x0022C5C6` with `fault=0`. Build:
     `P5AM-DISK-IDENTITY-DATA-20261020-A`.
-64. **Phase 5AN active / partial hardware proof:** Partition0 bounded
-    read/write semantics are now hardware-proven at offset `0x800`,
-    length `512`, and translated root `0x0022C5C6` executes with its
-    depth-2/cap-16 closure. Cache prep reports Partition3/4/5 roots ready.
-    Current blocker is exact cache-root spelling without a trailing slash:
-    `\\Device\\Harddisk0\\Partition5` reached ordinal 202 and was fenced
-    as unsupported. Active fix accepts exact roots and child paths for
-    Partition3/4/5, case-insensitively, with or without trailing slash.
-    Hardware gate now additionally requires at least one successful cache-root
-    native open. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AN.ps1`.
-    Build tag: `P5AN-CACHE-PARTITION-BATCH-20261020-B`.
+64. **Done:** Phase 5AN-B completed the cache-partition/storage batch on
+    real hardware. Partition0 read/write succeeded at offset `0x800`,
+    length `512`; cache prep reported all three roots ready; exact
+    `\\Device\\Harddisk0\\Partition5` mapped to
+    `game:\\merc360-partition5` and opened successfully; translated root
+    `0x0022C5C6` executed. The next boundary is fault-free
+    `ICALL_SAFE target=0x800000C4` (ordinal 196
+    `NtDeviceIoControlFile`). Build:
+    `P5AN-CACHE-PARTITION-BATCH-20261020-B`.
+65. **Phase 5AO active:** add a synchronous 44-byte ordinal-196
+    `NtDeviceIoControlFile` continuation for tracked cache-volume handles.
+    Batch `IOCTL_DISK_GET_DRIVE_GEOMETRY (0x00070000)` and
+    `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`; unknown/asynchronous
+    controls remain fenced with full live-frame diagnostics. Hardware gate
+    requires at least one successful ordinal-196 compatibility continuation
+    and a boundary newer than `0x800000C4`. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AO.ps1`.
+    Build tag: `P5AO-CACHE-DEVICE-IO-20261020-A`.
 
 ### Evidence policy
 
@@ -2868,6 +2875,24 @@ unexecuted test PASS.**
   existing trailing-slash/child-path mappings; the hardware PASS gate now
   requires a successful cache-root native open.
 - Corrected exact-root build identity is now `P5AN-CACHE-PARTITION-BATCH-20261020-B` so stale `-A` deployments are unambiguous in xbWatson.
+
+### 2026-10-20 — Phase 5AN-B cache-partition batch PASS
+
+- Build `P5AN-CACHE-PARTITION-BATCH-20261020-B` passed on real Xbox 360
+  hardware with the 84-body translated pack.
+- Corrected build identity and exact-root diagnostics were present, proving
+  the deployed XEX contained the intended fix.
+- Partition0 raw read and matching raw writeback both succeeded at offset
+  `0x800`, length `512`, `STATUS_SUCCESS`.
+- Cache prep reported `roots_ready=3`.
+- Exact `\\Device\\Harddisk0\\Partition5` (no trailing slash) mapped to
+  `game:\\merc360-partition5` and `NtOpenFile` succeeded.
+- The run advanced to a new fault-free kernel boundary:
+  `ICALL_SAFE caller=0x0022C5C6 target=0x800000C4`.
+- Token `0x800000C4` is ordinal 196 `NtDeviceIoControlFile`.
+- **Phase 5AN cache-partition batch: PASS.**
+- **Next:** Phase 5AO handles the cache-mount disk geometry and partition-info
+  device controls in one batch and fences any unknown control code.
 
 ### How future updates are recorded
 
