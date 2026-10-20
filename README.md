@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AM — relocate HAL disk-identity DATA exports 40/41/42 after Phase 5AL hardware PASS made the Partition0 offset-0x800/512-byte raw read succeed and advanced to raw token `0x80000028`.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AN — complete Partition0 read/write config-device semantics, map cache Partition3/4/5, and batch-promote translated root `0x0022C5C6` after Phase 5AM hardware PASS.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AL hardware PASS; Phase 5AM HAL disk-identity data batch active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AM hardware PASS; Phase 5AN cache-partition/storage batch active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,20 +75,20 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5AL have passed their
-hardware gates. Phase 5AL fixed the actual storage root cause: the exact
-`\\Device\\Harddisk0\\Partition0` raw request at offset `0x800`,
-length `512`, now returns `STATUS_SUCCESS` with all 512 bytes from the
-bounded 512 KiB fixed-structure config-device model. The former
-`STATUS_UNSUCCESSFUL -> RtlNtStatusToDosError(31) -> LaunchDataPage ->
-MmAllocateContiguousMemory -> MmPersistContiguousMemory -> HalReturnToFirmware`
-fallback disappears. Retail execution instead advances directly from
-`0x0022A3B9` to READ32 `0x80000028`. Ordinal 40 is the DATA export
-`HalDiskCachePartitionCount`; adjacent ordinals 41/42 are also DATA exports
-(`HalDiskModelNumber` / `HalDiskSerialNumber`). Phase 5AM relocates this
-whole disk-identity cluster into the existing guest kernel-data page, with
-cache partition count 3 (X/Y/Z) and deterministic guest-only model/serial
-STRING objects.
+**Present blockers:** Phase 4 and Phase 5A through 5AM have passed their
+hardware gates. Phase 5AM relocated ordinal 40 `HalDiskCachePartitionCount`
+from raw token `0x80000028` to guest kernel data at `0x0087E4A0`, with
+cache partition count 3; optional disk model/serial exports were not imported
+by this retail XBE. The successful Partition0 raw read at offset `0x800`
+remains intact. Retail then edits that 512-byte sector and issues
+`NtWriteFile` back to the same Partition0 offset; the current directory-backed
+write path returns `STATUS_UNSUCCESSFUL`, showing that the fixed-structure
+config-device model still needs bounded write semantics. Startup nevertheless
+continues, constructs `\\Device\\Harddisk0\\Partition5\\`, and reaches
+a new translated direct frontier `0x0022C5C6` from caller `0x0023A3CE`
+with `fault=0`. Phase 5AN batches this cache-storage neighborhood: Partition0
+read/write backing, isolated Partition3/4/5 mappings for X/Y/Z, and a bounded
+depth-2/cap-16 translated closure rooted at `0x0022C5C6`.
 
 ### Immediate next tests
 
@@ -306,14 +306,21 @@ STRING objects.
     `bytes=512`, and eliminated the previous firmware-return fallback. The
     next deterministic boundary is READ32 `0x80000028` from caller
     `0x0022A3B9`. Build: `P5AL-PARTITION0-CONFIG-20261020-A`.
-63. **Phase 5AM active:** relocate HAL disk-identity DATA exports as one batch:
-    ordinal 40 `HalDiskCachePartitionCount` is required and initialized to
-    3 (X/Y/Z); optional imported ordinals 41/42
-    `HalDiskModelNumber`/`HalDiskSerialNumber` receive valid guest STRING
-    objects with deterministic synthetic buffers. Raw token `0x80000028` is
-    explicitly rejected as an acceptable next boundary. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AM.ps1`.
-    Build tag: `P5AM-DISK-IDENTITY-DATA-20261020-A`.
+63. **Done:** Phase 5AM relocated the HAL disk-identity DATA cluster on real
+    hardware. Ordinal 40 moved from `0x80000028` to `0x0087E4A0`,
+    initialized cache count 3; ordinals 41/42 were absent from this import
+    table. Partition0 raw read stayed successful. Retail then attempted a
+    512-byte writeback at offset `0x800`, constructed Partition5 cache paths,
+    and reached direct frontier `0x0022C5C6` with `fault=0`. Build:
+    `P5AM-DISK-IDENTITY-DATA-20261020-A`.
+64. **Phase 5AN active:** make Partition0 a bounded read/write 512 KiB config
+    device, add isolated native mappings for cache Partition3/4/5, and promote
+    translated root `0x0022C5C6` with a bounded direct closure
+    (depth 2, cap 16). Hardware gate requires successful Partition0 writeback
+    plus entry into the promoted cache root; the old frontier cannot count as
+    progress. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AN.ps1`.
+    Build tag: `P5AN-CACHE-PARTITION-BATCH-20261020-A`.
 
 ### Evidence policy
 
@@ -2819,6 +2826,27 @@ unexecuted test PASS.**
 - **Phase 5AL Partition0 config-device model: PASS.**
 - **Next:** Phase 5AM relocates the 40/41/42 disk-identity data cluster in one
   build so startup does not fall back into one-data-export-per-test iteration.
+
+### 2026-10-20 — Phase 5AM disk-identity data batch PASS
+
+- Build `P5AM-DISK-IDENTITY-DATA-20261020-A` passed on real Xbox 360 hardware.
+- Disk identity initialization succeeded with cache partition count 3 and
+  deterministic guest-only model/serial data.
+- Retail import relocation observed:
+  ordinal 40 slot `0x002DBD98`, old token `0x80000028`, new guest-data VA
+  `0x0087E4A0`. Ordinals 41/42 were not present in this XBE import table.
+- The bounded Partition0 raw read remained successful at byte offset
+  `0x800`, length `512`, `STATUS_SUCCESS`, `bytes=512`.
+- Retail immediately copied/edited that sector and attempted a 512-byte
+  `NtWriteFile` back to offset `0x800`; the old directory-backed write path
+  returned `STATUS_UNSUCCESSFUL`.
+- Startup continued rather than rebooting, initialized
+  `\\Device\\Harddisk0\\Partition5\\` path strings, and reached
+  `DIRECT_FRONTIER caller=0x0023A3CE target=0x0022C5C6` with `fault=0`.
+- **Phase 5AM disk-identity data batch: PASS.**
+- **Next:** Phase 5AN completes Partition0 writeback semantics, maps cache
+  Partition3/4/5, and promotes a bounded depth-2 translated closure rooted at
+  `0x0022C5C6`.
 
 ### How future updates are recorded
 
