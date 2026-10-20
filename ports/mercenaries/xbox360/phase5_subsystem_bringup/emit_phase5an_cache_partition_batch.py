@@ -7302,6 +7302,7 @@ def main() -> int:
     })
 
     unknown = {}
+    unknown_contexts = {}
     for va in member_vas:
         row = generated[va]
         rendered = rendered_by_va[va]
@@ -7314,7 +7315,40 @@ def main() -> int:
             if name not in local_supplied and name not in base.STANDARD_CALLS
         )
         if missing:
-            unknown[f"0x{va:08X} {row['name']}"] = missing
+            owner = f"0x{va:08X} {row['name']}"
+            unknown[owner] = missing
+            source_lines = rendered.splitlines()
+            owner_contexts = []
+            for helper in missing:
+                call_pattern = re.compile(
+                    rf"\b{re.escape(helper)}\s*\("
+                )
+                matched = False
+                for line_index, source_line in enumerate(source_lines):
+                    if not call_pattern.search(source_line):
+                        continue
+                    matched = True
+                    first = max(0, line_index - 5)
+                    last = min(len(source_lines), line_index + 6)
+                    owner_contexts.append({
+                        "helper": helper,
+                        "call_line": line_index + 1,
+                        "first_line": first + 1,
+                        "last_line": last,
+                        "context": "\n".join(
+                            f"{n + 1:04d}: {source_lines[n]}"
+                            for n in range(first, last)
+                        ),
+                    })
+                if not matched:
+                    owner_contexts.append({
+                        "helper": helper,
+                        "call_line": 0,
+                        "first_line": 0,
+                        "last_line": 0,
+                        "context": "<call not found in rendered source>",
+                    })
+            unknown_contexts[owner] = owner_contexts
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -7764,6 +7798,7 @@ def main() -> int:
         "pack_guest_bytes": pack_guest_bytes,
         "pack_source_bytes": pack_source_bytes,
         "unknown_direct_helpers": unknown,
+        "unknown_direct_helper_contexts": unknown_contexts,
         "members": [f"0x{va:08X}" for va in member_vas],
     }
     (args.out_dir / "phase5an-manifest.json").write_text(
@@ -7775,6 +7810,13 @@ def main() -> int:
         print("[Phase5AN] NON-DIRECT unresolved helper dependencies remain:")
         for owner, names in unknown.items():
             print(f"[Phase5AN]   {owner}: {', '.join(names)}")
+            for item in unknown_contexts.get(owner, []):
+                print(
+                    f"[Phase5AN]     CALL CONTEXT helper={item['helper']} "
+                    f"lines={item['first_line']}-{item['last_line']}"
+                )
+                for context_line in item["context"].splitlines():
+                    print(f"[Phase5AN]       {context_line}")
         print(
             "[Phase5AN] Direct sub_XXXXXXXX callees have already been converted "
             "to DIRECT_FRONTIER boundaries; entries listed above are true support "
