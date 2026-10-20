@@ -1914,3 +1914,63 @@ Build: `P5AG-PARTITION0-NATIVE-20261020-A`
 Cookie: `P5AG / 0x50354147`.
 
 Link-time guard symbol: `phase5ag_env_build_cookie`.
+
+
+## Phase 5AG hardware result
+
+The exact Partition0 root continuation itself **passed on real Xbox 360
+hardware**:
+
+```text
+xbox   = \Device\Harddisk0\partition0
+native = game:\merc360-partition0
+status = 0
+token  = 0x48000001
+```
+
+Retail next requested a 512-byte read at offset `0x800`. Because the current
+Partition0 model is intentionally an isolated directory rather than a guessed
+raw-disk image, the native read returned `STATUS_UNSUCCESSFUL`. Retail then
+closed the handle and called ordinal 301 from translated function
+`0x0022B1A6`.
+
+That exposed an old harness limitation: `RtlNtStatusToDosError` was guarded
+as a one-shot service, even though it is naturally repeatable. The first
+startup `STATUS_SUCCESS` conversion had already consumed the gate. Thus
+Phase 5AG's final harness label is FAIL even though the new Partition0 open is
+hardware-proven.
+
+## Phase 5AH — repeatable ordinal 301
+
+5AH removes the `!s_phase4cNtStatusMapped` one-shot condition and services
+every observed `RtlNtStatusToDosError` call using the production
+`src/kernel/kernel_rtl.c` mapping table.
+
+The key newly observed mapping is:
+
+```text
+0xC0000001 STATUS_UNSUCCESSFUL -> 31 ERROR_GEN_FAILURE
+```
+
+The hardware gate requires at least two ordinal-301 calls and requires the
+latest input/output to match that pair before accepting the next boundary.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AH.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\rtlstatus301_repeatable_xdk\main.cpp
+build\phase5_subsystem_bringup\rtlstatus301_repeatable_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\rtlstatus301_repeatable_xdk\phase5ah-manifest.json
+```
+
+Build: `P5AH-RTLSTATUS301-REPEATABLE-20261020-A`
+
+Cookie: `P5AH / 0x50354148`.
+
+Link-time guard symbol: `phase5ah_env_build_cookie`.
