@@ -105,7 +105,7 @@ $mainText = Get-Content -LiteralPath $main -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
 foreach ($requiredText in @(
-    "P5AN-CACHE-PARTITION-BATCH-20261020-A",
+    "P5AN-CACHE-PARTITION-BATCH-20261020-B",
     "PASS: ordinal 149 KeSetTimer continuation armed",
     "PASS: bounded direct closure rooted at 0022D980 is packed for translated execution",
     "PASS: hardware-observed direct root 00238C00 is packed for translated execution",
@@ -168,6 +168,7 @@ foreach ($requiredText in @(
     "partition5Root[]",
     "s_phase5anCacheRootOpenCount > 0u",
     "PASS: Phase 5AN cache partition native open",
+    "PASS: Phase 5AN exact cache-root mappings armed for Partition3/4/5 (slash optional)",
     "case 0x0022C5C6u: return sub_0022C5C6;",
     "s_phase5anRoot22C5C6Entered = 1;",
     "s_phase4cBoundaryTarget != 0x0022C5C6u",
@@ -301,7 +302,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
     throw "Generated Phase 5AN manifest is missing: $manifest"
 }
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-if ($manifestJson.phase -ne "5AN" -or $manifestJson.build_tag -ne "P5AN-CACHE-PARTITION-BATCH-20261020-A") {
+if ($manifestJson.phase -ne "5AN" -or $manifestJson.build_tag -ne "P5AN-CACHE-PARTITION-BATCH-20261020-B") {
     throw "Phase 5AN manifest identity mismatch"
 }
 $cacheStorage = $manifestJson.phase5an_cache_storage
@@ -695,4 +696,4 @@ Write-Host "[Phase5AN]   $env"
 Write-Host "[Phase5AN] Link-time guard: main requires phase5an_env_build_cookie from the matching generated environment source."
 Write-Host "[Phase5AN] The 5AN cookie must be 0x5035414E (P5AN)."
 Write-Host "[Phase5AN] Keep the exact supported retail default.xbe beside the XEX."
-Write-Host "[Phase5AN] Expected build tag: P5AN-CACHE-PARTITION-BATCH-20261020-A"
+Write-Host "[Phase5AN] Expected build tag: P5AN-CACHE-PARTITION-BATCH-20261020-B"
