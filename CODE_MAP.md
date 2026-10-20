@@ -338,3 +338,24 @@ target `0x00237801` from caller `0x0023701A`. This validates the broad-sweep
 methodology itself: ordinary packed targets can now be consumed without a new
 one-address harness build, while genuinely unknown indirect targets remain
 explicit evidence-bearing stops.
+
+
+### Phase-5BD regional translated sweep
+
+Phase 5BC hardware proved generic packed ICALL_SAFE dispatch by entering
+`0x00237052` from `0x0022C3FA`. Execution then continued to `0x0023701A`
+and exposed the next fault-free safe indirect target `0x00237801`.
+
+Phase 5BD files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BD.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bd_regional_sweep.py`
+
+5BD deliberately avoids returning to one-address-per-build promotion. It keeps
+`0x00237801` as the mandatory hardware-observed seed, adds its bounded
+depth-6 direct closure, and pre-packs support-clean exact generated entries in
+the nearby `0x00236000..0x00238FFF` region up to 256 new functions total.
+The already-proven generic packed ICALL dispatcher can therefore consume
+follow-on function-pointer targets in the same startup subsystem when they are
+present. Unsupported side branches remain fenced; the mandatory runtime seed,
+guest faults, ABI/frame anomalies, kernel/device unknowns, heap exhaustion and
+the execution-budget watchdog remain hard stops.
