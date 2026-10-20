@@ -140,7 +140,7 @@ foreach ($requiredText in @(
     "PHASE 5J RETAIL ENVIRONMENT PREP START",
     "PHASE 5J EXACT RETAIL VERIFICATION: PASS",
     "PHASE 5J EXECUTION ENVIRONMENT RESULT: PASS",
-    "phase4c_env_build_cookie",
+    "phase5j_env_build_cookie",
     "50354A31",
     "PHASE 5J RETAIL ENVIRONMENT PREP END"
 )) {
