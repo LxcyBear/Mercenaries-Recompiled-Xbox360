@@ -538,6 +538,39 @@ def rewrite_direct_frontier(base, source, generated, packed_vas):
 def phase5a_boundary(base):
     text = base.boundary_support()
 
+    # B178 is already a maintained helper in the Phase-4C support donor.
+    # Instrument that one canonical body instead of emitting a duplicate body
+    # from the translated pack. Keep the shared s_phase4cLastError state so
+    # the paired GetLastError helper (B150) observes exactly what SetLastError
+    # wrote.
+    old_b178 = """static void sub_0022B178(void)
+{
+    s_phase4cLastError = GUEST_READ32(g_esp + 4u);
+    g_esp += 8u;
+}"""
+    new_b178 = """static void sub_0022B178(void)
+{
+    char line[256];
+
+    RECOMP_TRACE_FUNC(0x0022B178u);
+    s_phase4cLastError = GUEST_READ32(g_esp + 4u);
+    s_phase5lXboxLastError = s_phase4cLastError;
+    ++s_phase5lSetLastErrorCount;
+
+    sprintf(
+        line,
+        "PASS: Phase 5L maintained SetLastError value=%08X calls=%u new_esp=%08X",
+        (unsigned int)s_phase4cLastError,
+        (unsigned int)s_phase5lSetLastErrorCount,
+        (unsigned int)(g_esp + 8u));
+    trace(line);
+
+    g_esp += 8u;
+}"""
+    if old_b178 not in text:
+        raise SystemExit("[Phase5L] maintained support-owned B178 body marker changed")
+    text = text.replace(old_b178, new_b178, 1)
+
     old_enum = """    PHASE4C_BOUNDARY_DEBUGBREAK = 7,
     PHASE4C_BOUNDARY_HEAP_EXHAUSTED = 8
 };"""
@@ -4445,28 +4478,19 @@ def main() -> int:
         )
 
     # Recompile.ps1 deliberately passes --manual-function 0x0022B178.
-    # Mirror the maintained production body from recomp_manual.c here rather
-    # than mutating the frozen Stage-3 generated tree or silently re-lifting it.
+    # The Phase-4C boundary/support layer already owns the maintained
+    # SetLastError implementation for this address. Keep only metadata in the
+    # generated map so closure/lookup logic can name the root; phase5a_boundary
+    # instruments the single support-owned body below. Never emit a second
+    # translated/manual definition into the body pack.
     generated[LIVE_DIRECT_FRONTIER_TARGET_16] = {
         "name": "sub_0022B178",
         "file": "<maintained-manual:recomp_manual.c>",
         "source": """void sub_0022B178(void)
 {
-    uint32_t _phase5l_last_error;
-    char _phase5l_line[256];
-    RECOMP_TRACE_FUNC(0x0022B178u);
-    _phase5l_last_error = GUEST_READ32(g_esp + 4u);
-    s_phase5lXboxLastError = _phase5l_last_error;
-    ++s_phase5lSetLastErrorCount;
-    sprintf(
-        _phase5l_line,
-        "PASS: Phase 5L maintained SetLastError value=%08X calls=%u new_esp=%08X",
-        (unsigned int)_phase5l_last_error,
-        (unsigned int)s_phase5lSetLastErrorCount,
-        (unsigned int)(g_esp + 8u));
-    trace(_phase5l_line);
-    g_esp += 8u;
+    /* support-owned maintained SetLastError; emitted by phase5a_boundary */
 }""",
+        "emit_mode": "support-owned",
     }
 
     entry_members = {
@@ -4655,6 +4679,17 @@ def main() -> int:
         row = generated[va]
         name = row["name"]
         translated_names.add(name)
+
+        if va == LIVE_DIRECT_FRONTIER_TARGET_16:
+            if row.get("emit_mode") != "support-owned":
+                raise SystemExit(
+                    "[Phase5L] B178 must remain support-owned during body emission"
+                )
+            # phase5a_boundary() already emitted the one canonical maintained
+            # body before the pack lookup and translated bodies.
+            rendered_by_va[va] = ""
+            continue
+
         forward_decls.append(f"static void {name}(void);")
         rendered = base.localize_and_instrument(row["source"], name)
         rendered, frontier = rewrite_direct_frontier(
@@ -5418,6 +5453,21 @@ extern "C" DWORD phase5l_env_build_cookie(void)
         + "\n#pragma optimize(\"\", on)\n"
         + driver
     )
+
+    b178_definition = "static void sub_0022B178(void)"
+    if generated_main.count(b178_definition) != 1:
+        raise SystemExit(
+            "[Phase5L] generated main must contain exactly one support-owned "
+            "sub_0022B178 definition"
+        )
+    if "s_phase4cLastError = GUEST_READ32(g_esp + 4u);" not in generated_main:
+        raise SystemExit(
+            "[Phase5L] generated main lost shared SetLastError runtime state"
+        )
+    if "PASS: Phase 5L maintained SetLastError value=" not in generated_main:
+        raise SystemExit(
+            "[Phase5L] generated main lost maintained SetLastError instrumentation"
+        )
 
     (args.out_dir / "main.cpp").write_text(generated_main, encoding="utf-8")
     (args.out_dir / "phase5_env.cpp").write_text(env_source, encoding="utf-8")
