@@ -413,3 +413,27 @@ and pre-packs a support-clean forward band covering
 generic packed ICALL/direct dispatcher remains the continuation mechanism;
 unsupported side branches stay fenced and the mandatory hardware-observed root
 is never pruned or guessed.
+
+
+### Phase-5BG retail title text-tail sweep
+
+Phase 5BF hardware passed on 2026-10-20. The generic packed dispatcher consumed
+four safe indirect translated targets in one launch:
+`0x00237052`, `0x00237801`, `0x00239055`, and `0x0023F22B`.
+The inherited persistent-storage, VM and maintained-heap proofs remained
+stable. Execution then advanced through `0x0022B3F1` and stopped at the next
+fault-free safe indirect target `0x002471C0`.
+
+Phase 5BG files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BG.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bg_text_tail_sweep.py`
+
+5BG deliberately widens the next sweep to the remainder of the retail title
+`.text` section instead of merely promoting one address. It keeps
+`0x002471C0` mandatory, adds its bounded depth-6 direct closure, and
+pre-packs support-clean exact generated entries from
+`0x00246000..0x0025561F` (the XMV section begins at `0x00255620`), capped
+at 256 additional functions. Unsupported side branches remain fenced; the
+mandatory hardware-observed seed, guest faults, ABI/frame anomalies,
+kernel/device unknowns, heap exhaustion and the execution-budget watchdog
+remain hard stops.
