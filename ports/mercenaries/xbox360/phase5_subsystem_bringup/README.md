@@ -1680,3 +1680,68 @@ Build:
 Cookie: `P5AC / 0x50354143`.
 
 Link-time guard symbol: `phase5ac_env_build_cookie`.
+
+
+## Phase 5AC hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The SaveImage branch matched the new two-entry image-section write guard.
+Retail loaded section 12 `$$XSIMAGE` and wrote the complete 4,096-byte
+payload to `SaveImage.xbx`:
+
+```text
+section = 0x00010610
+index   = 12
+VA      = 0x00877540
+length  = 0x1000
+file    = SaveImage.xbx
+status  = 0
+bytes   = 4096 / 4096
+```
+
+The repaired continuation restored `ESP` from `0x008BFBC0` to
+`0x008BFBC4`. Retail then entered translated root `0x0022F0AE` and reached
+kernel target `0x80000148` with `fault=0`.
+
+Ordinal 328 is `XeUnloadSection`.
+
+Harness result:
+`PHASE 5AC XSIMAGE SAVEIMAGE NATIVE RESULT: PASS`.
+
+## Phase 5AD — XeUnloadSection continuation
+
+5AD services ordinal 328 with the hardware-observed one-argument / 8-byte
+frame. The bridge validates the section pointer against the XBE section table,
+decrements `SectionReferenceCount`, and on a 1->0 transition decrements the
+distinct shared head/tail page reference counters.
+
+The guest section payload is intentionally left resident. Phase-2E already
+loads every XBE section into guest RAM and the maintained `XeLoadSection`
+bridge models reference bookkeeping rather than physical page loading, so the
+inverse bridge follows the same resident-byte policy.
+
+The gate is persistent-state aware: now that both image files have been
+written, future retail boots may skip the load/write/unload sequence entirely.
+The service stays armed if encountered, while PASS is based on reaching the
+next previously-unhandled runtime boundary.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AD.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\xeunloadsection_native_xdk\main.cpp
+build\phase5_subsystem_bringup\xeunloadsection_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\xeunloadsection_native_xdk\phase5ad-manifest.json
+```
+
+Build: `P5AD-XEUNLOADSECTION328-NATIVE-20261020-A`
+
+Cookie: `P5AD / 0x50354144`.
+
+Link-time guard symbol: `phase5ad_env_build_cookie`.
