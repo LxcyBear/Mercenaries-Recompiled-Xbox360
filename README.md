@@ -76,19 +76,16 @@ entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
 **Present blockers:** Phase 4 and Phase 5A through 5AM have passed their
-hardware gates. Phase 5AM relocated ordinal 40 `HalDiskCachePartitionCount`
-from raw token `0x80000028` to guest kernel data at `0x0087E4A0`, with
-cache partition count 3; optional disk model/serial exports were not imported
-by this retail XBE. The successful Partition0 raw read at offset `0x800`
-remains intact. Retail then edits that 512-byte sector and issues
-`NtWriteFile` back to the same Partition0 offset; the current directory-backed
-write path returns `STATUS_UNSUCCESSFUL`, showing that the fixed-structure
-config-device model still needs bounded write semantics. Startup nevertheless
-continues, constructs `\\Device\\Harddisk0\\Partition5\\`, and reaches
-a new translated direct frontier `0x0022C5C6` from caller `0x0023A3CE`
-with `fault=0`. Phase 5AN batches this cache-storage neighborhood: Partition0
-read/write backing, isolated Partition3/4/5 mappings for X/Y/Z, and a bounded
-depth-2/cap-16 translated closure rooted at `0x0022C5C6`.
+hardware gates. Phase 5AN is partially hardware-proven: the 512-byte
+Partition0 writeback at offset `0x800` now succeeds with
+`STATUS_SUCCESS`; the depth-2/cap-16 translated cache closure is packed,
+`0x0022C5C6` executes, and the cache-prep shim reports all three isolated
+cache roots ready. The first P5AN hardware run then reaches
+`NtOpenFile("\\Device\\Harddisk0\\Partition5")` without a trailing slash
+and stops at `STORAGE_OPEN`, because the mapper only accepted
+`Partition5\\...` prefix form. P5AN remains active with a batched exact-root
+fix for Partition3/4/5 (case-insensitive, with or without trailing slash),
+while preserving child-path mapping and the translated closure.
 
 ### Immediate next tests
 
@@ -313,12 +310,16 @@ depth-2/cap-16 translated closure rooted at `0x0022C5C6`.
     512-byte writeback at offset `0x800`, constructed Partition5 cache paths,
     and reached direct frontier `0x0022C5C6` with `fault=0`. Build:
     `P5AM-DISK-IDENTITY-DATA-20261020-A`.
-64. **Phase 5AN active:** make Partition0 a bounded read/write 512 KiB config
-    device, add isolated native mappings for cache Partition3/4/5, and promote
-    translated root `0x0022C5C6` with a bounded direct closure
-    (depth 2, cap 16). Hardware gate requires successful Partition0 writeback
-    plus entry into the promoted cache root; the old frontier cannot count as
-    progress. Gate:
+64. **Phase 5AN active / partial hardware proof:** Partition0 bounded
+    read/write semantics are now hardware-proven at offset `0x800`,
+    length `512`, and translated root `0x0022C5C6` executes with its
+    depth-2/cap-16 closure. Cache prep reports Partition3/4/5 roots ready.
+    Current blocker is exact cache-root spelling without a trailing slash:
+    `\\Device\\Harddisk0\\Partition5` reached ordinal 202 and was fenced
+    as unsupported. Active fix accepts exact roots and child paths for
+    Partition3/4/5, case-insensitively, with or without trailing slash.
+    Hardware gate now additionally requires at least one successful cache-root
+    native open. Gate:
     `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AN.ps1`.
     Build tag: `P5AN-CACHE-PARTITION-BATCH-20261020-A`.
 
@@ -2847,6 +2848,25 @@ unexecuted test PASS.**
 - **Next:** Phase 5AN completes Partition0 writeback semantics, maps cache
   Partition3/4/5, and promotes a bounded depth-2 translated closure rooted at
   `0x0022C5C6`.
+
+### 2026-10-20 — Phase 5AN partial hardware proof: Partition0 writeback PASS
+
+- Build `P5AN-CACHE-PARTITION-BATCH-20261020-A` ran on real Xbox 360
+  hardware with an 84-body translated pack.
+- Exact retail XBE verification and execution-environment setup remained green.
+- Partition0 raw read at offset `0x800`, length `512` returned
+  `STATUS_SUCCESS`, and the matching 512-byte `NtWriteFile` writeback also
+  returned `STATUS_SUCCESS`.
+- The cache-prep support shim ran and reported `roots_ready=3`, then retail
+  entered translated root `0x0022C5C6`.
+- The next observed operation was
+  `NtOpenFile("\\Device\\Harddisk0\\Partition5")` with no trailing slash.
+  The mapper rejected that exact-root spelling and fenced at
+  `BOUNDARY: kind=STORAGE_OPEN ... target=0x800000CA`, `fault=0`.
+- P5AN therefore remains **active**, not passed.
+- Active fix batches exact-root handling for Partition3/4/5 while preserving
+  existing trailing-slash/child-path mappings; the hardware PASS gate now
+  requires a successful cache-root native open.
 
 ### How future updates are recorded
 
