@@ -2061,3 +2061,35 @@ Build: `P5AU-SYMLINKOBJ203-215-NATIVE-20261020-A`
 
 Cookie: `P5AU / 0x50354155`.
 
+## Phase 5AU hardware result / Phase 5AV ordinal-215 frame repair
+
+5AU proved the guest symbolic-link object table on hardware:
+
+```text
+NtOpenSymbolicLinkObject
+path   = \??\D:
+target = \Device\CdRom0
+token  = 53000001
+status = 00000000
+```
+
+The next ordinal-215 `NtQuerySymbolicLinkObject` arrived from the same
+translated caller with a 20-byte `savedEsp-callEsp` delta. The Xbox ABI is
+still three stdcall arguments (16 guest bytes including the synthetic return
+slot), so 5AV applies a one-dword caller-specific saved-ESP repair rather than
+changing the kernel signature globally.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AV.ps1"
+```
+
+5AV logs all three standard arguments plus the extra observed dword, requires a
+valid `0x53xxxxxx` link token and bounded ANSI_STRING before repair, resumes
+at `savedEsp - 4`, then continues through the existing query/close support.
+
+Build: `P5AV-SYMLINK215-SAVEDESP-20261020-A`
+
+Cookie: `P5AV / 0x50354156`.
+
