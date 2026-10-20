@@ -5588,7 +5588,7 @@ extern "C" DWORD phase5n_env_build_cookie(void)
         "    trace(\"PASS: Phase 5N ordinal 219 NtReadFile synchronous continuation armed\");\n"
         "    trace(\"PASS: Phase 5N ordinal 289 RtlInitAnsiString continuation armed\");\n"
         "    trace(\"PASS: Phase 5N ordinal 279 RtlEqualString continuation armed\");\n"
-        "    trace(\"PASS: Phase 5N ordinal 211 NtQueryInformationFile capture armed\");\n",
+        "    trace(\"PASS: Phase 5N ordinal 211 NtQueryInformationFile class-34 native continuation armed\");\n",
         1,
     )
     driver = driver.replace(
@@ -5894,7 +5894,7 @@ extern "C" DWORD phase5n_env_build_cookie(void)
     print(f"[Phase5N] env:  {args.out_dir / 'phase5_env.cpp'}")
     print(
         "[Phase5N] Runtime policy: preserve the proven startup path, keep "
-        "the complete hardware-proven title-storage/XBE-section-scan path live, preserve reviewed SetLastError execution, capture ordinal 211 NtQueryInformationFile, and stop before fabricating a file-information payload."
+        "the complete hardware-proven title-storage/XBE-section-scan path live, preserve reviewed SetLastError execution, service ordinal 211 class 34 natively, and continue to the next real runtime boundary."
     )
     return 0
 
