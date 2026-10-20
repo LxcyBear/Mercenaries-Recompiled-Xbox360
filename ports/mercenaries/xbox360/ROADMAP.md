@@ -2976,3 +2976,35 @@ and a NULL or guest-readable source. On success, execution resumes at
 Build tag: `P5AY-RTLANSI-A7A4-20261020-A`.
 Cookie: `P5AY / 0x50354159`.
 
+#### Phase 5AY — caller-local RtlInitAnsiString repair hardware result
+**Status: PASS / ADVANCED TO XBOX DOS-DEVICE FILE SEMANTICS.**
+
+Build `P5AY-RTLANSI-A7A4-20261020-A` proved the exact
+`0x0022A7A4` ordinal-289 saved-ESP repair. Hardware validated the canonical
+destination/source arguments, adjusted `008BE9D8 -> 008BE9D4`, built
+`t:\\$u\\contentmeta.xbx`, and completed RtlInitAnsiString.
+
+The next boundary was ordinal 190 `NtCreateFile` from the same translated
+caller. Its OBJECT_ATTRIBUTES used `RootDirectory=0xFFFFFFFD`, the Xbox
+`ObDosDevices` pseudo-root, with the DOS-drive path
+`t:\\$u\\contentmeta.xbx`. The harness incorrectly treated every nonzero
+RootDirectory as an unsupported relative file handle.
+
+#### Phase 5AZ — Xbox ObDosDevices root semantics
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AZ.ps1`
+
+5AZ accepts only the Xbox-defined pseudo-root `0xFFFFFFFD` in addition to
+NULL for NtCreateFile/NtOpenFile. DOS paths such as `T:\\...` are then
+expanded through the guest-created `\\??\\T:` symbolic link and passed to
+the existing sandbox path translator. Arbitrary nonzero root handles remain
+fenced.
+
+Hardware PASS additionally requires a proven ObDosDevices NtCreateFile path
+mapping before accepting a newer boundary.
+
+Build tag: `P5AZ-OBDOSDEVICES-20261020-A`.
+Cookie: `P5AZ / 0x5035415A`.
+
