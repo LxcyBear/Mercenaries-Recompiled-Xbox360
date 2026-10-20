@@ -2666,3 +2666,55 @@ nonfaulting boundary can satisfy the hardware PASS gate.
 Build tag: `P5AF-DIRECT22A3B9-20261020-A`.
 Cookie: `P5AF / 0x50354146`.
 Link-time guard: `phase5af_env_build_cookie`.
+
+
+#### Phase 5AF — root 0x0022A3B9 hardware execution / Partition0 discovery
+**Status: root execution proved on hardware; overall harness result FAIL at a new fenced storage dependency.**
+
+Build `P5AF-DIRECT22A3B9-20261020-A` ran against the exact supported retail
+XBE with a 77-body translated pack. Root `0x0022A3B9` executed on hardware.
+
+Its first newly exposed dependency is ordinal 202 `NtOpenFile` on:
+
+```text
+path    = \Device\Harddisk0\partition0
+access  = 0xC0100000
+share   = 3
+options = 0x10
+caller  = 0x0022A3B9
+fault   = 0
+```
+
+The existing path mapper intentionally supported Partition1 and CdRom0 only,
+so it emitted `STORAGE UNSUPPORTED` and stopped before native I/O. This is a
+clean capability fence rather than a guest fault.
+
+Final harness label:
+`PHASE 5AF DIRECT22A3B9 RESULT: FAIL`.
+
+#### Phase 5AG — exact Partition0 native storage continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AG.ps1`
+
+5AG retains the full 77-body pack and adds one exact, isolated storage mapping:
+
+```text
+\Device\Harddisk0\partition0
+    -> game:\merc360-partition0
+```
+
+The synthetic directory is created on demand. Virtual-root directory opens
+force `FILE_FLAG_BACKUP_SEMANTICS`, which is required for the observed root
+open even though its Xbox open-options word does not set the existing
+directory bit used by the Partition1 path.
+
+No Partition0 child path is inferred; only the exact root is mapped. The
+hardware PASS gate additionally requires a successful Partition0-root
+`NtOpenFile`, preventing the earlier Partition1 open from satisfying the new
+proof accidentally.
+
+Build tag: `P5AG-PARTITION0-NATIVE-20261020-A`.
+Cookie: `P5AG / 0x50354147`.
+Link-time guard: `phase5ag_env_build_cookie`.
