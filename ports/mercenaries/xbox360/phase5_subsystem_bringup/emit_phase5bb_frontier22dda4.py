@@ -584,6 +584,14 @@ def phase5a_boundary(base):
         "static uint32_t s_phase5bbNtQuerySymbolicLinkSavedEspRepairCount;\n"
         "static uint32_t s_phase5bbNtQuerySymbolicLinkSavedEspRepairExtra;\n"
         "static uint32_t s_phase5bbSymbolicLinkCloseCount;\n"
+        "static int s_phase5bbRoot22DDA4Entered;\n"
+        "static uint32_t s_phase5bbManualHeapAllocCount;\n"
+        "static uint32_t s_phase5bbManualHeapFreeCount;\n"
+        "static uint32_t s_phase5bbManualHeapReallocCount;\n"
+        "static uint32_t s_phase5bbManualHeapLastHeap;\n"
+        "static uint32_t s_phase5bbManualHeapLastFlags;\n"
+        "static uint32_t s_phase5bbManualHeapLastSize;\n"
+        "static uint32_t s_phase5bbManualHeapLastResult;\n"
         "static void phase5bb_nt_open_symbolic_link_object(uint32_t savedEsp);\n"
         "static void phase5bb_nt_query_symbolic_link_object(uint32_t savedEsp);\n\n"
         + text
@@ -621,6 +629,251 @@ def phase5a_boundary(base):
     if old_b178 not in text:
         raise SystemExit("[Phase5BB] maintained support-owned B178 body marker changed")
     text = text.replace(old_b178, new_b178, 1)
+
+    # DDA4/E51F are already support-owned manual Xbox CRT heap helpers in the
+    # Phase-4C donor. Phase 5BA hardware reached DDA4 directly. Instrument
+    # those canonical bodies and add the adjacent production-manual realloc
+    # sibling E713 over the same deterministic title-heap block table.
+    old_manual_heap = """static void sub_0022DDA4(void)
+{
+    uint32_t flags = GUEST_READ32(g_esp + 8u);
+    uint32_t size = GUEST_READ32(g_esp + 12u);
+
+    g_eax = phase4c_heap_allocate(flags, size);
+    g_esp += 16u;
+}
+
+static void sub_0022E51F(void)
+{
+    uint32_t allocation = GUEST_READ32(g_esp + 12u);
+
+    g_eax = phase4c_heap_free(allocation);
+    g_esp += 16u;
+}"""
+
+    new_manual_heap = """static uint32_t phase5bb_heap_reallocate(
+    uint32_t flags,
+    uint32_t address,
+    uint32_t requested)
+{
+    uint32_t capacity;
+    uint32_t index;
+
+    if (address == 0u)
+        return phase4c_heap_allocate(flags, requested);
+
+    phase4c_heap_init();
+    capacity = phase4c_heap_align(requested);
+    if (capacity == 0u)
+        return 0u;
+
+    for (index = 0u; index < s_phase4cHeapCount; ++index)
+    {
+        Phase4CHeapBlock* block = &s_phase4cHeap[index];
+        uint32_t oldRequested;
+
+        if (!block->inUse || block->address != address)
+            continue;
+
+        oldRequested = block->requested;
+
+        if (capacity <= block->capacity)
+        {
+            if ((flags & PHASE4C_HEAP_ZERO_MEMORY) != 0u &&
+                requested > oldRequested)
+            {
+                memset(
+                    g_ram + address + oldRequested,
+                    0,
+                    requested - oldRequested);
+            }
+            block->requested = requested;
+            return address;
+        }
+
+        if (index + 1u < s_phase4cHeapCount)
+        {
+            Phase4CHeapBlock* next = &s_phase4cHeap[index + 1u];
+            if (!next->inUse &&
+                block->address + block->capacity == next->address &&
+                block->capacity + next->capacity >= capacity)
+            {
+                uint32_t needed = capacity - block->capacity;
+
+                if (next->capacity == needed)
+                {
+                    block->capacity = capacity;
+                    phase4c_heap_remove(index + 1u);
+                }
+                else
+                {
+                    block->capacity = capacity;
+                    next = &s_phase4cHeap[index + 1u];
+                    next->address += needed;
+                    next->capacity -= needed;
+                }
+
+                block = &s_phase4cHeap[index];
+                if ((flags & PHASE4C_HEAP_ZERO_MEMORY) != 0u &&
+                    requested > oldRequested)
+                {
+                    memset(
+                        g_ram + address + oldRequested,
+                        0,
+                        requested - oldRequested);
+                }
+                block->requested = requested;
+                return address;
+            }
+        }
+
+        if ((flags & 0x00000010u) == 0u)
+        {
+            uint32_t replacement = phase4c_heap_allocate(flags, requested);
+            uint32_t copyBytes =
+                oldRequested < requested ? oldRequested : requested;
+
+            if (replacement != 0u)
+            {
+                if (copyBytes != 0u)
+                    memmove(g_ram + replacement, g_ram + address, copyBytes);
+                phase4c_heap_free(address);
+            }
+            return replacement;
+        }
+
+        return 0u;
+    }
+
+    return 0u;
+}
+
+static void sub_0022DDA4(void)
+{
+    uint32_t returnSlot = GUEST_READ32(g_esp + 0u);
+    uint32_t heap = GUEST_READ32(g_esp + 4u);
+    uint32_t flags = GUEST_READ32(g_esp + 8u);
+    uint32_t size = GUEST_READ32(g_esp + 12u);
+    uint32_t result;
+    char line[448];
+
+    RECOMP_TRACE_FUNC(0x0022DDA4u);
+    s_phase5bbRoot22DDA4Entered = 1;
+
+    if (s_accessFault)
+        phase4c_escape(
+            PHASE4C_BOUNDARY_GUEST_FAULT,
+            0x0022DDA4u,
+            g_esp);
+
+    result = phase4c_heap_allocate(flags, size);
+    ++s_phase5bbManualHeapAllocCount;
+    s_phase5bbManualHeapLastHeap = heap;
+    s_phase5bbManualHeapLastFlags = flags;
+    s_phase5bbManualHeapLastSize = size;
+    s_phase5bbManualHeapLastResult = result;
+
+    sprintf(
+        line,
+        "PASS: Phase 5BB maintained RtlAllocateHeap ret=%08X heap=%08X flags=%08X size=%u result=%08X calls=%u new_esp=%08X",
+        (unsigned int)returnSlot,
+        (unsigned int)heap,
+        (unsigned int)flags,
+        (unsigned int)size,
+        (unsigned int)result,
+        (unsigned int)s_phase5bbManualHeapAllocCount,
+        (unsigned int)(g_esp + 16u));
+    trace(line);
+
+    g_eax = result;
+    g_esp += 16u;
+}
+
+static void sub_0022E51F(void)
+{
+    uint32_t returnSlot = GUEST_READ32(g_esp + 0u);
+    uint32_t heap = GUEST_READ32(g_esp + 4u);
+    uint32_t flags = GUEST_READ32(g_esp + 8u);
+    uint32_t allocation = GUEST_READ32(g_esp + 12u);
+    uint32_t result;
+    char line[448];
+
+    RECOMP_TRACE_FUNC(0x0022E51Fu);
+
+    if (s_accessFault)
+        phase4c_escape(
+            PHASE4C_BOUNDARY_GUEST_FAULT,
+            0x0022E51Fu,
+            g_esp);
+
+    result = phase4c_heap_free(allocation);
+    ++s_phase5bbManualHeapFreeCount;
+    s_phase5bbManualHeapLastHeap = heap;
+    s_phase5bbManualHeapLastFlags = flags;
+    s_phase5bbManualHeapLastSize = 0u;
+    s_phase5bbManualHeapLastResult = result;
+
+    sprintf(
+        line,
+        "PASS: Phase 5BB maintained RtlFreeHeap ret=%08X heap=%08X flags=%08X allocation=%08X result=%u calls=%u new_esp=%08X",
+        (unsigned int)returnSlot,
+        (unsigned int)heap,
+        (unsigned int)flags,
+        (unsigned int)allocation,
+        (unsigned int)result,
+        (unsigned int)s_phase5bbManualHeapFreeCount,
+        (unsigned int)(g_esp + 16u));
+    trace(line);
+
+    g_eax = result;
+    g_esp += 16u;
+}
+
+static void sub_0022E713(void)
+{
+    uint32_t returnSlot = GUEST_READ32(g_esp + 0u);
+    uint32_t heap = GUEST_READ32(g_esp + 4u);
+    uint32_t flags = GUEST_READ32(g_esp + 8u);
+    uint32_t allocation = GUEST_READ32(g_esp + 12u);
+    uint32_t size = GUEST_READ32(g_esp + 16u);
+    uint32_t result;
+    char line[480];
+
+    RECOMP_TRACE_FUNC(0x0022E713u);
+
+    if (s_accessFault)
+        phase4c_escape(
+            PHASE4C_BOUNDARY_GUEST_FAULT,
+            0x0022E713u,
+            g_esp);
+
+    result = phase5bb_heap_reallocate(flags, allocation, size);
+    ++s_phase5bbManualHeapReallocCount;
+    s_phase5bbManualHeapLastHeap = heap;
+    s_phase5bbManualHeapLastFlags = flags;
+    s_phase5bbManualHeapLastSize = size;
+    s_phase5bbManualHeapLastResult = result;
+
+    sprintf(
+        line,
+        "PASS: Phase 5BB maintained RtlReAllocateHeap ret=%08X heap=%08X flags=%08X allocation=%08X size=%u result=%08X calls=%u new_esp=%08X",
+        (unsigned int)returnSlot,
+        (unsigned int)heap,
+        (unsigned int)flags,
+        (unsigned int)allocation,
+        (unsigned int)size,
+        (unsigned int)result,
+        (unsigned int)s_phase5bbManualHeapReallocCount,
+        (unsigned int)(g_esp + 20u));
+    trace(line);
+
+    g_eax = result;
+    g_esp += 20u;
+}"""
+
+    if old_manual_heap not in text:
+        raise SystemExit("[Phase5BB] maintained manual heap donor bodies changed")
+    text = text.replace(old_manual_heap, new_manual_heap, 1)
 
     old_enum = """    PHASE4C_BOUNDARY_DEBUGBREAK = 7,
     PHASE4C_BOUNDARY_HEAP_EXHAUSTED = 8
@@ -864,7 +1117,6 @@ static int s_phase5bbRoot23E600Entered;
 static int s_phase5bbRoot23D550Entered;
 static uint32_t s_phase5bbPackedIcall23D550Count;
 static uint32_t s_phase5bbPackedIcall23D550LastSavedEsp;
-static int s_phase5bbRoot22DDA4Entered;
 static uint32_t s_phase5ahXeLoadSectionCallCount;
 static uint32_t s_phase5ahXeLoadSectionSuccessCount;
 static uint32_t s_phase5ahXeLoadSectionLastSectionVa;
@@ -7913,6 +8165,33 @@ def main() -> int:
         "emit_mode": "support-owned",
     }
 
+    manual_heap_targets = {
+        0x0022DDA4: "sub_0022DDA4",
+        0x0022E51F: "sub_0022E51F",
+        0x0022E713: "sub_0022E713",
+    }
+    for manual_va, manual_name in manual_heap_targets.items():
+        manual_row = by_va.get(manual_va)
+        if manual_row is None:
+            raise SystemExit(
+                f"[Phase5BB] maintained manual heap target 0x{manual_va:08X} "
+                "is absent from the function inventory"
+            )
+        if manual_row["name"] != manual_name:
+            raise SystemExit(
+                f"[Phase5BB] maintained manual heap target 0x{manual_va:08X} "
+                f"name changed: {manual_row['name']}"
+            )
+        generated[manual_va] = {
+            "name": manual_name,
+            "file": "<maintained-manual:recomp_manual.c>",
+            "source": f"""void {manual_name}(void)
+{{
+    /* support-owned maintained Xbox CRT heap helper; emitted by phase5a_boundary */
+}}""",
+            "emit_mode": "support-owned",
+        }
+
     entry_members = {
         int(str(row["address"]), 0)
         for row in entry_report["closure"]["members"]
@@ -8752,11 +9031,9 @@ def main() -> int:
             "do not seed blindly -- inspect the hardware-proven direct target first"
         )
 
-    if LIVE_DIRECT_FRONTIER_TARGET_34 not in generated:
-        row = by_va[LIVE_DIRECT_FRONTIER_TARGET_34]
+    if generated[LIVE_DIRECT_FRONTIER_TARGET_34].get("emit_mode") != "support-owned":
         raise SystemExit(
-            "[Phase5BB] target 0x0022DDA4 is an exact function start "
-            f"({row['name']}) but has no generated translated body"
+            "[Phase5BB] target 0x0022DDA4 must use the reviewed maintained manual RtlAllocateHeap body"
         )
 
     phase5bb_direct34_members = set(
@@ -8768,9 +9045,14 @@ def main() -> int:
             P5BB_DIRECT34_CLOSURE_CAP,
         )
     )
+    phase5bb_direct34_members.update(manual_heap_targets.keys())
     if LIVE_DIRECT_FRONTIER_TARGET_34 not in phase5bb_direct34_members:
         raise SystemExit(
             "[Phase5BB] direct frontier closure lost root 0x0022DDA4"
+        )
+    if len(phase5bb_direct34_members) > P5BB_DIRECT34_CLOSURE_CAP:
+        raise SystemExit(
+            "[Phase5BB] maintained heap family exceeds direct34 closure cap"
         )
 
     promoted_direct_members = {
@@ -8807,13 +9089,16 @@ def main() -> int:
         name = row["name"]
         translated_names.add(name)
 
-        if va == LIVE_DIRECT_FRONTIER_TARGET_16:
+        if va in {
+            LIVE_DIRECT_FRONTIER_TARGET_16,
+            0x0022DDA4,
+            0x0022E51F,
+            0x0022E713,
+        }:
             if row.get("emit_mode") != "support-owned":
                 raise SystemExit(
-                    "[Phase5BB] B178 must remain support-owned during body emission"
+                    f"[Phase5BB] manual support target 0x{va:08X} must remain support-owned during body emission"
                 )
-            # phase5a_boundary() already emitted the one canonical maintained
-            # body before the pack lookup and translated bodies.
             rendered_by_va[va] = ""
             continue
 
@@ -8949,18 +9234,6 @@ def main() -> int:
             rendered = (
                 rendered[:brace_pos + 1]
                 + "\n    s_phase5bbRoot23D550Entered = 1;"
-                + rendered[brace_pos + 1:]
-            )
-        if va == LIVE_DIRECT_FRONTIER_TARGET_34:
-            name_pos = rendered.find(name)
-            brace_pos = rendered.find("{", name_pos)
-            if name_pos < 0 or brace_pos < 0:
-                raise SystemExit(
-                    "[Phase5BB] could not instrument direct frontier root 0x0022DDA4"
-                )
-            rendered = (
-                rendered[:brace_pos + 1]
-                + "\n    s_phase5bbRoot22DDA4Entered = 1;"
                 + rendered[brace_pos + 1:]
             )
         rendered, frontier = rewrite_direct_frontier(
@@ -9680,7 +9953,20 @@ def main() -> int:
             "closure_depth": P5BB_DIRECT34_CLOSURE_DEPTH,
             "closure_cap": P5BB_DIRECT34_CLOSURE_CAP,
             "required_prior_state": "packed ICALL 0x0023D550 executed; trace reached 0x00238533, 0x00238507, 0x002384E0, 0x0022B5EF",
-            "pass_policy": "0x0022DDA4 root must execute and old 0x0022DDA4 direct frontier cannot count as progress"
+            "pass_policy": "0x0022DDA4 root must execute, maintained allocation call count must be nonzero, and old 0x0022DDA4 direct frontier cannot count as progress"
+        },
+        "phase5bb_manual_heap": {
+            "mode": "support-owned maintained Xbox CRT heap family",
+            "allocate": "0x0022DDA4",
+            "free": "0x0022E51F",
+            "reallocate": "0x0022E713",
+            "arena_start": "0x008C1000",
+            "arena_end": "0x009C0000",
+            "alignment": 16,
+            "zero_memory_flag": "0x00000008",
+            "realloc_in_place_only_flag": "0x00000010",
+            "source_policy": "reuse Phase-4C deterministic title-heap allocator/free and add coherent realloc over the same block table",
+            "pack_policy": "all three reviewed Recompile.ps1 manual functions are support-owned and packed together"
         },
         "phase5bb_symbolic_link_object": {
             "open_target": "0x800000CB",
@@ -9976,7 +10262,13 @@ extern "C" DWORD phase5bb_env_build_cookie(void)
         "    s_phase5ahRoot22A604Entered = 0;\n"
         "    s_phase5ahRoot22A3B9Entered = 0;\n"        "    s_phase5bbRoot22C5C6Entered = 0;\n"        "    s_phase5bbRoot22F0D6Entered = 0;\n"        "    s_phase5bbRoot22BBC8Entered = 0;\n"        "    s_phase5bbRoot23E600Entered = 0;\n"        "    s_phase5bbRoot23D550Entered = 0;\n"
         "    s_phase5bbPackedIcall23D550Count = 0u;\n"
-        "    s_phase5bbPackedIcall23D550LastSavedEsp = 0u;\n"        "    s_phase5bbRoot22DDA4Entered = 0;\n"        "    s_phase5bbNtOpenSymbolicLinkCallCount = 0u;\n"
+        "    s_phase5bbPackedIcall23D550LastSavedEsp = 0u;\n"        "    s_phase5bbRoot22DDA4Entered = 0;\n"        "    s_phase5bbManualHeapAllocCount = 0u;\n"
+        "    s_phase5bbManualHeapFreeCount = 0u;\n"
+        "    s_phase5bbManualHeapReallocCount = 0u;\n"
+        "    s_phase5bbManualHeapLastHeap = 0u;\n"
+        "    s_phase5bbManualHeapLastFlags = 0u;\n"
+        "    s_phase5bbManualHeapLastSize = 0u;\n"
+        "    s_phase5bbManualHeapLastResult = 0u;\n"        "    s_phase5bbNtOpenSymbolicLinkCallCount = 0u;\n"
         "    s_phase5bbNtOpenSymbolicLinkSuccessCount = 0u;\n"
         "    s_phase5bbNtOpenSymbolicLinkDDriveSuccessCount = 0u;\n"
         "    s_phase5bbNtOpenSymbolicLinkLastToken = 0u;\n"
@@ -10074,7 +10366,7 @@ extern "C" DWORD phase5bb_env_build_cookie(void)
         "    trace(\"PASS: hardware-observed post-write direct root 0022BDA5 is packed for translated execution\");\n"
         "    trace(\"PASS: hardware-observed TitleImage-path direct root 0022F08D is packed for translated execution\");\n"
         "    trace(\"PASS: hardware-observed post-XeLoadSection direct root 0022F0CC is packed for translated execution\");\n"
-        "    trace(\"PASS: hardware-observed post-TitleImage-write direct root 0022F0AE is packed for translated execution\");\n"        "    trace(\"PASS: hardware-observed persistent-state direct root 0022A604 is packed for translated execution\");\n"        "    trace(\"PASS: hardware-observed next direct root 0022A3B9 is packed for translated execution\");\n"        "    trace(\"PASS: Phase 5BB cache-setup root 0022C5C6 plus bounded depth-2 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB post-persistence root 0022F0D6 plus bounded depth-2/cap-16 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB next frontier root 0022BBC8 plus bounded depth-2/cap-16 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB live frontier root 0023E600 plus bounded depth-2/cap-16 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB ICALL frontier root 0023D550 plus bounded depth-2/cap-16 closure is packed and dispatch armed\");\n"        "    trace(\"PASS: Phase 5BB direct frontier root 0022DDA4 plus bounded depth-2/cap-16 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB ordinals 203/215 NtOpenSymbolicLinkObject + NtQuerySymbolicLinkObject guest-object continuations armed\");\n"
+        "    trace(\"PASS: hardware-observed post-TitleImage-write direct root 0022F0AE is packed for translated execution\");\n"        "    trace(\"PASS: hardware-observed persistent-state direct root 0022A604 is packed for translated execution\");\n"        "    trace(\"PASS: hardware-observed next direct root 0022A3B9 is packed for translated execution\");\n"        "    trace(\"PASS: Phase 5BB cache-setup root 0022C5C6 plus bounded depth-2 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB post-persistence root 0022F0D6 plus bounded depth-2/cap-16 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB next frontier root 0022BBC8 plus bounded depth-2/cap-16 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB live frontier root 0023E600 plus bounded depth-2/cap-16 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB ICALL frontier root 0023D550 plus bounded depth-2/cap-16 closure is packed and dispatch armed\");\n"        "    trace(\"PASS: Phase 5BB direct frontier root 0022DDA4 plus bounded depth-2/cap-16 closure is packed\");\n"        "    trace(\"PASS: Phase 5BB maintained Xbox CRT heap family DDA4/E51F/E713 is support-owned and packed\");\n"        "    trace(\"PASS: Phase 5BB ordinals 203/215 NtOpenSymbolicLinkObject + NtQuerySymbolicLinkObject guest-object continuations armed\");\n"
         "    trace(\"PASS: Phase 5BB Partition0 config read/write device semantics armed\");\n"        "    trace(\"PASS: Phase 5BB Partition0 persistent backing armed at game:\\\\merc360-partition0\\\\partition0-config.bin\");\n"
         "    trace(\"PASS: Phase 5BB cache partition mappings armed for Partition3/4/5\");\n"        "    trace(\"PASS: Phase 5BB exact cache-root mappings armed for Partition3/4/5 (slash optional)\");\n"
         "    trace(\"PASS: Phase 5BB guest-safe Mm cluster armed: ordinals 165/166/167/171/172/173/175/176/177/178/179/180/181/182/183/184/199\");\n"
@@ -10176,6 +10468,7 @@ extern "C" DWORD phase5bb_env_build_cookie(void)
             s_phase5bbRoot23D550Entered &&
             s_phase5bbPackedIcall23D550Count > 0u &&
             s_phase5bbRoot22DDA4Entered &&
+            s_phase5bbManualHeapAllocCount > 0u &&
             s_phase5bbNtOpenSymbolicLinkSuccessCount > 0u &&
             s_phase5bbNtOpenSymbolicLinkDDriveSuccessCount > 0u &&
             s_phase5bbNtQuerySymbolicLinkCallCount > 0u &&
@@ -10726,10 +11019,17 @@ extern "C" DWORD phase5bb_env_build_cookie(void)
 
     for marker in (
         "case 0x0022DDA4u: return sub_0022DDA4;",
+        "case 0x0022E51Fu: return sub_0022E51F;",
+        "case 0x0022E713u: return sub_0022E713;",
         "s_phase5bbRoot22DDA4Entered = 1;",
         "s_phase5bbRoot22DDA4Entered",
+        "s_phase5bbManualHeapAllocCount > 0u",
+        "PASS: Phase 5BB maintained RtlAllocateHeap",
+        "PASS: Phase 5BB maintained RtlFreeHeap",
+        "PASS: Phase 5BB maintained RtlReAllocateHeap",
         "s_phase4cBoundaryTarget != 0x0022DDA4u",
         "PASS: Phase 5BB direct frontier root 0022DDA4 plus bounded depth-2/cap-16 closure is packed",
+        "PASS: Phase 5BB maintained Xbox CRT heap family DDA4/E51F/E713 is support-owned and packed",
     ):
         if marker not in generated_main:
             raise SystemExit(
