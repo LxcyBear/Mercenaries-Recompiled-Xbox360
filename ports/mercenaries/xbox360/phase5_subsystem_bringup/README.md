@@ -2209,13 +2209,16 @@ was returned to retail, which mapped it to DOS error 3 and continued. The next
 boundary is a fault-free indirect guest call from `0x0022C452` to
 `0x0023D550`.
 
-Phase 5BA validates that target against the generated function inventory,
+Because this address was not present in the prior Phase-3N function inventory, hardware evidence promoted `0x0023D550` into `ports/mercenaries/manual-seeds.json`. Regenerate Phase-3N once before preparing 5BA.
+
+Phase 5BA validates that target against the refreshed generated function inventory,
 packages a depth-2/cap-16 closure, and allows only this exact guest ICALL target
 to dispatch through the translated pack.
 
 Run:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase3n_final_abi_scale_xex\Prepare-Phase3N.ps1"
 powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5BA.ps1"
 ```
 
