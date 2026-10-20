@@ -63,6 +63,19 @@ if ($emitExit -ne 0) {
                 foreach ($prop in $unknownProps) {
                     $names = @($prop.Value)
                     Write-Host ("[Phase5AN]   {0}: {1}" -f $prop.Name, ($names -join ", "))
+
+                    $ctxProp = $failedJson.unknown_direct_helper_contexts.PSObject.Properties[$prop.Name]
+                    if ($ctxProp) {
+                        foreach ($ctx in @($ctxProp.Value)) {
+                            Write-Host ("[Phase5AN]     helper={0} source-lines={1}-{2}" -f
+                                $ctx.helper, $ctx.first_line, $ctx.last_line)
+                            if ($ctx.context) {
+                                ($ctx.context -split "`n") | ForEach-Object {
+                                    Write-Host ("[Phase5AN]       {0}" -f $_)
+                                }
+                            }
+                        }
+                    }
                 }
                 Write-Host ""
                 $reportedUnknown = $true
