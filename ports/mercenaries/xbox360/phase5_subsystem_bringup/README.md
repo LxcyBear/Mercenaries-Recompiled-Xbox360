@@ -210,3 +210,55 @@ build\phase5_subsystem_bringup\symlink_native_xdk\phase5d-manifest.json
 Build: `P5D-SYMLINK67-NATIVE-20261019-A`
 
 Cookie: `P5D1 / 0x50354431`.
+
+
+## Phase 5D hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The previously proven native storage lifecycle remained intact, then retail
+code created the exact optical-disc symbolic link:
+
+```text
+link   = \??\D:
+target = \Device\CdRom0
+status = 0x00000000
+```
+
+The live path then advanced with `fault=0` to:
+
+```text
+DIRECT_FRONTIER
+caller = 0x0022BD2D
+target = 0x0022C1C0
+```
+
+This confirms the retail title establishes its normal original-Xbox `D:`
+namespace before continuing startup.
+
+## Phase 5E — post-mount translated helper
+
+5E preserves the complete native storage + symbolic-link stack and promotes
+only the exact hardware-observed translated root `0x0022C1C0`. Deeper direct
+callees remain fenced.
+
+Preparation fails explicitly if C1C0 is not an exact function start or has no
+generated translated body.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5E.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_c1c0_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_c1c0_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_c1c0_xdk\phase5e-manifest.json
+```
+
+Build: `P5E-DIRECTC1C0-20261020-A`
+
+Cookie: `P5E1 / 0x50354531`.
