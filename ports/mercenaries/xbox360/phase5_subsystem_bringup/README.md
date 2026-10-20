@@ -1974,3 +1974,51 @@ Build: `P5AH-RTLSTATUS301-REPEATABLE-20261020-A`
 Cookie: `P5AH / 0x50354148`.
 
 Link-time guard symbol: `phase5ah_env_build_cookie`.
+
+## Phase 5AS hardware result / Phase 5AT capture gate
+
+**5AS PASS on real Xbox 360 hardware.**
+
+The persistent cache path remained stable: Partition0 backing reloaded, the
+0x800 sector rewrite remained unchanged, Partition5 mounted as `Z:`, and the
+second ordinal-24 EEPROM query succeeded. The promoted `0x0022BBC8` closure
+then advanced through:
+
+```text
+0022BBC8 -> 00237830 -> 0022B74E -> 0022B7B2
+```
+
+The next clean boundary is:
+
+```text
+ICALL_SAFE caller=0022B7B2 target=800000CB fault=0
+```
+
+`0x800000CB` is original-Xbox kernel ordinal 203,
+`NtOpenSymbolicLinkObject`.
+
+### Phase 5AT — NtOpenSymbolicLinkObject capture
+
+5AT captures the exact live 12-byte translated call frame (synthetic return +
+two stdcall arguments), decodes the guest `OBJECT_ATTRIBUTES` and
+`ANSI_STRING` path, and stops without inventing native symbolic-link-object
+semantics.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AT.ps1"
+```
+
+Generated sources remain in the active shared Phase-5 XDK package directory:
+
+```text
+build\phase5_subsystem_bringup\post_persist_closure_xdk\main.cpp
+build\phase5_subsystem_bringup\post_persist_closure_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\post_persist_closure_xdk\phase5at-manifest.json
+```
+
+Build: `P5AT-NTOPENSYMLINK203-CAPTURE-20261020-A`
+
+Cookie: `P5AT / 0x50354154`.
+
