@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AQ — P5AP pass 2 reloaded persistent Partition0 state, produced `changed=0`, mounted `Z:`, avoided the quick-reboot path, and reached new direct frontier `0x0022F0D6`; batch-promote that frontier now.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5BF — Phase 5BE hardware PASS proved three generic packed ICALL promotions in one launch (`0x00237052`, `0x00237801`, `0x00239055`), completed a third real heap allocation, advanced through `0x0023D87C`, and reached fault-free safe ICALL frontier `0x0023F22B`; sweep the forward `0x0023E000..0x00245FFF` translated region now.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5AP hardware PASS; Phase 5AQ post-persistence closure active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BE hardware PASS; Phase 5BF forward broad sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,18 +75,24 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5AP have passed their
-hardware gates. P5AP pass 2 reloaded the full 512 KiB Partition0 backing,
-re-read sector `0x800`, rewrote identical bytes with `changed=0`, and
-therefore proved persistence across XEX launches. Retail then skipped the
-first-boot cache IOCTL / quick-reboot branch, opened
-`\\Device\\Harddisk0\\Partition5\\`, queried the existing cache volume,
-created `\\??\\Z:`, and reached a new fault-free direct frontier
-`0x0022F0D6` from caller `0x0022BD2D`. The P5AP harness printed FAIL only
-because its old pass gate required the first-boot IOCTL path; that stale gate
-has been corrected. Phase 5AQ now promotes `0x0022F0D6` with a bounded
-depth-2/cap-16 translated closure and requires actual root entry plus a newer
-boundary.
+**Present blockers:** Phase 4 and Phase 5A through 5BE have passed their
+hardware gates. The persistent 512 KiB Partition0 backing remains stable across
+launches, including the sector-`0x800` unchanged rewrite, cache Partition5
+mount and `\\??\\Z:` creation. Phase 5BB crossed the support-owned
+`RtlAllocateHeap` boundary at `0x0022DDA4`, allocated 256 bytes at
+`0x008C1000`, and reached fault-free safe ICALL
+`0x0022C3FA -> 0x00237052`. Phase 5BC then changed the development method:
+exact generated targets already present in a bounded support-clean translated
+pack may continue automatically through the generic safe-ICALL dispatcher
+instead of requiring a bespoke one-address build. Phase 5BD and 5BE validated
+that strategy repeatedly on hardware. The 5BE run automatically consumed
+`0x00237052`, `0x00237801`, and `0x00239055`, completed additional
+128-byte and 2048-byte heap allocations at `0x008C1100` and `0x008C1180`,
+continued through `0x0023D87C`, and stopped cleanly at
+`ICALL_SAFE caller=0x0022DDA4 target=0x0023F22B` with `fault=0`. Phase
+5BF now keeps `0x0023F22B` mandatory while pre-packing a support-clean
+`0x0023E000..0x00245FFF` forward region, capped at 256 additional translated
+functions.
 
 ### Immediate next tests
 
@@ -337,13 +343,41 @@ boundary.
     `0x0022F0D6` from caller `0x0022BD2D`. The old harness FAIL label was a
     stale first-boot-only gate and has been corrected. Build:
     `P5AP-PARTITION0-PERSIST-20261020-A`.
-67. **Phase 5AQ active:** preserve persistent Partition0 and batch-promote the
-    new post-persistence root `0x0022F0D6` with a bounded depth-2/cap-16
-    translated closure. Hardware gate requires backing LOADED, the unchanged
-    sector rewrite, actual entry into `0x0022F0D6`, and a boundary newer than
-    that root. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AQ.ps1`.
-    Build tag: `P5AQ-POST-PERSIST-CLOSURE-20261020-A`.
+67. **Done:** Phase 5AQ through 5BB advanced the post-persistence startup
+    path through successive translated closures and runtime-service proofs.
+    Phase 5BB entered packed ICALL target `0x0023D550`, executed the
+    support-owned Xbox CRT heap family, allocated 256 bytes at `0x008C1000`,
+    and reached the next fault-free safe indirect frontier
+    `0x0022C3FA -> 0x00237052`. Build:
+    `P5BB-FRONTIER22DDA4-20261020-A`.
+68. **Done:** Phase 5BC introduced the bounded support-clean broad-sweep
+    strategy. Generic packed ICALL dispatch automatically entered
+    `0x00237052` from caller `0x0022C3FA`, execution continued to
+    `0x0023701A`, and hardware stopped cleanly at the next safe indirect
+    target `0x00237801` with `fault=0`. This proved that exact translated
+    targets can be consumed without a bespoke harness build for each address.
+    Build: `P5BC-BROADSWEEP237052-20261020-C`.
+69. **Done:** Phase 5BD widened the translated neighborhood and consumed both
+    `0x00237052` and `0x00237801` automatically in one launch. A second
+    maintained heap allocation returned 128 bytes at `0x008C1100`; execution
+    continued through the `0x002385xx` path and reached fault-free
+    `ICALL_SAFE target=0x00239055`. Build:
+    `P5BD-REGIONALSWEEP237801-20261020-A`.
+70. **Done:** Phase 5BE automatically consumed three packed safe-ICALL targets
+    in one launch: `0x00237052`, `0x00237801`, and `0x00239055`. The
+    maintained heap completed a third allocation (2048 bytes, flags `0x8`)
+    at `0x008C1180`; translated execution continued through
+    `0x0023D87C` and stopped at fault-free
+    `ICALL_SAFE caller=0x0022DDA4 target=0x0023F22B`. Build:
+    `P5BE-FORWARDSWEEP239055-20261020-A`.
+71. **Phase 5BF active:** retain all 5BE proofs, keep hardware-observed
+    `0x0023F22B` mandatory, add its bounded depth-6 direct closure, and
+    pre-pack a support-clean forward band `0x0023E000..0x00245FFF` with a
+    cap of 256 additional functions. Unknown/unsupported side branches remain
+    fenced; guest faults, ABI/frame anomalies, heap exhaustion, kernel/device
+    unknowns and the execution-budget watchdog remain hard stops. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BF.ps1`.
+    Build tag: `P5BF-FORWARDSWEEP23F22B-20261020-A`.
 
 ### Evidence policy
 
