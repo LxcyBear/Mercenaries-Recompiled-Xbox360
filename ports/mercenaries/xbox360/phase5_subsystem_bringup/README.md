@@ -457,3 +457,60 @@ build\phase5_subsystem_bringup\rtl_init_ansi_xdk\phase5i-manifest.json
 Build: `P5I-RTLINITANSI289-20261020-A`
 
 Cookie: `P5I1 / 0x50354931`.
+
+
+## Phase 5I hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The complete native storage and mount stack remained intact. The maintained
+ordinal 289 `RtlInitAnsiString` continuation exposed the exact title-id path:
+
+```text
+\Device\Harddisk0\partition1\TDATA\4c410015
+```
+
+The live title then successfully:
+
+```text
+created/opened TDATA\4c410015
+mounted \??\T: -> \Device\Harddisk0\partition1\TDATA\4c410015
+created/opened UDATA
+created/opened UDATA\4c410015
+```
+
+All observed `NtCreateFile` calls returned STATUS_SUCCESS. The translated
+trace reached 47 entries and advanced with `fault=0` to:
+
+```text
+DIRECT_FRONTIER
+caller = 0x0022BE8C
+target = 0x0022F026
+```
+
+## Phase 5J — post-title-storage translated helper
+
+5J preserves the full native Partition1, `D:`, `T:`, TDATA/UDATA,
+`NtCreateFile`, handle-lifecycle and RTL-string stack, then promotes only the
+exact hardware-observed translated root `0x0022F026`.
+
+Preparation fails explicitly if F026 is a split/mid-function target or lacks a
+generated translated body.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5J.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_f026_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_f026_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_f026_xdk\phase5j-manifest.json
+```
+
+Build: `P5J-DIRECTF026-20261020-A`
+
+Cookie: `P5J1 / 0x50354A31`.
