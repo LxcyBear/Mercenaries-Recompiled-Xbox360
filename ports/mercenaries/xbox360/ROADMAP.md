@@ -2926,3 +2926,29 @@ rejects `0x80000146` as an acceptable new fault.
 Build tag: `P5AW-XEIMAGEFILENAME-DATA-20261020-A`.
 Cookie: `P5AW / 0x50354157`.
 
+#### Phase 5AW — XeImageFileName relocation hardware result
+**Status: HARDWARE PASS / NEW DIRECT FRONTIER.**
+
+Build `P5AW-XEIMAGEFILENAME-DATA-20261020-A` relocated kernel data export
+ordinal 326 (`XeImageFileName`) exactly once from `0x80000146` to guest
+ANSI_STRING `0x0087E040` with buffer `0x0087E050` containing
+`\Device\CdRom0\default.xbe`.
+
+The prior symbolic-link open/query/close path remained green. Retail then
+advanced through `0x00239C23 -> 0x00239D6C` and reached a new fault-free direct
+frontier `0x00239D6C -> 0x0023E600`.
+
+#### Phase 5AX — promote 0x0023E600
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AX.ps1`
+
+5AX promotes `0x0023E600` as a depth-2 / cap-16 translated closure. The
+emitter fails closed if the address is not an exact generated function start.
+The hardware gate requires actual entry into `0x0023E600` and rejects the old
+`0x0023E600` direct frontier as progress.
+
+Build tag: `P5AX-FRONTIER23E600-20261020-A`.
+Cookie: `P5AX / 0x50354158`.
+
