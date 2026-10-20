@@ -23,7 +23,7 @@ from pathlib import Path
 SWEEP_ROOT = 0x00237052
 SWEEP_DIRECT_DEPTH = 6
 SWEEP_DIRECT_CAP = 256
-BUILD_TAG = "P5BC-BROADSWEEP237052-20261020-A"
+BUILD_TAG = "P5BC-BROADSWEEP237052-20261020-B"
 
 
 def load_module(path: Path, name: str):
@@ -209,82 +209,162 @@ def insert_pack_members(
     generated: dict,
     new_members: list[int],
     expanded_members: set[int],
-) -> tuple[str, dict[int, str], set[int]]:
-    rendered_by_va: dict[int, str] = {}
-    direct_frontiers: set[int] = set()
+) -> tuple[str, dict[int, str], set[int], dict[int, list[str]]]:
+    candidate_members = list(new_members)
+    existing_defs = set(base.support_symbols(main_text))
 
-    for va in new_members:
+    def render_member(va: int, allowed_members: set[int]) -> tuple[str, list[int]]:
         row = generated[va]
         name = row["name"]
         rendered = base.localize_and_instrument(row["source"], name)
         if va == SWEEP_ROOT:
             rendered = instrument_root_entry(rendered, name)
-        rendered, frontier = phase5bb.rewrite_direct_frontier(
+        return phase5bb.rewrite_direct_frontier(
             base,
             rendered,
             generated,
-            expanded_members,
+            allowed_members,
         )
+
+    def find_unknown(
+        rendered_by_va: dict[int, str],
+        member_list: list[int],
+    ) -> tuple[dict[int, list[str]], dict[int, list[dict]]]:
+        translated_names = {generated[va]["name"] for va in member_list}
+        supplied = set(existing_defs) | translated_names
+        unknown: dict[int, list[str]] = {}
+        contexts: dict[int, list[dict]] = {}
+
+        for va in member_list:
+            row = generated[va]
+            rendered = rendered_by_va[va]
+            calls = set(base.CALL_RE.findall(base.mask_noncode(rendered)))
+            calls.discard(row["name"])
+            missing = sorted(
+                name
+                for name in calls
+                if name not in supplied and name not in base.STANDARD_CALLS
+            )
+            if not missing:
+                continue
+
+            unknown[va] = missing
+            lines = rendered.splitlines()
+            owner_contexts = []
+            for helper in missing:
+                call_re = re.compile(rf"\b{re.escape(helper)}\s*\(")
+                found = False
+                for index, line in enumerate(lines):
+                    if not call_re.search(line):
+                        continue
+                    found = True
+                    first = max(0, index - 4)
+                    last = min(len(lines), index + 5)
+                    owner_contexts.append(
+                        {
+                            "helper": helper,
+                            "first_line": first + 1,
+                            "last_line": last,
+                            "context": "\n".join(
+                                f"{n + 1:04d}: {lines[n]}"
+                                for n in range(first, last)
+                            ),
+                        }
+                    )
+                if not found:
+                    owner_contexts.append(
+                        {
+                            "helper": helper,
+                            "first_line": 0,
+                            "last_line": 0,
+                            "context": "<call not found in rendered source>",
+                        }
+                    )
+            contexts[va] = owner_contexts
+
+        return unknown, contexts
+
+    # First render the complete candidate closure. A broad static closure can
+    # legitimately include cold/side branches that require support we have not
+    # modeled yet. Those members should not prevent the hardware sweep from
+    # running through the support-clean portion of the graph.
+    rendered_candidate: dict[int, str] = {}
+    for va in candidate_members:
+        rendered_candidate[va], _ = render_member(va, expanded_members)
+
+    unsafe, unsafe_contexts = find_unknown(
+        rendered_candidate,
+        candidate_members,
+    )
+
+    if SWEEP_ROOT in unsafe:
+        names = unsafe[SWEEP_ROOT]
+        print(
+            "[Phase5BC] sweep root 0x00237052 itself has unresolved support "
+            f"dependencies: {', '.join(names)}"
+        )
+        for item in unsafe_contexts.get(SWEEP_ROOT, []):
+            print(
+                f"[Phase5BC]   helper={item['helper']} "
+                f"source-lines={item['first_line']}-{item['last_line']}"
+            )
+            for line in item["context"].splitlines():
+                print(f"[Phase5BC]     {line}")
+        raise SystemExit(
+            "[Phase5BC] broad-sweep seed requires a real support implementation; "
+            "refusing to guess"
+        )
+
+    pruned = {
+        va: names
+        for va, names in unsafe.items()
+        if va != SWEEP_ROOT
+    }
+
+    retained = [va for va in candidate_members if va not in pruned]
+    if not retained or SWEEP_ROOT not in retained:
+        raise SystemExit("[Phase5BC] support-clean sweep unexpectedly lost root")
+
+    # Mutate the caller-owned collections so all later manifest accounting and
+    # lookup generation describe the actual pack, not merely the candidate set.
+    if pruned:
+        for va in pruned:
+            expanded_members.discard(va)
+        new_members[:] = retained
+
+        print(
+            "[Phase5BC] SUPPORT-CLEAN PRUNE: "
+            f"candidate_new={len(candidate_members)} "
+            f"pruned={len(pruned)} retained_new={len(retained)}"
+        )
+        for va in sorted(pruned):
+            print(
+                f"[Phase5BC]   fenced 0x{va:08X} {generated[va]['name']}: "
+                + ", ".join(pruned[va])
+            )
+
+    # Re-render against the final retained pack. Direct calls into a pruned
+    # translated member now become normal DIRECT_FRONTIER fences instead of
+    # unresolved link dependencies.
+    rendered_by_va: dict[int, str] = {}
+    direct_frontiers: set[int] = set()
+    for va in new_members:
+        rendered, frontier = render_member(va, expanded_members)
         rendered_by_va[va] = rendered
         direct_frontiers.update(frontier)
 
-    existing_defs = set(base.support_symbols(main_text))
-    existing_defs.update(generated[va]["name"] for va in new_members)
-
-    unknown: dict[str, list[str]] = {}
-    unknown_contexts: dict[str, list[dict]] = {}
-
-    for va in new_members:
-        row = generated[va]
-        rendered = rendered_by_va[va]
-        calls = set(base.CALL_RE.findall(base.mask_noncode(rendered)))
-        calls.discard(row["name"])
-        missing = sorted(
-            name
-            for name in calls
-            if name not in existing_defs and name not in base.STANDARD_CALLS
-        )
-        if not missing:
-            continue
-
-        owner = f"0x{va:08X} {row['name']}"
-        unknown[owner] = missing
-        lines = rendered.splitlines()
-        contexts = []
-        for helper in missing:
-            call_re = re.compile(rf"\b{re.escape(helper)}\s*\(")
-            found = False
-            for index, line in enumerate(lines):
-                if not call_re.search(line):
-                    continue
-                found = True
-                first = max(0, index - 4)
-                last = min(len(lines), index + 5)
-                contexts.append(
-                    {
-                        "helper": helper,
-                        "first_line": first + 1,
-                        "last_line": last,
-                        "context": "\n".join(
-                            f"{n + 1:04d}: {lines[n]}" for n in range(first, last)
-                        ),
-                    }
-                )
-            if not found:
-                contexts.append(
-                    {
-                        "helper": helper,
-                        "first_line": 0,
-                        "last_line": 0,
-                        "context": "<call not found in rendered source>",
-                    }
-                )
-        unknown_contexts[owner] = contexts
-
-    if unknown:
-        for owner, names in unknown.items():
-            print(f"[Phase5BC] unresolved support dependency in {owner}: {', '.join(names)}")
-            for item in unknown_contexts.get(owner, []):
+    final_unknown, final_contexts = find_unknown(
+        rendered_by_va,
+        new_members,
+    )
+    if final_unknown:
+        for va, names in final_unknown.items():
+            print(
+                f"[Phase5BC] retained member 0x{va:08X} "
+                f"{generated[va]['name']} still has unresolved support: "
+                + ", ".join(names)
+            )
+            for item in final_contexts.get(va, []):
                 print(
                     f"[Phase5BC]   helper={item['helper']} "
                     f"source-lines={item['first_line']}-{item['last_line']}"
@@ -292,7 +372,7 @@ def insert_pack_members(
                 for line in item["context"].splitlines():
                     print(f"[Phase5BC]     {line}")
         raise SystemExit(
-            "[Phase5BC] broad sweep blocked by unresolved non-direct support dependency"
+            "[Phase5BC] support-clean pruning did not converge; refusing unsafe pack"
         )
 
     lookup_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
@@ -335,8 +415,7 @@ def insert_pack_members(
         + main_text[optimize_pos:]
     )
 
-    return main_text, rendered_by_va, direct_frontiers
-
+    return main_text, rendered_by_va, direct_frontiers, pruned
 
 def patch_driver_contract(main_text: str) -> str:
     gate = "            s_phase5bbManualHeapAllocCount > 0u &&\n"
@@ -485,7 +564,8 @@ def main() -> int:
             "expected 0x00237052 to be new relative to Phase 5BB"
         )
 
-    main_text, rendered_by_va, new_direct_frontiers = insert_pack_members(
+    candidate_new_members = list(new_members)
+    main_text, rendered_by_va, new_direct_frontiers, pruned_members = insert_pack_members(
         main_text,
         base,
         phase5bb,
@@ -539,7 +619,9 @@ def main() -> int:
         "direct_closure_cap": SWEEP_DIRECT_CAP,
         "base_pack_members": len(old_members),
         "sweep_members": len(sweep_members),
+        "candidate_new_members": len(candidate_new_members),
         "new_members": len(new_members),
+        "pruned_members": len(pruned_members),
         "expanded_pack_members": len(expanded_members),
         "auto_dispatch": {
             "safe_icall": "exact target must resolve through phase4c_lookup_pack_func",
@@ -568,8 +650,19 @@ def main() -> int:
     manifest["phase5bc_sweep_members"] = [
         f"0x{va:08X}" for va in sorted(sweep_members)
     ]
+    manifest["phase5bc_candidate_new_members"] = [
+        f"0x{va:08X}" for va in candidate_new_members
+    ]
     manifest["phase5bc_new_members"] = [
         f"0x{va:08X}" for va in new_members
+    ]
+    manifest["phase5bc_pruned_members"] = [
+        {
+            "address": f"0x{va:08X}",
+            "name": generated[va]["name"],
+            "unresolved_support": names,
+        }
+        for va, names in sorted(pruned_members.items())
     ]
     manifest["phase5bc_new_direct_frontier_targets"] = [
         f"0x{va:08X}" for va in sorted(new_direct_frontiers)
@@ -584,7 +677,9 @@ def main() -> int:
     print(
         "[Phase5BC] BROAD SWEEP PACK: "
         f"base={len(old_members)} sweep={len(sweep_members)} "
-        f"new={len(new_members)} total={len(expanded_members)} "
+        f"candidate_new={len(candidate_new_members)} "
+        f"pruned={len(pruned_members)} new={len(new_members)} "
+        f"total={len(expanded_members)} "
         f"new_source_bytes={total_new_source}"
     )
     print(
