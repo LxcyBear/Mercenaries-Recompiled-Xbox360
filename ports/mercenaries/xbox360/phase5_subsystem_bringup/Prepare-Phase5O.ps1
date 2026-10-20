@@ -167,7 +167,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
     throw "Generated Phase 5O manifest is missing: $manifest"
 }
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-if ($manifestJson.phase -ne "5N" -or $manifestJson.build_tag -ne "P5O-DIRECT239B78-20261020-A") {
+if ($manifestJson.phase -ne "5O" -or $manifestJson.build_tag -ne "P5O-DIRECT239B78-20261020-A") {
     throw "Phase 5O manifest identity mismatch"
 }
 if ($manifestJson.promoted_direct_frontier_target_7 -ne "0x00238C00") {
