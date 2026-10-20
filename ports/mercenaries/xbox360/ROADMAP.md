@@ -1807,3 +1807,48 @@ Build tag: `P5M-NTQUERYINFO211-CAPTURE-20261020-A`.
 Cookie: `P5M1 / 0x50354D31`.
 
 Link-time guard: `phase5m_env_build_cookie`.
+
+
+#### Phase 5M — NtQueryInformationFile capture hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5M-NTQUERYINFO211-CAPTURE-20261020-A` preserved the complete 5L
+runtime stack and captured the first live ordinal-211 request with `fault=0`:
+
+```text
+handle = 0x48000002
+iosb   = 0x008BFEB4
+info   = 0x008BFE68
+len    = 56
+class  = 34
+caller = 0x00239C23
+trace  = 54
+```
+
+The handle is the native-backed token returned for
+`\Device\Harddisk0\partition1\UDATA\4c410015\TitleMeta.xbx`.
+
+Class 34 is `FileNetworkOpenInformation`; the live 56-byte request matches
+the `FILE_NETWORK_OPEN_INFORMATION` layout exactly.
+
+#### Phase 5N — native NtQueryInformationFile class 34
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5N.ps1`
+
+5N extends the tagged guest-handle lifecycle with a remembered native Xenon
+path. Ordinal 211 class 34 is serviced from `GetFileAttributesExA` metadata
+and returned as the exact 56-byte guest `FILE_NETWORK_OPEN_INFORMATION`
+layout. `IO_STATUS_BLOCK.Information` is set to 56 on success.
+
+AllocationSize is rounded to the already-proven 16 KiB FATX-style allocation
+unit. XAM exposes creation/access/write time but no independent change time in
+`WIN32_FILE_ATTRIBUTE_DATA`, so the maintained 5N bridge mirrors last-write
+time into ChangeTime. Unobserved information classes remain fenced.
+
+Build tag: `P5N-NTQUERYINFO211-NATIVE-20261020-A`.
+
+Cookie: `P5N1 / 0x50354E31`.
+
+Link-time guard: `phase5n_env_build_cookie`.
