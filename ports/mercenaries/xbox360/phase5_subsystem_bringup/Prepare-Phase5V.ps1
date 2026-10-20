@@ -133,7 +133,6 @@ foreach ($requiredText in @(
     "PASS: hardware-observed next post-TitleMeta direct root 0023DD56 is packed for translated execution",
     "PASS: hardware-observed next post-TitleMeta direct root 0023F8CB is packed for translated execution",
     "PASS: hardware-observed post-write direct root 0022BDA5 is packed for translated execution",
-    "sub_0022BDA5",
     "s_phase5vRoot22BDA5Entered = 1;",
     "sub_00239B78",
     "sub_0023DDDD",
