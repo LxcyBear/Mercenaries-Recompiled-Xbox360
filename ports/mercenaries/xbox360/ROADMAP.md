@@ -1647,3 +1647,43 @@ and resumes the live retail path.
 Build tag: `P5I-RTLINITANSI289-20261020-A`.
 
 Cookie: `P5I1 / 0x50354931`.
+
+
+#### Phase 5I — title-storage hierarchy hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5I-RTLINITANSI289-20261020-A` preserved the complete native storage
+and mount stack, serviced ordinal 289 `RtlInitAnsiString`, and exposed the
+exact title-id storage paths.
+
+Hardware then successfully created/opened:
+
+```text
+\Device\Harddisk0\partition1\TDATA\4c410015
+\Device\Harddisk0\partition1\UDATA
+\Device\Harddisk0\partition1\UDATA\4c410015
+```
+
+and mounted:
+
+```text
+\??\T: -> \Device\Harddisk0\partition1\TDATA\4c410015
+```
+
+The next live dependency is
+`DIRECT_FRONTIER caller=0x0022BE8C target=0x0022F026` with `fault=0`;
+the translated trace reached 47 entries.
+
+#### Phase 5J — promote post-title-storage root 0x0022F026
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5J.ps1`
+
+5J retains all proven native storage, `D:`/`T:` mounts, TDATA/UDATA
+hierarchy and RTL string behavior, and promotes only the exact
+hardware-observed translated root `0x0022F026`.
+
+Build tag: `P5J-DIRECTF026-20261020-A`.
+
+Cookie: `P5J1 / 0x50354A31`.
