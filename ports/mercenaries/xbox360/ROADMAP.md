@@ -1760,3 +1760,50 @@ Build tag: `P5L-DIRECTB178-20261020-A`.
 Cookie: `P5L1 / 0x50354C31`.
 
 Link-time guard: `phase5l_env_build_cookie`.
+
+
+#### Phase 5L — maintained SetLastError hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5L-DIRECTB178-20261020-A` retained the complete native storage,
+D:/T: mount, title-data and RTL section-scan stack. The support-owned
+maintained `SetLastError` root `0x0022B178` executed on real hardware with:
+
+```text
+value=0x00000490
+calls=1
+new_esp=0x008BFC14
+```
+
+Retail startup then continued through the XBE image-section path, matched
+`$$XTIMAGE` and `$$XSIMAGE` against their live section names, opened
+`\Device\Harddisk0\partition1\UDATA\4c410015\TitleMeta.xbx` successfully
+as tagged guest handle `0x48000002`, and advanced with `fault=0` to:
+
+```text
+ICALL_SAFE caller=0x00239C23 target=0x800000D3
+esp=0x008BFC24 saved_esp=0x008BFC3C
+trace=54
+```
+
+`0x800000D3` is original-Xbox ordinal 211 `NtQueryInformationFile`. The
+observed 24-byte full frame matches five stdcall arguments plus the translated
+synthetic return.
+
+#### Phase 5M — NtQueryInformationFile live-frame capture
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5M.ps1`
+
+5M preserves every 5L-proven subsystem and intercepts only ordinal 211. It
+captures the exact live file handle, `IO_STATUS_BLOCK` pointer, output-buffer
+pointer, requested length and `FILE_INFORMATION_CLASS`, then stops at an
+explicit `FILE_INFORMATION` boundary. No file-information payload is
+fabricated until hardware identifies the class requested by Mercenaries.
+
+Build tag: `P5M-NTQUERYINFO211-CAPTURE-20261020-A`.
+
+Cookie: `P5M1 / 0x50354D31`.
+
+Link-time guard: `phase5m_env_build_cookie`.
