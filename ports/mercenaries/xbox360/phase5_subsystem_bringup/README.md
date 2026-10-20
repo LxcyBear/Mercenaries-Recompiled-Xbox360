@@ -1857,3 +1857,60 @@ Build: `P5AF-DIRECT22A3B9-20261020-A`
 Cookie: `P5AF / 0x50354146`.
 
 Link-time guard symbol: `phase5af_env_build_cookie`.
+
+
+## Phase 5AF hardware result
+
+Root `0x0022A3B9` executed on real Xbox 360 hardware, but the overall phase
+stopped at a newly discovered storage request:
+
+```text
+NtOpenFile
+  caller  = 0x0022A3B9
+  path    = \Device\Harddisk0\partition0
+  access  = 0xC0100000
+  share   = 3
+  options = 0x10
+  fault   = 0
+```
+
+The maintained storage bridge had no Partition0 mapping and correctly fenced
+the request before native I/O. Therefore the root itself is hardware-proven,
+while the final Phase-5AF harness result is FAIL.
+
+## Phase 5AG — Partition0 root mapping
+
+5AG adds only the hardware-observed exact root mapping:
+
+```text
+\Device\Harddisk0\partition0 -> game:\merc360-partition0
+```
+
+The native target is an isolated sandbox directory created on demand. Because
+the request is a root-directory open, virtual-root opens force
+`FILE_FLAG_BACKUP_SEMANTICS`. Child paths below Partition0 are still fenced
+until retail actually requests one.
+
+The PASS gate requires `s_phase5agPartition0OpenSuccessCount > 0` before a
+later boundary can count, so prior Partition1 activity cannot mask a broken
+Partition0 continuation.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AG.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\partition0_native_xdk\main.cpp
+build\phase5_subsystem_bringup\partition0_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\partition0_native_xdk\phase5ag-manifest.json
+```
+
+Build: `P5AG-PARTITION0-NATIVE-20261020-A`
+
+Cookie: `P5AG / 0x50354147`.
+
+Link-time guard symbol: `phase5ag_env_build_cookie`.
