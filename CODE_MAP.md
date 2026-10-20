@@ -316,12 +316,16 @@ Phase 5BC files:
 
 5BC changes the Phase-5 progression strategy from one-frontier-per-build to a
 bounded broad sweep. It inherits the complete Phase 5BB package, validates
-`0x00237052` as an exact generated function start, adds a depth-6/cap-256
-direct translated closure, and permits automatic continuation only when a safe
-ICALL or previously fenced direct target resolves exactly through the widened
-translated-pack lookup. Ordinary ICALL/ITAIL boundaries, unknown kernel/device
-behavior, mid-function targets, guest faults, ABI/frame anomalies, heap
-exhaustion, debug breaks, and the 200,000-block execution budget remain hard
-stops. The goal is to consume multiple ordinary translated frontiers per
-hardware run and stop only when genuinely new runtime knowledge is required.
+`0x00237052` as an exact generated function start, discovers a depth-6/cap-256
+candidate direct closure, then keeps the largest support-clean subset. Candidate
+side branches with unresolved non-direct support helpers are pruned from the
+pack and remain ordinary runtime fences instead of aborting the whole build;
+the hardware-observed seed itself is never pruned or guessed. Safe ICALLs and
+previously fenced direct targets may continue automatically only when the exact
+target resolves through the retained translated-pack lookup. Ordinary
+ICALL/ITAIL boundaries, unknown kernel/device behavior, mid-function targets,
+guest faults, ABI/frame anomalies, heap exhaustion, debug breaks, and the
+200,000-block execution budget remain hard stops. The goal is to consume
+multiple ordinary translated frontiers per hardware run and stop only when
+genuinely new runtime knowledge is required.
 
