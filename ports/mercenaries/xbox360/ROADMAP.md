@@ -3042,3 +3042,35 @@ PASS.
 Build tag: `P5BA-ICALL23D550-20261020-A`.
 Cookie: `P5BA / 0x50354241`.
 
+#### Phase 5BA — packed ICALL 0x0023D550 hardware result
+**Status: HARDWARE PASS / NEW DIRECT FRONTIER.**
+
+Build `P5BA-ICALL23D550-20261020-A` executed the newly-seeded
+`0x0023D550` guest ICALL target on hardware. Execution then continued through
+`0x00238533 -> 0x00238507 -> 0x002384E0 -> 0x0022B5EF` before reaching a new
+fault-free direct frontier:
+
+```text
+caller=0x0022B5EF
+target=0x0022DDA4
+esp=0x008BFF14
+fault=0
+```
+
+The Phase 5BA gate finished PASS.
+
+#### Phase 5BB — direct frontier 0x0022DDA4
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BB.ps1`
+
+5BB validates `0x0022DDA4` against the freshly-regenerated Phase-3N function
+inventory. If it is an exact generated function start, a bounded depth-2 /
+cap-16 closure is packed and actual root entry is required. If it is absent or
+falls inside another function, the emitter fails closed with the exact reason;
+no blind manual seed is added.
+
+Build tag: `P5BB-FRONTIER22DDA4-20261020-A`.
+Cookie: `P5BB / 0x50354242`.
+
