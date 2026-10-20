@@ -1745,3 +1745,64 @@ Build: `P5AD-XEUNLOADSECTION328-NATIVE-20261020-A`
 Cookie: `P5AD / 0x50354144`.
 
 Link-time guard symbol: `phase5ad_env_build_cookie`.
+
+
+## Phase 5AD hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The persistent title-state branch is now confirmed. Retail sees:
+
+```text
+TitleMeta.xbx  = 48 bytes
+TitleImage.xbx = 10240 bytes
+SaveImage.xbx  = 4096 bytes
+```
+
+That causes the image load/write path to be skipped. The 5AD
+`XeUnloadSection` bridge was therefore not called in this run, so it remains
+implemented and armed but not yet hardware-proven.
+
+After closing the title handles and creating `U:`, retail reaches:
+
+```text
+caller = 0x00239C23
+target = 0x0022A604
+esp    = 0x008BFF00
+trace  = 62
+fault  = 0
+```
+
+Harness result:
+`PHASE 5AD XEUNLOADSECTION328 NATIVE RESULT: PASS`.
+
+## Phase 5AE — direct root 0x0022A604
+
+5AE promotes only `0x0022A604` at depth zero. It retains every prior native
+storage/image-section continuation, including the ordinal-328
+`XeUnloadSection` bridge, but does not require skipped persistent-state work
+to repeat.
+
+The gate validates that `0x0022A604` is an exact generated function start,
+adds explicit root-entry instrumentation, and accepts only a later
+nonfaulting runtime boundary as proof.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AE.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_22a604_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_22a604_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_22a604_xdk\phase5ae-manifest.json
+```
+
+Build: `P5AE-DIRECT22A604-20261020-A`
+
+Cookie: `P5AE / 0x50354145`.
+
+Link-time guard symbol: `phase5ae_env_build_cookie`.
