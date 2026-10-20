@@ -28,7 +28,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Write-Host "[Phase5BB] POST-PERSISTENCE TRANSLATED CLOSURE"
 Write-Host "[Phase5BB] Phase 5BA proved packed ICALL 0022C452 -> 0023D550 and advanced through translated code to DIRECT_FRONTIER 0022B5EF -> 0022DDA4."
 Write-Host "[Phase5BB] Persisted second boot mounted Z: and reached direct frontier 0x0022F0D6 from caller 0x0022BD2D."
-Write-Host "[Phase5BB] Promoting exact direct target 0x0022DDA4 with depth-2/cap-16 closure; the refreshed Phase-3N inventory is validated before emission."
+Write-Host "[Phase5BB] 0x0022DDA4 is a reviewed manual RtlAllocateHeap target; packing maintained DDA4/E51F/E713 heap helpers over the existing Phase-4C title heap."
 Write-Host "[Phase5BB] Hardware gate requires loaded persistence, unchanged sector rewrite, actual root entry, and a newer boundary."
 Write-Host "[Phase5BB] Depth-2 closure support: cache-prep + tracked audio fallback/free shims are supplied without replacing retail allocator/free behavior."
 Write-Host "[Phase5BB] Unknown kernel/device behavior remains fenced at the next real boundary."
@@ -221,8 +221,15 @@ foreach ($requiredText in @(
     "_phase4c_target == 0x0023D550u",
     "PASS: Phase 5BB ICALL_SAFE 0022C452 -> 0023D550 entering packed translated target",
     "case 0x0022DDA4u: return sub_0022DDA4;",
+    "case 0x0022E51Fu: return sub_0022E51F;",
+    "case 0x0022E713u: return sub_0022E713;",
     "s_phase5bbRoot22DDA4Entered = 1;",
     "s_phase5bbRoot22DDA4Entered",
+    "s_phase5bbManualHeapAllocCount > 0u",
+    "PASS: Phase 5BB maintained RtlAllocateHeap",
+    "PASS: Phase 5BB maintained RtlFreeHeap",
+    "PASS: Phase 5BB maintained RtlReAllocateHeap",
+    "PASS: Phase 5BB maintained Xbox CRT heap family DDA4/E51F/E713 is support-owned and packed",
     "s_phase4cBoundaryTarget != 0x0022DDA4u",
     "PASS: Phase 5BB direct frontier root 0022DDA4 plus bounded depth-2/cap-16 closure is packed",
     "s_phase5bbRoot23D550Entered = 1;",
@@ -463,8 +470,23 @@ if ($direct34.observed_phase -ne "5BA" -or
     [int]$direct34.closure_depth -ne 2 -or
     [int]$direct34.closure_cap -ne 16 -or
     $direct34.required_prior_state -notlike "*packed ICALL 0x0023D550 executed*0x00238533*0x00238507*0x002384E0*0x0022B5EF*" -or
-    $direct34.pass_policy -notlike "*0x0022DDA4 root must execute*old 0x0022DDA4 direct frontier cannot count as progress*") {
+    $direct34.pass_policy -notlike "*0x0022DDA4 root must execute*maintained allocation call count must be nonzero*old 0x0022DDA4 direct frontier cannot count as progress*") {
     throw "Phase 5BB direct-frontier manifest contract mismatch"
+}
+
+$manualHeap = $manifestJson.phase5bb_manual_heap
+if ($manualHeap.mode -ne "support-owned maintained Xbox CRT heap family" -or
+    $manualHeap.allocate -ne "0x0022DDA4" -or
+    $manualHeap.free -ne "0x0022E51F" -or
+    $manualHeap.reallocate -ne "0x0022E713" -or
+    $manualHeap.arena_start -ne "0x008C1000" -or
+    $manualHeap.arena_end -ne "0x009C0000" -or
+    [int]$manualHeap.alignment -ne 16 -or
+    $manualHeap.zero_memory_flag -ne "0x00000008" -or
+    $manualHeap.realloc_in_place_only_flag -ne "0x00000010" -or
+    $manualHeap.source_policy -notlike "*Phase-4C deterministic title-heap allocator/free*coherent realloc*" -or
+    $manualHeap.pack_policy -notlike "*all three reviewed Recompile.ps1 manual functions*support-owned*packed together*") {
+    throw "Phase 5BB maintained heap manifest contract mismatch"
 }
 
 $symbolicLinkObject = $manifestJson.phase5bb_symbolic_link_object
