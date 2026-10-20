@@ -197,3 +197,21 @@ Repair policy: exact caller `0x0022B7B2` + target `0x800000D7` + observed
 20-byte frame only; validate the normal ordinal-215 arguments, record the extra
 dword, and resume at `savedEsp - 4`. No global ABI change.
 
+### Phase-5 XeImageFileName data-import frontier
+
+5AV hardware proved the ordinal-215 symbolic-link query repair and guest object
+close. Execution then advanced to translated caller `0x00239C23`, which
+attempted a 16-bit read from `0x80000146`. That token is Xbox kernel export
+ordinal 326, `XeImageFileName`, an ANSI_STRING data object.
+
+Phase 5AW files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AW.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5aw_xeimagefilename_data.py`
+
+Guest data layout:
+- `0x0087E040`: ANSI_STRING {Length=26, MaximumLength=27, Buffer=0x0087E050}
+- `0x0087E050`: `\Device\CdRom0\default.xbe\0`
+
+Ordinal 326 is relocated in the retail kernel thunk table before translated
+execution. The old `0x80000146` fault is explicitly excluded from PASS.
+
