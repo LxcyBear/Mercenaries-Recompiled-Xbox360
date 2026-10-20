@@ -879,7 +879,7 @@ if ([int]$manifestJson.continued_support_helper_memmove.arg_bytes -ne 12 -or
 }
 Write-Host ""
 Write-Host "[Phase5AZ] READY"
-Write-Host "[Phase5AZ] Hardware target: NtCreateFile must accept RootDirectory=FFFFFFFD, expand t:\\$u\\contentmeta.xbx through the guest T: link, return the native file status, and continue to a genuinely newer boundary."
+Write-Host '[Phase5AZ] Hardware target: NtCreateFile must accept RootDirectory=FFFFFFFD, expand t:\\$u\\contentmeta.xbx through the guest T: link, return the native file status, and continue to a genuinely newer boundary.'
 Write-Host "[Phase5AZ] Cache Partition3/4/5 exact roots (with or without trailing slash) and child paths are mapped proactively; stop only at the next genuinely new boundary."
 Write-Host "[Phase5AZ] Retained regression: ordinal 301 remains repeatable and STATUS_UNSUCCESSFUL still maps to ERROR_GEN_FAILURE (31)."
 Write-Host "[Phase5AZ] Expected prior-state evidence: Partition0 backing LOADED + changed=0 + Z: cache mount; 0x0022F0D6 itself is no longer an acceptable stop."
