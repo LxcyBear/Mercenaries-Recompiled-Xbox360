@@ -2138,3 +2138,51 @@ Event/APC forms and other negative/special offsets remain fenced.
 Build tag: `P5U-NTWRITEFILE236-NATIVE-20261020-A`.
 Cookie: `P5U1 / 0x50355531`.
 Link-time guard: `phase5u_env_build_cookie`.
+
+
+#### Phase 5U — native NtWriteFile ordinal 236 hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5U-NTWRITEFILE236-NATIVE-20261020-A` preserved the exact supported
+retail environment and full native title-storage stack. The live write request
+was serviced synchronously:
+
+```text
+handle=0x48000002
+buffer=0x008BFC48
+length=48
+offset_ptr=0x00000000
+status=0x00000000
+bytes=48
+requested=48
+```
+
+`NtClose` then succeeded for the same handle, and retail execution advanced
+to a new direct frontier with no guest fault:
+
+```text
+caller=0x0023F8CB
+target=0x0022BDA5
+esp=0x008BFC28
+trace=119
+fault=0
+```
+
+Harness result: `PHASE 5U NTWRITEFILE236 NATIVE RESULT: PASS`.
+
+#### Phase 5V — post-write direct root 0x0022BDA5
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5V.ps1`
+
+5V preserves the native ordinal-236 write bridge and the complete prior
+translated stack, then promotes only exact hardware-observed root
+`0x0022BDA5` at depth zero. Because 5U persisted a 48-byte
+`TitleMeta.xbx`, 5V is state-aware: a successful write is no longer required
+on every boot. The new root carries explicit execution instrumentation so its
+hardware proof is independent of preceding loop iteration count.
+
+Build tag: `P5V-DIRECT22BDA5-20261020-A`.
+Cookie: `P5V1 / 0x50355631`.
+Link-time guard: `phase5v_env_build_cookie`.
