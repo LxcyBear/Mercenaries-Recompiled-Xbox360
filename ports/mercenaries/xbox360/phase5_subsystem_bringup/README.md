@@ -2194,3 +2194,30 @@ powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_sub
 
 Build: `P5AZ-OBDOSDEVICES-20261020-A`
 
+## Phase 5AZ hardware pass / Phase 5BA packed ICALL
+
+5AZ proved the Xbox `ObDosDevices` pseudo-root path. The observed request:
+
+```text
+root=FFFFFFFD
+path=t:\$u\contentmeta.xbx
+native=game:\merc360-partition1\TDATA\4c410015\$u\contentmeta.xbx
+status=C000003A
+```
+
+was returned to retail, which mapped it to DOS error 3 and continued. The next
+boundary is a fault-free indirect guest call from `0x0022C452` to
+`0x0023D550`.
+
+Phase 5BA validates that target against the generated function inventory,
+packages a depth-2/cap-16 closure, and allows only this exact guest ICALL target
+to dispatch through the translated pack.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5BA.ps1"
+```
+
+Build: `P5BA-ICALL23D550-20261020-A`
+
