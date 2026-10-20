@@ -2818,3 +2818,42 @@ storage-open boundary without fabricating a symbolic-link handle.
 Build tag: `P5AT-NTOPENSYMLINK203-CAPTURE-20261020-A`.
 Cookie: `P5AT / 0x50354154`.
 
+#### Phase 5AT — NtOpenSymbolicLinkObject hardware capture
+**Status: HARDWARE PASS.**
+
+Build `P5AT-NTOPENSYMLINK203-CAPTURE-20261020-A` ran the complete
+persistent-cache path with the 96-member translated closure and captured the
+next object-manager dependency without a guest fault.
+
+Exact live request:
+
+```text
+ordinal = 203 / NtOpenSymbolicLinkObject
+caller  = 0x0022B7B2
+path    = \??\D:
+target  = \Device\CdRom0   (created earlier by IoCreateSymbolicLink)
+frame   = 12 bytes including synthetic return slot
+fault   = 0
+```
+
+Harness result: `PHASE 5AT POST-PERSIST CLOSURE RESULT: PASS`.
+
+#### Phase 5AU — symbolic-link object open/query/close continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AU.ps1`
+
+5AU services ordinal 203 against the exact guest symbolic-link table already
+populated by `IoCreateSymbolicLink`, returning a tagged guest-safe object
+handle. It also arms ordinal 215 `NtQuerySymbolicLinkObject` in the same
+build and extends `NtClose` to release those object handles without passing
+them to host `CloseHandle`.
+
+The query bridge follows Xbox ANSI_STRING semantics and returns the exact
+target snapshot associated with the opened link handle. Unknown link names
+remain bounded failures rather than guessed aliases.
+
+Build tag: `P5AU-SYMLINKOBJ203-215-NATIVE-20261020-A`.
+Cookie: `P5AU / 0x50354155`.
+
