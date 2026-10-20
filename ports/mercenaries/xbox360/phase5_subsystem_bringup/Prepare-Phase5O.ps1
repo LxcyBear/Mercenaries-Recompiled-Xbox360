@@ -143,7 +143,7 @@ foreach ($requiredText in @(
     "CRT memmove LIVE FRAME",
     "PASS: recomp_crt_memmove matched maintained cdecl semantics",
     "PASS: Phase 5O main/env build cookie matches",
-    "PHASE 5O DIRECTB178 RESULT"
+    "PHASE 5O DIRECT239B78 RESULT"
 )) {
     if ($mainText -notlike "*$requiredText*") {
         throw "Generated Phase 5O main.cpp is missing marker: $requiredText"
@@ -155,7 +155,7 @@ foreach ($requiredText in @(
     "PHASE 5O EXACT RETAIL VERIFICATION: PASS",
     "PHASE 5O EXECUTION ENVIRONMENT RESULT: PASS",
     "phase5o_env_build_cookie",
-    "50354C31",
+    "50354F31",
     "PHASE 5O RETAIL ENVIRONMENT PREP END"
 )) {
     if ($envText -notlike "*$requiredText*") {
