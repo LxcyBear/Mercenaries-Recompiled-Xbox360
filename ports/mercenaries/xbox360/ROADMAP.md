@@ -1462,3 +1462,35 @@ Ordinal 187 `NtClose` is also armed for the tagged native handle lifecycle.
 Build tag: `P5C-VOLUME218-NATIVE-20261019-A`.
 
 Cookie: `P5C1 / 0x50354331`.
+
+
+#### Phase 5C — native volume query hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5C-VOLUME218-NATIVE-20261019-A` successfully completed the native
+Partition1 storage lifecycle:
+
+- `NtOpenFile` returned token `0x48000001`;
+- `NtQueryVolumeInformationFile` class 3 returned native-backed free/total
+  space with 512-byte sectors and 32 sectors per allocation unit;
+- `NtClose` released the tagged Xenon handle.
+
+The next live dependency is `ICALL_SAFE target=0x80000043`, ordinal 67
+`IoCreateSymbolicLink`, with `fault=0` and an exact 12-byte full frame.
+
+#### Phase 5D — native symbolic-link mount
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5D.ps1`
+
+5D decodes the live guest symbolic-link name and device target, records the
+mapping with maintained Xbox collision/resource semantics, integrates
+guest-created `\??\X:` aliases into storage path translation, and resumes
+the real boot path.
+
+Ordinal 69 `IoDeleteSymbolicLink` is also armed.
+
+Build tag: `P5D-SYMLINK67-NATIVE-20261019-A`.
+
+Cookie: `P5D1 / 0x50354431`.
