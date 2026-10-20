@@ -1582,3 +1582,34 @@ missing generated body.
 Build tag: `P5G-DIRECTBE8C-20261020-A`.
 
 Cookie: `P5G1 / 0x50354731`.
+
+
+#### Phase 5G — NtCreateFile boundary hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5G-DIRECTBE8C-20261020-A` retained the complete native storage/mount
+stack, executed translated root `0x0022BE8C`, and reached:
+
+```text
+ICALL_SAFE caller=0x0022BE8C target=0x800000BE
+fault=0
+trace=46
+```
+
+Target `0x800000BE` is ordinal 190 `NtCreateFile`. The observed full frame
+is 40 bytes, matching nine stdcall arguments plus the synthetic return.
+
+#### Phase 5H — native NtCreateFile + synchronous read
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5H.ps1`
+
+5H services `NtCreateFile` through native Xenon/XDK file primitives while
+reusing the proven symbolic-link/path translator and tagged guest-handle table.
+It also arms ordinal 219 `NtReadFile` for synchronous native-backed reads;
+event/APC forms remain fenced.
+
+Build tag: `P5H-NTCREATE190-NATIVE-20261020-A`.
+
+Cookie: `P5H1 / 0x50354831`.
