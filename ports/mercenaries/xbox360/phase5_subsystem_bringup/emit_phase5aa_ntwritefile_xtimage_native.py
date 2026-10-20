@@ -6505,7 +6505,7 @@ def main() -> int:
     env_source += """
 extern "C" DWORD phase5aa_env_build_cookie(void)
 {
-    return 0x50354141u; /* P5AA1 */
+    return 0x50354141u; /* P5AA */
 }
 """
     for stale_phase in (
