@@ -25,10 +25,10 @@ foreach ($required in @($python,$generatedRoot,$functionsPath,$entryReport,$thre
 if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-Write-Host "[Phase5L] POST-XBE-SECTION-SCAN RETAIL HELPER CONTINUATION"
-Write-Host "[Phase5L] Phase 5K hardware PASS compared $$XTINFO against all 14 live XBE section names and reached DIRECT_FRONTIER 0x0022B178 with fault=0."
-Write-Host "[Phase5L] Promoting only exact hardware-observed translated root 0x0022B178; deeper direct callees remain fenced."
-Write-Host "[Phase5L] Preparation fails explicitly if B178 is a split/mid-function target or lacks a generated body."
+Write-Host "[Phase5L] MAINTAINED SETLASTERROR CONTINUATION"
+Write-Host "[Phase5L] Phase 5K hardware PASS compared $XTINFO against all 14 live XBE section names and reached DIRECT_FRONTIER 0x0022B178 with fault=0."
+Write-Host "[Phase5L] 0x0022B178 is intentionally manual in Recompile.ps1 and maps to the maintained SetLastError wrapper in recomp_manual.c."
+Write-Host "[Phase5L] Packaging only that reviewed manual body; every other missing generated function still fails closed."
 Write-Host "[Phase5L] Complete native storage, D:/T:, title-data, RTL string, and section-scan state remains active."
 Write-Host "[Phase5L] Main/env link-time cookie symbol is phase5l_env_build_cookie / P5L1."
 Write-Host ""
@@ -123,7 +123,8 @@ foreach ($requiredText in @(
     "RtlEqualString LIVE FRAME",
     "PASS: Phase 5L RtlEqualString continuation",
     "PASS: hardware-observed post-storage direct root 0022F026 is packed for translated execution",
-    "PASS: hardware-observed post-section-scan direct root 0022B178 is packed for translated execution",
+    "PASS: hardware-observed root 0022B178 uses maintained manual SetLastError execution",
+    "PASS: Phase 5L maintained SetLastError value=",
     "STORAGE_IO",
     "game:\\merc360-partition1",
     "RtlInitializeCriticalSection LIVE FRAME",
@@ -264,6 +265,15 @@ if ($manifestJson.promoted_closure_15_members.Count -ne 1 -or
 if ($manifestJson.promoted_direct_frontier_target_16 -ne "0x0022B178") {
     throw "Phase 5L manifest B178 root mismatch"
 }
+if ($manifestJson.promoted_direct_frontier_target_16_mode -ne "manual-maintained") {
+    throw "Phase 5L B178 mode must be manual-maintained"
+}
+if ($manifestJson.manual_maintained_root_16.address -ne "0x0022B178" -or
+    $manifestJson.manual_maintained_root_16.name -ne "sub_0022B178" -or
+    $manifestJson.manual_maintained_root_16.semantic_name -ne "SetLastError" -or
+    $manifestJson.manual_maintained_root_16.production_source -ne "ports/mercenaries/src/recomp_manual.c") {
+    throw "Phase 5L maintained B178 contract mismatch"
+}
 if ($manifestJson.promoted_closure_members.Count -ne 1 -or
     $manifestJson.promoted_closure_members[0] -ne "0x0022B178") {
     throw "Phase 5L safe-root member set must be exactly 0x0022B178"
@@ -311,9 +321,11 @@ if ([int]$manifestJson.continued_support_helper_memmove.arg_bytes -ne 12 -or
 }
 Write-Host ""
 Write-Host "[Phase5L] READY"
-Write-Host "[Phase5L] Phase 5K evidence locked: $$XTINFO was compared against all 14 XBE section names before frontier 0x0022B178."
-Write-Host "[Phase5L] New translated root: 0x0022B178"
-Write-Host "[Phase5L] Promotion depth: 0; member set must be exactly one function."
+Write-Host "[Phase5L] Phase 5K evidence locked: $XTINFO was compared against all 14 XBE section names before frontier 0x0022B178."
+Write-Host "[Phase5L] New maintained-manual root: 0x0022B178 = SetLastError"
+Write-Host "[Phase5L] Production source: ports/mercenaries/src/recomp_manual.c"
+Write-Host "[Phase5L] ABI: stdcall one uint32 argument; preserve EAX; g_esp += 8."
+Write-Host "[Phase5L] Promotion depth: 0; member set remains exactly one reviewed function."
 Write-Host "[Phase5L] Retained stack: Partition1 + D:/T: mounts + TDATA/UDATA + NtCreateFile/NtClose + RtlInitAnsiString/RtlEqualString."
 Write-Host "[Phase5L] Build BOTH freshly generated sources in the same XDK project:"
 Write-Host "[Phase5L]   $main"
