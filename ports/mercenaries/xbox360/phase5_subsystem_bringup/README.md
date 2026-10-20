@@ -1562,3 +1562,64 @@ Build: `P5AA-NTWRITEFILE236-XTIMAGE-NATIVE-20261020-A`
 Cookie: `P5AA / 0x50354141`.
 
 Link-time guard symbol: `phase5aa_env_build_cookie`.
+
+
+## Phase 5AA hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The Phase-5Z stack capture was classified correctly. Caller
+`0x0022F0CC` still supplies the full standard NtWriteFile argument set; only
+its translated continuation ESP is one dword short. 5AA validated the exact
+captured frame, repaired `savedEsp` from `0x008BFBC0` to
+`0x008BFBC4`, and performed the native write:
+
+```text
+buffer    = 0x00874D40   ($$XTIMAGE)
+length    = 0x2800       (10,240 bytes)
+status    = 0
+bytes     = 10,240
+requested = 10,240
+```
+
+Retail then reached:
+
+```text
+caller = 0x0022F0CC
+target = 0x0022F0AE
+esp    = 0x008BFBBC
+trace  = 60
+fault  = 0
+```
+
+Harness result: `PHASE 5AA NTWRITEFILE236 XTIMAGE NATIVE RESULT: PASS`.
+
+## Phase 5AB — direct root 0x0022F0AE
+
+5AB promotes only `0x0022F0AE` at depth zero and keeps every previously
+proven native storage/runtime continuation armed.
+
+Because 5AA persisted the complete `TitleImage.xbx` payload, subsequent boots
+may take a shorter path. The 5AB PASS condition therefore does not require
+`XeLoadSection` or the TitleImage write to repeat. The new root has explicit
+entry instrumentation and remains the authoritative proof target.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AB.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_22f0ae_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_22f0ae_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_22f0ae_xdk\phase5ab-manifest.json
+```
+
+Build: `P5AB-DIRECT22F0AE-20261020-A`
+
+Cookie: `P5AB / 0x50354142`.
+
+Link-time guard symbol: `phase5ab_env_build_cookie`.
