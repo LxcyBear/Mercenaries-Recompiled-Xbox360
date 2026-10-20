@@ -4819,7 +4819,7 @@ def main() -> int:
     ):
         env_source = env_source.replace(stale_phase, "PHASE 5J")
     env_source += """
-extern "C" DWORD phase4c_env_build_cookie(void)
+extern "C" DWORD phase5j_env_build_cookie(void)
 {
     return 0x50354A31u; /* P5J1 */
 }
@@ -4860,7 +4860,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         raise SystemExit("[Phase5J] env-entry declaration marker changed")
     driver = driver.replace(
         cookie_decl,
-        cookie_decl + 'extern "C" DWORD phase4c_env_build_cookie(void);\n',
+        cookie_decl + 'extern "C" DWORD phase5j_env_build_cookie(void);\n',
         1,
     )
     env_pass_marker = """    trace("PHASE 5J ENVIRONMENT RESULT: PASS");
@@ -4870,7 +4870,7 @@ extern "C" DWORD phase4c_env_build_cookie(void)
         raise SystemExit("[Phase5J] environment PASS marker changed")
     driver = driver.replace(
         env_pass_marker,
-        """    if (phase4c_env_build_cookie() != 0x50354A31u)
+        """    if (phase5j_env_build_cookie() != 0x50354A31u)
     {
         trace("FAIL: Phase 5J environment build cookie mismatch");
         goto shutdown_env;
