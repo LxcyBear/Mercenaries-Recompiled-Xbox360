@@ -2511,3 +2511,65 @@ Build tag:
 
 Cookie: `P5AC / 0x50354143`.
 Link-time guard: `phase5ac_env_build_cookie`.
+
+
+#### Phase 5AC — native SaveImage / $$XSIMAGE write hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5AC-NTWRITEFILE236-IMAGESECTIONS-NATIVE-20261020-A` preserved the
+exact supported retail environment and confirmed the persistent TitleImage
+branch. Retail observed `TitleImage.xbx` at 10,240 bytes, created
+`SaveImage.xbx`, loaded XBE section 12 `$$XSIMAGE`, and issued the same
+caller-`0x0022F0CC` one-dword-short NtWriteFile shape.
+
+The two-entry image-section allowlist matched the `$$XSIMAGE` request
+exactly:
+
+```text
+section header = 0x00010610
+section index  = 12
+section name   = $$XSIMAGE
+buffer         = 0x00877540
+length         = 0x1000
+file           = SaveImage.xbx
+ByteOffset     = NULL
+savedEsp       = 0x008BFBC0
+resumeEsp      = 0x008BFBC4
+```
+
+The native write completed with `status=0` and `bytes=4096/4096`.
+Translated root `0x0022F0AE` then executed and reached a new safe kernel
+boundary:
+
+```text
+caller=0x0022F0AE
+target=0x80000148
+esp=0x008BFBB4
+saved_esp=0x008BFBBC
+trace=65
+fault=0
+```
+
+Ordinal 328 is `XeUnloadSection`. Harness result:
+`PHASE 5AC XSIMAGE SAVEIMAGE NATIVE RESULT: PASS`.
+
+#### Phase 5AD — native XeUnloadSection ordinal 328
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AD.ps1`
+
+5AD adds an 8-byte-frame `XeUnloadSection` bookkeeping continuation. It
+validates the XBE section header, decrements `SectionReferenceCount`, and on
+a 1->0 transition decrements the distinct shared head/tail page reference
+counters. Guest section bytes remain resident because Phase-2E preloads all
+XBE sections and the maintained `XeLoadSection` bridge is bookkeeping-only.
+
+Both TitleImage and SaveImage are now persistent filesystem state. Therefore
+5AD keeps all image-write/load/unload services armed but does not require
+those operations or root `0x0022F0AE` to repeat on every boot; it captures
+the next previously-unhandled runtime boundary from the current retail state.
+
+Build tag: `P5AD-XEUNLOADSECTION328-NATIVE-20261020-A`.
+Cookie: `P5AD / 0x50354144`.
+Link-time guard: `phase5ad_env_build_cookie`.
