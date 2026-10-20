@@ -9006,9 +9006,18 @@ extern "C" DWORD phase5ap_env_build_cookie(void)
             ) &&
             s_phase5apDiskIdentityDataReady > 0u &&
             s_phase5apDiskIdentitySeen40 == 1u &&
-            s_phase5apRoot22C5C6Entered &&
+            (
+                (
+                    s_phase5apPartition0BackingLoaded == 0u &&
+                    s_phase5apRoot22C5C6Entered &&
+                    s_phase5apNtDeviceIoControlSuccessCount > 0u
+                ) ||
+                (
+                    s_phase5apPartition0BackingLoaded > 0u &&
+                    s_phase5apPartition0UnchangedWriteCount > 0u
+                )
+            ) &&
             s_phase5apCacheRootOpenCount > 0u &&
-            s_phase5apNtDeviceIoControlSuccessCount > 0u &&
             s_phase5cVolumeQueryCount > 0u &&
             s_phase5dSymbolicLinkCreateCount > 0u &&
             s_phase5hNtCreateFileCallCount > 0u &&
@@ -9425,6 +9434,9 @@ extern "C" DWORD phase5ap_env_build_cookie(void)
         "0x00070000u",
         "0x00074004u",
         "s_phase5apNtDeviceIoControlSuccessCount > 0u",
+        "s_phase5apPartition0BackingLoaded == 0u",
+        "s_phase5apPartition0BackingLoaded > 0u",
+        "s_phase5apPartition0UnchangedWriteCount > 0u",
         "s_phase4cBoundaryTarget != 0x800000C4u",
         "PASS: Phase 5AP NtDeviceIoControlFile cache continuation",
     ):
