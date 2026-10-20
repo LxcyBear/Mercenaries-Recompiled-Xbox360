@@ -1307,3 +1307,71 @@ Build: `P5W-DIRECT22F08D-20261020-A`
 Cookie: `P5W1 / 0x50355731`.
 
 Link-time guard symbol: `phase5w_env_build_cookie`.
+
+
+## Phase 5W hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The state-aware path behaved as intended. Persistent `TitleMeta.xbx` was
+recognized at EOF 48, `TitleImage.xbx` was opened and queried at EOF 0, and
+the promoted translated root executed:
+
+```text
+trace[58] = 0x0022F08D
+```
+
+It then reached:
+
+```text
+kind      = ICALL_SAFE
+caller    = 0x0022F08D
+target    = 0x80000147
+esp       = 0x008BFBB0
+saved_esp = 0x008BFBB8
+trace     = 59
+fault     = 0
+```
+
+Ordinal 327 is `XeLoadSection@4`, matching the observed 8-byte full frame.
+
+Harness result: `PHASE 5W DIRECT22F08D RESULT: PASS`.
+
+## Phase 5X — native XeLoadSection continuation
+
+5X services ordinal 327 without rereading section bytes. The Phase-2E
+environment has already copied and zero-filled every retail XBE section into
+guest RAM before execution, so the bridge performs the missing kernel
+bookkeeping:
+
+```text
+validate exact XBE section-table pointer
+read 0x38-byte XBE section header
+increment SectionReferenceCount
+on first load, increment distinct shared head/tail page reference counters
+return STATUS_SUCCESS
+restore stdcall ESP and resume retail execution
+```
+
+Unexpected pointers, malformed section metadata, invalid reference counts, and
+guest-memory faults remain fenced.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5X.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\xeloadsection_native_xdk\main.cpp
+build\phase5_subsystem_bringup\xeloadsection_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\xeloadsection_native_xdk\phase5x-manifest.json
+```
+
+Build: `P5X-XELOADSECTION327-NATIVE-20261020-A`
+
+Cookie: `P5X1 / 0x50355831`.
+
+Link-time guard symbol: `phase5x_env_build_cookie`.
