@@ -80,7 +80,11 @@ if ($emitExit -ne 0) {
         }
     }
     Write-Host ""
-    throw "Phase 5BC broad-sweep package emission failed (exit $emitExit). Full emitter output: $emitLog"
+    $tailText = ""
+    if (Test-Path -LiteralPath $emitLog) {
+        $tailText = (Get-Content -LiteralPath $emitLog -Tail 40) -join [Environment]::NewLine
+    }
+    throw ("Phase 5BC broad-sweep package emission failed (exit {0}). Full emitter output: {1}{2}{3}" -f $emitExit, $emitLog, [Environment]::NewLine, $tailText)
 }
 
 $main = Join-Path $outDir "main.cpp"
@@ -97,7 +101,7 @@ $mainText = Get-Content -LiteralPath $main -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
 foreach ($requiredText in @(
-    "P5BC-BROADSWEEP237052-20261020-A",
+    "P5BC-BROADSWEEP237052-20261020-B",
     "case 0x00237052u: return sub_00237052;",
     "s_phase5bcSweepRootEntered = 1;",
     "PASS: Phase 5BC broad-sweep ICALL_SAFE",
@@ -128,7 +132,7 @@ foreach ($requiredText in @(
 
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($manifestJson.phase -ne "5BC" -or
-    $manifestJson.build_tag -ne "P5BC-BROADSWEEP237052-20261020-A") {
+    $manifestJson.build_tag -ne "P5BC-BROADSWEEP237052-20261020-B") {
     throw "Phase 5BC manifest identity mismatch"
 }
 
@@ -143,7 +147,9 @@ if ($sweep.observed_phase -ne "5BB" -or
     [int]$sweep.direct_closure_depth -ne 6 -or
     [int]$sweep.direct_closure_cap -ne 256 -or
     [int]$sweep.execution_budget_blocks -ne 200000 -or
+    [int]$sweep.candidate_new_members -lt 1 -or
     [int]$sweep.new_members -lt 1 -or
+    [int]$sweep.pruned_members -lt 0 -or
     [int]$sweep.expanded_pack_members -le [int]$sweep.base_pack_members) {
     throw "Phase 5BC broad-sweep manifest contract mismatch"
 }
@@ -177,8 +183,10 @@ if ($manifestJson.phase5bb_partition0_persistence.backing_path -ne "game:\merc36
 Write-Host ""
 Write-Host "[Phase5BC] READY"
 Write-Host ("[Phase5BC] Base pack members : {0}" -f [int]$sweep.base_pack_members)
-Write-Host ("[Phase5BC] Sweep members     : {0}" -f [int]$sweep.sweep_members)
-Write-Host ("[Phase5BC] Newly added       : {0}" -f [int]$sweep.new_members)
+Write-Host ("[Phase5BC] Sweep candidates  : {0}" -f [int]$sweep.sweep_members)
+Write-Host ("[Phase5BC] Candidate new     : {0}" -f [int]$sweep.candidate_new_members)
+Write-Host ("[Phase5BC] Pruned/fenced     : {0}" -f [int]$sweep.pruned_members)
+Write-Host ("[Phase5BC] Newly packed      : {0}" -f [int]$sweep.new_members)
 Write-Host ("[Phase5BC] Expanded pack     : {0}" -f [int]$sweep.expanded_pack_members)
 Write-Host "[Phase5BC] Hardware goal: enter 00237052, then keep consuming exact packed translated targets until a genuinely unsupported boundary appears."
 Write-Host "[Phase5BC] Do NOT delete game:\merc360-partition0\partition0-config.bin; the persisted second-boot path remains part of the gate."
@@ -186,5 +194,5 @@ Write-Host "[Phase5BC] Build BOTH freshly generated sources:"
 Write-Host "[Phase5BC]   $main"
 Write-Host "[Phase5BC]   $env"
 Write-Host "[Phase5BC] Link-time cookie: phase5bc_env_build_cookie = 0x50354243 (P5BC)."
-Write-Host "[Phase5BC] Expected build tag: P5BC-BROADSWEEP237052-20261020-A"
+Write-Host "[Phase5BC] Expected build tag: P5BC-BROADSWEEP237052-20261020-B"
 Write-Host "[Phase5BC] If hardware stops, send the complete xbWatson log; one run may now cross multiple old-style frontiers."
