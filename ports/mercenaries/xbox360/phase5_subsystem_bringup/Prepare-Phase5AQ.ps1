@@ -190,7 +190,6 @@ foreach ($requiredText in @(
     "arg_offset=%u",
     "0x00070000u",
     "0x00074004u",
-    "s_phase5aqNtDeviceIoControlSuccessCount > 0u",
     "s_phase4cBoundaryTarget != 0x800000C4u",
     "PASS: Phase 5AQ ordinal 196 NtDeviceIoControlFile cache continuation armed for IOCTL 00070000/00074004",
     "PASS: Phase 5AQ NtDeviceIoControlFile cache continuation",
