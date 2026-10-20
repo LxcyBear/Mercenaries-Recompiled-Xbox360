@@ -1743,15 +1743,17 @@ fault=0
 trace=48
 ```
 
-#### Phase 5L — promote post-section-scan root 0x0022B178
+#### Phase 5L — maintained SetLastError root 0x0022B178
 **Status: package preparation ready.**
 
 Gate:
 `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5L.ps1`
 
 5L retains all proven native storage, D:/T: mounts, title-data setup and RTL
-section-name scanning, and promotes only the exact hardware-observed translated
-root `0x0022B178`.
+section-name scanning, and executes exact hardware-observed root `0x0022B178`
+through the reviewed maintained `SetLastError` body from `recomp_manual.c`.
+The Stage-3 generated tree remains frozen; all unrelated missing bodies still
+fail closed.
 
 Build tag: `P5L-DIRECTB178-20261020-A`.
 
