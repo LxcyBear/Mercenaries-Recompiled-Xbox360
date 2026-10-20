@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AP — persist the synthetic Partition0 config device across launches after Phase 5AO-B hardware PASS completed both cache IOCTLs and reached an intentional quick reboot.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5AP pass 2 — first hardware launch successfully created/flushed persistent Partition0 state with `changed=1` and reached the expected quick reboot; relaunch the same XEX without rebuilding to prove the backing is reloaded.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -76,18 +76,17 @@ entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
 **Present blockers:** Phase 4 and Phase 5A through 5AO have passed their
-hardware gates. P5AO-B completed both cache-mount device controls on real
-hardware: `0x00070000` succeeded from the observed 52-byte padded call-site
-frame and `0x00074004` succeeded from the canonical 44-byte frame. Retail
-then closed Partition5, set last error `0x70`, allocated/persisted
-`LaunchDataPage`, and requested `HalReturnToFirmware(2)` (quick reboot)
-back to the same title. The current synthetic Partition0 config device is
-reinitialized to zeros on every XEX launch, so its successful sector
-`0x800` write cannot survive that reboot. Phase 5AP makes the bounded
-512 KiB Partition0 model persistent at
-`game:\merc360-partition0\partition0-config.bin` and uses a two-launch
-hardware test to determine whether preserving the retail-written cache metadata
-breaks the reinitialization/reboot loop.
+hardware gates. P5AP pass 1 is now hardware-proven: the persistent Partition0
+backing was created, the retail sector write at offset `0x800` changed state,
+the complete 512 KiB backing flushed successfully, both cache IOCTLs still
+passed, and retail again requested `HalReturnToFirmware(2)` for the same
+title. The only remaining P5AP question is whether that persisted cache
+metadata changes the next boot. The required next test is therefore a second
+launch of the **same P5AP XEX without regeneration or rebuild**. That run must
+show `Partition0 backing LOADED`; if startup skips or changes the cache
+reconfiguration/reboot sequence, persistence broke the loop. If retail repeats
+the write with `changed=0` and still requests quick reboot, persistence is
+working and some other retail condition is driving the reboot.
 
 ### Immediate next tests
 
@@ -329,15 +328,16 @@ breaks the reinitialization/reboot loop.
     `IOCTL_DISK_GET_PARTITION_INFO (0x00074004)`. Retail then requested
     `HalReturnToFirmware(2)` with a persisted LaunchDataPage for the same
     title. Build: `P5AO-CACHE-DEVICE-IO-20261020-B`.
-66. **Phase 5AP active:** persist the bounded 512 KiB synthetic Partition0
-    config device at
-    `game:\merc360-partition0\partition0-config.bin`. Writes compare the
-    incoming range against existing state and log changed versus unchanged
-    writes, then flush the complete backing before reporting success. Hardware
-    test is intentionally two-pass with the **same XEX**: first launch may
-    create/flush the backing and reach quick reboot; second launch must reload
-    the file without regeneration/rebuild so retail sees its prior cache-table
-    write. Gate:
+66. **Phase 5AP active / pass 1 hardware proof:** first launch of
+    `P5AP-PARTITION0-PERSIST-20261020-A` created
+    `game:\merc360-partition0\partition0-config.bin`, flushed the full
+    512 KiB backing, and recorded the observed `0x800` / 512-byte retail
+    write as `changed=1`. Both cache device controls remained green and the
+    title reached the expected `HalReturnToFirmware(2)` quick-reboot request.
+    **Pass 2 is still required:** relaunch the same XEX without regeneration
+    or rebuild and require `Partition0 backing LOADED`. A repeated write
+    should then report `changed=0` if the persisted sector is identical.
+    Gate:
     `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AP.ps1`.
     Build tag: `P5AP-PARTITION0-PERSIST-20261020-A`.
 
@@ -2937,6 +2937,25 @@ unexecuted test PASS.**
 - **Next:** Phase 5AP persists Partition0 across XEX launches and reruns the
   same build twice to test whether retail cache metadata survives the reboot
   boundary and allows startup to advance.
+
+### 2026-10-20 — Phase 5AP pass 1: persistent Partition0 primed
+
+- Build `P5AP-PARTITION0-PERSIST-20261020-A` ran on real Xbox 360 hardware.
+- Persistent backing was absent at startup, so the phase created a fresh
+  `game:\merc360-partition0\partition0-config.bin` model.
+- The retail Partition0 sector at offset `0x800`, length `512`, was read,
+  modified, and written successfully.
+- The full 512 KiB backing flushed successfully before `NtWriteFile`
+  reported success.
+- The write was `changed=1`, proving the persisted image now differs from
+  the original zero-initialized Partition0 state.
+- Both cache-mount `NtDeviceIoControlFile` calls remained successful.
+- Retail again requested `HalReturnToFirmware(2)` with LaunchDataPage for
+  the same title.
+- **P5AP pass 1: successful / persistence primed.**
+- **Next:** launch the same P5AP XEX again with no regeneration or rebuild and
+  verify `Partition0 backing LOADED` before evaluating the new frontier or
+  any repeated `changed=0` write/reboot behavior.
 
 ### How future updates are recorded
 
