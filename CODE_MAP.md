@@ -148,3 +148,21 @@ Many title `.h` files contain implementation with internal linkage and are inclu
 ## Validation navigation
 
 [run_tests.py](tools/recomp/run_tests.py) discovers `tools/**/test_*.py` by AST and runs isolated subprocesses, choosing pytest or direct script execution. Native fixtures, retail oracles, source-spelling checks, WARP rendering and live-game tests establish different things. [MAINTENANCE](MAINTENANCE.md) describes which evidence is needed for each subsystem. A developer utility or fixture can explain a decision without being a runtime/build dependency.
+
+## Xbox 360 native-port live frontier
+
+Current Phase-5 hardware frontier (2026-10-20):
+
+- `Prepare-Phase5AS.ps1` / `emit_phase5as_direct_22bbc8.py`: hardware PASS.
+- Proven translated chain after persistent-cache setup:
+  `0022F0D6 -> 00230060 -> 0022BBC8 -> 00237830 -> 0022B74E -> 0022B7B2`.
+- Current kernel frontier: `0x800000CB`, original-Xbox ordinal 203
+  `NtOpenSymbolicLinkObject`, reached from translated caller `0x0022B7B2`
+  with `fault=0`.
+- `Prepare-Phase5AT.ps1` / `emit_phase5at_ntopensymlink_capture.py`:
+  capture-only next gate. It records the live handle pointer and guest
+  `OBJECT_ATTRIBUTES` / `ANSI_STRING` name before any symbolic-link handle
+  semantics are implemented.
+- Active generated XDK package:
+  `build/phase5_subsystem_bringup/post_persist_closure_xdk`.
+
