@@ -1495,3 +1495,70 @@ Build: `P5Z-NTWRITEFILE236-COMPACT-CAPTURE-20261020-A`
 Cookie: `P5Z1 / 0x50355A31`.
 
 Link-time guard symbol: `phase5z_env_build_cookie`.
+
+
+## Phase 5Z hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The compact capture resolved the second `NtWriteFile` call shape. Caller
+`0x0022F0CC` supplies the normal eight arguments; the captured raw stack is:
+
+```text
++00 = 00000000   synthetic return
++04 = 48000002   file handle
++08 = 00000000   event
++0C = 00000000   APC routine
++10 = 00000000   APC context
++14 = 008BFC1C   IO_STATUS_BLOCK
++18 = 00874D40   buffer
++1C = 00002800   length
++20 = 00000000   ByteOffset
+```
+
+`0x00874D40 / 0x2800` is exactly the retail `$$XTIMAGE` section. The
+kernel ABI is therefore not actually shortened; only this translated call
+site's `savedEsp` is one dword short.
+
+Harness result:
+`PHASE 5Z NTWRITEFILE236 COMPACT CAPTURE RESULT: PASS`.
+
+## Phase 5AA — native TitleImage NtWriteFile continuation
+
+5AA keeps the already-proven standard `NtWriteFile` path intact and adds a
+strict caller-specific correction for `0x0022F0CC`.
+
+The correction is allowed only when the observed frame still matches the
+5Z evidence:
+
+```text
+caller     = 0x0022F0CC
+buffer     = 0x00874D40
+length     = 0x2800
+ByteOffset = NULL
+event/APC/context = NULL
+```
+
+For that exact case, `resumeEsp = savedEsp + 4` restores the true 36-byte
+stdcall frame end. The bridge then performs a real native `WriteFile`,
+updates the guest `IO_STATUS_BLOCK`, and continues execution.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5AA.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\ntwritefile_xtimage_native_xdk\main.cpp
+build\phase5_subsystem_bringup\ntwritefile_xtimage_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\ntwritefile_xtimage_native_xdk\phase5aa-manifest.json
+```
+
+Build: `P5AA-NTWRITEFILE236-XTIMAGE-NATIVE-20261020-A`
+
+Cookie: `P5AA / 0x50354141`.
+
+Link-time guard symbol: `phase5aa_env_build_cookie`.
