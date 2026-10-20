@@ -392,3 +392,24 @@ fault-free safe indirect target `0x0023F22B` from caller `0x0022DDA4`.
 This extends the broad-sweep proof beyond the 5BE regional window and confirms
 that repeated exact packed ICALL promotion is stable across multiple heap-backed
 startup objects in one launch.
+
+
+### Phase-5BF forward regional sweep
+
+Phase 5BE hardware passed. The generic packed dispatcher consumed
+`0x00237052`, `0x00237801`, and `0x00239055` in a single launch.
+After the third automatic ICALL promotion, the maintained heap completed a
+third allocation (2048 bytes, flags `0x8`) at `0x008C1180`, execution
+continued through `0x0023D87C`, and the next hard stop was the fault-free
+safe indirect target `0x0023F22B` from caller `0x0022DDA4`.
+
+Phase 5BF files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BF.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bf_forward_sweep.py`
+
+5BF keeps `0x0023F22B` mandatory, adds its bounded depth-6 direct closure,
+and pre-packs a support-clean forward band covering
+`0x0023E000..0x00245FFF`, capped at 256 additional functions. The inherited
+generic packed ICALL/direct dispatcher remains the continuation mechanism;
+unsupported side branches stay fenced and the mandatory hardware-observed root
+is never pruned or guessed.
