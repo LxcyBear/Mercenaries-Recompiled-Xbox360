@@ -66,7 +66,7 @@ if ($emitExit -ne 0) {
             Write-Host "[Phase5M] Could not decode failure manifest: $($_.Exception.Message)"
         }
     }
-    throw "Phase 5M post-section-scan B178 package emission failed (exit $emitExit). Full emitter output: $emitLog"
+    throw "Phase 5M NtQueryInformationFile capture package emission failed (exit $emitExit). Full emitter output: $emitLog"
 }
 
 $main = Join-Path $outDir "main.cpp"
@@ -341,6 +341,6 @@ Write-Host "[Phase5M] Build BOTH freshly generated sources in the same XDK proje
 Write-Host "[Phase5M]   $main"
 Write-Host "[Phase5M]   $env"
 Write-Host "[Phase5M] Link-time guard: main requires phase5m_env_build_cookie from the matching generated environment source."
-Write-Host "[Phase5M] The 5L cookie must be 0x50354D31 (P5M1)."
+Write-Host "[Phase5M] The 5M cookie must be 0x50354D31 (P5M1)."
 Write-Host "[Phase5M] Keep the exact supported retail default.xbe beside the XEX."
 Write-Host "[Phase5M] Expected build tag: P5M-NTQUERYINFO211-CAPTURE-20261020-A"
