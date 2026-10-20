@@ -154,3 +154,59 @@ build\phase5_subsystem_bringup\volume_native_xdk\phase5c-manifest.json
 Build: `P5C-VOLUME218-NATIVE-20261019-A`
 
 Cookie: `P5C1 / 0x50354331`.
+
+
+## Phase 5C hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The complete native-backed storage lifecycle executed successfully:
+
+```text
+NtOpenFile                      -> STATUS_SUCCESS / token 0x48000001
+NtQueryVolumeInformationFile    -> STATUS_SUCCESS
+NtClose                         -> STATUS_SUCCESS
+```
+
+The live volume query used class 3 (`XboxFileFsSizeInformation`) and returned:
+
+```text
+TotalAllocationUnits      = 243868976
+AvailableAllocationUnits  = 55322560
+SectorsPerAllocationUnit  = 32
+BytesPerSector             = 512
+```
+
+Translated execution then advanced with `fault=0` to
+`ICALL_SAFE target=0x80000043`, ordinal 67 `IoCreateSymbolicLink`.
+
+## Phase 5D — native symbolic-link mount continuation
+
+5D decodes the exact guest `ANSI_STRING` link/target pair requested by retail
+code and mirrors the maintained Xbox symbolic-link semantics. No drive letter
+is guessed in advance.
+
+Guest-created aliases such as `\??\T:` or `\??\U:` are stored and
+consulted by the live storage path translator, so later drive-letter file opens
+resolve through the exact device target created by the game.
+
+Ordinal 69 `IoDeleteSymbolicLink` is also armed as the matching lifecycle
+operation.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5D.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\symlink_native_xdk\main.cpp
+build\phase5_subsystem_bringup\symlink_native_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\symlink_native_xdk\phase5d-manifest.json
+```
+
+Build: `P5D-SYMLINK67-NATIVE-20261019-A`
+
+Cookie: `P5D1 / 0x50354431`.
