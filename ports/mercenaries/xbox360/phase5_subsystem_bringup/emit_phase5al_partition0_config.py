@@ -8146,9 +8146,18 @@ extern "C" DWORD phase5al_env_build_cookie(void)
         raise SystemExit(
             "[Phase5AL] generated main lost repeatable ordinal-301 dispatch"
         )
-    if "s_phase5ahNtStatusMapCount >= 2u" not in generated_main:
+    # P5AL deliberately removes the P5AH/P5AK "second ordinal-301 must
+    # execute" PASS gate. A successful Partition0 raw read should avoid the
+    # STATUS_UNSUCCESSFUL -> RtlNtStatusToDosError recovery path entirely.
+    # Keep the repeatable ordinal-301 implementation/mapping available as a
+    # retained regression path, but prove P5AL with the config-device read.
+    if "s_phase5alPartition0RawReadCount > 0u" not in generated_main:
         raise SystemExit(
-            "[Phase5AL] generated main lost second ordinal-301 hardware gate"
+            "[Phase5AL] generated main lost Partition0 raw-read hardware gate"
+        )
+    if "s_phase5hNtReadFileSuccessCount > 0u" not in generated_main:
+        raise SystemExit(
+            "[Phase5AL] generated main lost successful NtReadFile hardware gate"
         )
     if "case 0xC0000001u: dosError = 31u;" not in generated_main:
         raise SystemExit(
