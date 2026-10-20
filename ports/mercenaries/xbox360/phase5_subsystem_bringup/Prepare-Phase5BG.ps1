@@ -117,7 +117,7 @@ foreach ($requiredText in @(
     "s_phase5bgTailRootEntered = 1;",
     "s_phase5bgTailRootEntered &&",
     "PASS: Phase 5BG broad-sweep ICALL_SAFE",
-    "PHASE 5BF BROAD TRANSLATED SWEEP RESULT",
+    "PHASE 5BG BROAD TRANSLATED SWEEP RESULT",
     "PASS: Phase 5BG maintained RtlAllocateHeap",
     "PASS: Phase 5BG Partition0 backing LOADED"
 )) {
@@ -127,12 +127,12 @@ foreach ($requiredText in @(
 }
 
 foreach ($requiredText in @(
-    "PHASE 5BF RETAIL ENVIRONMENT PREP START",
-    "PHASE 5BF EXACT RETAIL VERIFICATION: PASS",
-    "PHASE 5BF EXECUTION ENVIRONMENT RESULT: PASS",
+    "PHASE 5BG RETAIL ENVIRONMENT PREP START",
+    "PHASE 5BG EXACT RETAIL VERIFICATION: PASS",
+    "PHASE 5BG EXECUTION ENVIRONMENT RESULT: PASS",
     "phase5bg_env_build_cookie",
     "50354247",
-    "PHASE 5BF RETAIL ENVIRONMENT PREP END"
+    "PHASE 5BG RETAIL ENVIRONMENT PREP END"
 )) {
     if (-not $envText.Contains($requiredText)) {
         throw "Generated Phase 5BG phase5_env.cpp is missing marker: $requiredText"
@@ -165,7 +165,7 @@ if ($sweep.observed_phase -ne "5BF" -or
     [int]$sweep.candidate_new_members -lt 1 -or
     [int]$sweep.new_members -lt 1 -or
     [int]$sweep.expanded_pack_members -le [int]$sweep.base_pack_members) {
-    throw "Phase 5BG forward-sweep manifest contract mismatch"
+    throw "Phase 5BG text-tail-sweep manifest contract mismatch"
 }
 
 $newMembers = @($manifestJson.phase5bg_new_members)
