@@ -1993,3 +1993,37 @@ split/mid-function target. A missing frozen Stage-3 body also fails closed.
 Build tag: `P5Q-DIRECT23DD7B-20261020-A`.
 Cookie: `P5Q1 / 0x50355131`.
 Link-time guard: `phase5q_env_build_cookie`.
+
+
+#### Phase 5Q — post-TitleMeta direct root 0x0023DD7B hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5Q-DIRECT23DD7B-20261020-A` retained the complete native
+`TitleMeta.xbx` class-34 metadata continuation. Root `0x0023DD7B`
+executed as translated trace entry 56, then reached a new direct frontier with
+`fault=0`:
+
+```text
+caller=0x0023DD7B
+target=0x0023DDA0
+esp=0x008BF774
+trace=57
+```
+
+Harness result: `PHASE 5Q DIRECT23DD7B RESULT: PASS`.
+
+#### Phase 5R — post-TitleMeta direct root 0x0023DDA0
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5R.ps1`
+
+5R retains roots `0x00239B78`, `0x0023DDDD`, and `0x0023DD7B`, then
+promotes only exact hardware-observed root `0x0023DDA0` at depth zero. The
+new target is only 0x25 bytes above `0x0023DD7B`, so preparation explicitly
+rejects a split/mid-function target. A missing frozen Stage-3 body also fails
+closed.
+
+Build tag: `P5R-DIRECT23DDA0-20261020-A`.
+Cookie: `P5R1 / 0x50355231`.
+Link-time guard: `phase5r_env_build_cookie`.
