@@ -9485,7 +9485,6 @@ extern "C" DWORD phase5aq_env_build_cookie(void)
         "code=%08X",
         "0x00070000u",
         "0x00074004u",
-        "s_phase5aqPartition0BackingLoaded == 0u",
         "s_phase5aqPartition0BackingLoaded > 0u",
         "s_phase5aqPartition0UnchangedWriteCount > 0u",
         "s_phase4cBoundaryTarget != 0x800000C4u",
