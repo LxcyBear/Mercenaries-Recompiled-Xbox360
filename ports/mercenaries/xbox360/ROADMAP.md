@@ -1613,3 +1613,37 @@ event/APC forms remain fenced.
 Build tag: `P5H-NTCREATE190-NATIVE-20261020-A`.
 
 Cookie: `P5H1 / 0x50354831`.
+
+
+#### Phase 5H — TDATA NtCreateFile hardware pass
+**Status: HARDWARE PASS.**
+
+Build `P5H-NTCREATE190-NATIVE-20261020-A` preserved the complete native
+storage/mount stack and successfully serviced ordinal 190 `NtCreateFile` for:
+
+```text
+\Device\Harddisk0\partition1\TDATA
+    -> game:\merc360-partition1\TDATA
+disposition=FILE_OPEN_IF
+status=0x00000000
+```
+
+The tagged handle was then closed successfully. `NtReadFile` was armed but
+not reached in this hardware run.
+
+The next live dependency is `0x80000121`, ordinal 289
+`RtlInitAnsiString`, with an exact 12-byte full frame and `fault=0`.
+
+#### Phase 5I — maintained RtlInitAnsiString continuation
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5I.ps1`
+
+5I performs bounded guest C-string scanning, initializes the Xbox
+`ANSI_STRING` layout in guest memory, logs a bounded printable source preview,
+and resumes the live retail path.
+
+Build tag: `P5I-RTLINITANSI289-20261020-A`.
+
+Cookie: `P5I1 / 0x50354931`.
