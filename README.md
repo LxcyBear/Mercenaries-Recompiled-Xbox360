@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5I — service live ordinal 289 RtlInitAnsiString after Phase 5H hardware PASS.
+> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5J — execute translated root 0x0022F026 after Phase 5I title-storage hardware PASS.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5H PASS; Phase 5I RTL string initialization active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5I PASS; Phase 5J post-title-storage retail helper active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,14 +75,14 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5H have passed on hardware.
-The native-backed Partition1 lifecycle and `D:` optical-disc mount remain
-intact. Ordinal 190 `NtCreateFile` now successfully opens/creates
-`\\Device\\Harddisk0\\partition1\\TDATA` as
-`game:\\merc360-partition1\\TDATA` with `FILE_OPEN_IF`, then closes the
-tagged handle. The live path next reaches `0x80000121` = ordinal 289
-`RtlInitAnsiString` with an exact 12-byte full frame and `fault=0`. Phase 5I
-services that maintained RTL string primitive and continues.
+**Present blockers:** Phase 4 and Phase 5A through 5I have passed on hardware.
+The native-backed Partition1 lifecycle, `D:` optical-disc mount and title
+storage hierarchy now initialize successfully. Retail code creates
+`TDATA\\4c410015`, mounts `\\??\\T:` to that title-id directory, then
+creates `UDATA` and `UDATA\\4c410015`, all through native-backed
+`NtCreateFile` with STATUS_SUCCESS. The live path next reaches
+`DIRECT_FRONTIER target=0x0022F026` with a 47-entry trace and `fault=0`.
+Phase 5J promotes only that exact next retail helper.
 
 ### Immediate next tests
 
@@ -252,11 +252,15 @@ services that maintained RTL string primitive and continues.
     `\\Device\\Harddisk0\\partition1\\TDATA` using `FILE_OPEN_IF`,
     returned STATUS_SUCCESS, closed the tagged handle, and reached ordinal 289
     `RtlInitAnsiString` with `fault=0`.
-53. **Phase 5I:** apply maintained Xbox `RtlInitAnsiString` semantics using
-    bounded guest-string reads, log the live source string preview, and resume.
+53. **Done:** Phase 5I initialized the live title-id ANSI strings, created
+    `TDATA\\4c410015` and `UDATA\\4c410015`, mounted
+    `\\??\\T: -> \\Device\\Harddisk0\\partition1\\TDATA\\4c410015`,
+    and advanced with `fault=0` to `DIRECT_FRONTIER target=0x0022F026`.
+54. **Phase 5J:** promote only hardware-observed post-title-storage translated
+    root `0x0022F026`, retaining all proven native storage/mount behavior.
     Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5I.ps1`.
-    Build tag: `P5I-RTLINITANSI289-20261020-A`.
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5J.ps1`.
+    Build tag: `P5J-DIRECTF026-20261020-A`.
 
 ### Evidence policy
 
@@ -2595,6 +2599,20 @@ unexecuted test PASS.**
 - **Phase 5H: PASS.**
 - **Next:** Phase 5I maintained `RtlInitAnsiString` continuation.
 - Build tag: `P5I-RTLINITANSI289-20261020-A`.
+
+### 2026-10-20 — Phase 5I title-storage hierarchy PASS
+
+- Build `P5I-RTLINITANSI289-20261020-A` passed on real Xbox 360 hardware.
+- Ordinal 289 `RtlInitAnsiString` exposed the live title-data paths.
+- Created/opened `TDATA\\4c410015` with STATUS_SUCCESS.
+- Mounted `\\??\\T: -> \\Device\\Harddisk0\\partition1\\TDATA\\4c410015`.
+- Created/opened `UDATA` and `UDATA\\4c410015` with STATUS_SUCCESS.
+- New boundary:
+  `DIRECT_FRONTIER caller=0x0022BE8C target=0x0022F026`.
+- The translated trace reached 47 entries with `fault=0`.
+- **Phase 5I: PASS.**
+- **Next:** Phase 5J exact-root promotion of `0x0022F026`.
+- Build tag: `P5J-DIRECTF026-20261020-A`.
 
 ### How future updates are recorded
 
