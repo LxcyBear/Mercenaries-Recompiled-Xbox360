@@ -3008,3 +3008,35 @@ mapping before accepting a newer boundary.
 Build tag: `P5AZ-OBDOSDEVICES-20261020-A`.
 Cookie: `P5AZ / 0x5035415A`.
 
+#### Phase 5AZ — Xbox ObDosDevices hardware result
+**Status: HARDWARE PASS / NEW GUEST ICALL FRONTIER.**
+
+Build `P5AZ-OBDOSDEVICES-20261020-A` accepted
+`OBJECT_ATTRIBUTES.RootDirectory=0xFFFFFFFD` as the Xbox `ObDosDevices`
+pseudo-root. The observed `t:\\$u\\contentmeta.xbx` request expanded
+through the guest `T:` link to the title TDATA sandbox, returned
+`STATUS_OBJECT_PATH_NOT_FOUND`, and retail correctly converted that status to
+DOS error 3 and continued.
+
+The next boundary is fault-free guest code:
+
+```text
+ICALL_SAFE caller=0022C452 target=0023D550
+esp=008BFF40 saved_esp=008BFF44 fault=0
+```
+
+#### Phase 5BA — packed ICALL frontier 0x0023D550
+**Status: package preparation ready.**
+
+Gate:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BA.ps1`
+
+5BA validates `0x0023D550` as an exact generated function start, promotes a
+bounded depth-2/cap-16 closure, and extends `RECOMP_ICALL_SAFE` only for this
+exact hardware-observed guest target. The target must enter, the packed-ICALL
+counter must increment, and the old `0x0023D550` boundary is excluded from
+PASS.
+
+Build tag: `P5BA-ICALL23D550-20261020-A`.
+Cookie: `P5BA / 0x50354241`.
+
