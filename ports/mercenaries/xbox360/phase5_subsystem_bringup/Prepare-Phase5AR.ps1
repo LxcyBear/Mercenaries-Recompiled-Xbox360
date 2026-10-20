@@ -323,7 +323,7 @@ foreach ($requiredText in @(
     "PHASE 5AR EXACT RETAIL VERIFICATION: PASS",
     "PHASE 5AR EXECUTION ENVIRONMENT RESULT: PASS",
     "phase5ar_env_build_cookie",
-    "50354151",
+    "50354152",
     "PHASE 5AR RETAIL ENVIRONMENT PREP END"
 )) {
     if (-not $envText.Contains($requiredText)) {
@@ -335,7 +335,7 @@ if (-not (Test-Path -LiteralPath $manifest)) {
     throw "Generated Phase 5AR manifest is missing: $manifest"
 }
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-if ($manifestJson.phase -ne "5AQ" -or $manifestJson.build_tag -ne "P5AR-REPEAT-NVQUERY-20261020-A") {
+if ($manifestJson.phase -ne "5AR" -or $manifestJson.build_tag -ne "P5AR-REPEAT-NVQUERY-20261020-A") {
     throw "Phase 5AR manifest identity mismatch"
 }
 $postPersist = $manifestJson.phase5ar_post_persistence_frontier
@@ -769,6 +769,6 @@ Write-Host "[Phase5AR] Build BOTH freshly generated sources in the same XDK proj
 Write-Host "[Phase5AR]   $main"
 Write-Host "[Phase5AR]   $env"
 Write-Host "[Phase5AR] Link-time guard: main requires phase5ar_env_build_cookie from the matching generated environment source."
-Write-Host "[Phase5AR] The 5AP cookie must be 0x50354151 (P5AR)."
+Write-Host "[Phase5AR] The 5AR cookie must be 0x50354152 (P5AR)."
 Write-Host "[Phase5AR] Keep the exact supported retail default.xbe beside the XEX."
 Write-Host "[Phase5AR] Expected build tag: P5AR-REPEAT-NVQUERY-20261020-A"
