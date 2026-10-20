@@ -157,7 +157,7 @@ foreach ($requiredText in @(
     "PHASE 5P EXACT RETAIL VERIFICATION: PASS",
     "PHASE 5P EXECUTION ENVIRONMENT RESULT: PASS",
     "phase5p_env_build_cookie",
-    "50354F31",
+    "50355031",
     "PHASE 5P RETAIL ENVIRONMENT PREP END"
 )) {
     if ($envText -notlike "*$requiredText*") {
