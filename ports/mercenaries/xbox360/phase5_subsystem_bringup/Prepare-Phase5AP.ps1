@@ -168,6 +168,8 @@ foreach ($requiredText in @(
     "partition5Root[]",
     "s_phase5apCacheRootOpenCount > 0u",
     "PASS: Phase 5AP cache partition native open",
+    "static int phase5ap_partition0_backing_load(void);",
+    "static int phase5ap_partition0_backing_flush(void);",
     "static int phase5ap_partition0_backing_load(void)",
     "static int phase5ap_partition0_backing_flush(void)",
     "partition0-config.bin",
