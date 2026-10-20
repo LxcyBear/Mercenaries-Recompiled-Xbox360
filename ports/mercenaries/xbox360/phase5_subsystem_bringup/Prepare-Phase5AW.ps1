@@ -130,7 +130,7 @@ foreach ($requiredText in @(
     "case 0xC0000001u: dosError = 31u;",
     "case 164u: return 0x0087E030u; /* LaunchDataPage pointer export */",
     "case 326u: return 0x0087E040u; /* XeImageFileName ANSI_STRING */",
-    "PASS: Phase 5AW XeImageFileName initialized ordinal=326 string_va=0087E040 buffer_va=0087E050 len=26 path=\Device\CdRom0\default.xbe",
+    "PASS: Phase 5AW XeImageFileName initialized ordinal=326 string_va=0087E040 buffer_va=0087E050 len=26 path=\\Device\\CdRom0\\default.xbe",
     "s_phase5awXeImageFileNameReady > 0u",
     "s_phase5awXeImageFileNameSeen326 == 1u",
     "s_phase4cFaultAddress != 0x80000146u",
