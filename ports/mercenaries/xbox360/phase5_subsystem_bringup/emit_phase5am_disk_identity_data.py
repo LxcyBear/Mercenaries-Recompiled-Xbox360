@@ -8263,6 +8263,30 @@ extern "C" DWORD phase5am_env_build_cookie(void)
         raise SystemExit(
             "[Phase5AM] generated main lost successful NtReadFile hardware gate"
         )
+    if "case 40u:  return 0x0087E4A0u; /* HalDiskCachePartitionCount */" not in generated_main:
+        raise SystemExit(
+            "[Phase5AM] generated main lost ordinal-40 data-thunk mapping"
+        )
+    if "case 41u:  return 0x0087E420u; /* HalDiskModelNumber STRING */" not in generated_main:
+        raise SystemExit(
+            "[Phase5AM] generated main lost ordinal-41 data-thunk mapping"
+        )
+    if "case 42u:  return 0x0087E460u; /* HalDiskSerialNumber STRING */" not in generated_main:
+        raise SystemExit(
+            "[Phase5AM] generated main lost ordinal-42 data-thunk mapping"
+        )
+    if "s_phase5amDiskIdentitySeen40 == 1u" not in generated_main:
+        raise SystemExit(
+            "[Phase5AM] generated main lost ordinal-40 hardware PASS gate"
+        )
+    if "s_phase4cFaultAddress != 0x80000028u" not in generated_main:
+        raise SystemExit(
+            "[Phase5AM] generated main still accepts raw ordinal-40 token fault"
+        )
+    if "PASS: Phase 5AM disk identity data initialized cache_partitions=3" not in generated_main:
+        raise SystemExit(
+            "[Phase5AM] generated main lost disk-identity initialization proof"
+        )
     if "case 0xC0000001u: dosError = 31u;" not in generated_main:
         raise SystemExit(
             "[Phase5AM] generated main lost STATUS_UNSUCCESSFUL -> ERROR_GEN_FAILURE mapping"
