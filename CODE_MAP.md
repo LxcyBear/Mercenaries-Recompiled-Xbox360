@@ -329,3 +329,12 @@ guest faults, ABI/frame anomalies, heap exhaustion, debug breaks, and the
 multiple ordinary translated frontiers per hardware run and stop only when
 genuinely new runtime knowledge is required.
 
+
+
+Hardware result (2026-10-20): PASS. The generic packed ICALL_SAFE dispatcher
+entered `0x00237052` from caller `0x0022C3FA`, execution continued through
+`0x0023701A`, and the first new hard stop was another fault-free safe indirect
+target `0x00237801` from caller `0x0023701A`. This validates the broad-sweep
+methodology itself: ordinary packed targets can now be consumed without a new
+one-address harness build, while genuinely unknown indirect targets remain
+explicit evidence-bearing stops.
