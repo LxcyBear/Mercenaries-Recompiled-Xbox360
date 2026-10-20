@@ -229,3 +229,17 @@ Policy: exact-function-start validation, generated-body validation, then bounded
 depth-2/cap-16 closure promotion. Actual root entry is required and the old
 `0x0023E600` boundary is excluded from PASS.
 
+### Phase-5 ordinal-289 caller repair at 0x0022A7A4
+
+Phase 5AX hardware executed `0x0023E600` and advanced to caller
+`0x0022A7A4`, which invokes kernel ordinal 289 `RtlInitAnsiString` with a
+translated saved-ESP delta of 16 bytes instead of the canonical 12.
+
+Phase 5AY files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AY.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5ay_rtlansi_a7a4.py`
+
+Policy: retain ordinal-289's normal two-argument ABI globally. Repair only exact
+caller `0x0022A7A4` with observed frame 16, validate the canonical stack
+arguments, resume at `savedEsp-4`, and require a repair proof before PASS.
+
