@@ -613,14 +613,16 @@ target = 0x0022B178
 trace  = 48
 ```
 
-## Phase 5L — post-XBE-section-scan translated helper
+## Phase 5L — maintained SetLastError continuation
 
 5L preserves the complete native Partition1, D:/T: mounts, title-data
-hierarchy and RTL string-comparison path, then promotes only the exact
-hardware-observed translated root `0x0022B178`.
+hierarchy and RTL string-comparison path, then executes the exact
+hardware-observed root `0x0022B178` through its reviewed maintained manual
+implementation. `Recompile.ps1` intentionally marks this function manual;
+production `recomp_manual.c` implements it as the Xbox `SetLastError` wrapper
+using stable runtime last-error state instead of the flattened FS-backed TIB.
 
-Preparation fails explicitly if B178 is a split/mid-function target or lacks a
-generated translated body.
+Every other missing generated body remains fail-closed.
 
 Run:
 
