@@ -296,3 +296,32 @@ The family reuses the Phase-4C deterministic title heap
 `0x008C1000..0x009C0000`. Require actual DDA4 entry plus a maintained
 allocation call before PASS, and exclude the old `0x0022DDA4` boundary.
 
+
+### Phase-5BC broad translated frontier sweep
+
+Phase 5BB hardware entered the maintained `0x0022DDA4` heap allocator,
+returned guest allocation `0x008C1000`, then advanced to a new fault-free
+safe indirect boundary:
+
+```text
+ICALL_SAFE 0x0022C3FA -> 0x00237052
+fault=0
+esp=0x008BFF48
+saved_esp=0x008BFF4C
+```
+
+Phase 5BC files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BC.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bc_broad_sweep.py`
+
+5BC changes the Phase-5 progression strategy from one-frontier-per-build to a
+bounded broad sweep. It inherits the complete Phase 5BB package, validates
+`0x00237052` as an exact generated function start, adds a depth-6/cap-256
+direct translated closure, and permits automatic continuation only when a safe
+ICALL or previously fenced direct target resolves exactly through the widened
+translated-pack lookup. Ordinary ICALL/ITAIL boundaries, unknown kernel/device
+behavior, mid-function targets, guest faults, ABI/frame anomalies, heap
+exhaustion, debug breaks, and the 200,000-block execution budget remain hard
+stops. The goal is to consume multiple ordinary translated frontiers per
+hardware run and stop only when genuinely new runtime knowledge is required.
+
