@@ -896,3 +896,54 @@ Build: `P5P-DIRECT23DDDD-20261020-A`
 Cookie: `P5P1 / 0x50355031`.
 
 Link-time guard symbol: `phase5p_env_build_cookie`.
+
+
+## Phase 5P hardware result
+
+**PASS on real Xbox 360 hardware.**
+
+The newly promoted translated root executed as:
+
+```text
+trace[55] = 0x0023DDDD
+```
+
+and immediately reached the next clean direct frontier:
+
+```text
+caller    = 0x0023DDDD
+target    = 0x0023DD7B
+esp       = 0x008BF76C
+saved_esp = 0x008BF76C
+fault     = 0
+trace     = 56
+```
+
+Harness result: `PHASE 5P DIRECT23DDDD RESULT: PASS`.
+
+## Phase 5Q — direct root 0x0023DD7B
+
+5Q promotes only `0x0023DD7B` at depth zero while retaining the complete
+Phase-5 storage/runtime stack plus roots `0x00239B78` and `0x0023DDDD`.
+The gate requires an exact function start and generated Stage-3 body.
+Split/mid-function targets and missing bodies fail preparation explicitly.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5Q.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\direct_23dd7b_xdk\main.cpp
+build\phase5_subsystem_bringup\direct_23dd7b_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\direct_23dd7b_xdk\phase5q-manifest.json
+```
+
+Build: `P5Q-DIRECT23DD7B-20261020-A`
+
+Cookie: `P5Q1 / 0x50355131`.
+
+Link-time guard symbol: `phase5q_env_build_cookie`.
