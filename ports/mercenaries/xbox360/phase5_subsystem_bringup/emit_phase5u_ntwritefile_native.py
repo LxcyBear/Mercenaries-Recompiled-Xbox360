@@ -2752,8 +2752,8 @@ static uint32_t phase5u_write_status_from_error(DWORD error)
         return 0xC0000022u; /* STATUS_ACCESS_DENIED */
     case ERROR_INVALID_HANDLE:
         return 0xC0000008u; /* STATUS_INVALID_HANDLE */
-    case ERROR_DISK_FULL:
-    case ERROR_HANDLE_DISK_FULL:
+    case 112u: /* ERROR_DISK_FULL */
+    case 39u:  /* ERROR_HANDLE_DISK_FULL */
         return 0xC000007Fu; /* STATUS_DISK_FULL */
     default:
         return 0xC0000001u; /* STATUS_UNSUCCESSFUL */
