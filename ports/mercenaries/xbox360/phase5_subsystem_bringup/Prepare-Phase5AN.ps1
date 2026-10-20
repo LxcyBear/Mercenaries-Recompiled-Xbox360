@@ -30,6 +30,7 @@ Write-Host "[Phase5AN] Phase 5AM hardware PASS fixed ordinal 40 and advanced thr
 Write-Host "[Phase5AN] The observed Partition0 writeback is offset 0x800 length 512; current directory-backed write returned STATUS_UNSUCCESSFUL."
 Write-Host "[Phase5AN] Enabling bounded Partition0 config writes and isolated cache mappings for Partition3/4/5."
 Write-Host "[Phase5AN] Promoting translated root 0x0022C5C6 with bounded depth-2 / cap-16 direct closure."
+Write-Host "[Phase5AN] Depth-2 closure support: cache-prep + tracked audio fallback/free shims are supplied without replacing retail allocator/free behavior."
 Write-Host "[Phase5AN] Unknown kernel/device behavior remains fenced at the next real boundary."
 Write-Host "[Phase5AN] Main/env link-time cookie symbol is phase5an_env_build_cookie / P5AN."
 Write-Host ""
@@ -168,6 +169,13 @@ foreach ($requiredText in @(
     "s_phase5anRoot22C5C6Entered",
     "s_phase4cBoundaryTarget != 0x0022C5C6u",
     "PASS: Phase 5AN cache-setup root 0022C5C6 plus bounded depth-2 closure is packed",
+    "int recomp_prepare_empty_cache_volume(void)",
+    "int recomp_test_audio_alloc_failure(uint32_t attributes)",
+    "uint32_t recomp_audio_pool_fallback(uint32_t size, uint32_t attributes)",
+    "int recomp_audio_pool_free(uint32_t ptr)",
+    "PASS: Phase 5AN cache prep helper",
+    "PASS: Phase 5AN audio pool fallback",
+    "policy=continue-retail-body",
     "s_phase5hNtReadFileSuccessCount > 0u",
     "PASS: Phase 5AN Partition0 config raw read offset=",
     "phase5an_hal_return_to_firmware_trap",
@@ -305,6 +313,17 @@ if ([int]$cacheStorage.partition0_size -ne 524288 -or
     [int]$cacheStorage.closure_depth -ne 2 -or
     [int]$cacheStorage.closure_cap -ne 16) {
     throw "Phase 5AN cache-storage manifest contract mismatch"
+}
+$supportShims = $manifestJson.phase5an_support_shims
+if ($supportShims.recomp_prepare_empty_cache_volume.signature -ne "int(void)" -or
+    $supportShims.recomp_prepare_empty_cache_volume.policy -notlike "*return 0*retail translated body executes*" -or
+    $supportShims.recomp_test_audio_alloc_failure.signature -ne "int(uint32_t attributes)" -or
+    $supportShims.recomp_test_audio_alloc_failure.policy -notlike "*never force failure*" -or
+    $supportShims.recomp_audio_pool_fallback.signature -ne "uint32_t(uint32_t size, uint32_t attributes)" -or
+    $supportShims.recomp_audio_pool_fallback.policy -notlike "*retail allocator returned NULL*tracked ownership*" -or
+    $supportShims.recomp_audio_pool_free.signature -ne "int(uint32_t ptr)" -or
+    $supportShims.recomp_audio_pool_free.policy -notlike "*tracked fallback pointers*retail free path*") {
+    throw "Phase 5AN support-shim manifest contract mismatch"
 }
 if ($manifestJson.promoted_direct_frontier_target_29 -ne "0x0022C5C6") {
     throw "Phase 5AN target-29 address mismatch"
