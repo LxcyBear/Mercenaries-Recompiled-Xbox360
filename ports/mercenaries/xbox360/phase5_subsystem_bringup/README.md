@@ -1437,3 +1437,61 @@ Build: `P5Y-DIRECT22F0CC-20261020-A`
 Cookie: `P5Y1 / 0x50355931`.
 
 Link-time guard symbol: `phase5y_env_build_cookie`.
+
+
+## Phase 5Y hardware result
+
+**Root execution proven; full harness result intentionally remains FAIL because
+the next NtWriteFile ABI shape is not yet classified.**
+
+The proven `XeLoadSection` bridge again services section 11
+`$$XTIMAGE`, then the promoted root executes:
+
+```text
+trace[58] = 0x0022F08D
+trace[59] = 0x0022F0CC
+```
+
+Root `0x0022F0CC` reaches ordinal 236 with:
+
+```text
+esp       = 0x008BFBA0
+saved_esp = 0x008BFBC0
+delta     = 32 bytes
+fault     = 0
+```
+
+The prior native TitleMeta write established a 36-byte full frame for
+`NtWriteFile`. The 5Y bridge therefore fences this new 32-byte form rather
+than guessing its layout.
+
+## Phase 5Z — compact NtWriteFile frame capture
+
+5Z is an ABI-evidence phase. It keeps the proven 36-byte native
+`NtWriteFile` continuation intact. When caller `0x0022F0CC` reaches the
+observed 32-byte form, the bridge logs the raw guest stack at offsets
+`+0x00` through `+0x28` and performs no native I/O.
+
+This distinguishes whether the second call is a compact argument layout,
+tail/wrapper stack shape, or a saved-ESP translation issue before any
+TitleImage payload is written.
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\phase5_subsystem_bringup\Prepare-Phase5Z.ps1"
+```
+
+Generated sources:
+
+```text
+build\phase5_subsystem_bringup\ntwritefile_compact_capture_xdk\main.cpp
+build\phase5_subsystem_bringup\ntwritefile_compact_capture_xdk\phase5_env.cpp
+build\phase5_subsystem_bringup\ntwritefile_compact_capture_xdk\phase5z-manifest.json
+```
+
+Build: `P5Z-NTWRITEFILE236-COMPACT-CAPTURE-20261020-A`
+
+Cookie: `P5Z1 / 0x50355A31`.
+
+Link-time guard symbol: `phase5z_env_build_cookie`.
