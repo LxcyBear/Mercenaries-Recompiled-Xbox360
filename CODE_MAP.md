@@ -260,3 +260,22 @@ Phase 5AZ files:
 - `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5AZ.ps1`
 - `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5az_obdosdevices.py`
 
+### Phase-5 packed guest ICALL frontier 0x0023D550
+
+5AZ hardware completed the ObDosDevices `t:\\$u\\contentmeta.xbx` path
+handling and then reached:
+
+```text
+ICALL_SAFE 0x0022C452 -> 0x0023D550
+fault=0
+```
+
+Phase 5BA files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BA.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5ba_icall23d550.py`
+
+Policy: exact-function-start and generated-body validation, bounded
+depth-2/cap-16 closure, target-specific `RECOMP_ICALL_SAFE` packed dispatch,
+actual root-entry proof, and exclusion of the old `0x0023D550` boundary from
+PASS.
+
