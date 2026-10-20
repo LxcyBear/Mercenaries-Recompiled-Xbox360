@@ -8773,10 +8773,13 @@ extern "C" DWORD phase5an_env_build_cookie(void)
         raise SystemExit(
             "[Phase5AN] generated main still accepts old 0x0022C5C6 frontier"
         )
+    # generated_main is C/C++ source text, so path separators appear
+    # escaped as two backslashes in the string literal. Use raw Python
+    # markers here; manifest/runtime path checks intentionally use one slash.
     for marker in (
-        "game:\\merc360-partition3",
-        "game:\\merc360-partition4",
-        "game:\\merc360-partition5",
+        r"game:\\merc360-partition3",
+        r"game:\\merc360-partition4",
+        r"game:\\merc360-partition5",
     ):
         if marker not in generated_main:
             raise SystemExit(
