@@ -2798,7 +2798,7 @@ static void bridge_NtQuerySymbolicLinkObject(void)
     g_eax = STATUS_SUCCESS;
 }
 
-/* -- IoCreateFile (ordinal 67, 10 args = 40 bytes) ------ */
+/* -- IoCreateFile (ordinal 66, 10 args = 40 bytes) ------ */
 static void bridge_IoCreateFile(void)
 {
     /* Same as NtCreateFile with an extra Options arg at the end */
@@ -2871,7 +2871,7 @@ static void bridge_NtCreateDirectoryObject(void)
     g_eax = 0;  /* STATUS_SUCCESS */
 }
 
-/* -- IoCreateSymbolicLink (ordinal 63) --------------------- */
+/* -- IoCreateSymbolicLink (ordinal 67, 2 args = 8 bytes) -- */
 static void bridge_IoCreateSymbolicLink(void)
 {
     g_eax = 0;  /* STATUS_SUCCESS */
