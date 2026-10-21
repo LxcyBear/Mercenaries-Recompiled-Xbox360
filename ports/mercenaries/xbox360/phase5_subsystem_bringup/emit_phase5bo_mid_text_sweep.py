@@ -315,7 +315,7 @@ def main() -> int:
         raise SystemExit("[Phase5BO] Phase 5BN root reset marker changed")
     main_text = main_text.replace(
         reset_marker,
-        reset_marker + "    s_phase5bnDeepLowRootEntered = 0;\n",
+        reset_marker + "    s_phase5boMidTextRootEntered = 0;\n",
         1,
     )
 
