@@ -437,3 +437,27 @@ at 256 additional functions. Unsupported side branches remain fenced; the
 mandatory hardware-observed seed, guest faults, ABI/frame anomalies,
 kernel/device unknowns, heap exhaustion and the execution-budget watchdog
 remain hard stops.
+
+
+### Phase-5BH accumulated direct-frontier mop
+
+Phase 5BG hardware passed on 2026-10-21. The generic packed dispatcher consumed
+five safe indirect translated targets in one launch:
+`0x00237052`, `0x00237801`, `0x00239055`, `0x0023F22B`, and
+`0x002471C0`. The inherited storage, VM, symbolic-link and maintained-heap
+proofs remained stable. After entering `0x002471C0`, execution continued
+through the translated startup path and stopped fault-free at the direct
+boundary `0x0023776D -> 0x0023BE3C`.
+
+Phase 5BH files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BH.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bh_direct_frontier_mop.py`
+
+5BH avoids falling back to one-address direct promotion. It keeps
+`0x0023BE3C` mandatory, scans the inherited generated `main.cpp` for every
+currently fenced `phase4c_direct_frontier(0x...)` target, filters those to
+exact generated/unpacked function starts, adds bounded translated closures for
+them, and packs the largest support-clean subset under a 256-new-function cap.
+The mandatory hardware-observed root is never pruned or guessed. Unsupported
+side branches, guest faults, ABI/frame anomalies, kernel/device unknowns, heap
+exhaustion and the execution-budget watchdog remain hard stops.
