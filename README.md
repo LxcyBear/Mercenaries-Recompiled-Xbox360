@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BM hardware PASS; Phase 5BN second-pass deep-low `.text` saturation sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BM hardware PASS; Phase 5BN second-pass deep-low `.text` saturation sweep active; mandatory Phase-6 reconnaissance exit gate planned** | Saturate translated/runtime bring-up, then inventory and hardware-trace the graphics/audio/movie/input surface so Phase 6 starts from an evidence-backed implementation map |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -424,6 +424,19 @@ revisits the remaining support-clean deep-low retail title `.text` band
     Gate:
     `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BN.ps1`.
     Build tag: `P5BN-DEEPLOW31080-20261021-A`.
+80. **Planned final Phase 5 exit gate — Phase 6 subsystem exposure and
+    reconnaissance:** after the translated/runtime saturation sequence reaches
+    completion/repeatability, run a whole-codebase static audit plus an
+    observe-only real-hardware first-touch trace for graphics/display,
+    audio/XACT-style paths, movies/video, input, and cross-cutting async,
+    threading, timing, allocation/resource-lifecycle and filesystem
+    dependencies. Genuine unimplemented subsystem operations remain hard
+    boundaries; do not fabricate backend success merely to advance execution.
+    Required handoff outputs include a subsystem-surface inventory, hardware
+    first-touch timeline, first-frame/logo/movie/menu criticality, unresolved
+    risk list, Phase-6 risk map, and ordered implementation plan. Design:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/PHASE5_EXIT_RECON.md`.
+
 
 ### Evidence policy
 
