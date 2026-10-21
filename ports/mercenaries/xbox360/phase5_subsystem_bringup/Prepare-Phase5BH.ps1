@@ -120,6 +120,7 @@ foreach ($requiredText in @(
     "PASS: Phase 5BH maintained CRT _msize",
     "s_phase5bhDirectRootEntered = 1;",
     "s_phase5bhDirectRootEntered &&",
+    "s_phase5bhManualMsizeCount > 0u",
     "PASS: Phase 5BH broad-sweep ICALL_SAFE",
     "PHASE 5BH BROAD TRANSLATED SWEEP RESULT",
     "PASS: Phase 5BH maintained RtlAllocateHeap",
