@@ -504,3 +504,28 @@ unsupported kernel/device semantics, guest faults, ABI/frame anomalies, heap
 exhaustion and the execution-budget watchdog remain hard stops.
 
 Build tag: `P5BI-LOWTEXTB5E50-20261021-A`.
+
+
+### Phase-5BJ deep-low retail .text sweep
+
+Phase 5BI hardware passed on 2026-10-21. The low-.text sweep consumed the
+mandatory `0x000B5E50` safe-ICALL target repeatedly and continued through a
+much larger translated runtime path. The run reached 76 safe-ICALL dispatches,
+107 direct dispatches, 18282 translated block ticks, and 1424 trace entries.
+The maintained CRT `_msize` path continued to report correct tracked sizes,
+and the maintained `RtlReAllocateHeap` path remained healthy. The first new
+hard stop was fault-free
+`ICALL_SAFE caller=0x0023A3CE target=0x00039B00` with
+`esp=0x008BFEF4`, `saved_esp=0x008BFEF8`, and `fault=0`.
+
+Phase 5BJ files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BJ.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bj_deep_low_text_sweep.py`
+
+5BJ keeps `0x00039B00` mandatory, prioritizes its bounded depth-6 direct
+closure, then fills the remaining 256-new-function budget with nearest
+support-clean exact generated functions from the remaining lower retail title
+`.text` band `0x00011000..0x0009FFFF`. This complements 5BI's
+`0x000A0000..0x0011FFFF` sweep while retaining the same hard-stop policy.
+
+Build tag: `P5BJ-DEEPLOW39B00-20261021-A`.
