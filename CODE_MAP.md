@@ -887,3 +887,48 @@ or lands on an already-known/owned boundary, the next planned step is the
 Phase-5 completion/repeatability gate instead of another saturation sweep.
 
 Build tag: `P5BU-MIDTEXT1462E0-20261021-A`.
+
+
+Phase 5BU hardware passed on 2026-10-21. The third-pass mid-.text sweep
+consumed `0x001462E0` through generic packed direct dispatch and advanced
+only a collapsed amount beyond 5BT: 1262 safe-ICALL dispatches, 1002 direct
+dispatches, 73417 translated block ticks, 7322 trace entries, 395 maintained
+CRT `_msize` calls, and four successful maintained `RtlReAllocateHeap`
+calls. The first new hard stop remained fault-free:
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`, with
+`esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, and `fault=0`.
+The harness reported Phase 5BU PASS, released the guest arena, completed the
+post-test heartbeat interval, ended the proof cleanly, and returned through
+XAPI with 0.
+
+Compared with 5BT, 5BU added only one safe-ICALL dispatch, two direct
+dispatches, one maintained `_msize` call, 15 translated block ticks, and six
+trace entries, with the realloc count unchanged. This is the strongest
+late-stage convergence signal so far.
+
+### Phase-5BV frozen-pack repeatability gate
+
+Phase 5BV files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BV.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bv_repeatability.py`
+
+5BV intentionally adds zero translated members. It regenerates the exact 5BU
+pack, relabels the harness as a repeatability build, preserves persistent
+Partition0 state, and requires three consecutive hardware launches of the same
+XEX to reproduce the exact fault-free endpoint candidate
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`.
+
+The expected deterministic translated-runtime state for every run is:
+1262 safe-ICALL dispatches, 1002 direct dispatches, 395 maintained CRT
+`_msize` calls, four successful reallocations ending at 2048 bytes, 73417
+translated block ticks, 7322 trace entries, `fault=0`, guest-arena release,
+proof-end, and XAPI return 0.
+
+The same XEX must be used for all three runs without rebuilding or deleting
+`game:\merc360-partition0\partition0-config.bin`. If the three runs match,
+the translated/runtime repeatability gate passes and the project proceeds to
+the mandatory Phase-5 exit reconnaissance stage, where the remaining stable
+boundary and broader graphics/audio/movie/input surface are classified before
+Phase 6.
+
+Build tag: `P5BV-REPEATABILITY-20261021-A`.
