@@ -454,10 +454,16 @@ Phase 5BH files:
 - `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bh_direct_frontier_mop.py`
 
 5BH avoids falling back to one-address direct promotion. It keeps
-`0x0023BE3C` mandatory, scans the inherited generated `main.cpp` for every
-currently fenced `phase4c_direct_frontier(0x...)` target, filters those to
-exact generated/unpacked function starts, adds bounded translated closures for
-them, and packs the largest support-clean subset under a 256-new-function cap.
+`0x0023BE3C` mandatory. That address is a reviewed `Recompile.ps1
+--manual-function` and the production port supplies it from
+`ports/mercenaries/src/recomp_manual.c` as the Xbox CRT `_msize` wrapper,
+so the 360 harness routes it through the same maintained semantics over the
+Phase-4C title-heap table plus the retail metadata fallback. 5BH also scans the
+inherited generated `main.cpp` for every currently fenced
+`phase4c_direct_frontier(0x...)` target, filters those to exact generated
+unpacked function starts, adds bounded translated closures for them, and packs
+the largest support-clean subset while keeping the total new-function cap at
+256.
 The mandatory hardware-observed root is never pruned or guessed. Unsupported
 side branches, guest faults, ABI/frame anomalies, kernel/device unknowns, heap
 exhaustion and the execution-budget watchdog remain hard stops.
