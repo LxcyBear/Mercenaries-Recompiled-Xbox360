@@ -28,7 +28,7 @@ ROOT_DIRECT_CAP = 256
 FENCE_DIRECT_DEPTH = 3
 FENCE_DIRECT_CAP = 48
 TOTAL_NEW_CAP = 256
-BUILD_TAG = "P5BH-DIRECTMOP23BE3C-20261021-A"
+BUILD_TAG = "P5BH-DIRECTMOP23BE3C-20261021-B"
 
 DIRECT_FENCE_RE = re.compile(
     r"phase4c_direct_frontier\(\s*0x([0-9A-Fa-f]{8})u\s*\)"
@@ -44,7 +44,7 @@ def load_module(path: Path, name: str):
     return module
 
 
-def validate_exact_generated_target(root: int, by_va: dict, generated: dict) -> None:
+def validate_manual_root(root: int, by_va: dict, generated: dict) -> None:
     if root not in by_va:
         containing = [
             row
@@ -63,11 +63,15 @@ def validate_exact_generated_target(root: int, by_va: dict, generated: dict) -> 
             f"[Phase5BH] target 0x{root:08X} is absent from the function inventory"
         )
 
-    if root not in generated:
-        row = by_va[root]
+    row = by_va[root]
+    if row["name"] != "sub_0023BE3C":
         raise SystemExit(
-            f"[Phase5BH] target 0x{root:08X} is an exact function start "
-            f"({row['name']}) but has no generated translated body"
+            f"[Phase5BH] manual root 0x{root:08X} identity changed: {row['name']}"
+        )
+    if root in generated:
+        raise SystemExit(
+            "[Phase5BH] 0x0023BE3C unexpectedly has a generated body; "
+            "review Recompile.ps1 manual-function policy before proceeding"
         )
 
 
@@ -95,6 +99,136 @@ def append_members(
         if va in old_members or va in order:
             continue
         order.append(va)
+
+
+
+def install_manual_msize(main_text: str) -> str:
+    lookup_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    lookup_pos = main_text.find(lookup_marker)
+    if lookup_pos < 0:
+        raise SystemExit("[Phase5BH] pack lookup definition marker changed")
+
+    if "static void sub_0023BE3C(void)" in main_text:
+        raise SystemExit("[Phase5BH] maintained _msize body already present unexpectedly")
+
+    body = r'''static uint32_t s_phase5bhManualMsizeCount;
+static uint32_t s_phase5bhManualMsizeLastAllocation;
+static uint32_t s_phase5bhManualMsizeLastResult;
+
+static uint32_t phase5bh_heap_size(uint32_t address, uint32_t* size)
+{
+    DWORD index;
+
+    phase4c_heap_init();
+    for (index = 0u; index < s_phase4cHeapCount; ++index)
+    {
+        Phase4CHeapBlock* block = &s_phase4cHeap[index];
+        if (block->inUse && block->address == address)
+        {
+            *size = block->capacity;
+            return 1u;
+        }
+    }
+    return 0u;
+}
+
+/* Maintained production manual from ports/mercenaries/src/recomp_manual.c:
+ * Xbox CRT _msize wrapper.  Keep the title-heap fast path coherent with the
+ * Phase-4C allocator, then preserve the retail metadata fallback for pointers
+ * not owned by that deterministic arena.  cdecl: consume return address only. */
+static void sub_0023BE3C(void)
+{
+    uint32_t returnSlot = GUEST_READ32(g_esp + 0u);
+    uint32_t allocation = GUEST_READ32(g_esp + 4u);
+    uint32_t result = 0u;
+    uint32_t manualSize = 0u;
+    char line[448];
+
+    RECOMP_TRACE_FUNC(0x0023BE3Cu);
+    s_phase5bhDirectRootEntered = 1;
+
+    if (s_accessFault)
+        phase4c_escape(
+            PHASE4C_BOUNDARY_GUEST_FAULT,
+            0x0023BE3Cu,
+            g_esp);
+
+    if (allocation == 0u)
+    {
+        result = 0u;
+    }
+    else if (phase5bh_heap_size(allocation, &manualSize))
+    {
+        result = manualSize;
+    }
+    else
+    {
+        uint8_t flags;
+
+        if (allocation < 24u)
+            phase4c_escape(
+                PHASE4C_BOUNDARY_GUEST_FAULT,
+                allocation,
+                g_esp);
+
+        flags = GUEST_READ8(allocation - 11u);
+        if ((flags & 1u) == 0u)
+        {
+            result = 0xFFFFFFFFu;
+        }
+        else if ((flags & 8u) != 0u)
+        {
+            uint32_t leading = (uint32_t)GUEST_READ16(allocation - 16u);
+            uint32_t total = GUEST_READ32(allocation - 24u);
+            g_edx = leading;
+            result = total - leading;
+        }
+        else
+        {
+            result =
+                ((uint32_t)GUEST_READ16(allocation - 16u) << 4) -
+                (uint32_t)GUEST_READ8(allocation - 10u);
+        }
+
+        if (s_accessFault)
+            phase4c_escape(
+                PHASE4C_BOUNDARY_GUEST_FAULT,
+                allocation,
+                g_esp);
+    }
+
+    ++s_phase5bhManualMsizeCount;
+    s_phase5bhManualMsizeLastAllocation = allocation;
+    s_phase5bhManualMsizeLastResult = result;
+
+    sprintf(
+        line,
+        "PASS: Phase 5BH maintained CRT _msize ret=%08X allocation=%08X result=%u calls=%u new_esp=%08X",
+        (unsigned int)returnSlot,
+        (unsigned int)allocation,
+        (unsigned int)result,
+        (unsigned int)s_phase5bhManualMsizeCount,
+        (unsigned int)(g_esp + 4u));
+    trace(line);
+
+    g_eax = result;
+    g_esp += 4u;
+}
+
+'''
+    main_text = main_text[:lookup_pos] + body + main_text[lookup_pos:]
+
+    lookup_pos = main_text.find(lookup_marker)
+    default_marker = "    default: return (recomp_func_t)0;"
+    default_pos = main_text.find(default_marker, lookup_pos)
+    if default_pos < 0:
+        raise SystemExit("[Phase5BH] pack lookup default marker changed")
+
+    lookup_case = "    case 0x0023BE3Cu: return sub_0023BE3C;\n"
+    if lookup_case in main_text:
+        raise SystemExit("[Phase5BH] duplicate _msize lookup case")
+    main_text = main_text[:default_pos] + lookup_case + main_text[default_pos:]
+    return main_text
 
 
 def relabel(main_text: str, env_text: str) -> tuple[str, str]:
@@ -226,7 +360,7 @@ def main() -> int:
 
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated_root, by_name)
-    validate_exact_generated_target(NEW_ROOT, by_va, generated)
+    validate_manual_root(NEW_ROOT, by_va, generated)
 
     old_members = {int(item, 0) for item in manifest.get("members", [])}
 
@@ -249,20 +383,15 @@ def main() -> int:
         # prior source-format change prevents the fence regex from seeing it.
         exact_generated_fences.insert(0, NEW_ROOT)
 
-    root_members = list(
-        phase5bb.bounded_promoted_members(
-            base,
-            NEW_ROOT,
-            generated,
-            ROOT_DIRECT_DEPTH,
-            ROOT_DIRECT_CAP,
-        )
-    )
+    # 0x0023BE3C is a reviewed Recompile.ps1 --manual-function.  Its
+    # maintained body is installed below; no generated direct closure exists
+    # to walk from the root itself.
+    root_members: list[int] = []
 
     candidate_order: list[int] = []
     append_members(
         candidate_order,
-        [NEW_ROOT] + sorted(va for va in root_members if va != NEW_ROOT),
+        sorted(root_members),
         old_members,
         TOTAL_NEW_CAP,
     )
@@ -293,9 +422,6 @@ def main() -> int:
             old_members,
             TOTAL_NEW_CAP,
         )
-
-    if NEW_ROOT not in candidate_order:
-        raise SystemExit("[Phase5BH] candidate set lost mandatory root 0x0023BE3C")
 
     candidate_new_members = sorted(set(candidate_order))
     expanded_members = set(old_members) | set(candidate_new_members)
@@ -328,6 +454,8 @@ def main() -> int:
         1,
     )
 
+    main_text = install_manual_msize(main_text)
+
     phase5bc.SWEEP_ROOT = NEW_ROOT
     phase5bc.instrument_root_entry = instrument_new_root
 
@@ -343,19 +471,18 @@ def main() -> int:
         generated,
         new_members,
         expanded_members,
+        require_sweep_root=False,
     )
 
-    if NEW_ROOT not in new_members:
-        raise SystemExit(
-            "[Phase5BH] support-clean pruning attempted to remove mandatory "
-            "hardware-observed root 0x0023BE3C"
-        )
+    if "case 0x0023BE3Cu: return sub_0023BE3C;" not in main_text:
+        raise SystemExit("[Phase5BH] maintained _msize root lost from pack lookup")
 
     main_text, env_text = relabel(main_text, env_text)
 
     required_main_markers = (
         BUILD_TAG,
         "case 0x0023BE3Cu: return sub_0023BE3C;",
+        "PASS: Phase 5BH maintained CRT _msize",
         "s_phase5bhDirectRootEntered = 1;",
         "s_phase5bhDirectRootEntered &&",
         "PASS: Phase 5BH broad-sweep ICALL_SAFE",
@@ -378,8 +505,9 @@ def main() -> int:
 
     manifest["phase"] = "5BH"
     manifest["build_tag"] = BUILD_TAG
-    manifest["pack_members"] = len(expanded_members)
-    manifest["members"] = [f"0x{va:08X}" for va in sorted(expanded_members)]
+    all_packed_members = set(expanded_members) | {NEW_ROOT}
+    manifest["pack_members"] = len(all_packed_members)
+    manifest["members"] = [f"0x{va:08X}" for va in sorted(all_packed_members)]
     manifest["phase5bh_direct_frontier_mop"] = {
         "observed_phase": "5BG",
         "boundary_kind": "DIRECT_FRONTIER",
@@ -394,13 +522,18 @@ def main() -> int:
         "fence_direct_closure_cap": FENCE_DIRECT_CAP,
         "total_new_cap": TOTAL_NEW_CAP,
         "base_pack_members": len(old_members),
+        "support_owned_manual_root": "0x0023BE3C",
+        "support_owned_manual_name": "Xbox CRT _msize",
+        "support_owned_source": "ports/mercenaries/src/recomp_manual.c",
         "observed_direct_fence_targets": len(observed_fences),
         "exact_generated_unpacked_fences": len(exact_generated_fences),
         "selected_fence_roots": len(selected_fence_roots),
         "candidate_new_members": len(candidate_new_members),
-        "new_members": len(new_members),
+        "new_members": len(new_members) + 1,
+        "translated_new_members": len(new_members),
+        "support_owned_new_members": 1,
         "pruned_members": len(pruned_members),
-        "expanded_pack_members": len(expanded_members),
+        "expanded_pack_members": len(all_packed_members),
         "strategy": (
             "mandatory 5BG direct frontier plus bounded closures rooted at "
             "accumulated exact generated direct-frontier fences; unsupported "
@@ -451,15 +584,17 @@ def main() -> int:
         f"exact_unpacked={len(exact_generated_fences)} "
         f"selected_roots={len(selected_fence_roots)} "
         f"candidate_new={len(candidate_new_members)} "
-        f"pruned={len(pruned_members)} packed_new={len(new_members)} "
-        f"total={len(expanded_members)} new_source_bytes={total_new_source}"
+        f"pruned={len(pruned_members)} translated_new={len(new_members)} "
+        f"support_owned_new=1 total={len(all_packed_members)} "
+        f"new_source_bytes={total_new_source}"
     )
     print(
         "[Phase5BH] AUTO-DISPATCH: inherited exact packed ICALL_SAFE + "
         "exact packed direct continuation"
     )
     print(
-        "[Phase5BH] MANDATORY ROOT: DIRECT 0x0023776D -> 0x0023BE3C"
+        "[Phase5BH] MANDATORY ROOT: DIRECT 0x0023776D -> 0x0023BE3C "
+        "(support-owned maintained Xbox CRT _msize)"
     )
     print("[Phase5BH] EMIT RESULT: PASS")
     return 0
