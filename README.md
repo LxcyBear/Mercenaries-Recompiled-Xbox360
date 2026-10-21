@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BU — Phase 5BT hardware PASS consumed `0x00191680`, reached 1261 safe-ICALL and 1000 direct automatic dispatches, 73402 translated block ticks / 7316 trace entries, and stopped fault-free at `DIRECT_FRONTIER caller=0x0023A3CE target=0x001462E0`; third-pass mid-`.text` saturation is active next.
+> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BV repeatability — Phase 5BU hardware PASS consumed `0x001462E0`, advanced only +1 safe-ICALL / +2 direct / +15 ticks / +6 trace beyond 5BT, and stopped fault-free at `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`; the translated pack is now frozen for three identical hardware boots before final Phase-5 reconnaissance.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BT hardware PASS; Phase 5BU third-pass mid-`.text` saturation sweep active; mandatory Phase-6 reconnaissance exit gate planned** | Saturate translated/runtime bring-up, then inventory and hardware-trace the graphics/audio/movie/input surface so Phase 6 starts from an evidence-backed implementation map |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BU hardware PASS; Phase 5BV frozen-pack repeatability gate active; mandatory Phase-6 reconnaissance exit gate next** | Prove stable translated/runtime convergence, then inventory and hardware-trace the graphics/audio/movie/input surface so Phase 6 starts from an evidence-backed implementation map |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,18 +75,20 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BT have passed their
+**Present blockers:** Phase 4 and Phase 5A through 5BU have passed their
 hardware gates. Persistent Partition0, cache Partition5/Z:, VM, filesystem,
 symbolic-link, maintained-heap and diagnostic-helper behavior remain stable.
-Phase 5BT consumed `0x00191680` through generic packed direct dispatch and
-expanded execution to 1261 safe-ICALL dispatches, 1000 direct dispatches, 73402
-translated block ticks, 7316 trace entries, 394 maintained CRT `_msize`
-calls and four successful `RtlReAllocateHeap` calls. The first new hard stop
-is fault-free `DIRECT_FRONTIER caller=0x0023A3CE target=0x001462E0` with
-`esp=0x008BFF3C` and `saved_esp=0x008BFF3C`. Phase 5BU now keeps
-`0x001462E0` mandatory, prioritizes its bounded depth-6 direct closure, and
-revisits the remaining support-clean mid-`.text` band
-`0x00120000..0x00235FFF` under the 256-new-function cap.
+Phase 5BU consumed `0x001462E0` and advanced only to 1262 safe-ICALL
+dispatches, 1002 direct dispatches, 73417 translated block ticks, 7322 trace
+entries, 395 maintained CRT `_msize` calls and four successful
+`RtlReAllocateHeap` calls before the next fault-free endpoint candidate:
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`, with
+`esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, and `fault=0`. Because this is
+only +1 safe ICALL, +2 direct, +1 `_msize`, +15 ticks and +6 trace beyond
+5BT, coverage expansion is now frozen. Phase 5BV requires three consecutive
+boots of the exact same XEX and persistent Partition0 state to reproduce that
+endpoint and the exact translated-runtime counters before the final Phase-5
+reconnaissance gate.
 
 ### Immediate next tests
 
@@ -464,18 +466,24 @@ revisits the remaining support-clean mid-`.text` band
     calls. The first new hard stop was fault-free
     `DIRECT_FRONTIER caller=0x0023A3CE target=0x001462E0`. Build:
     `P5BT-MIDTEXT191680-20261021-A`.
-86. **Phase 5BU active:** keep `0x001462E0` mandatory, preserve all 5BT
-    persistence/VM/heap/runtime and maintained diagnostic proofs, prioritize
-    its bounded depth-6 direct closure, then fill the remaining 256-new-function
-    budget with nearest still-unpacked support-clean exact generated functions
-    from the mid-`.text` band `0x00120000..0x00235FFF`. Because 5BT's
-    delta collapsed to +8 safe ICALL, +12 direct, +99 ticks and +36 trace,
-    another collapsed delta or known/owned boundary should trigger the
-    Phase-5 completion/repeatability gate rather than another broad sweep.
+86. **Done:** Phase 5BU consumed `0x001462E0` through generic packed direct
+    dispatch and advanced to 1262 safe-ICALL plus 1002 direct automatic
+    dispatches, 73417 translated block ticks, 7322 trace entries, 395
+    maintained CRT `_msize` calls and four successful `RtlReAllocateHeap`
+    calls. The first new hard stop was fault-free
+    `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`. The delta versus
+    5BT collapsed to +1 safe ICALL, +2 direct, +1 `_msize`, +15 ticks and
+    +6 trace. Build: `P5BU-MIDTEXT1462E0-20261021-A`.
+87. **Phase 5BV active — frozen-pack repeatability:** add zero translated
+    members, regenerate the exact 5BU pack, and run one freshly built
+    `P5BV-REPEATABILITY-20261021-A` XEX three consecutive times without
+    rebuilding or deleting `game:\\merc360-partition0\\partition0-config.bin`.
+    Every run must reproduce `DIRECT_FRONTIER 0023A3CE -> 0014CD30`,
+    `fault=0`, icall=1262, direct=1002, `_msize`=395, realloc=4,
+    ticks=73417, trace=7322, guest-arena release, proof-end, and XAPI return 0.
     Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BU.ps1`.
-    Build tag: `P5BU-MIDTEXT1462E0-20261021-A`.
-87. **Planned final Phase 5 exit gate — Phase 6 subsystem exposure and
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BV.ps1`.
+88. **Planned final Phase 5 exit gate — Phase 6 subsystem exposure and
     reconnaissance:** after the translated/runtime saturation sequence reaches
     completion/repeatability, run a whole-codebase static audit plus an
     observe-only real-hardware first-touch trace for graphics/display,
@@ -3125,6 +3133,26 @@ unexecuted test PASS.**
 - **Phase 5AP persistent Partition0 / reboot handshake: PASS.**
 - **Next:** Phase 5AQ promotes `0x0022F0D6` with a depth-2/cap-16 translated
   closure and rejects that old frontier as acceptable progress.
+
+### 2026-10-21 — Phase 5BU convergence PASS / Phase 5BV repeatability active
+
+- Build `P5BU-MIDTEXT1462E0-20261021-A` passed on real Xbox 360 hardware.
+- The previous frontier `0x001462E0` was consumed through generic packed
+  direct dispatch.
+- Execution advanced only one safe-ICALL, two direct dispatches, one
+  maintained `_msize` call, 15 translated block ticks and six trace entries
+  beyond Phase 5BT before reaching
+  `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`.
+- Final 5BU state was icall=1262, direct=1002, `_msize`=395, realloc=4,
+  ticks=73417, trace=7322, `fault=0`; the fourth realloc remained 2048 bytes.
+- The harness reported PASS, released the guest arena, completed the post-test
+  heartbeat interval, ended the proof cleanly and returned through XAPI with 0.
+- This is the strongest convergence signal so far, so the translated pack is
+  frozen rather than expanded again.
+- **Phase 5BV active:** one `P5BV-REPEATABILITY-20261021-A` XEX must be
+  launched three consecutive times with persistent Partition0 unchanged. All
+  three complete xbWatson logs must reproduce the exact same endpoint and
+  translated-runtime counters before Phase-5 exit reconnaissance begins.
 
 ### How future updates are recorded
 
