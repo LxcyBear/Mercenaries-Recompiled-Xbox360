@@ -969,3 +969,38 @@ is the already-defined Phase-6 subsystem exposure & reconnaissance pass in
 That gate inventories and observe-only traces graphics/display, audio,
 movies/video, input, and cross-cutting async/thread/timer/resource/path/endian/
 lifecycle surfaces before Phase 6 implementation work begins.
+
+
+### Phase 5 exit reconnaissance — PASS / PHASE 5 COMPLETE
+
+The mandatory Phase-5 exit reconnaissance gate passed on 2026-10-21.
+
+Command:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5ExitRecon.ps1`
+
+Result:
+- `[Phase5Exit] EXIT RECON RESULT: PASS`
+- `[Phase5Exit] READY / PASS`
+- stable endpoint `DIRECT_FRONTIER 0x0023A3CE -> 0x0014CD30`
+- endpoint classified as `exact_generated_title_function`
+- generated source: `recomp_0006.c`
+- original range: `0x0014CD30-0x0014CD9C`
+- direct refs: `0x0014CD30`, `0x001FA0B0`, `0x002370B8`
+- five required subsystem families inventoried
+- six Phase-6 risks ranked
+- no graphics/audio/movie/input backend success fabricated
+
+The exit audit produced all mandatory handoff artifacts:
+- `phase5-exit-subsystem-surface.json`
+- `phase5-exit-subsystem-surface.md`
+- `phase5-exit-first-touch.txt`
+- `phase6-risk-map.json`
+- `phase6-handoff.md`
+
+Together with the Phase 5BV 3/3 frozen-pack hardware repeatability PASS, this
+satisfies the Phase-5 completion criteria. Phase 5 is **100% complete**.
+
+The next active development phase is **Phase 6 — Native Xbox 360 graphics
+(Xenos)**. The first implementation target is an independently rendered native
+Xenos test surface, followed by guest-rendered first pixels, the main menu, and
+a reproducible 3D scene.
