@@ -1,6 +1,6 @@
 # Phase 6 — Native Xbox 360 graphics (Xenos)
 
-> **Status:** ACTIVE · Phase 6C hardware frontier PASS on 2026-10-21
+> **Status:** ACTIVE · Phase 6D hardware frontier PASS on 2026-10-21
 >
 > **Immediate target:** render an independent native Xenos test surface, then
 > connect the translated Mercenaries graphics path far enough to capture the
@@ -122,7 +122,10 @@ guest faults:
 - **Phase 6C:** promoted `0x0014D820`; hardware stopped at
   `DIRECT_FRONTIER 0x0023A3CE -> 0x0014E2D0`, `fault=0`,
   `ticks=74380`, `trace=7402`; harness PASS and XAPI return 0.
-- **Phase 6D:** promotes exact target `0x0014E2D0` with the same depth-12 /
+- **Phase 6D:** promoted `0x0014E2D0`; hardware stopped at
+  `DIRECT_FRONTIER 0x0023A3CE -> 0x0014E770`, `fault=0`, `ticks=74854`,
+  `trace=7439`; harness PASS and XAPI return 0.
+- **Phase 6E:** promotes exact target `0x0014E770` with the same depth-12 /
   cap-512 bounded direct continuation and the live native Xenos surface.
 
 Purple remains reserved for an actual rejected NV2A MMIO/VRAM access. No
