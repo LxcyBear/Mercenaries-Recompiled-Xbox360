@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 20, 2026 · **Current focus:** Phase 5BG — Phase 5BF hardware PASS proved four generic packed ICALL promotions in one launch (`0x00237052`, `0x00237801`, `0x00239055`, `0x0023F22B`) and reached fault-free safe ICALL frontier `0x002471C0`; sweep the remaining retail title `.text` tail `0x00246000..0x0025561F` now.
+> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BH — Phase 5BG hardware PASS proved five generic packed ICALL promotions in one launch through `0x002471C0`, then reached fault-free direct frontier `0x0023776D -> 0x0023BE3C`; mop up accumulated exact translated direct-frontier fences now.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BF hardware PASS; Phase 5BG title `.text` tail sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BG hardware PASS; Phase 5BH accumulated direct-frontier mop active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,21 +75,21 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BF have passed their
+**Present blockers:** Phase 4 and Phase 5A through 5BG have passed their
 hardware gates. The persistent 512 KiB Partition0 backing remains stable across
 launches, including the sector-`0x800` unchanged rewrite, cache Partition5
 mount and `\\??\\Z:` creation. Phase 5BC introduced the generic
 support-clean broad-sweep dispatcher so exact generated targets already present
 in the pack can continue automatically rather than requiring a bespoke
-one-address build. Phase 5BD, 5BE and 5BF have now validated that strategy on
-hardware. The 5BF run automatically consumed four safe indirect translated
-targets in one launch: `0x00237052`, `0x00237801`, `0x00239055`, and
-`0x0023F22B`. The existing maintained heap/VM/storage proofs remained stable,
-and execution then advanced through `0x0022B3F1` to the next clean
-`ICALL_SAFE target=0x002471C0` with `fault=0`. Phase 5BG keeps
-`0x002471C0` mandatory and widens the next sweep across the remaining retail
-title `.text` tail `0x00246000..0x0025561F`, capped at 256 additional
-support-clean translated functions.
+one-address build. Phase 5BD through 5BG have now validated that strategy on
+hardware. The 5BG run automatically consumed five safe indirect translated
+targets in one launch: `0x00237052`, `0x00237801`, `0x00239055`,
+`0x0023F22B`, and `0x002471C0`. The inherited storage/VM/heap and
+symbolic-link proofs remained stable, and execution then stopped cleanly at
+`DIRECT_FRONTIER caller=0x0023776D target=0x0023BE3C` with `fault=0`.
+Phase 5BH keeps `0x0023BE3C` mandatory and scans the accumulated generated
+pack for all exact generated direct-frontier fences, adding bounded closures
+for the largest support-clean subset under a 256-new-function cap.
 
 ### Immediate next tests
 
@@ -373,16 +373,22 @@ support-clean translated functions.
     through the inherited persistence/VM/heap infrastructure and advanced to
     `ICALL_SAFE caller=0x0022B3F1 target=0x002471C0` with `fault=0`.
     Build: `P5BF-FORWARDSWEEP23F22B-20261020-A`.
-72. **Phase 5BG active:** retain all 5BF proofs, keep hardware-observed
-    `0x002471C0` mandatory, add its bounded depth-6 direct closure, and
-    pre-pack support-clean exact generated functions across the remaining
-    retail title `.text` tail `0x00246000..0x0025561F` (the XMV section
-    begins at `0x00255620`), capped at 256 additional functions.
-    Unknown/unsupported side branches remain fenced; guest faults, ABI/frame
-    anomalies, heap exhaustion, kernel/device unknowns and the
-    execution-budget watchdog remain hard stops. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BG.ps1`.
-    Build tag: `P5BG-TEXTTAIL2471C0-20261020-A`.
+72. **Done:** Phase 5BG automatically consumed five packed safe-ICALL
+    targets in one launch: `0x00237052`, `0x00237801`, `0x00239055`,
+    `0x0023F22B`, and `0x002471C0`. The inherited persistence, VM,
+    filesystem and maintained-heap proofs remained stable. Execution then
+    reached fault-free direct frontier
+    `0x0023776D -> 0x0023BE3C`. Build:
+    `P5BG-TEXTTAIL2471C0-20261020-A`.
+73. **Phase 5BH active:** retain all 5BG proofs, keep hardware-observed
+    direct target `0x0023BE3C` mandatory, scan the inherited generated
+    `main.cpp` for accumulated exact translated direct-frontier fences, and
+    add bounded closures for the largest support-clean subset under a
+    256-new-function cap. Unknown/unsupported branches remain fenced; guest
+    faults, ABI/frame anomalies, heap exhaustion, kernel/device unknowns and
+    the execution-budget watchdog remain hard stops. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BH.ps1`.
+    Build tag: `P5BH-DIRECTMOP23BE3C-20261021-A`.
 
 ### Evidence policy
 
