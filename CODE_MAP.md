@@ -1004,3 +1004,30 @@ The next active development phase is **Phase 6 — Native Xbox 360 graphics
 (Xenos)**. The first implementation target is an independently rendered native
 Xenos test surface, followed by guest-rendered first pixels, the main menu, and
 a reproducible 3D scene.
+
+
+### Phase 6 — Native Xbox 360 graphics (Xenos) — ACTIVE
+
+Phase 5 closed at 100% on 2026-10-21 after:
+- Phase 5BV frozen-pack hardware repeatability: 3/3 identical boots;
+- stable endpoint `0x0014CD30` classified as exact generated title code;
+- mandatory exit reconnaissance: `READY / PASS`;
+- all required subsystem-surface, first-touch, risk-map and handoff artifacts
+  generated without fabricating backend functionality.
+
+Active branch: `xbox360/phase6-native-graphics`.
+
+Phase-6 graphics status:
+- **DONE:** initial Mercenaries NV2A pushbuffer/format/swizzle/render-state/
+  vertex-program/combiner/surface-alias inventory.
+- **IN PROGRESS:** isolate D3D11/DXGI assumptions behind a backend-neutral
+  presentation/texture/draw seam.
+- **NEXT HARDWARE MILESTONE:** initialize the Xbox 360 graphics device and
+  render an independent native Xenos test surface.
+- Later Gate-6 milestones: minimal 2D/textured draw + flip, required
+  shaders/vertex formats/state/synchronization, first guest-rendered frame,
+  main-menu graphics, reproducible 3D scene, then frame-time/GPU-memory/error
+  instrumentation.
+
+Detailed plan:
+`ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
