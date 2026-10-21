@@ -563,3 +563,30 @@ semantics, ABI/frame anomalies, guest faults, kernel/device gaps, heap
 exhaustion and watchdog exhaustion remain hard stops.
 
 Build tag: `P5BK-DIAGMOP1F2A60-20261021-A`.
+
+
+Phase 5BK hardware passed on 2026-10-21. The diagnostic checkpoint mop cleared
+the `0x001F2A60` observational XACT/setup fence and continued dramatically
+farther through the translated runtime path. The run reached 316 safe-ICALL
+dispatches, 555 direct dispatches, 60852 translated block ticks, 4941 trace
+entries, and 229 completed maintained CRT `_msize` calls. The first new hard
+stop was fault-free
+`ICALL_SAFE caller=0x0023A3CE target=0x0024BC50` with
+`esp=0x008BFF40`, `saved_esp=0x008BFF44`, and `fault=0`.
+The harness then reported Phase 5BK PASS and returned through XAPI with 0.
+
+### Phase-5BL high retail .text tail saturation sweep
+
+Phase 5BL files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BL.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bl_high_tail_sweep.py`
+
+5BL keeps `0x0024BC50` mandatory, prioritizes its bounded depth-6 direct
+closure, then revisits the remaining high retail title `.text` tail
+`0x00246000..0x0025561F`. This complements the original 5BG pass, which
+could retain only 256 of 733 regional candidates. The remaining pack budget is
+filled with the nearest still-unpacked support-clean exact generated entries,
+again capped at 256 new functions. All 5BK maintained observational diagnostic
+support remains inherited; genuine subsystem/ABI/kernel faults remain fenced.
+
+Build tag: `P5BL-HIGHTAIL24BC50-20261021-A`.
