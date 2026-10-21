@@ -149,7 +149,7 @@ def main() -> int:
     main_text = main_text.replace(old_result, new_result, 1)
 
     old_policy = (
-        "Policy: inherit the hardware-proven Phase 6B runtime/Xenos path, add exact direct frontier "
+        "Policy: inherit the hardware-proven Phase 6C runtime/Xenos path, add exact direct frontier "
         "0014D820 plus a bounded direct closure, keep the native Xenos device alive, and stop at the "
         "next genuine graphics/platform/ABI boundary without fabricating backend success"
     )
