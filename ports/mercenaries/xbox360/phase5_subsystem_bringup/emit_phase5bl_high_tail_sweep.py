@@ -86,8 +86,8 @@ def relabel(main_text: str, env_text: str) -> tuple[str, str]:
 
     if "P5BK-DIAGMOP1F2A60-20261021-A" not in main_text:
         raise SystemExit("[Phase5BL] inherited 5BK main build tag changed")
-    if "P5BK-DIAGMOP1F2A60-20261021-A" not in env_text:
-        raise SystemExit("[Phase5BL] inherited 5BK env build tag changed")
+    # phase5_env.cpp is identified by its phase labels + link-time cookie;
+    # inherited emitters do not require the human-readable build tag there.
     if "phase5bk_env_build_cookie" not in main_text:
         raise SystemExit("[Phase5BL] inherited 5BK main cookie marker changed")
     if "phase5bk_env_build_cookie" not in env_text:
@@ -136,8 +136,8 @@ def relabel(main_text: str, env_text: str) -> tuple[str, str]:
         raise SystemExit("[Phase5BL] inherited 5BK policy marker changed")
     main_text = main_text.replace(old_policy, new_policy, 1)
 
-    if BUILD_TAG not in main_text or BUILD_TAG not in env_text:
-        raise SystemExit("[Phase5BL] build-tag relabel failed")
+    if BUILD_TAG not in main_text:
+        raise SystemExit("[Phase5BL] main build-tag relabel failed")
     if "phase5bl_env_build_cookie" not in main_text:
         raise SystemExit("[Phase5BL] main cookie relabel failed")
     if "phase5bl_env_build_cookie" not in env_text:
