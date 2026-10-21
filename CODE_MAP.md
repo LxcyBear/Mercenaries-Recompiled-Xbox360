@@ -703,3 +703,29 @@ at `0x00236000`. All 5BN persistence, VM, heap, diagnostic-helper and
 generic-dispatch proofs remain inherited.
 
 Build tag: `P5BO-MIDTEXT216BB0-20261021-A`.
+
+
+Phase 5BO hardware passed on 2026-10-21. The mid-.text gap sweep consumed
+`0x00216BB0` through generic packed direct dispatch and advanced to 845
+safe-ICALL dispatches, 630 direct dispatches, 64829 translated block ticks,
+5869 trace entries, 301 maintained CRT `_msize` calls, and four successful
+maintained `RtlReAllocateHeap` calls. The first new hard stop was fault-free:
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x000C8140`, with
+`esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, and `fault=0`.
+The harness reported Phase 5BO PASS, released the guest arena, completed the
+post-test heartbeat interval, and returned through XAPI with 0.
+
+### Phase-5BP third-pass low-.text saturation sweep
+
+Phase 5BP files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BP.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bp_low_text_sweep.py`
+
+5BP keeps `0x000C8140` mandatory, prioritizes its bounded depth-6 direct
+closure, then fills the remaining 256-new-function budget with nearest
+still-unpacked support-clean exact generated functions from
+`0x000A0000..0x0011FFFF`. This is a third pass over the low-.text family
+previously sampled by 5BI and 5BM. All 5BO persistence, VM, filesystem, heap,
+diagnostic-helper and generic-dispatch proofs remain inherited.
+
+Build tag: `P5BP-LOWTEXTC8140-20261021-A`.
