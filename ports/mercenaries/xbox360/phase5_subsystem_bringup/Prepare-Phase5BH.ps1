@@ -120,7 +120,7 @@ foreach ($requiredText in @(
     "s_phase5bhDirectRootEntered = 1;",
     "s_phase5bhDirectRootEntered &&",
     "PASS: Phase 5BH broad-sweep ICALL_SAFE",
-    "PHASE 5BG BROAD TRANSLATED SWEEP RESULT",
+    "PHASE 5BH BROAD TRANSLATED SWEEP RESULT",
     "PASS: Phase 5BH maintained RtlAllocateHeap",
     "PASS: Phase 5BH Partition0 backing LOADED"
 )) {
@@ -130,12 +130,12 @@ foreach ($requiredText in @(
 }
 
 foreach ($requiredText in @(
-    "PHASE 5BG RETAIL ENVIRONMENT PREP START",
-    "PHASE 5BG EXACT RETAIL VERIFICATION: PASS",
-    "PHASE 5BG EXECUTION ENVIRONMENT RESULT: PASS",
+    "PHASE 5BH RETAIL ENVIRONMENT PREP START",
+    "PHASE 5BH EXACT RETAIL VERIFICATION: PASS",
+    "PHASE 5BH EXECUTION ENVIRONMENT RESULT: PASS",
     "phase5bh_env_build_cookie",
     "50354248",
-    "PHASE 5BG RETAIL ENVIRONMENT PREP END"
+    "PHASE 5BH RETAIL ENVIRONMENT PREP END"
 )) {
     if (-not $envText.Contains($requiredText)) {
         throw "Generated Phase 5BH phase5_env.cpp is missing marker: $requiredText"
