@@ -209,6 +209,7 @@ def insert_pack_members(
     generated: dict,
     new_members: list[int],
     expanded_members: set[int],
+    require_sweep_root: bool = True,
 ) -> tuple[str, dict[int, str], set[int], dict[int, list[str]]]:
     candidate_members = list(new_members)
     existing_defs = set(base.support_symbols(main_text))
@@ -306,7 +307,7 @@ def insert_pack_members(
         candidate_members,
     )
 
-    if SWEEP_ROOT in unsafe:
+    if require_sweep_root and SWEEP_ROOT in unsafe:
         names = unsafe[SWEEP_ROOT]
         print(
             "[Phase5BC] sweep root 0x00237052 itself has unresolved support "
@@ -331,8 +332,11 @@ def insert_pack_members(
     }
 
     retained = [va for va in candidate_members if va not in pruned]
-    if not retained or SWEEP_ROOT not in retained:
-        raise SystemExit("[Phase5BC] support-clean sweep unexpectedly lost root")
+    if require_sweep_root:
+        if not retained or SWEEP_ROOT not in retained:
+            raise SystemExit("[Phase5BC] support-clean sweep unexpectedly lost root")
+    elif not retained and candidate_members:
+        raise SystemExit("[Phase5BC] support-clean sweep unexpectedly lost all candidates")
 
     # Mutate the caller-owned collections so all later manifest accounting and
     # lookup generation describe the actual pack, not merely the candidate set.
