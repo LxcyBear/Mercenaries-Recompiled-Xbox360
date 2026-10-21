@@ -511,6 +511,17 @@ Phase-5 runtime baseline.
   complete; backend abstraction cleanup is in progress; the immediate hardware
   milestone is an independent native Xenos test surface.
 
+### 2026-10-21 — First visible Xenos hardware output
+
+- Phase 6A visibly presented the intended native Xenos color sequence on real
+  Xbox 360 hardware: dark green -> blue -> red -> grey/white.
+- This proves the native Xbox 360 D3D device/backbuffer/present path reaches the
+  physical display.
+- Full Phase-6A gate closure remains pending the xbWatson/debug PASS tail and
+  clean XAPI return 0.
+- No Mercenaries guest renderer is connected yet; this is the standalone native
+  graphics baseline that Phase 6B will wrap behind the backend seam.
+
 ### Evidence policy
 
 `[x]` = source/analysis task confirmed as **done**; it does **not** indicate
