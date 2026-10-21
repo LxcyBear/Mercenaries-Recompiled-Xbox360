@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BQ — Phase 5BP hardware PASS consumed `0x000C8140`, reached 859 safe-ICALL and 641 direct automatic dispatches, 66991 translated block ticks / 5992 trace entries, and stopped fault-free at `DIRECT_FRONTIER caller=0x0023A3CE target=0x0010B2B0`; fourth-pass low-`.text` saturation is active next.
+> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BR — Phase 5BQ hardware PASS consumed `0x0010B2B0`, reached 868 safe-ICALL and 646 direct automatic dispatches, 67067 translated block ticks / 6018 trace entries, and stopped fault-free at `DIRECT_FRONTIER caller=0x0023A3CE target=0x000F8BB0`; fifth-pass low-`.text` saturation is active next.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BP hardware PASS; Phase 5BQ fourth-pass low-`.text` saturation sweep active; mandatory Phase-6 reconnaissance exit gate planned** | Saturate translated/runtime bring-up, then inventory and hardware-trace the graphics/audio/movie/input surface so Phase 6 starts from an evidence-backed implementation map |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BQ hardware PASS; Phase 5BR fifth-pass low-`.text` saturation sweep active; mandatory Phase-6 reconnaissance exit gate planned** | Saturate translated/runtime bring-up, then inventory and hardware-trace the graphics/audio/movie/input surface so Phase 6 starts from an evidence-backed implementation map |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,16 +75,16 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BP have passed their
+**Present blockers:** Phase 4 and Phase 5A through 5BQ have passed their
 hardware gates. Persistent Partition0, cache Partition5/Z:, VM, filesystem,
 symbolic-link, maintained-heap and diagnostic-helper behavior remain stable.
-Phase 5BP consumed `0x000C8140` through generic packed direct dispatch and
-expanded execution to 859 safe-ICALL dispatches, 641 direct dispatches, 66991
-translated block ticks, 5992 trace entries, 307 maintained CRT `_msize`
+Phase 5BQ consumed `0x0010B2B0` through generic packed direct dispatch and
+expanded execution to 868 safe-ICALL dispatches, 646 direct dispatches, 67067
+translated block ticks, 6018 trace entries, 309 maintained CRT `_msize`
 calls and four successful `RtlReAllocateHeap` calls. The first new hard stop
-is fault-free `DIRECT_FRONTIER caller=0x0023A3CE target=0x0010B2B0` with
-`esp=0x008BFF3C` and `saved_esp=0x008BFF3C`. Phase 5BQ now keeps
-`0x0010B2B0` mandatory, prioritizes its bounded depth-6 direct closure, and
+is fault-free `DIRECT_FRONTIER caller=0x0023A3CE target=0x000F8BB0` with
+`esp=0x008BFF34` and `saved_esp=0x008BFF34`. Phase 5BR now keeps
+`0x000F8BB0` mandatory, prioritizes its bounded depth-6 direct closure, and
 revisits the remaining support-clean low-`.text` band
 `0x000A0000..0x0011FFFF` under the 256-new-function cap.
 
@@ -436,15 +436,24 @@ revisits the remaining support-clean low-`.text` band
     calls. The first new hard stop was fault-free
     `DIRECT_FRONTIER caller=0x0023A3CE target=0x0010B2B0`. Build:
     `P5BP-LOWTEXTC8140-20261021-A`.
-82. **Phase 5BQ active:** keep `0x0010B2B0` mandatory, preserve all 5BP
+82. **Done:** Phase 5BQ consumed `0x0010B2B0` through generic packed
+    direct dispatch and advanced to 868 safe-ICALL plus 646 direct automatic
+    dispatches, 67067 translated block ticks, 6018 trace entries, 309
+    maintained CRT `_msize` calls and four successful `RtlReAllocateHeap`
+    calls. The first new hard stop was fault-free
+    `DIRECT_FRONTIER caller=0x0023A3CE target=0x000F8BB0`. Build:
+    `P5BQ-LOWTEXT10B2B0-20261021-A`.
+83. **Phase 5BR active:** keep `0x000F8BB0` mandatory, preserve all 5BQ
     persistence/VM/heap/runtime and maintained diagnostic proofs, prioritize
     its bounded depth-6 direct closure, then fill the remaining 256-new-function
     budget with nearest still-unpacked support-clean exact generated functions
-    from the low-`.text` band `0x000A0000..0x0011FFFF`.
+    from the low-`.text` band `0x000A0000..0x0011FFFF`. If this pass again
+    yields only a very small delta or converges on a known/owned boundary, move
+    to the Phase-5 completion/repeatability gate instead of another broad sweep.
     Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BQ.ps1`.
-    Build tag: `P5BQ-LOWTEXT10B2B0-20261021-A`.
-83. **Planned final Phase 5 exit gate — Phase 6 subsystem exposure and
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BR.ps1`.
+    Build tag: `P5BR-LOWTEXTF8BB0-20261021-A`.
+84. **Planned final Phase 5 exit gate — Phase 6 subsystem exposure and
     reconnaissance:** after the translated/runtime saturation sequence reaches
     completion/repeatability, run a whole-codebase static audit plus an
     observe-only real-hardware first-touch trace for graphics/display,
