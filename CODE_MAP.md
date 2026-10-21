@@ -756,3 +756,36 @@ completion/repeatability gate remains deferred until this frontier family
 stops yielding substantive new traversal.
 
 Build tag: `P5BQ-LOWTEXT10B2B0-20261021-A`.
+
+
+Phase 5BQ hardware passed on 2026-10-21. The fourth-pass low-.text sweep
+consumed `0x0010B2B0` through generic packed direct dispatch and advanced to
+868 safe-ICALL dispatches, 646 direct dispatches, 67067 translated block ticks,
+6018 trace entries, 309 maintained CRT `_msize` calls, and four successful
+maintained `RtlReAllocateHeap` calls. The first new hard stop was fault-free:
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x000F8BB0`, with
+`esp=0x008BFF34`, `saved_esp=0x008BFF34`, and `fault=0`.
+The harness reported Phase 5BQ PASS, released the guest arena, completed the
+post-test heartbeat interval, and returned through XAPI with 0.
+
+Compared with 5BP, 5BQ added only 9 safe-ICALL dispatches, 5 direct dispatches,
+2 maintained `_msize` calls, 76 translated block ticks, and 26 trace entries.
+That small delta is consistent with late-stage saturation, but the new ordinary
+title-code frontier still warrants one more targeted low-.text pass before
+moving to repeatability/completion.
+
+### Phase-5BR fifth-pass low-.text saturation sweep
+
+Phase 5BR files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BR.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5br_low_text_sweep.py`
+
+5BR keeps `0x000F8BB0` mandatory, prioritizes its bounded depth-6 direct
+closure, then fills the remaining 256-new-function budget with nearest
+still-unpacked support-clean exact generated functions from
+`0x000A0000..0x0011FFFF`. If this pass yields another very small delta or
+converges on an already-known/owned boundary, the next planned step is the
+Phase-5 completion/repeatability gate rather than another broad saturation
+pass.
+
+Build tag: `P5BR-LOWTEXTF8BB0-20261021-A`.
