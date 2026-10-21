@@ -88,15 +88,15 @@ def relabel(main_text: str, env_text: str) -> tuple[str, str]:
         BUILD_TAG,
     )
     main_text = main_text.replace(
-        "phase5bj_env_build_cookie",
+        "phase5bi_env_build_cookie",
         "phase5bj_env_build_cookie",
     )
     env_text = env_text.replace(
         "phase5bj_env_build_cookie",
         "phase5bj_env_build_cookie",
     )
-    main_text = main_text.replace("5035424A", "5035424A")
-    env_text = env_text.replace("5035424A", "5035424A")
+    main_text = main_text.replace("50354249", "5035424A")
+    env_text = env_text.replace("50354249", "5035424A")
     main_text = main_text.replace("PHASE 5BI", "PHASE 5BJ")
     env_text = env_text.replace("PHASE 5BI", "PHASE 5BJ")
     main_text = main_text.replace("Phase 5BI", "Phase 5BJ")
@@ -200,7 +200,7 @@ def main() -> int:
 
         base_main = temp_dir / "main.cpp"
         base_env = temp_dir / "phase5_env.cpp"
-        base_manifest_path = temp_dir / "phase5bj-manifest.json"
+        base_manifest_path = temp_dir / "phase5bi-manifest.json"
         for required in (base_main, base_env, base_manifest_path):
             if not required.exists():
                 raise SystemExit(
@@ -264,7 +264,7 @@ def main() -> int:
 
     declaration_marker = "static int s_phase5biLowTextRootEntered;"
     if declaration_marker not in main_text:
-        raise SystemExit("[Phase5BJ] Phase 5BH sweep state marker changed")
+        raise SystemExit("[Phase5BJ] Phase 5BI sweep state marker changed")
     main_text = main_text.replace(
         declaration_marker,
         declaration_marker + "\nstatic int s_phase5bjDeepLowRootEntered;",
@@ -273,7 +273,7 @@ def main() -> int:
 
     reset_marker = "    s_phase5biLowTextRootEntered = 0;\n"
     if reset_marker not in main_text:
-        raise SystemExit("[Phase5BJ] Phase 5BH root reset marker changed")
+        raise SystemExit("[Phase5BJ] Phase 5BI root reset marker changed")
     main_text = main_text.replace(
         reset_marker,
         reset_marker + "    s_phase5bjDeepLowRootEntered = 0;\n",
@@ -282,7 +282,7 @@ def main() -> int:
 
     gate_marker = "            s_phase5biLowTextRootEntered &&\n"
     if gate_marker not in main_text:
-        raise SystemExit("[Phase5BJ] Phase 5BH PASS gate marker changed")
+        raise SystemExit("[Phase5BJ] Phase 5BI PASS gate marker changed")
     main_text = main_text.replace(
         gate_marker,
         gate_marker + "            s_phase5bjDeepLowRootEntered &&\n",
@@ -396,7 +396,7 @@ def main() -> int:
         f"0x{va:08X}" for va in sorted(new_direct_frontiers)
     ]
 
-    (args.out_dir / "phase5bi-manifest.json").write_text(
+    (args.out_dir / "phase5bj-manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n",
         encoding="utf-8",
     )
