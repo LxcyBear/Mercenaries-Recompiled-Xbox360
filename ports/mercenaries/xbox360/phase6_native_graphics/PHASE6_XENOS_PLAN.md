@@ -30,9 +30,9 @@ regress that baseline or fake graphics success merely to advance execution.
   Xenos implementation can be considered cleanly swappable.
 
 - [ ] **Initialize an Xbox 360 graphics device and render an independent test
-  surface.**
-  This is the immediate implementation milestone and should not depend on the
-  game renderer yet.
+  surface.** **VISUAL HARDWARE PASS; xbWatson/XAPI tail still pending for full
+  checkbox closure.** Real hardware visibly presented the intended Phase-6A
+  green -> blue -> red -> grey/white sequence.
 
 - [ ] **Implement compatible 2D, textured draw and flip operations.**
   Establish a minimal native path for resource creation/upload, simple
@@ -86,3 +86,26 @@ Phase 6 starts from these frozen proofs:
 No Phase-6 graphics milestone may be claimed merely because the PC/D3D11
 reference implementation exists. The checkbox advances only when the
 Xbox 360-native path itself is demonstrated.
+
+
+## Phase 6B — first Mercenaries graphics touch
+
+Phase 6B merges the frozen, hardware-proven Phase-5 runtime with the visually
+proven Phase-6A Xenos device.
+
+The generated build:
+- resumes from exact title function `0x0014CD30`;
+- adds a depth-12 / cap-512 direct closure rooted there;
+- keeps a real 640x480 Xenos D3D surface alive during translated execution;
+- preserves the Phase-5 hard-stop policy for unknown semantics;
+- logs exact rejected guest access address, width and read/write direction;
+- classifies `0xFDxxxxxx` as NV2A MMIO and `0xF0xxxxxx-0xF7xxxxxx` as
+  the NV2A VRAM aperture.
+
+A purple screen is a **diagnostic-only** indication that Mercenaries reached a
+GPU boundary. It does not count as a guest-rendered frame. The next patch must
+implement the specific observed graphics operation before claiming the first
+Mercenaries pixel.
+
+Preparation:
+`ports/mercenaries/xbox360/phase6_native_graphics/Prepare-Phase6B.ps1`.
