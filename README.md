@@ -709,6 +709,53 @@ translated-code scale and reference-comparison suite passed on modified Xbox
 **Gate 4:** startup service requests and title-critical imports have verified
 native implementations, not unexplained stubs.
 
+### Phase 5 — Subsystem bring-up under native game execution
+
+**Status: COMPLETE — Gate 5 PASS (October 21, 2026).**
+
+**Purpose:** drive genuine translated Mercenaries startup through the native
+Xbox 360 runtime until the active title-code graph converges, then prove the
+result is deterministic and produce an evidence-backed subsystem handoff for
+native graphics/audio/movie/input work.
+
+- [x] Bring the exact supported retail XBE through native Xbox 360 startup with
+      persistent guest storage, VM, filesystem, kernel-data and ABI invariants.
+- [x] Establish and hardware-prove the maintained guest heap/CRT path,
+      including allocation, free, realloc and `_msize`.
+- [x] Implement reviewed automatic continuation through exact packed
+      `ICALL_SAFE` and direct-frontier targets while retaining hard stops for
+      unknown semantics, unsafe indirects, faults and platform/subsystem
+      boundaries.
+- [x] Classify maintained diagnostic/checkpoint helpers without fabricating
+      gameplay/platform success.
+- [x] Saturate the translated startup graph across deep-low, low, mid, forward,
+      high-tail and text-tail regions through Phase 5BU.
+- [x] Freeze the final translated pack and prove repeatability with one
+      unchanged `P5BV-REPEATABILITY-20261021-A` XEX over **3/3 consecutive
+      real-hardware boots** with persistent Partition0 left intact.
+- [x] Reproduce the exact stable endpoint on all three runs:
+      `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`,
+      `esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, icall=1262,
+      direct=1002, `_msize`=395, realloc=4, final allocation size=2048,
+      ticks=73417, trace=7322, `fault=0`, guest-arena release, proof end and
+      XAPI return 0.
+- [x] Run the mandatory Phase-5 exit reconnaissance. It reported
+      **`READY / PASS`**, classified `0x0014CD30` as an exact generated
+      title function in `recomp_0006.c` (original range
+      `0x0014CD30-0x0014CD9C`), inventoried graphics/display, audio,
+      movies/video, input and cross-cutting surfaces, and ranked six Phase-6
+      risks.
+- [x] Produce all required Phase-6 handoff artifacts:
+      `phase5-exit-subsystem-surface.json`,
+      `phase5-exit-subsystem-surface.md`,
+      `phase5-exit-first-touch.txt`, `phase6-risk-map.json`, and
+      `phase6-handoff.md`.
+
+**Gate 5: PASS.** The translated/runtime startup path is converged,
+repeatable and classified. Phase 5 is frozen; Phase 6 may implement real
+Xbox 360-native subsystem backends without reopening Phase 5 unless new
+hardware evidence invalidates a proven invariant.
+
 ### Phase 6 — Native Xbox 360 graphics (Xenos)
 
 **Purpose:** replace NV2A/PGRAPH-to-D3D11 hosting with a correct native
