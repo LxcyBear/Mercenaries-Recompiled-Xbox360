@@ -442,7 +442,11 @@ def main() -> int:
         raise SystemExit("[Phase5BH] Phase 5BG root reset marker changed")
     main_text = main_text.replace(
         reset_marker,
-        reset_marker + "    s_phase5bhDirectRootEntered = 0;\n",
+        reset_marker
+        + "    s_phase5bhDirectRootEntered = 0;\n"
+        + "    s_phase5bhManualMsizeCount = 0u;\n"
+        + "    s_phase5bhManualMsizeLastAllocation = 0u;\n"
+        + "    s_phase5bhManualMsizeLastResult = 0u;\n",
         1,
     )
 
@@ -451,7 +455,9 @@ def main() -> int:
         raise SystemExit("[Phase5BH] Phase 5BG PASS gate marker changed")
     main_text = main_text.replace(
         gate_marker,
-        gate_marker + "            s_phase5bhDirectRootEntered &&\n",
+        gate_marker
+        + "            s_phase5bhDirectRootEntered &&\n"
+        + "            s_phase5bhManualMsizeCount > 0u &&\n",
         1,
     )
 
@@ -486,6 +492,7 @@ def main() -> int:
         "PASS: Phase 5BH maintained CRT _msize",
         "s_phase5bhDirectRootEntered = 1;",
         "s_phase5bhDirectRootEntered &&",
+        "s_phase5bhManualMsizeCount > 0u",
         "PASS: Phase 5BH broad-sweep ICALL_SAFE",
         "PHASE 5BH BROAD TRANSLATED SWEEP RESULT",
     )
@@ -542,9 +549,10 @@ def main() -> int:
             "branches remain fenced"
         ),
         "pass_policy": (
-            "all inherited 5BG invariants must hold and 0x0023BE3C must "
-            "actually enter through the generic packed direct dispatcher; "
-            "continue until a newer real boundary appears"
+            "all inherited 5BG invariants must hold; 0x0023BE3C must "
+            "enter through the generic packed direct dispatcher and the "
+            "maintained CRT _msize body must complete at least once; continue "
+            "until a newer real boundary appears"
         ),
     }
     manifest["phase5bh_observed_direct_fences"] = [
