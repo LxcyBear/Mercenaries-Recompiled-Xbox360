@@ -87,9 +87,13 @@ targets in one launch: `0x00237052`, `0x00237801`, `0x00239055`,
 `0x0023F22B`, and `0x002471C0`. The inherited storage/VM/heap and
 symbolic-link proofs remained stable, and execution then stopped cleanly at
 `DIRECT_FRONTIER caller=0x0023776D target=0x0023BE3C` with `fault=0`.
-Phase 5BH keeps `0x0023BE3C` mandatory and scans the accumulated generated
-pack for all exact generated direct-frontier fences, adding bounded closures
-for the largest support-clean subset under a 256-new-function cap.
+Phase 5BH keeps `0x0023BE3C` mandatory. The production recompiler
+intentionally marks that address as a manual function; the maintained port
+implements it as the Xbox CRT `_msize` wrapper, so the 360 harness now routes
+the same reviewed semantics over the proven title-heap table plus retail
+metadata fallback. 5BH also scans the accumulated generated pack for exact
+generated direct-frontier fences and adds bounded closures for the largest
+support-clean subset while keeping the total new-function cap at 256.
 
 ### Immediate next tests
 
@@ -388,7 +392,7 @@ for the largest support-clean subset under a 256-new-function cap.
     faults, ABI/frame anomalies, heap exhaustion, kernel/device unknowns and
     the execution-budget watchdog remain hard stops. Gate:
     `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BH.ps1`.
-    Build tag: `P5BH-DIRECTMOP23BE3C-20261021-A`.
+    Build tag: `P5BH-DIRECTMOP23BE3C-20261021-B`.
 
 ### Evidence policy
 
