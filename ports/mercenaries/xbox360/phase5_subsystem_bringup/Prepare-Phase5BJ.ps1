@@ -128,7 +128,7 @@ foreach ($requiredText in @(
     "s_phase5bjDeepLowRootEntered &&",
     "PASS: Phase 5BJ maintained CRT _msize",
     "PASS: Phase 5BJ broad-sweep ICALL_SAFE",
-    "PHASE 5BI BROAD TRANSLATED SWEEP RESULT",
+    "PHASE 5BJ BROAD TRANSLATED SWEEP RESULT",
     "PASS: Phase 5BJ maintained RtlAllocateHeap",
     "PASS: Phase 5BJ Partition0 backing LOADED"
 )) {
@@ -138,12 +138,12 @@ foreach ($requiredText in @(
 }
 
 foreach ($requiredText in @(
-    "PHASE 5BI RETAIL ENVIRONMENT PREP START",
-    "PHASE 5BI EXACT RETAIL VERIFICATION: PASS",
-    "PHASE 5BI EXECUTION ENVIRONMENT RESULT: PASS",
+    "PHASE 5BJ RETAIL ENVIRONMENT PREP START",
+    "PHASE 5BJ EXACT RETAIL VERIFICATION: PASS",
+    "PHASE 5BJ EXECUTION ENVIRONMENT RESULT: PASS",
     "phase5bj_env_build_cookie",
     "5035424A",
-    "PHASE 5BI RETAIL ENVIRONMENT PREP END"
+    "PHASE 5BJ RETAIL ENVIRONMENT PREP END"
 )) {
     if (-not $envText.Contains($requiredText)) {
         throw "Generated Phase 5BJ phase5_env.cpp is missing marker: $requiredText"
