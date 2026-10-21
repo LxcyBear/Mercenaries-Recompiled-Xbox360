@@ -1054,3 +1054,22 @@ Phase 6A remains **unpassed** until real Xbox 360 hardware visibly presents
 the frames and the log reports device creation + Phase-6A PASS + clean XAPI
 return. After that, Phase 6B isolates the proven Xenos presentation/resource
 primitives behind the backend-neutral seam used by translated guest graphics.
+
+
+### Phase 6A — first visible Xenos hardware output
+
+Real Xbox 360 hardware visibly presented the intended Phase-6A color sequence:
+
+- dark green
+- blue
+- red
+- grey/white
+
+This confirms that the native Xbox 360 D3D device/backbuffer/presentation path
+is reaching the physical display. The first visible Xenos output milestone is
+therefore achieved.
+
+This is not yet marked as the complete Phase-6A gate until the corresponding
+xbWatson/debug tail confirms the expected device-creation/PASS markers and a
+clean XAPI return value 0. No Mercenaries guest rendering is connected yet;
+this proof remains the isolated native Xenos surface baseline.
