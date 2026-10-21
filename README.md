@@ -4,9 +4,9 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** final Phase-5 subsystem exposure & reconnaissance — Phase 5BV repeatability hardware PASS completed 3/3 identical boots of the same frozen XEX at `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30` with identical counters, fault=0, proof end and XAPI return 0.
+> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Phase 5 is 100% COMPLETE: 5BV passed 3/3 frozen-pack hardware repeatability and the mandatory exit reconnaissance reported `READY / PASS`, classifying `0x0014CD30` as exact generated title code and producing the complete Phase-6 handoff.
 >
-> **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
+> **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
 ## The mission
 
@@ -56,9 +56,10 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BV hardware PASS; repeatability gate complete 3/3; mandatory Phase-6 reconnaissance exit gate active next** | Inventory and hardware-trace the graphics/audio/movie/input surface so Phase 6 starts from an evidence-backed implementation map |
-| 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
-| 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
+| **5 — Subsystem bring-up under native game execution** | **COMPLETE — repeatability 3/3 PASS + exit reconnaissance READY/PASS** | Stable translated/runtime path, classified endpoint, subsystem inventory, first-touch baseline, risk map and ordered Phase-6 handoff |
+| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — inventory complete; backend abstraction cleanup / first Xenos surface next** | Repeatable native Xenos first frame, functional title/menu graphics and reproducible 3D scene |
+| 7 — Audio, movies, input and streaming integration | Not started | Functional startup media/menu audio/input with stable timing and storage streaming |
+| 8 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
 **Verified foundation:** the VS17/XDK bootstrap, 64 MiB guest RAM contract,
 exact retail-XBE identity, bounded 14-section load, and the full Phase 3
@@ -75,19 +76,18 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BV have passed their
-hardware gates. Persistent Partition0, cache Partition5/Z:, VM, filesystem,
-symbolic-link, maintained-heap and diagnostic-helper behavior remain stable.
-Phase 5BV launched the same frozen `P5BV-REPEATABILITY-20261021-A` XEX three
-consecutive times without rebuilding or resetting Partition0. All three boots
-reproduced the exact same fault-free endpoint,
-`DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`, with
-`esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, icall=1262, direct=1002,
-`_msize`=395, realloc=4, final allocation size 2048, ticks=73417,
-trace=7322, `fault=0`, guest-arena release, proof end and XAPI return 0.
-The translated/runtime repeatability gate is therefore complete. The only
-remaining Phase-5 exit work is the mandatory Phase-6 subsystem exposure and
-reconnaissance gate.
+**Present blockers:** Phase 5 is complete. The same frozen
+`P5BV-REPEATABILITY-20261021-A` XEX reproduced the exact
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30` endpoint and counters
+on three consecutive real-hardware boots with `fault=0`, guest-arena release,
+proof end and XAPI return 0. The mandatory exit reconnaissance then reported
+`READY / PASS`, classified `0x0014CD30` as exact generated title code in
+`recomp_0006.c` (original range `0x0014CD30-0x0014CD9C`), inventoried the
+five required subsystem families, ranked six Phase-6 risks and generated all
+five handoff artifacts. The active blocker is now Phase 6 implementation:
+isolate the remaining D3D11/DXGI-specific backend assumptions and bring up the
+first independent Xbox 360/Xenos render surface without regressing the frozen
+Phase-5 runtime baseline.
 
 ### Immediate next tests
 
@@ -480,19 +480,36 @@ reconnaissance gate.
     direct=1002, `_msize`=395, realloc=4, final allocation size 2048,
     ticks=73417, trace=7322, guest-arena release, proof-end and XAPI return 0.
     The translated/runtime repeatability gate is closed.
-88. **Active final Phase 5 exit gate — Phase 6 subsystem exposure and
-    reconnaissance:** after the translated/runtime saturation sequence reaches
-    completion/repeatability, run a whole-codebase static audit plus an
-    observe-only real-hardware first-touch trace for graphics/display,
-    audio/XACT-style paths, movies/video, input, and cross-cutting async,
-    threading, timing, allocation/resource-lifecycle and filesystem
-    dependencies. Genuine unimplemented subsystem operations remain hard
-    boundaries; do not fabricate backend success merely to advance execution.
-    Required handoff outputs include a subsystem-surface inventory, hardware
-    first-touch timeline, first-frame/logo/movie/menu criticality, unresolved
-    risk list, Phase-6 risk map, and ordered implementation plan. Design:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/PHASE5_EXIT_RECON.md`.
+88. **Done:** Phase-5 exit reconnaissance reported
+    `[Phase5Exit] READY / PASS`. The stable `0x0014CD30` endpoint was
+    classified as exact generated title code in `recomp_0006.c`, original
+    range `0x0014CD30-0x0014CD9C`; graphics/display, audio, movies/video,
+    input and cross-cutting surfaces were inventoried; six Phase-6 risks were
+    ranked; and all five required handoff artifacts were generated. **Phase 5
+    is 100% COMPLETE.**
+89. **Phase 6 active — Native Xbox 360 graphics (Xenos):** the Mercenaries
+    NV2A/pushbuffer/format/state/shader/surface inventory is complete. The
+    backend-neutral interface seam is **in progress** because maintained
+    D3D8/NV2A semantic layers exist but D3D11/DXGI backend assumptions still
+    need isolation. Immediate target: initialize a native Xbox 360 graphics
+    device and render an independent Xenos test surface. Plan:
+    `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
 
+
+### 2026-10-21 — PHASE 5 COMPLETE / Phase 6 begins
+
+- Phase 5BV froze the translated pack and passed **3/3 identical real-hardware
+  boots** with the same `0x0014CD30` endpoint and exact runtime counters.
+- The mandatory Phase-5 exit reconnaissance reported **READY / PASS**.
+- `0x0014CD30` was classified as exact generated title code in
+  `recomp_0006.c`, original range `0x0014CD30-0x0014CD9C`.
+- All five required exit artifacts were generated and five subsystem families
+  plus six Phase-6 risks were recorded.
+- **Phase 5 is 100% complete.**
+- Active development moved to branch
+  `xbox360/phase6-native-graphics`. The first graphics-inventory task is
+  complete; backend abstraction cleanup is in progress; the immediate hardware
+  milestone is an independent native Xenos test surface.
 
 ### Evidence policy
 
@@ -692,40 +709,52 @@ translated-code scale and reference-comparison suite passed on modified Xbox
 **Gate 4:** startup service requests and title-critical imports have verified
 native implementations, not unexplained stubs.
 
-### Phase 5 — Native Xbox 360 graphics (Xenos)
+### Phase 6 — Native Xbox 360 graphics (Xenos)
 
 **Purpose:** replace NV2A/PGRAPH-to-D3D11 hosting with a correct native
-360 graphics backend.
+Xbox 360/Xenos graphics backend.
 
-- [ ] Inventory actual Mercenaries NV2A pushbuffers, texture formats,
+- [x] Inventory actual Mercenaries NV2A pushbuffers, texture formats,
       swizzle, render states, vertex programs, combiners and surface aliases.
+      Phase-5 exit reconnaissance plus the maintained NV2A/PGRAPH/D3D8
+      semantic implementation provide the evidence-backed starting inventory.
 - [ ] Introduce backend-neutral presentation/texture/draw interfaces.
+      **IN PROGRESS:** the semantic/resource layers exist, but D3D11/DXGI
+      backend assumptions still need to be isolated behind the Xenos seam.
 - [ ] Initialize an Xbox 360 graphics device and render an independent test
-      surface (not yet the game).
+      surface (not yet the game). **Immediate target.**
 - [ ] Implement compatible 2D, textured draw and flip operations.
 - [ ] Translate needed shaders and vertex formats; validate depth/stencil,
       blending, alpha testing, render targets and synchronization.
 - [ ] Capture the first guest-rendered frame; then the main menu;
       then a reproducible 3D scene, comparing to the working PC reference.
-- [ ] Measure frame time, GPU memory and render errors on hardware.
+- [ ] Measure frame time, GPU memory and renderer errors on hardware.
 
-**Gate 5:** repeatable first frame and functional title/menu/scene graphics.
+**Gate 6:** repeatable native Xenos first frame and functional
+title/menu/scene graphics.
 
-### Phase 6 — Audio, movies, asset streaming and timing
+Detailed active plan:
+`ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
 
-- [ ] Identify needed original Xbox APU, DirectSound and XACT behavior.
+### Phase 7 — Audio, movies, input, asset streaming and timing
+
+- [x] Inventory original Xbox APU/DirectSound/XACT, XMV/WMADEC, input and
+      cross-cutting timing/lifecycle surfaces during the Phase-5 exit gate.
 - [ ] Implement/bridge native Xbox 360 audio output, sound decoding and
       channel/mixing behavior.
+- [ ] Bind native Xbox 360 controller polling to the preserved title mapping
+      and context layer; validate vibration and reconnect semantics.
 - [ ] Preserve sample progression, callbacks and cutscene timing.
-- [ ] Implement required movie playback or a lawful user-side conversion
-      approach without bundling proprietary video.
+- [ ] Connect required movie playback/output to the native graphics/audio
+      backends without bundling proprietary media.
 - [ ] Validate loading/streaming on console storage within available RAM.
-- [ ] Test music, dialogue, SFX, movie transitions and long idle playback.
+- [ ] Test music, dialogue, SFX, movie transitions, input handoff and long
+      idle playback.
 
-**Gate 6:** no critical missing sound, timing drift or cutscene softlock in
-the documented test scenarios.
+**Gate 7:** stable startup media/menu audio/input with no critical timing drift
+or cutscene softlock in documented hardware scenarios.
 
-### Phase 7 — Gameplay, reliability and packaging
+### Phase 8 — Gameplay, reliability and packaging
 
 - [ ] Start game, use menus, load world and control a character.
 - [ ] Test driving, combat, AI, mission triggers and asset loading.
@@ -737,7 +766,7 @@ the documented test scenarios.
 - [ ] Verify no proprietary Xbox 360 SDK or original game files are
       included in public release artifacts.
 
-**Gate 7:** independently repeatable playable scenarios and a documented
+**Gate 8:** independently repeatable playable scenarios and a documented
 build/install process.
 
 ---
