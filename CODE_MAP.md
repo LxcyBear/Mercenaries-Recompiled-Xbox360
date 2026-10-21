@@ -675,3 +675,31 @@ Required handoff content includes:
 Phase 5 is complete only after both the translated/runtime saturation gate and
 this subsystem-reconnaissance exit gate pass. The exit gate is intentionally a
 measurement/handoff stage, not a hidden start of Phase 6 implementation.
+
+
+Phase 5BN hardware passed on 2026-10-21. The second-pass deep-low sweep
+consumed `0x00031080` repeatedly through the generic packed safe-ICALL
+dispatcher and continued to 843 safe-ICALL dispatches, 626 direct dispatches,
+64803 translated block ticks, 5859 trace entries, 299 maintained CRT
+`_msize` calls, and four successful maintained `RtlReAllocateHeap` calls.
+The first new hard stop was fault-free:
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x00216BB0`, with
+`esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, and `fault=0`.
+The harness reported Phase 5BN PASS and returned through XAPI with 0.
+
+### Phase-5BO mid-.text gap saturation sweep
+
+Phase 5BO files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BO.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bo_mid_text_sweep.py`
+
+5BO keeps `0x00216BB0` mandatory, prioritizes its bounded depth-6 direct
+closure, then fills the remaining 256-new-function budget with nearest
+still-unpacked support-clean exact generated functions from
+`0x00120000..0x00235FFF`. This interval is the only large retail `.text`
+gap that has not yet received a dedicated regional saturation pass: the low
+passes stop at `0x0011FFFF`, while Phase 5BD and later forward sweeps begin
+at `0x00236000`. All 5BN persistence, VM, heap, diagnostic-helper and
+generic-dispatch proofs remain inherited.
+
+Build tag: `P5BO-MIDTEXT216BB0-20261021-A`.
