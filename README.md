@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BH — Phase 5BG hardware PASS proved five generic packed ICALL promotions in one launch through `0x002471C0`, then reached fault-free direct frontier `0x0023776D -> 0x0023BE3C`; mop up accumulated exact translated direct-frontier fences now.
+> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BI — Phase 5BH hardware PASS completed the maintained CRT `_msize` route, exercised `RtlReAllocateHeap`, reached 53 safe-ICALL and 94 direct automatic dispatches in one launch, and stopped fault-free at `ICALL_SAFE caller=0x0023A3CE target=0x000B5E50`; promote that new low-text runtime family next.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BG hardware PASS; Phase 5BH accumulated direct-frontier mop active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BH hardware PASS; Phase 5BI next low-text safe-ICALL sweep** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,25 +75,19 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BG have passed their
-hardware gates. The persistent 512 KiB Partition0 backing remains stable across
-launches, including the sector-`0x800` unchanged rewrite, cache Partition5
-mount and `\\??\\Z:` creation. Phase 5BC introduced the generic
-support-clean broad-sweep dispatcher so exact generated targets already present
-in the pack can continue automatically rather than requiring a bespoke
-one-address build. Phase 5BD through 5BG have now validated that strategy on
-hardware. The 5BG run automatically consumed five safe indirect translated
-targets in one launch: `0x00237052`, `0x00237801`, `0x00239055`,
-`0x0023F22B`, and `0x002471C0`. The inherited storage/VM/heap and
-symbolic-link proofs remained stable, and execution then stopped cleanly at
-`DIRECT_FRONTIER caller=0x0023776D target=0x0023BE3C` with `fault=0`.
-Phase 5BH keeps `0x0023BE3C` mandatory. The production recompiler
-intentionally marks that address as a manual function; the maintained port
-implements it as the Xbox CRT `_msize` wrapper, so the 360 harness now routes
-the same reviewed semantics over the proven title-heap table plus retail
-metadata fallback. 5BH also scans the accumulated generated pack for exact
-generated direct-frontier fences and adds bounded closures for the largest
-support-clean subset while keeping the total new-function cap at 256.
+**Present blockers:** Phase 4 and Phase 5A through 5BH have passed their
+hardware gates. Persistent Partition0, cache Partition5/Z:, VM, filesystem,
+symbolic-link and maintained-heap behavior remain stable. Phase 5BH crossed the
+reviewed manual Xbox CRT `_msize` root at `0x0023BE3C`, repeatedly returned
+the correct size for the tracked guest heap allocation, and later exercised the
+maintained `RtlReAllocateHeap` path successfully. The broad dispatcher reached
+53 safe-ICALL dispatches and 94 direct dispatches in one hardware launch,
+consuming a large cluster of startup/runtime targets that would previously have
+required many separate frontier builds. The first new hard stop is
+`ICALL_SAFE caller=0x0023A3CE target=0x000B5E50` with `fault=0`,
+`esp=0x008BFEF4`, and `saved_esp=0x008BFEF8`. Phase 5BI should treat that
+as the next mandatory low-text runtime seed while preserving the same bounded,
+support-clean dispatch policy.
 
 ### Immediate next tests
 
@@ -384,15 +378,18 @@ support-clean subset while keeping the total new-function cap at 256.
     reached fault-free direct frontier
     `0x0023776D -> 0x0023BE3C`. Build:
     `P5BG-TEXTTAIL2471C0-20261020-A`.
-73. **Phase 5BH active:** retain all 5BG proofs, keep hardware-observed
-    direct target `0x0023BE3C` mandatory, scan the inherited generated
-    `main.cpp` for accumulated exact translated direct-frontier fences, and
-    add bounded closures for the largest support-clean subset under a
-    256-new-function cap. Unknown/unsupported branches remain fenced; guest
-    faults, ABI/frame anomalies, heap exhaustion, kernel/device unknowns and
-    the execution-budget watchdog remain hard stops. Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BH.ps1`.
-    Build tag: `P5BH-DIRECTMOP23BE3C-20261021-B`.
+73. **Done:** Phase 5BH crossed the maintained CRT `_msize` root at
+    `0x0023BE3C`, later exercised maintained `RtlReAllocateHeap`, and
+    advanced through 53 safe-ICALL plus 94 direct automatic dispatches in one
+    launch. The first new hard stop was fault-free
+    `ICALL_SAFE caller=0x0023A3CE target=0x000B5E50`. Build:
+    `P5BH-DIRECTMOP23BE3C-20261021-B`.
+74. **Phase 5BI next:** keep `0x000B5E50` mandatory, preserve all 5BH
+    storage/VM/heap/runtime proofs, and promote a bounded support-clean
+    low-`.text` runtime family around the new safe-ICALL target. Continue to
+    hard-stop on unknown indirect targets, unsupported kernel/device behavior,
+    guest faults, ABI/frame anomalies, heap exhaustion, and execution-budget
+    exhaustion.
 
 ### Evidence policy
 
