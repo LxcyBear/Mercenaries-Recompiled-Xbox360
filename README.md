@@ -85,9 +85,7 @@ maintained `RtlReAllocateHeap` path successfully. The broad dispatcher reached
 consuming a large cluster of startup/runtime targets that would previously have
 required many separate frontier builds. The first new hard stop is
 `ICALL_SAFE caller=0x0023A3CE target=0x000B5E50` with `fault=0`,
-`esp=0x008BFEF4`, and `saved_esp=0x008BFEF8`. Phase 5BI should treat that
-as the next mandatory low-text runtime seed while preserving the same bounded,
-support-clean dispatch policy.
+`esp=0x008BFEF4`, and `saved_esp=0x008BFEF8`. Phase 5BI now treats that as the mandatory low-text runtime seed, prioritizes its depth-6 direct closure, and fills the remaining bounded pack budget with nearest support-clean exact generated entries from `0x000A0000..0x0011FFFF`.
 
 ### Immediate next tests
 
@@ -384,12 +382,15 @@ support-clean dispatch policy.
     launch. The first new hard stop was fault-free
     `ICALL_SAFE caller=0x0023A3CE target=0x000B5E50`. Build:
     `P5BH-DIRECTMOP23BE3C-20261021-B`.
-74. **Phase 5BI next:** keep `0x000B5E50` mandatory, preserve all 5BH
-    storage/VM/heap/runtime proofs, and promote a bounded support-clean
-    low-`.text` runtime family around the new safe-ICALL target. Continue to
-    hard-stop on unknown indirect targets, unsupported kernel/device behavior,
-    guest faults, ABI/frame anomalies, heap exhaustion, and execution-budget
-    exhaustion.
+74. **Phase 5BI active:** keep `0x000B5E50` mandatory, preserve all 5BH
+    storage/VM/heap/runtime proofs, prioritize its bounded depth-6 direct
+    closure, then pre-pack nearest support-clean exact generated functions
+    across `0x000A0000..0x0011FFFF` under the 256-new-function cap. Continue
+    to hard-stop on unknown indirect targets, unsupported kernel/device
+    behavior, guest faults, ABI/frame anomalies, heap exhaustion, and
+    execution-budget exhaustion. Gate:
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BI.ps1`.
+    Build tag: `P5BI-LOWTEXTB5E50-20261021-A`.
 
 ### Evidence policy
 
