@@ -529,3 +529,37 @@ support-clean exact generated functions from the remaining lower retail title
 `0x000A0000..0x0011FFFF` sweep while retaining the same hard-stop policy.
 
 Build tag: `P5BJ-DEEPLOW39B00-20261021-A`.
+
+
+Phase 5BJ hardware passed on 2026-10-21. The deep-low sweep consumed
+`0x00039B00` as safe-ICALL dispatch 77 and continued until the first new
+fault-free direct boundary:
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x001F2A60`,
+with `esp=0x008BFE94`, `saved_esp=0x008BFE94`, `fault=0`,
+18578 translated block ticks, and 1445 trace entries. The maintained CRT
+`_msize`, `RtlReAllocateHeap`, persistence, filesystem, VM and symbolic-link
+proofs remained healthy throughout the run.
+
+The 5BJ preparer had already identified `0x001F2A60` as a support-clean fence
+because its translated body calls `recomp_xact_setup_checkpoint`. The
+production port implementation of that helper is observational only: with
+tracing disabled it does not alter guest state.
+
+### Phase-5BK observational diagnostic mop
+
+Phase 5BK files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BK.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bk_diagnostic_mop.py`
+
+5BK keeps `0x001F2A60` mandatory and supplies maintained tracing-disabled
+no-op equivalents for four production diagnostic callbacks:
+`recomp_xact_setup_checkpoint`, `recomp_teardown_call_checkpoint`,
+`recomp_teardown_item_checkpoint`, and
+`recomp_collision_agent_recycle_range`. These helpers are host-side
+observability hooks, not gameplay/XACT implementations. After adding them,
+5BK re-harvests accumulated exact-generated direct-frontier fences and adds
+bounded closures under the existing 256-new-function cap. Unknown subsystem
+semantics, ABI/frame anomalies, guest faults, kernel/device gaps, heap
+exhaustion and watchdog exhaustion remain hard stops.
+
+Build tag: `P5BK-DIAGMOP1F2A60-20261021-A`.
