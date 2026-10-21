@@ -79,6 +79,13 @@ def instrument_new_root(rendered: str, name: str) -> str:
 
 
 def relabel(main_text: str, env_text: str) -> tuple[str, str]:
+    if "phase5bi_env_build_cookie" not in main_text:
+        raise SystemExit("[Phase5BJ] inherited 5BI main cookie marker changed")
+    if "phase5bi_env_build_cookie" not in env_text:
+        raise SystemExit("[Phase5BJ] inherited 5BI env cookie marker changed")
+    if "50354249" not in env_text:
+        raise SystemExit("[Phase5BJ] inherited 5BI env cookie value changed")
+
     main_text = main_text.replace(
         "P5BI-LOWTEXTB5E50-20261021-A",
         BUILD_TAG,
@@ -92,7 +99,7 @@ def relabel(main_text: str, env_text: str) -> tuple[str, str]:
         "phase5bj_env_build_cookie",
     )
     env_text = env_text.replace(
-        "phase5bj_env_build_cookie",
+        "phase5bi_env_build_cookie",
         "phase5bj_env_build_cookie",
     )
     main_text = main_text.replace("50354249", "5035424A")
@@ -119,6 +126,13 @@ def relabel(main_text: str, env_text: str) -> tuple[str, str]:
     if old_policy not in main_text:
         raise SystemExit("[Phase5BJ] inherited 5BI policy marker changed")
     main_text = main_text.replace(old_policy, new_policy, 1)
+
+    if "phase5bj_env_build_cookie" not in main_text:
+        raise SystemExit("[Phase5BJ] main cookie relabel failed")
+    if "phase5bj_env_build_cookie" not in env_text:
+        raise SystemExit("[Phase5BJ] env cookie relabel failed")
+    if "5035424A" not in env_text:
+        raise SystemExit("[Phase5BJ] env cookie value relabel failed")
 
     return main_text, env_text
 
