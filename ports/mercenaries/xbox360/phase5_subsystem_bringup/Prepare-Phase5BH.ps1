@@ -115,8 +115,9 @@ $envText = Get-Content -LiteralPath $env -Raw
 $manifestJson = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 
 foreach ($requiredText in @(
-    "P5BH-DIRECTMOP23BE3C-20261021-A",
+    "P5BH-DIRECTMOP23BE3C-20261021-B",
     "case 0x0023BE3Cu: return sub_0023BE3C;",
+    "PASS: Phase 5BH maintained CRT _msize",
     "s_phase5bhDirectRootEntered = 1;",
     "s_phase5bhDirectRootEntered &&",
     "PASS: Phase 5BH broad-sweep ICALL_SAFE",
@@ -148,7 +149,7 @@ if (-not $mainText.Contains(
 }
 
 if ($manifestJson.phase -ne "5BH" -or
-    $manifestJson.build_tag -ne "P5BH-DIRECTMOP23BE3C-20261021-A") {
+    $manifestJson.build_tag -ne "P5BH-DIRECTMOP23BE3C-20261021-B") {
     throw "Phase 5BH manifest identity mismatch"
 }
 
@@ -165,9 +166,14 @@ if ($sweep.observed_phase -ne "5BG" -or
     [int]$sweep.fence_direct_closure_depth -ne 3 -or
     [int]$sweep.fence_direct_closure_cap -ne 48 -or
     [int]$sweep.total_new_cap -ne 256 -or
+    [int]$sweep.translated_new_cap -ne 255 -or
+    $sweep.support_owned_manual_root -ne "0x0023BE3C" -or
+    $sweep.support_owned_manual_name -ne "Xbox CRT _msize" -or
+    [int]$sweep.support_owned_new_members -ne 1 -or
     [int]$sweep.observed_direct_fence_targets -lt 1 -or
     [int]$sweep.exact_generated_unpacked_fences -lt 1 -or
-    [int]$sweep.candidate_new_members -lt 1 -or
+    [int]$sweep.candidate_new_members -lt 0 -or
+    [int]$sweep.translated_new_members -lt 0 -or
     [int]$sweep.new_members -lt 1 -or
     [int]$sweep.expanded_pack_members -le [int]$sweep.base_pack_members) {
     throw "Phase 5BH direct-frontier-mop manifest contract mismatch"
@@ -191,9 +197,11 @@ Write-Host ("[Phase5BH] Base pack members      : {0}" -f [int]$sweep.base_pack_m
 Write-Host ("[Phase5BH] Observed direct fences : {0}" -f [int]$sweep.observed_direct_fence_targets)
 Write-Host ("[Phase5BH] Exact unpacked fences  : {0}" -f [int]$sweep.exact_generated_unpacked_fences)
 Write-Host ("[Phase5BH] Selected fence roots   : {0}" -f [int]$sweep.selected_fence_roots)
-Write-Host ("[Phase5BH] Candidate new          : {0}" -f [int]$sweep.candidate_new_members)
+Write-Host ("[Phase5BH] Candidate translated   : {0}" -f [int]$sweep.candidate_new_members)
 Write-Host ("[Phase5BH] Pruned/fenced          : {0}" -f [int]$sweep.pruned_members)
-Write-Host ("[Phase5BH] Newly packed           : {0}" -f [int]$sweep.new_members)
+Write-Host ("[Phase5BH] Translated newly packed: {0}" -f [int]$sweep.translated_new_members)
+Write-Host ("[Phase5BH] Support-owned new      : {0} ({1})" -f [int]$sweep.support_owned_new_members, $sweep.support_owned_manual_name)
+Write-Host ("[Phase5BH] Newly packed total     : {0}" -f [int]$sweep.new_members)
 Write-Host ("[Phase5BH] Expanded pack          : {0}" -f [int]$sweep.expanded_pack_members)
 Write-Host "[Phase5BH] Hardware goal: consume direct target 0023BE3C and automatically clear as many accumulated exact translated direct-frontier fences as the support-clean pack permits."
 Write-Host "[Phase5BH] Keep game:\merc360-partition0\partition0-config.bin."
@@ -201,5 +209,5 @@ Write-Host "[Phase5BH] Build BOTH freshly generated sources:"
 Write-Host "[Phase5BH]   $main"
 Write-Host "[Phase5BH]   $env"
 Write-Host "[Phase5BH] Link-time cookie: phase5bh_env_build_cookie = 0x50354248 (P5BH)."
-Write-Host "[Phase5BH] Expected build tag: P5BH-DIRECTMOP23BE3C-20261021-A"
+Write-Host "[Phase5BH] Expected build tag: P5BH-DIRECTMOP23BE3C-20261021-B"
 Write-Host "[Phase5BH] Send the complete xbWatson log after hardware test."
