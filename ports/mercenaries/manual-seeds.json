@@ -40,6 +40,10 @@
     "reason": "Retail BunkerBusterRays array constructor passed as an immediate callback by 0x0024A610 to CRT vector constructor 0x0023792F. Initializes brush links and vtable 0x002E7628; omission silently drops all white ray draws."
   },
   {
+    "start": "0x000B20C0",
+    "reason": "Phase 5BL real Xbox 360 hardware proved a fault-free ICALL_SAFE from translated caller 0x0023A3CE to 0x000B20C0 after the high-.text tail sweep reached 358 safe-ICALL and 597 direct dispatches; preserve this runtime-discovered indirect guest-code entry as a reviewed hard function boundary."
+  },
+  {
     "start": "0x000CB120",
     "reason": "Retail DataPod Status update; owns the 0x64-byte frame and internal display-mode jump table through the shared timer/update epilogue at 0x000CB4D9"
   },
