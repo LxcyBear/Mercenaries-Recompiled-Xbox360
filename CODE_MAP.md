@@ -590,3 +590,30 @@ again capped at 256 new functions. All 5BK maintained observational diagnostic
 support remains inherited; genuine subsystem/ABI/kernel faults remain fenced.
 
 Build tag: `P5BL-HIGHTAIL24BC50-20261021-A`.
+
+
+Phase 5BL hardware passed on 2026-10-21. The high-tail saturation sweep
+consumed `0x0024BC50` as safe-ICALL dispatch 317 and continued through the
+remaining packed high retail `.text` tail to `0x0024CCF0`. The run reached
+358 safe-ICALL dispatches, 597 direct dispatches, 61750 translated block
+ticks, 5152 trace entries, 270 maintained CRT `_msize` calls, and four
+successful maintained `RtlReAllocateHeap` calls. The first new hard stop was
+fault-free `ICALL_SAFE caller=0x0023A3CE target=0x000B20C0` with
+`esp=0x008BFEEC`, `saved_esp=0x008BFEF0`, and `fault=0`. Phase 5BL
+then reported PASS.
+
+### Phase-5BM second-pass low-.text saturation sweep
+
+Phase 5BM files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BM.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bm_low_text_sweep.py`
+
+5BM keeps `0x000B20C0` mandatory, prioritizes its bounded depth-6 direct
+closure, then revisits the remaining support-clean low-`.text` band
+`0x000A0000..0x0011FFFF`. This complements 5BI, which could retain only 254
+support-clean entries from 2178 regional candidates. The remaining budget is
+filled with nearest still-unpacked exact generated functions under the same
+256-new-function cap. All 5BL persistence, VM, heap, diagnostic-helper and
+generic-dispatch proofs remain inherited.
+
+Build tag: `P5BM-LOWTEXTB20C0-20261021-A`.
