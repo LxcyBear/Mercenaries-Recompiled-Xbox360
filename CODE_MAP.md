@@ -1073,3 +1073,27 @@ This is not yet marked as the complete Phase-6A gate until the corresponding
 xbWatson/debug tail confirms the expected device-creation/PASS markers and a
 clean XAPI return value 0. No Mercenaries guest rendering is connected yet;
 this proof remains the isolated native Xenos surface baseline.
+
+
+### Phase 6B — first Mercenaries graphics touch
+
+Phase 6B is prepared as the first combined title-runtime + native-Xenos build.
+
+Files:
+- `ports/mercenaries/xbox360/phase6_native_graphics/Prepare-Phase6B.ps1`
+- `ports/mercenaries/xbox360/phase6_native_graphics/emit_phase6b_first_graphics_touch.py`
+
+Build tag: `P6B-FIRST-GRAPHICS-TOUCH-20261021-A`.
+
+The build regenerates the proven Phase-5BV pack, adds exact generated title
+root `0x0014CD30` plus a bounded depth-12/cap-512 direct closure, initializes
+the Phase-6A native Xenos surface, and resumes translated Mercenaries execution.
+
+Unknown graphics/platform semantics remain hard stops. A rejected guest access
+records exact address/width/read-vs-write; NV2A MMIO and VRAM aperture accesses
+also trigger a purple diagnostic screen. Purple is only evidence that the title
+reached the GPU boundary, not that Mercenaries rendered the frame.
+
+Hardware target: reach the first actual graphics semantic touch with Xenos
+already alive so the next patch can translate that specific operation into the
+first genuine guest-driven pixels.
