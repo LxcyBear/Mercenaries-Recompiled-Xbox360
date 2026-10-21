@@ -28,6 +28,7 @@ ROOT_DIRECT_CAP = 256
 FENCE_DIRECT_DEPTH = 3
 FENCE_DIRECT_CAP = 48
 TOTAL_NEW_CAP = 256
+TRANSLATED_NEW_CAP = TOTAL_NEW_CAP - 1
 BUILD_TAG = "P5BH-DIRECTMOP23BE3C-20261021-B"
 
 DIRECT_FENCE_RE = re.compile(
@@ -393,12 +394,12 @@ def main() -> int:
         candidate_order,
         sorted(root_members),
         old_members,
-        TOTAL_NEW_CAP,
+        TRANSLATED_NEW_CAP,
     )
 
     selected_fence_roots: list[int] = []
     for fence_va in exact_generated_fences:
-        if len(candidate_order) >= TOTAL_NEW_CAP:
+        if len(candidate_order) >= TRANSLATED_NEW_CAP:
             break
         if fence_va == NEW_ROOT:
             if fence_va not in selected_fence_roots:
@@ -521,6 +522,7 @@ def main() -> int:
         "fence_direct_closure_depth": FENCE_DIRECT_DEPTH,
         "fence_direct_closure_cap": FENCE_DIRECT_CAP,
         "total_new_cap": TOTAL_NEW_CAP,
+        "translated_new_cap": TRANSLATED_NEW_CAP,
         "base_pack_members": len(old_members),
         "support_owned_manual_root": "0x0023BE3C",
         "support_owned_manual_name": "Xbox CRT _msize",
@@ -558,6 +560,10 @@ def main() -> int:
         f"0x{va:08X}" for va in candidate_new_members
     ]
     manifest["phase5bh_new_members"] = [
+        f"0x{NEW_ROOT:08X}",
+        *[f"0x{va:08X}" for va in new_members],
+    ]
+    manifest["phase5bh_translated_new_members"] = [
         f"0x{va:08X}" for va in new_members
     ]
     manifest["phase5bh_pruned_members"] = [
