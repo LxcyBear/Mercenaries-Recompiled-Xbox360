@@ -481,3 +481,26 @@ new startup/runtime targets. The first new hard stop was a fault-free
 `ICALL_SAFE caller=0x0023A3CE target=0x000B5E50` at tick 15406 with
 `fault=0`. This is the strongest hardware proof so far that the broad-sweep
 strategy is collapsing many former one-build frontiers into one execution run.
+
+
+### Phase-5BI low-.text runtime-family sweep
+
+Phase 5BH hardware passed with the strongest broad-sweep result so far:
+53 safe-ICALL dispatches, 94 direct dispatches, 15406 translated block ticks,
+1190 trace entries, repeated maintained CRT `_msize` execution, and a
+successful maintained `RtlReAllocateHeap`. The first new hard stop was
+fault-free `ICALL_SAFE caller=0x0023A3CE target=0x000B5E50`.
+
+Phase 5BI files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BI.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bi_low_text_sweep.py`
+
+5BI keeps `0x000B5E50` mandatory, prioritizes its bounded depth-6 direct
+closure, then fills the remaining pack budget with nearest support-clean exact
+generated entries from `0x000A0000..0x0011FFFF`. The total new-function cap
+remains 256. All inherited storage, persistence, VM, heap, CRT-manual and
+generic dispatcher proofs remain required; unknown indirect targets,
+unsupported kernel/device semantics, guest faults, ABI/frame anomalies, heap
+exhaustion and the execution-budget watchdog remain hard stops.
+
+Build tag: `P5BI-LOWTEXTB5E50-20261021-A`.
