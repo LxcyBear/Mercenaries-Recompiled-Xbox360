@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BV repeatability — Phase 5BU hardware PASS consumed `0x001462E0`, advanced only +1 safe-ICALL / +2 direct / +15 ticks / +6 trace beyond 5BT, and stopped fault-free at `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`; the translated pack is now frozen for three identical hardware boots before final Phase-5 reconnaissance.
+> **Last roadmap review:** October 21, 2026 · **Current focus:** final Phase-5 subsystem exposure & reconnaissance — Phase 5BV repeatability hardware PASS completed 3/3 identical boots of the same frozen XEX at `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30` with identical counters, fault=0, proof end and XAPI return 0.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BU hardware PASS; Phase 5BV frozen-pack repeatability gate active; mandatory Phase-6 reconnaissance exit gate next** | Prove stable translated/runtime convergence, then inventory and hardware-trace the graphics/audio/movie/input surface so Phase 6 starts from an evidence-backed implementation map |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BV hardware PASS; repeatability gate complete 3/3; mandatory Phase-6 reconnaissance exit gate active next** | Inventory and hardware-trace the graphics/audio/movie/input surface so Phase 6 starts from an evidence-backed implementation map |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,19 +75,18 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BU have passed their
+**Present blockers:** Phase 4 and Phase 5A through 5BV have passed their
 hardware gates. Persistent Partition0, cache Partition5/Z:, VM, filesystem,
 symbolic-link, maintained-heap and diagnostic-helper behavior remain stable.
-Phase 5BU consumed `0x001462E0` and advanced only to 1262 safe-ICALL
-dispatches, 1002 direct dispatches, 73417 translated block ticks, 7322 trace
-entries, 395 maintained CRT `_msize` calls and four successful
-`RtlReAllocateHeap` calls before the next fault-free endpoint candidate:
+Phase 5BV launched the same frozen `P5BV-REPEATABILITY-20261021-A` XEX three
+consecutive times without rebuilding or resetting Partition0. All three boots
+reproduced the exact same fault-free endpoint,
 `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`, with
-`esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, and `fault=0`. Because this is
-only +1 safe ICALL, +2 direct, +1 `_msize`, +15 ticks and +6 trace beyond
-5BT, coverage expansion is now frozen. Phase 5BV requires three consecutive
-boots of the exact same XEX and persistent Partition0 state to reproduce that
-endpoint and the exact translated-runtime counters before the final Phase-5
+`esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, icall=1262, direct=1002,
+`_msize`=395, realloc=4, final allocation size 2048, ticks=73417,
+trace=7322, `fault=0`, guest-arena release, proof end and XAPI return 0.
+The translated/runtime repeatability gate is therefore complete. The only
+remaining Phase-5 exit work is the mandatory Phase-6 subsystem exposure and
 reconnaissance gate.
 
 ### Immediate next tests
@@ -474,16 +473,14 @@ reconnaissance gate.
     `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`. The delta versus
     5BT collapsed to +1 safe ICALL, +2 direct, +1 `_msize`, +15 ticks and
     +6 trace. Build: `P5BU-MIDTEXT1462E0-20261021-A`.
-87. **Phase 5BV active — frozen-pack repeatability:** add zero translated
-    members, regenerate the exact 5BU pack, and run one freshly built
-    `P5BV-REPEATABILITY-20261021-A` XEX three consecutive times without
-    rebuilding or deleting `game:\\merc360-partition0\\partition0-config.bin`.
-    Every run must reproduce `DIRECT_FRONTIER 0023A3CE -> 0014CD30`,
-    `fault=0`, icall=1262, direct=1002, `_msize`=395, realloc=4,
-    ticks=73417, trace=7322, guest-arena release, proof-end, and XAPI return 0.
-    Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BV.ps1`.
-88. **Planned final Phase 5 exit gate — Phase 6 subsystem exposure and
+87. **Done:** Phase 5BV frozen-pack repeatability passed 3/3 on real
+    hardware using one unchanged `P5BV-REPEATABILITY-20261021-A` XEX and
+    persistent Partition0 state. Every run reproduced
+    `DIRECT_FRONTIER 0023A3CE -> 0014CD30`, `fault=0`, icall=1262,
+    direct=1002, `_msize`=395, realloc=4, final allocation size 2048,
+    ticks=73417, trace=7322, guest-arena release, proof-end and XAPI return 0.
+    The translated/runtime repeatability gate is closed.
+88. **Active final Phase 5 exit gate — Phase 6 subsystem exposure and
     reconnaissance:** after the translated/runtime saturation sequence reaches
     completion/repeatability, run a whole-codebase static audit plus an
     observe-only real-hardware first-touch trace for graphics/display,
@@ -3153,6 +3150,21 @@ unexecuted test PASS.**
   launched three consecutive times with persistent Partition0 unchanged. All
   three complete xbWatson logs must reproduce the exact same endpoint and
   translated-runtime counters before Phase-5 exit reconnaissance begins.
+
+### 2026-10-21 — Phase 5BV 3/3 repeatability PASS
+
+- One unchanged `P5BV-REPEATABILITY-20261021-A` XEX completed three
+  consecutive real-hardware boots with persistent Partition0 left intact.
+- All three runs reproduced the exact same endpoint:
+  `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`.
+- All three runs also reproduced icall=1262, direct=1002, `_msize`=395,
+  realloc=4, final allocation size 2048, ticks=73417, trace=7322 and
+  `fault=0`.
+- Each run reported the repeatability result PASS, released the guest arena,
+  reached proof end and returned through XAPI with 0.
+- The translated/runtime repeatability requirement is complete. The project
+  now proceeds to the mandatory final Phase-5 subsystem exposure &
+  reconnaissance gate before Phase 6 implementation work begins.
 
 ### How future updates are recorded
 
