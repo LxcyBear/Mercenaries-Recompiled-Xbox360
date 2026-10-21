@@ -821,3 +821,36 @@ still-unpacked support-clean exact generated functions from
 this frontier family stops producing substantive new traversal.
 
 Build tag: `P5BS-LOWTEXT105020-20261021-A`.
+
+
+Phase 5BS hardware passed on 2026-10-21. The sixth-pass low-.text sweep
+consumed `0x00105020` through generic packed direct dispatch and advanced to
+1253 safe-ICALL dispatches, 988 direct dispatches, 73303 translated block
+ticks, 7280 trace entries, 386 maintained CRT `_msize` calls, and four
+successful maintained `RtlReAllocateHeap` calls. The first new hard stop was
+fault-free:
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x00191680`, with
+`esp=0x008BFF00`, `saved_esp=0x008BFF00`, and `fault=0`.
+The harness reported Phase 5BS PASS, released the guest arena, completed the
+post-test heartbeat interval, ended the proof cleanly, and returned through
+XAPI with 0.
+
+Compared with 5BR, 5BS added 323 safe-ICALL dispatches, 266 direct dispatches,
+40 maintained `_msize` calls, 5349 translated block ticks, and 996 trace
+entries. This is substantial new traversal. The new frontier also crossed from
+the low-.text band into the mid-.text region previously swept by 5BO.
+
+### Phase-5BT second-pass mid-.text saturation sweep
+
+Phase 5BT files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BT.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bt_mid_text_sweep.py`
+
+5BT keeps `0x00191680` mandatory, prioritizes its bounded depth-6 direct
+closure, then fills the remaining 256-new-function budget with nearest
+still-unpacked support-clean exact generated functions from
+`0x00120000..0x00235FFF`. This is a second pass over the mid-.text region;
+completion/repeatability remains deferred until this cross-region frontier
+family stops producing substantive new traversal.
+
+Build tag: `P5BT-MIDTEXT191680-20261021-A`.
