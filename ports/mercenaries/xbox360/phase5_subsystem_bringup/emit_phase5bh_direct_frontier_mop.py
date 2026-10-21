@@ -421,7 +421,7 @@ def main() -> int:
             candidate_order,
             prioritized,
             old_members,
-            TOTAL_NEW_CAP,
+            TRANSLATED_NEW_CAP,
         )
 
     candidate_new_members = sorted(set(candidate_order))
