@@ -644,3 +644,34 @@ All 5BM persistence, VM, heap, hardware-promoted low-text, maintained
 diagnostic-helper and generic-dispatch proofs remain inherited.
 
 Build tag: `P5BN-DEEPLOW31080-20261021-A`.
+
+
+### Phase-5 exit gate — Phase 6 subsystem exposure & reconnaissance
+
+After the active Phase-5 translated/runtime saturation sequence is complete,
+Phase 5 does **not** close immediately. A mandatory final exit stage will
+perform a Phase-6-facing subsystem exposure audit before handoff.
+
+Design contract:
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/PHASE5_EXIT_RECON.md`
+
+The exit stage combines a whole-codebase static audit with an observe-only
+real-hardware first-touch trace. It must inventory and classify graphics,
+audio, movie/video, input, and cross-cutting async/threading/timing/resource
+lifecycle boundaries. Genuine unimplemented subsystem operations remain hard
+boundaries; the stage may observe them but may not fabricate success or backend
+semantics merely to advance execution.
+
+Required handoff content includes:
+- subsystem surface inventory;
+- hardware first-touch timeline;
+- per-boundary ABI/resource/lifecycle evidence;
+- first-frame/logo/movie/menu criticality;
+- unresolved/high-risk semantics;
+- Phase-6 risk map;
+- ordered implementation plan for first pixels, startup media, menu/input,
+  audio, and later gameplay-only work.
+
+Phase 5 is complete only after both the translated/runtime saturation gate and
+this subsystem-reconnaissance exit gate pass. The exit gate is intentionally a
+measurement/handoff stage, not a hidden start of Phase 6 implementation.
