@@ -420,12 +420,12 @@ def main() -> int:
         "pruned_members": len(pruned_members),
         "expanded_pack_members": len(expanded_members),
         "strategy": (
-            mandatory 5BQ direct-frontier root plus its depth-6 direct closure, "
+            "mandatory 5BQ direct-frontier root plus its depth-6 direct closure, "
             "then nearest still-unpacked support-clean exact generated entries "
             "across the still-unpacked low-.text band"
         ),
         "pass_policy": (
-            all inherited 5BQ invariants must hold and 0x000F8BB0 must "
+            "all inherited 5BQ invariants must hold and 0x000F8BB0 must "
             "actually enter through generic packed direct dispatch; "
             "continue through further exact packed targets until a newer real "
             "boundary appears"
