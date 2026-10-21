@@ -135,7 +135,7 @@ foreach ($requiredText in @(
     "static void recomp_collision_agent_recycle_range(",
     "PASS: Phase 5BK maintained CRT _msize",
     "PASS: Phase 5BK broad-sweep ICALL_SAFE",
-    "PHASE 5BJ BROAD TRANSLATED SWEEP RESULT",
+    "PHASE 5BK BROAD TRANSLATED SWEEP RESULT",
     "PASS: Phase 5BK maintained RtlAllocateHeap",
     "PASS: Phase 5BK Partition0 backing LOADED"
 )) {
@@ -145,12 +145,12 @@ foreach ($requiredText in @(
 }
 
 foreach ($requiredText in @(
-    "PHASE 5BJ RETAIL ENVIRONMENT PREP START",
-    "PHASE 5BJ EXACT RETAIL VERIFICATION: PASS",
-    "PHASE 5BJ EXECUTION ENVIRONMENT RESULT: PASS",
+    "PHASE 5BK RETAIL ENVIRONMENT PREP START",
+    "PHASE 5BK EXACT RETAIL VERIFICATION: PASS",
+    "PHASE 5BK EXECUTION ENVIRONMENT RESULT: PASS",
     "phase5bk_env_build_cookie",
     "5035424B",
-    "PHASE 5BJ RETAIL ENVIRONMENT PREP END"
+    "PHASE 5BK RETAIL ENVIRONMENT PREP END"
 )) {
     if (-not $envText.Contains($requiredText)) {
         throw "Generated Phase 5BK phase5_env.cpp is missing marker: $requiredText"
