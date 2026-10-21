@@ -617,3 +617,30 @@ filled with nearest still-unpacked exact generated functions under the same
 generic-dispatch proofs remain inherited.
 
 Build tag: `P5BM-LOWTEXTB20C0-20261021-A`.
+
+
+Phase 5BM hardware passed on 2026-10-21. The second-pass low-.text sweep
+proved the reanalysis-promoted `0x000B20C0` function repeatedly through the
+generic packed safe-ICALL dispatcher and expanded execution to 807 safe-ICALL
+dispatches, 622 direct dispatches, 64101 translated block ticks, 5743 trace
+entries, 295 maintained CRT `_msize` calls, and four successful maintained
+`RtlReAllocateHeap` calls. The first new hard stop remained fault-free:
+`ICALL_SAFE caller=0x0023A3CE target=0x00031080`, with
+`esp=0x008BFEF4`, `saved_esp=0x008BFEF8`, and `fault=0`.
+The harness reported Phase 5BM PASS and returned through XAPI with 0.
+
+### Phase-5BN second-pass deep-low .text saturation sweep
+
+Phase 5BN files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BN.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bn_deep_low_sweep.py`
+
+5BN keeps `0x00031080` mandatory, prioritizes its bounded depth-6 direct
+closure, then revisits the remaining support-clean deep-low retail title
+`.text` band `0x00011000..0x0009FFFF`. This is the saturation follow-up
+to the original 5BJ pass. The remaining budget is filled with nearest
+still-unpacked exact generated functions under the 256-new-function cap.
+All 5BM persistence, VM, heap, hardware-promoted low-text, maintained
+diagnostic-helper and generic-dispatch proofs remain inherited.
+
+Build tag: `P5BN-DEEPLOW31080-20261021-A`.
