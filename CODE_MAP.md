@@ -467,3 +467,17 @@ the largest support-clean subset while keeping the total new-function cap at
 The mandatory hardware-observed root is never pruned or guessed. Unsupported
 side branches, guest faults, ABI/frame anomalies, kernel/device unknowns, heap
 exhaustion and the execution-budget watchdog remain hard stops.
+
+
+Phase 5BH hardware passed on 2026-10-21. The maintained Xbox CRT `_msize`
+root at `0x0023BE3C` completed repeatedly against the Phase-4C/5BB heap
+table, first reporting the 128-byte block at `0x008C1100` and later the
+256-byte reallocated block at `0x008C1980`. The run also exercised the
+maintained `RtlReAllocateHeap` path successfully. The generic broad-sweep
+dispatcher reached 53 safe-ICALL dispatches and 94 direct dispatches in one
+launch, including the inherited `0x00237052`, `0x00237801`,
+`0x00239055`, `0x0023F22B`, and `0x002471C0` chain plus a large set of
+new startup/runtime targets. The first new hard stop was a fault-free
+`ICALL_SAFE caller=0x0023A3CE target=0x000B5E50` at tick 15406 with
+`fault=0`. This is the strongest hardware proof so far that the broad-sweep
+strategy is collapsing many former one-build frontiers into one execution run.
