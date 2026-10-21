@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BL — Phase 5BK hardware PASS cleared the observational diagnostic fence, reached 316 safe-ICALL and 555 direct automatic dispatches, 60852 translated block ticks / 4941 trace entries, and stopped fault-free at `ICALL_SAFE caller=0x0023A3CE target=0x0024BC50`; saturate the remaining high retail `.text` tail next.
+> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BM — Phase 5BL hardware PASS consumed `0x0024BC50`, reached 358 safe-ICALL and 597 direct automatic dispatches, 61750 translated block ticks / 5152 trace entries, and stopped fault-free at `ICALL_SAFE caller=0x0023A3CE target=0x000B20C0`; second-pass low-`.text` saturation is active next.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BK hardware PASS; Phase 5BL high `.text` tail saturation sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BL hardware PASS; Phase 5BM second-pass low-`.text` saturation sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,19 +75,19 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BK have passed their
+**Present blockers:** Phase 4 and Phase 5A through 5BL have passed their
 hardware gates. Persistent Partition0, cache Partition5/Z:, VM, filesystem,
-symbolic-link and maintained-heap behavior remain stable. Phase 5BK cleared the
-observational diagnostic-helper fence at `0x001F2A60` and then expanded the
-hardware run dramatically to 316 safe-ICALL dispatches, 555 direct dispatches,
-60852 translated block ticks, 4941 trace entries, and 229 maintained CRT
-`_msize` calls. The first new hard stop is fault-free
-`ICALL_SAFE caller=0x0023A3CE target=0x0024BC50` with
-`esp=0x008BFF40` and `saved_esp=0x008BFF44`. Phase 5BL now keeps
-`0x0024BC50` mandatory, prioritizes its bounded depth-6 direct closure, and
-revisits the remaining support-clean high retail title `.text` tail
-`0x00246000..0x0025561F`, filling the remaining pack budget with the nearest
-still-unpacked exact generated functions under the 256-new-function cap.
+symbolic-link, maintained-heap and diagnostic-helper behavior remain stable.
+Phase 5BL consumed `0x0024BC50` as safe-ICALL dispatch 317 and saturated a
+much larger portion of the high retail title `.text` tail, reaching 358
+safe-ICALL dispatches, 597 direct dispatches, 61750 translated block ticks,
+5152 trace entries, 270 maintained CRT `_msize` calls and four successful
+`RtlReAllocateHeap` calls. The first new hard stop is fault-free
+`ICALL_SAFE caller=0x0023A3CE target=0x000B20C0` with
+`esp=0x008BFEEC` and `saved_esp=0x008BFEF0`. Phase 5BM now keeps
+`0x000B20C0` mandatory, prioritizes its bounded depth-6 direct closure, and
+revisits the remaining support-clean low-`.text` band
+`0x000A0000..0x0011FFFF` under the 256-new-function cap.
 
 ### Immediate next tests
 
@@ -402,14 +402,21 @@ still-unpacked exact generated functions under the 256-new-function cap.
     maintained CRT `_msize` calls. The first new hard stop was fault-free
     `ICALL_SAFE caller=0x0023A3CE target=0x0024BC50`. Build:
     `P5BK-DIAGMOP1F2A60-20261021-A`.
-77. **Phase 5BL active:** keep `0x0024BC50` mandatory, preserve all 5BK
+77. **Done:** Phase 5BL consumed `0x0024BC50` as safe-ICALL
+    dispatch 317 and advanced to 358 safe-ICALL plus 597 direct automatic
+    dispatches, 61750 translated block ticks, 5152 trace entries, 270
+    maintained CRT `_msize` calls and four successful
+    `RtlReAllocateHeap` calls. The first new hard stop was fault-free
+    `ICALL_SAFE caller=0x0023A3CE target=0x000B20C0`. Build:
+    `P5BL-HIGHTAIL24BC50-20261021-A`.
+78. **Phase 5BM active:** keep `0x000B20C0` mandatory, preserve all 5BL
     persistence/VM/heap/runtime and maintained diagnostic proofs, prioritize
     its bounded depth-6 direct closure, then fill the remaining 256-new-function
     budget with nearest still-unpacked support-clean exact generated functions
-    from the high retail title `.text` tail `0x00246000..0x0025561F`.
+    from the low-`.text` band `0x000A0000..0x0011FFFF`.
     Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BL.ps1`.
-    Build tag: `P5BL-HIGHTAIL24BC50-20261021-A`.
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BM.ps1`.
+    Build tag: `P5BM-LOWTEXTB20C0-20261021-A`.
 
 ### Evidence policy
 
