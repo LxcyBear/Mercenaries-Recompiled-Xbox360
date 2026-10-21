@@ -932,3 +932,40 @@ boundary and broader graphics/audio/movie/input surface are classified before
 Phase 6.
 
 Build tag: `P5BV-REPEATABILITY-20261021-A`.
+
+
+### Phase-5BV repeatability gate — hardware PASS
+
+Phase 5BV passed the frozen-pack repeatability gate on real Xbox 360 hardware
+on 2026-10-21.
+
+One freshly built `P5BV-REPEATABILITY-20261021-A` XEX was launched three
+consecutive times without rebuilding and with persistent Partition0 backing
+left intact. All three runs reproduced the same translated/runtime endpoint
+and counters exactly:
+
+- boundary: `DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30`
+- `esp=0x008BFF3C`, `saved_esp=0x008BFF3C`
+- safe-ICALL dispatches: 1262
+- direct dispatches: 1002
+- maintained CRT `_msize` calls: 395
+- maintained realloc calls: 4
+- final allocation size: 2048 bytes
+- translated block ticks: 73417
+- trace entries: 7322
+- `fault=0`
+- guest arena released
+- proof end reached
+- XAPI return value 0
+
+The third cumulative xbWatson capture contained exactly three 5BV build-tag
+starts and exactly three matching `0014CD30` endpoint records / repeatability
+PASS records / XAPI-zero returns. This closes the translated/runtime
+repeatability requirement.
+
+Phase 5 coverage expansion is now frozen. The next and final Phase-5 exit gate
+is the already-defined Phase-6 subsystem exposure & reconnaissance pass in
+`ports/mercenaries/xbox360/phase5_subsystem_bringup/PHASE5_EXIT_RECON.md`.
+That gate inventories and observe-only traces graphics/display, audio,
+movies/video, input, and cross-cutting async/thread/timer/resource/path/endian/
+lifecycle surfaces before Phase 6 implementation work begins.
