@@ -1031,3 +1031,26 @@ Phase-6 graphics status:
 
 Detailed plan:
 `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
+
+
+### Phase 6A — native Xenos surface proof
+
+Source:
+- `ports/mercenaries/xbox360/phase6_native_graphics/xenos_surface_xex/main.cpp`
+- `ports/mercenaries/xbox360/phase6_native_graphics/xenos_surface_xex/BUILD_PHASE6A.md`
+
+Build tag: `P6A-XENOS-SURFACE-20261021-A`.
+
+The first Phase-6 hardware test is deliberately independent of Mercenaries
+guest rendering. It uses the real Xbox 360 XDK D3D9 surface:
+`Direct3D_CreateDevice` -> `D3DDevice_Clear` -> `D3DDevice_Present`.
+
+Initial mode is conservative 640x480 A8R8G8B8, one back buffer, no MSAA,
+no depth/stencil and presentation interval one. The test cycles dark green,
+blue, red and white for up to 15 seconds, logs through xbWatson/debug output,
+accepts controller A as an early exit, and never fakes graphics success.
+
+Phase 6A remains **unpassed** until real Xbox 360 hardware visibly presents
+the frames and the log reports device creation + Phase-6A PASS + clean XAPI
+return. After that, Phase 6B isolates the proven Xenos presentation/resource
+primitives behind the backend-neutral seam used by translated guest graphics.
