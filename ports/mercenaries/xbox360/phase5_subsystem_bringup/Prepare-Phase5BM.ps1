@@ -64,8 +64,8 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Write-Host "[Phase5BM] SECOND-PASS LOW-.TEXT SATURATION SWEEP"
 Write-Host "[Phase5BM] Hardware seed: ICALL_SAFE 0023A3CE -> 000B20C0, fault=0."
 Write-Host "[Phase5BM] 5BL evidence: ticks=61750 trace=5152 safe_icall_dispatches=358 direct_dispatches=597 msize_calls=270 realloc_calls=4."
-Write-Host "[Phase5BM] Strategy: inherit 5BL, prioritize a depth-6 closure from 000B20C0, then fill the remaining 256-new-function budget with nearest still-unpacked support-clean exact generated targets across 000A0000-0011FFFF."
-Write-Host "[Phase5BM] The mandatory 000B20C0 root may not be pruned or guessed."
+Write-Host "[Phase5BM] Strategy: inherit 5BL, require the hardware-promoted 000B20C0 root to be present after Phase3N reanalysis, instrument its inherited body, then use the full 256-new-function budget on its remaining depth-6 closure plus nearest still-unpacked support-clean targets across 000A0000-0011FFFF."
+Write-Host "[Phase5BM] The mandatory 000B20C0 root may not disappear, be guessed, or bypass the hardware-entry gate."
 Write-Host ""
 
 $emitLog = Join-Path $repoRoot "build\phase5_subsystem_bringup\phase5bm-emitter.log"
@@ -192,6 +192,9 @@ if ($sweep.observed_phase -ne "5BL" -or
     [int]$sweep.direct_closure_depth -ne 6 -or
     [int]$sweep.direct_closure_cap -ne 256 -or
     [int]$sweep.total_new_cap -ne 256 -or
+    $sweep.root_inherited_from_reanalysis -ne $true -or
+    $sweep.hardware_seed_promoted -ne $true -or
+    $sweep.root_newly_packed -ne $false -or
     [int]$sweep.candidate_new_members -lt 1 -or
     [int]$sweep.new_members -lt 1 -or
     [int]$sweep.expanded_pack_members -le [int]$sweep.base_pack_members) {
@@ -199,10 +202,16 @@ if ($sweep.observed_phase -ne "5BL" -or
 }
 
 $newMembers = @($manifestJson.phase5bm_new_members)
+$allMembers = @($manifestJson.members)
 if ($newMembers.Count -lt 1 -or
-    $newMembers.Count -gt 256 -or
-    ($newMembers -notcontains "0x000B20C0")) {
-    throw "Phase 5BM retained pack must contain 0x000B20C0 and stay within the 256-new-member cap"
+    $newMembers.Count -gt 256) {
+    throw "Phase 5BM must retain between 1 and 256 genuinely new low-.text members"
+}
+if ($allMembers -notcontains "0x000B20C0") {
+    throw "Phase 5BM inherited pack lost hardware-promoted root 0x000B20C0"
+}
+if ($newMembers -contains "0x000B20C0") {
+    throw "Phase 5BM unexpectedly repacked inherited root 0x000B20C0"
 }
 
 if ($manifestJson.phase5bl_high_tail_sweep.root -ne "0x0024BC50" -or
@@ -215,13 +224,14 @@ if ($manifestJson.phase5bl_high_tail_sweep.root -ne "0x0024BC50" -or
 Write-Host ""
 Write-Host "[Phase5BM] READY"
 Write-Host ("[Phase5BM] Base pack members      : {0}" -f [int]$sweep.base_pack_members)
+Write-Host ("[Phase5BM] Root inherited/promoted : {0}/{1}" -f $sweep.root_inherited_from_reanalysis, $sweep.hardware_seed_promoted)
 Write-Host ("[Phase5BM] Direct candidates      : {0}" -f [int]$sweep.direct_candidate_members)
 Write-Host ("[Phase5BM] Remaining low-.text    : {0}" -f [int]$sweep.regional_generated_candidates)
 Write-Host ("[Phase5BM] Candidate new          : {0}" -f [int]$sweep.candidate_new_members)
 Write-Host ("[Phase5BM] Pruned/fenced          : {0}" -f [int]$sweep.pruned_members)
 Write-Host ("[Phase5BM] Newly packed           : {0}" -f [int]$sweep.new_members)
 Write-Host ("[Phase5BM] Expanded pack          : {0}" -f [int]$sweep.expanded_pack_members)
-Write-Host "[Phase5BM] Hardware goal: consume 000B20C0 and keep traversing the remaining low-.text family until the next genuine frontier or subsystem boundary."
+Write-Host "[Phase5BM] Hardware goal: prove execution actually enters the now-inherited 000B20C0 body, then keep traversing the expanded low-.text family until the next genuine frontier or subsystem boundary."
 Write-Host "[Phase5BM] Keep game:\merc360-partition0\partition0-config.bin."
 Write-Host "[Phase5BM] Build BOTH freshly generated sources:"
 Write-Host "[Phase5BM]   $main"
