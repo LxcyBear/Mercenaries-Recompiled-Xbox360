@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BM — Phase 5BL hardware PASS consumed `0x0024BC50`, reached 358 safe-ICALL and 597 direct automatic dispatches, 61750 translated block ticks / 5152 trace entries, and stopped fault-free at `ICALL_SAFE caller=0x0023A3CE target=0x000B20C0`; second-pass low-`.text` saturation is active next.
+> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 5BN — Phase 5BM hardware PASS proved the promoted `0x000B20C0` path, reached 807 safe-ICALL and 622 direct automatic dispatches, 64101 translated block ticks / 5743 trace entries, and stopped fault-free at `ICALL_SAFE caller=0x0023A3CE target=0x00031080`; second-pass deep-low `.text` saturation is active next.
 >
 > **Active development:** [Phase 5 — native subsystem bring-up](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase5-native-subsystems). Phase 4 is frozen on its hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -56,7 +56,7 @@ Each phase has independently checkable checkpoints below.
 | **2 — Guest memory + retail XBE loading** | **COMPLETE — Gate 2 PASS on modified Xbox 360 hardware** | Correct Xbox guest bytes/addresses, section loading, aliases, MMIO fixture PASS |
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
-| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BL hardware PASS; Phase 5BM second-pass low-`.text` saturation sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
+| **5 — Subsystem bring-up under native game execution** | **In progress — Phase 5A through 5BM hardware PASS; Phase 5BN second-pass deep-low `.text` saturation sweep active** | Advance the real boot path through storage/content, async/threading, graphics, input, audio/movie and remaining live subsystem blockers |
 | 6 — First interactive native milestone | Not started | Reproducible title-controlled boot/logo/movie/main-menu or equivalent interactive checkpoint |
 | 7 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -75,19 +75,18 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 4 and Phase 5A through 5BL have passed their
+**Present blockers:** Phase 4 and Phase 5A through 5BM have passed their
 hardware gates. Persistent Partition0, cache Partition5/Z:, VM, filesystem,
 symbolic-link, maintained-heap and diagnostic-helper behavior remain stable.
-Phase 5BL consumed `0x0024BC50` as safe-ICALL dispatch 317 and saturated a
-much larger portion of the high retail title `.text` tail, reaching 358
-safe-ICALL dispatches, 597 direct dispatches, 61750 translated block ticks,
-5152 trace entries, 270 maintained CRT `_msize` calls and four successful
-`RtlReAllocateHeap` calls. The first new hard stop is fault-free
-`ICALL_SAFE caller=0x0023A3CE target=0x000B20C0` with
-`esp=0x008BFEEC` and `saved_esp=0x008BFEF0`. Phase 5BM now keeps
-`0x000B20C0` mandatory, prioritizes its bounded depth-6 direct closure, and
-revisits the remaining support-clean low-`.text` band
-`0x000A0000..0x0011FFFF` under the 256-new-function cap.
+Phase 5BM proved the reanalysis-promoted `0x000B20C0` path repeatedly and
+expanded execution to 807 safe-ICALL dispatches, 622 direct dispatches, 64101
+translated block ticks, 5743 trace entries, 295 maintained CRT `_msize`
+calls and four successful `RtlReAllocateHeap` calls. The first new hard stop
+is fault-free `ICALL_SAFE caller=0x0023A3CE target=0x00031080` with
+`esp=0x008BFEF4` and `saved_esp=0x008BFEF8`. Phase 5BN now keeps
+`0x00031080` mandatory, prioritizes its bounded depth-6 direct closure, and
+revisits the remaining support-clean deep-low retail title `.text` band
+`0x00011000..0x0009FFFF` under the 256-new-function cap.
 
 ### Immediate next tests
 
@@ -409,14 +408,22 @@ revisits the remaining support-clean low-`.text` band
     `RtlReAllocateHeap` calls. The first new hard stop was fault-free
     `ICALL_SAFE caller=0x0023A3CE target=0x000B20C0`. Build:
     `P5BL-HIGHTAIL24BC50-20261021-A`.
-78. **Phase 5BM active:** keep `0x000B20C0` mandatory, preserve all 5BL
-    persistence/VM/heap/runtime and maintained diagnostic proofs, prioritize
-    its bounded depth-6 direct closure, then fill the remaining 256-new-function
-    budget with nearest still-unpacked support-clean exact generated functions
-    from the low-`.text` band `0x000A0000..0x0011FFFF`.
+78. **Done:** Phase 5BM proved the reanalysis-promoted
+    `0x000B20C0` path through generic packed dispatch and advanced to 807
+    safe-ICALL plus 622 direct automatic dispatches, 64101 translated block
+    ticks, 5743 trace entries, 295 maintained CRT `_msize` calls and four
+    successful `RtlReAllocateHeap` calls. The first new hard stop was
+    fault-free `ICALL_SAFE caller=0x0023A3CE target=0x00031080`. Build:
+    `P5BM-LOWTEXTB20C0-20261021-A`.
+79. **Phase 5BN active:** keep `0x00031080` mandatory, preserve all 5BM
+    persistence/VM/heap/runtime, hardware-promoted low-text and maintained
+    diagnostic proofs, prioritize its bounded depth-6 direct closure, then
+    fill the remaining 256-new-function budget with nearest still-unpacked
+    support-clean exact generated functions from the deep-low retail title
+    `.text` band `0x00011000..0x0009FFFF`.
     Gate:
-    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BM.ps1`.
-    Build tag: `P5BM-LOWTEXTB20C0-20261021-A`.
+    `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BN.ps1`.
+    Build tag: `P5BN-DEEPLOW31080-20261021-A`.
 
 ### Evidence policy
 
