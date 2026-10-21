@@ -144,7 +144,7 @@ foreach ($requiredText in @(
     "static void recomp_collision_agent_recycle_range(",
     "PASS: Phase 5BN maintained CRT _msize",
     "PASS: Phase 5BN broad-sweep ICALL_SAFE",
-    "PHASE 5BM BROAD TRANSLATED SWEEP RESULT",
+    "PHASE 5BN BROAD TRANSLATED SWEEP RESULT",
     "PASS: Phase 5BN maintained RtlAllocateHeap",
     "PASS: Phase 5BN Partition0 backing LOADED"
 )) {
@@ -154,12 +154,12 @@ foreach ($requiredText in @(
 }
 
 foreach ($requiredText in @(
-    "PHASE 5BM RETAIL ENVIRONMENT PREP START",
-    "PHASE 5BM EXACT RETAIL VERIFICATION: PASS",
-    "PHASE 5BM EXECUTION ENVIRONMENT RESULT: PASS",
+    "PHASE 5BN RETAIL ENVIRONMENT PREP START",
+    "PHASE 5BN EXACT RETAIL VERIFICATION: PASS",
+    "PHASE 5BN EXECUTION ENVIRONMENT RESULT: PASS",
     "phase5bn_env_build_cookie",
     "5035424E",
-    "PHASE 5BM RETAIL ENVIRONMENT PREP END"
+    "PHASE 5BN RETAIL ENVIRONMENT PREP END"
 )) {
     if (-not $envText.Contains($requiredText)) {
         throw "Generated Phase 5BN phase5_env.cpp is missing marker: $requiredText"
