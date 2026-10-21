@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -80,6 +81,27 @@ def instrument_new_root(rendered: str, name: str) -> str:
     )
 
 
+def instrument_existing_root(main_text: str, name: str) -> str:
+    marker = "s_phase5bmLowTextRootEntered = 1;"
+    if marker in main_text:
+        raise SystemExit("[Phase5BM] low-text root instrumentation already present")
+
+    pattern = re.compile(
+        rf"static\s+void\s+{re.escape(name)}\s*\(\s*void\s*\)\s*\{{"
+    )
+    match = pattern.search(main_text)
+    if match is None:
+        raise SystemExit(
+            f"[Phase5BM] inherited packed root body {name} was not found in main.cpp"
+        )
+
+    return (
+        main_text[: match.end()]
+        + "\n    s_phase5bmLowTextRootEntered = 1;"
+        + main_text[match.end() :]
+    )
+
+
 def relabel(main_text: str, env_text: str) -> tuple[str, str]:
     if BUILD_TAG in main_text:
         raise SystemExit("[Phase5BM] output already carries the 5BM build tag")
@@ -114,7 +136,7 @@ def relabel(main_text: str, env_text: str) -> tuple[str, str]:
 
     old_policy = (
         "Policy: retain the proven generic broad-sweep dispatcher and maintained "
-        "diagnostic support, seed ICALL_SAFE 0023A3CE -> 000B20C0, revisit the "
+        "diagnostic support, seed ICALL_SAFE 0023A3CE -> 0024BC50, revisit the "
         "remaining support-clean retail title .text tail 00246000-0025561F "
         "under a 256-new-function cap, and continue only through exact packed "
         "targets while preserving all genuine subsystem/ABI/kernel hard stops"
@@ -244,11 +266,17 @@ def main() -> int:
     validate_exact_generated_target(NEW_ROOT, by_va, generated)
 
     old_members = {int(item, 0) for item in manifest.get("members", [])}
-    if NEW_ROOT in old_members:
-        raise SystemExit(
-            "[Phase5BM] hardware frontier 0x000B20C0 is already present in the "
-            "inherited pack; boundary evidence and manifest disagree"
-        )
+    root_inherited = NEW_ROOT in old_members
+
+    # After Phase 5BL hardware promoted 0x000B20C0 into manual-seeds.json and
+    # Phase 3N was regenerated, the earlier 5BI regional sweep can legitimately
+    # pick the newly discovered function up before 5BM runs. That is success,
+    # not a manifest contradiction. 5BM still instruments the root so hardware
+    # must prove entry through it, while its 256-new-function budget is spent
+    # entirely on additional low-.text coverage.
+    if root_inherited:
+        root_name = generated[NEW_ROOT]["name"]
+        main_text = instrument_existing_root(main_text, root_name)
 
     direct_members = set(
         phase5bb.bounded_promoted_members(
@@ -280,24 +308,24 @@ def main() -> int:
         if va not in candidate_order:
             candidate_order.append(va)
 
-    if NEW_ROOT not in candidate_order:
+    if not root_inherited and NEW_ROOT not in candidate_order:
         candidate_order.insert(0, NEW_ROOT)
 
     if len(candidate_order) > TOTAL_NEW_CAP:
         candidate_order = candidate_order[:TOTAL_NEW_CAP]
-        if NEW_ROOT not in candidate_order:
+        if not root_inherited and NEW_ROOT not in candidate_order:
             candidate_order[-1] = NEW_ROOT
 
     candidate_new_members = sorted(set(candidate_order))
-    if NEW_ROOT not in candidate_new_members:
-        raise SystemExit("[Phase5BM] high-tail candidate set lost 0x000B20C0")
+    if not root_inherited and NEW_ROOT not in candidate_new_members:
+        raise SystemExit("[Phase5BM] low-text candidate set lost 0x000B20C0")
 
     expanded_members = set(old_members) | set(candidate_new_members)
     new_members = list(candidate_new_members)
 
     declaration_marker = "static int s_phase5blHighTailRootEntered;"
     if declaration_marker not in main_text:
-        raise SystemExit("[Phase5BM] Phase 5BK state marker changed")
+        raise SystemExit("[Phase5BM] Phase 5BL state marker changed")
     main_text = main_text.replace(
         declaration_marker,
         declaration_marker + "\nstatic int s_phase5bmLowTextRootEntered;",
@@ -306,16 +334,16 @@ def main() -> int:
 
     reset_marker = "    s_phase5blHighTailRootEntered = 0;\n"
     if reset_marker not in main_text:
-        raise SystemExit("[Phase5BM] Phase 5BK root reset marker changed")
+        raise SystemExit("[Phase5BM] Phase 5BL root reset marker changed")
     main_text = main_text.replace(
         reset_marker,
         reset_marker + "    s_phase5bmLowTextRootEntered = 0;\n",
         1,
     )
 
-    gate_marker = "            s_phase5bmLowTextRootEntered &&\n"
+    gate_marker = "            s_phase5blHighTailRootEntered &&\n"
     if gate_marker not in main_text:
-        raise SystemExit("[Phase5BM] Phase 5BK PASS gate marker changed")
+        raise SystemExit("[Phase5BM] Phase 5BL PASS gate marker changed")
     main_text = main_text.replace(
         gate_marker,
         gate_marker + "            s_phase5bmLowTextRootEntered &&\n",
@@ -337,9 +365,16 @@ def main() -> int:
         generated,
         new_members,
         expanded_members,
+        require_sweep_root=not root_inherited,
     )
 
-    if NEW_ROOT not in new_members:
+    if root_inherited:
+        if NEW_ROOT not in expanded_members:
+            raise SystemExit(
+                "[Phase5BM] inherited hardware root 0x000B20C0 disappeared "
+                "from the widened pack"
+            )
+    elif NEW_ROOT not in new_members:
         raise SystemExit(
             "[Phase5BM] support-clean pruning attempted to remove mandatory "
             "hardware-observed root 0x000B20C0"
@@ -368,7 +403,7 @@ def main() -> int:
 
     if "PHASE 5BM RETAIL ENVIRONMENT PREP START" not in env_text:
         raise SystemExit("[Phase5BM] environment phase label patch failed")
-    if "phase5bm_env_build_cookie" not in env_text or "5035424C" not in env_text:
+    if "phase5bm_env_build_cookie" not in env_text or "5035424D" not in env_text:
         raise SystemExit("[Phase5BM] environment cookie patch failed")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -399,6 +434,9 @@ def main() -> int:
         "direct_closure_cap": DIRECT_CAP,
         "total_new_cap": TOTAL_NEW_CAP,
         "base_pack_members": len(old_members),
+        "root_inherited_from_reanalysis": root_inherited,
+        "hardware_seed_promoted": True,
+        "root_newly_packed": not root_inherited,
         "direct_candidate_members": len(direct_members - old_members),
         "regional_generated_candidates": len(regional),
         "candidate_new_members": len(candidate_new_members),
@@ -406,9 +444,10 @@ def main() -> int:
         "pruned_members": len(pruned_members),
         "expanded_pack_members": len(expanded_members),
         "strategy": (
-            "mandatory 5BL safe-ICALL root plus its depth-6 direct closure, "
-            "then nearest still-unpacked support-clean generated entries across "
-            "the previously sampled low-.text band"
+            "hardware-promoted 5BL safe-ICALL root (already inherited after "
+            "Phase 3N reanalysis when applicable) plus its remaining depth-6 "
+            "closure, then nearest still-unpacked support-clean generated "
+            "entries across the previously sampled low-.text band"
         ),
         "pass_policy": (
             "all inherited 5BL invariants must hold and 0x000B20C0 must "
@@ -447,6 +486,11 @@ def main() -> int:
         f"regional_candidates={len(regional)} candidate_new={len(candidate_new_members)} "
         f"pruned={len(pruned_members)} packed_new={len(new_members)} "
         f"total={len(expanded_members)} new_source_bytes={total_new_source}"
+    )
+    print(
+        "[Phase5BM] ROOT PROMOTION: "
+        f"0x000B20C0 inherited_after_reanalysis={int(root_inherited)} "
+        f"newly_packed={int(not root_inherited)}"
     )
     print(
         "[Phase5BM] AUTO-DISPATCH: inherited generic exact packed ICALL_SAFE "
