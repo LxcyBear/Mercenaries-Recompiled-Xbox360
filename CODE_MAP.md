@@ -729,3 +729,30 @@ previously sampled by 5BI and 5BM. All 5BO persistence, VM, filesystem, heap,
 diagnostic-helper and generic-dispatch proofs remain inherited.
 
 Build tag: `P5BP-LOWTEXTC8140-20261021-A`.
+
+
+Phase 5BP hardware passed on 2026-10-21. The third-pass low-.text sweep
+consumed `0x000C8140` through generic packed direct dispatch and advanced to
+859 safe-ICALL dispatches, 641 direct dispatches, 66991 translated block ticks,
+5992 trace entries, 307 maintained CRT `_msize` calls, and four successful
+maintained `RtlReAllocateHeap` calls. The first new hard stop was fault-free:
+`DIRECT_FRONTIER caller=0x0023A3CE target=0x0010B2B0`, with
+`esp=0x008BFF3C`, `saved_esp=0x008BFF3C`, and `fault=0`.
+The harness reported Phase 5BP PASS, released the guest arena, completed the
+post-test heartbeat interval, and returned through XAPI with 0.
+
+### Phase-5BQ fourth-pass low-.text saturation sweep
+
+Phase 5BQ files:
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/Prepare-Phase5BQ.ps1`
+- `ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bq_low_text_sweep.py`
+
+5BQ keeps `0x0010B2B0` mandatory, prioritizes its bounded depth-6 direct
+closure, then fills the remaining 256-new-function budget with nearest
+still-unpacked support-clean exact generated functions from
+`0x000A0000..0x0011FFFF`. This is a fourth pass over the same low-.text
+family; because 5BP still produced meaningful new execution coverage, the
+completion/repeatability gate remains deferred until this frontier family
+stops yielding substantive new traversal.
+
+Build tag: `P5BQ-LOWTEXT10B2B0-20261021-A`.
