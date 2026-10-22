@@ -100,7 +100,7 @@ def main() -> int:
 
     old = {int(x, 0) for x in manifest.get("members", [])}
     if ROOT in old:
-        raise SystemExit("[Phase6E] 0x0014E770 already packed by Phase 6C")
+        raise SystemExit("[Phase6E] 0x0014E770 already packed by Phase 6D")
 
     direct = set(p5bb.bounded_promoted_members(base, ROOT, generated, DEPTH, CAP))
     direct.add(ROOT)
@@ -111,12 +111,12 @@ def main() -> int:
 
     marker = "static int s_phase6dRootEntered;"
     if marker not in main_text:
-        raise SystemExit("[Phase6E] Phase 6C root-state marker changed")
+        raise SystemExit("[Phase6E] Phase 6D root-state marker changed")
     main_text = main_text.replace(marker, marker + "\nstatic int s_phase6eRootEntered;", 1)
 
     marker = "    s_phase6dRootEntered = 0;\n"
     if marker not in main_text:
-        raise SystemExit("[Phase6E] Phase 6C reset marker changed")
+        raise SystemExit("[Phase6E] Phase 6D reset marker changed")
     main_text = main_text.replace(marker, marker + "    s_phase6eRootEntered = 0;\n", 1)
 
     p5bc.SWEEP_ROOT = ROOT
@@ -161,11 +161,11 @@ def main() -> int:
     if old_policy not in main_text:
         raise SystemExit("[Phase6E] Phase 6D policy marker changed")
 
-    main_text = main_text.replace("P6C-GRAPHICS-FRONTIER-0014D820-20261021-A", BUILD_TAG, 1)
+    main_text = main_text.replace("P6D-GRAPHICS-FRONTIER-0014E2D0-20261021-A", BUILD_TAG, 1)
     main_text = main_text.replace(old_policy, new_policy, 1)
-    main_text = main_text.replace("phase6c_env_build_cookie", "phase6d_env_build_cookie")
+    main_text = main_text.replace("phase6d_env_build_cookie", "phase6e_env_build_cookie")
     env_text = env_text.replace("phase6d_env_build_cookie", "phase6e_env_build_cookie")
-    main_text = main_text.replace("50364343", "50364444")
+    main_text = main_text.replace("50364444", "50364545")
     env_text = env_text.replace("50364444", "50364545")
     main_text = main_text.replace("PHASE 6D", "PHASE 6E").replace("Phase 6D", "Phase 6E").replace('"P6D ', '"P6E ')
     env_text = env_text.replace("PHASE 6D", "PHASE 6E").replace("Phase 6D", "Phase 6E")
