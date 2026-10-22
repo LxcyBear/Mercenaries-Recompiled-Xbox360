@@ -30,11 +30,11 @@ $baseFiles = @(
 )
 foreach ($f in $baseFiles) {
     if (-not (Test-Path -LiteralPath $f)) {
-        throw "Phase 6L fast baseline missing: $f. Keep the successful Phase 6J generated output."
+        throw "Phase 6L fast baseline missing: $f. Keep the successful Phase 6K generated output."
     }
 }
 
-$baseManifest = Get-Content (Join-Path $baseDir "phase6j-manifest.json") -Raw | ConvertFrom-Json
+$baseManifest = Get-Content (Join-Path $baseDir "phase6k-manifest.json") -Raw | ConvertFrom-Json
 if ($baseManifest.phase -ne "6K" -or $baseManifest.build_tag -ne "P6K-GLOBAL-HARVEST-000D4A30-20261022-A") {
     throw "Phase 6L cached Phase 6K baseline identity mismatch"
 }
