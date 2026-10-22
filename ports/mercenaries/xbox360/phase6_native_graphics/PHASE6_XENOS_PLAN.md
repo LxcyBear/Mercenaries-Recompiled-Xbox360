@@ -268,3 +268,17 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   missing translated bodies, unresolved support, NV2A/platform/ABI boundaries, and
   guest-memory faults remain hard stops. Existing native `cos()`/`sin()` support
   is retained.
+
+
+- **Phase 6R hardware:** exact XPP frontier root `0x002D66A2` executed successfully.
+  Native Xenos creation remained healthy. The run stopped only five budget ticks later at
+  `ICALL_SAFE 0x0023A3CE -> 0x002A0159`, `fault=0`, `ticks=430992`,
+  `trace=131962`. Summary: direct=1765, ICALL=9066, last packed ICALL
+  `0x002D66A2`. The new target lies in retail XBE `DSOUND`
+  (`0x0029CB80-0x002BB274`), proving the XPP frontier is behind us.
+- **Phase 6S:** batched DSOUND frontier resolver. Reuse the hardware-proven Phase-6R
+  cache, require `0x002A0159` to be an exact generated DSOUND function start,
+  then pack a depth-4/cap-256 support-clean closure to batch safe DSOUND dependencies.
+  Existing native `cos()`/`sin()` support remains active. Interior DSOUND entries,
+  missing bodies, unresolved support, NV2A/platform/ABI boundaries, and guest-memory
+  faults remain hard stops.
