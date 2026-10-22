@@ -157,3 +157,13 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   by caller `0x0023A3CE`, then adds caller/root closures and a local reserve under
   a 1024-new-member cap. Proven DIRECT/ICALL logging is throttled with a dense window
   around the old frontier plus a final dispatch summary.
+
+
+- **Phase 6I hardware:** cached caller harvest consumed `0x00202680` and stopped
+  cleanly at `DIRECT_FRONTIER 0x0023A3CE -> 0x00063F80`; `fault=0`,
+  `ticks=93858`, `trace=8084`, direct dispatches 1152, ICALL dispatches 1556,
+  harness PASS, XAPI return 0.
+- **Phase 6J:** cached Phase-6I baseline, mandatory root `0x00063F80`, same
+  caller/root harvest policy and 1024-new-member cap. Generated `main.cpp`
+  suppresses only MSVC C4102 because translated basic-block labels can remain
+  intentionally unreferenced after pruning/lowering; runtime semantics are unchanged.
