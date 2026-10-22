@@ -214,3 +214,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
 - **Phase 6N:** cached Phase-6M monolithic baseline, mandatory root `0x00222B20`,
   same caller/root + stratified-global 1536-member harvest policy and sharded
   Visual Studio build layout.
+
+
+- **Phase 6N hardware:** full retail game-data tree present in the development folder;
+  no `DATAxbox`/asset file was requested yet. The translated harvester advanced to
+  `ICALL_SAFE 0x0023A3CE -> 0x00251CD0`, `fault=0`, `ticks=147981`,
+  `trace=22791`, direct dispatches 1305, ICALL dispatches 8132, harness PASS,
+  XAPI return 0. The 6N preparation audit had already fenced `0x00251CD0`
+  because its translated body depends on CRT `cos()`.
+- **Phase 6O:** cached Phase-6N monolithic baseline, mandatory root `0x00251CD0`.
+  Phase-owned support explicitly certifies only `cos()` (with `<math.h>`);
+  all other unresolved helpers remain support-clean fenced. Existing 1536-member
+  caller/root + stratified-global harvesting and VS-friendly sharding remain active.
