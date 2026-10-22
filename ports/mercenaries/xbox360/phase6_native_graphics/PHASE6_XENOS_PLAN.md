@@ -1,6 +1,6 @@
 # Phase 6 — Native Xbox 360 graphics (Xenos)
 
-> **Status:** ACTIVE · Phase 6E hardware frontier PASS; Phase 6F batched harvester ready
+> **Status:** ACTIVE · Phase 6F hardware PASS; Phase 6G symmetric sibling harvester ready
 >
 > **Immediate target:** render an independent native Xenos test surface, then
 > connect the translated Mercenaries graphics path far enough to capture the
@@ -136,3 +136,13 @@ guest faults:
 
 Purple remains reserved for an actual rejected NV2A MMIO/VRAM access. No
 purple GPU-boundary event has yet been confirmed by xbWatson.
+
+- **Phase 6F hardware:** consumed packed root `0x00150E40` and one subsequent
+  ICALL, then stopped fault-free at adjacent backward sibling `0x00150E20`;
+  `ticks=75046`, `trace=7448`, direct dispatches 1012, ICALL dispatches 1272,
+  harness PASS, XAPI return 0. This proved the harvester dispatcher and exposed
+  the forward-biased candidate-selection blind spot.
+- **Phase 6G:** mandatory root `0x00150E20`; reserve 128 nearest generated
+  siblings symmetrically, then add depth-12 direct closure, then symmetric fill
+  from `0x00120000..0x0018FFFF` under a 512-new-member cap. Unknown support is
+  pruned; true NV2A/platform/ABI/guest-fault/missing-body boundaries remain fenced.
