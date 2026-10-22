@@ -75,9 +75,10 @@ if ($rc -ne 0) {
 }
 
 $main = Join-Path $out "main.cpp"
+$monolithic = Join-Path $out "main_monolithic.cpp"
 $env = Join-Path $out "phase5_env.cpp"
 $manifest = Join-Path $out "phase6l-manifest.json"
-foreach ($f in @($main,$env,$manifest)) {
+foreach ($f in @($main,$monolithic,$env,$manifest)) {
     if (-not (Test-Path $f)) { throw "Phase 6L missing output: $f" }
 }
 
@@ -90,6 +91,14 @@ if ($g.root -ne "0x0016B7F0" -or -not [bool]$g.phase6k_hardware_pass -or [int]$g
     throw "Phase 6L manifest gate mismatch"
 }
 
+if ($null -eq $g.source_layout -or [int]$g.source_layout.shard_count -lt 1) {
+    throw "Phase 6L source-shard manifest gate mismatch"
+}
+$shardDir = Join-Path $out ([string]$g.source_layout.shard_directory)
+if (-not (Test-Path -LiteralPath $shardDir)) {
+    throw "Phase 6L translated shard directory missing: $shardDir"
+}
+
 Write-Host ""
 Write-Host "[Phase6L] READY"
 Write-Host ("[Phase6L] Unpacked caller targets : {0}" -f [int]$g.caller_direct_targets_unpacked)
@@ -100,10 +109,16 @@ Write-Host ("[Phase6L] Candidate new members    : {0}" -f [int]$g.candidate_new_
 Write-Host ("[Phase6L] Pruned unsafe members     : {0}" -f [int]$g.pruned_members)
 Write-Host ("[Phase6L] Packed new members        : {0}" -f [int]$g.packed_new_members)
 Write-Host ("[Phase6L] Expanded pack members     : {0}" -f [int]$g.expanded_pack_members)
+Write-Host ("[Phase6L] VS wrapper lines          : {0}" -f [int]$g.source_layout.wrapper_lines)
+Write-Host ("[Phase6L] Translated body lines     : {0}" -f [int]$g.source_layout.body_lines)
+Write-Host ("[Phase6L] Generated .inl shards     : {0}" -f [int]$g.source_layout.shard_count)
 Write-Host "[Phase6L] Root                     : 0x0016B7F0"
 Write-Host "[Phase6L] Build BOTH fresh sources:"
-Write-Host "[Phase6L]   $main"
+Write-Host "[Phase6L]   $main   (small VS-friendly wrapper)"
 Write-Host "[Phase6L]   $env"
+Write-Host "[Phase6L] DO NOT add/compile main_monolithic.cpp; it is emitter cache only:"
+Write-Host "[Phase6L]   $monolithic"
+Write-Host "[Phase6L] Keep the translated_shards folder beside main.cpp."
 Write-Host "[Phase6L] Keep d3d9.lib linked."
 Write-Host "[Phase6L] Expected tag: P6L-GLOBAL-HARVEST-0016B7F0-20261022-A"
 Write-Host "[Phase6L] Hardware goal: catch multiple dynamic table targets before the next real boundary."
