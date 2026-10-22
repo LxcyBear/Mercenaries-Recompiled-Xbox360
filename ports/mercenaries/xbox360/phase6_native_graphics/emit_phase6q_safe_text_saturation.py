@@ -315,29 +315,27 @@ def main() -> int:
     if ROOT not in new_members:
         raise SystemExit("[Phase6Q] support-clean pruning removed mandatory root 0x001F9FD0")
 
-    # Phase 6P changed only identity/budget; its result gate still uses the
-    # Phase-6O root-state variable. Replace that gate with the 6Q live root.
-    old_result = '''    {
-        char phase6oSummary[256];
-        sprintf(
-            phase6oSummary,
-            "P6P HARVEST SUMMARY: direct=%u last_direct=%08X caller=%08X icall=%u last_icall=%08X icall_caller=%08X",
-            (unsigned int)s_phase5bcPackedDirectDispatchCount,
-            (unsigned int)s_phase5bcPackedDirectLastTarget,
-            (unsigned int)s_phase5bcPackedDirectLastCaller,
-            (unsigned int)s_phase5bcPackedIcallDispatchCount,
-            (unsigned int)s_phase5bcPackedIcallLastTarget,
-            (unsigned int)s_phase5bcPackedIcallLastCaller);
-        trace(phase6oSummary);
-    }
+    # Phase 6P guarantees the summary/result text markers. Locate the
+    # enclosing result block structurally so generated identifier names or
+    # harmless whitespace changes cannot break this phase.
+    summary_marker = '"P6P HARVEST SUMMARY: direct=%u last_direct=%08X caller=%08X icall=%u last_icall=%08X icall_caller=%08X"'
+    result_end_marker = '        trace("PHASE 6P BUDGET EXTENSION RESULT: FAIL");'
+    summary_pos = main_text.find(summary_marker)
+    result_end = main_text.find(result_end_marker, summary_pos)
+    if summary_pos < 0 or result_end < 0:
+        raise SystemExit("[Phase6Q] Phase 6P result markers changed")
+    if main_text.find(summary_marker, summary_pos + 1) >= 0:
+        raise SystemExit("[Phase6Q] Phase 6P summary marker is not unique")
+    result_start = main_text.rfind("    {\n", 0, summary_pos)
+    if result_start < 0:
+        raise SystemExit("[Phase6Q] could not locate Phase 6P result block start")
+    result_end += len(result_end_marker)
 
-    if (s_phase6oRootEntered &&
-        s_traceCount > 0u &&
-        (s_phase4cBoundaryKind != PHASE4C_BOUNDARY_NONE ||
-         boundedPass))
-        trace("PHASE 6P BUDGET EXTENSION RESULT: PASS");
-    else
-        trace("PHASE 6P BUDGET EXTENSION RESULT: FAIL");'''
+    old_result_region = main_text[result_start:result_end]
+    if "s_phase6oRootEntered" not in old_result_region:
+        raise SystemExit("[Phase6Q] Phase 6P inherited root gate missing inside result region")
+    if "PHASE 6P BUDGET EXTENSION RESULT: PASS" not in old_result_region:
+        raise SystemExit("[Phase6Q] Phase 6P PASS marker missing inside result region")
 
     new_result = '''    {
         char phase6qSummary[256];
@@ -361,9 +359,7 @@ def main() -> int:
     else
         trace("PHASE 6Q SAFE-TEXT SATURATION RESULT: FAIL");'''
 
-    if old_result not in main_text:
-        raise SystemExit("[Phase6Q] Phase 6P result gate changed")
-    main_text = main_text.replace(old_result, new_result, 1)
+    main_text = main_text[:result_start] + new_result + main_text[result_end:]
 
     old_policy = (
         "Policy: start from the frozen hardware-proven Phase-6N generated baseline, certify "
@@ -377,13 +373,16 @@ def main() -> int:
         "function, retain only the hardware-proven cos() plus live-root sin() CRT support exceptions, and hard-stop "
         "on genuine NV2A/platform/ABI/guest-fault/missing-support boundaries"
     )
-    if old_policy not in main_text:
+    policy_pos = main_text.find(old_policy)
+    if policy_pos < 0:
         raise SystemExit("[Phase6Q] Phase 6P policy marker changed")
+    if main_text.find(old_policy, policy_pos + 1) >= 0:
+        raise SystemExit("[Phase6Q] Phase 6P policy marker is not unique")
+    main_text = main_text[:policy_pos] + new_policy + main_text[policy_pos + len(old_policy):]
 
     main_text = main_text.replace(
         "P6P-BUDGET600K-20261022-A", BUILD_TAG, 1
     )
-    main_text = main_text.replace(old_policy, new_policy, 1)
     main_text = main_text.replace("phase6p_env_build_cookie", "phase6q_env_build_cookie")
     env_text = env_text.replace("phase6p_env_build_cookie", "phase6q_env_build_cookie")
     main_text = main_text.replace("50365050", "50365151")
