@@ -310,7 +310,7 @@ def insert_pack_members(
     if require_sweep_root and SWEEP_ROOT in unsafe:
         names = unsafe[SWEEP_ROOT]
         print(
-            "[Phase5BC] sweep root 0x00237052 itself has unresolved support "
+            f"[Phase5BC] sweep root 0x{SWEEP_ROOT:08X} itself has unresolved support "
             f"dependencies: {', '.join(names)}"
         )
         for item in unsafe_contexts.get(SWEEP_ROOT, []):
