@@ -178,3 +178,13 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   local reserve under a 1536-new-member cap. This targets the now non-local dynamic
   frontier pattern while keeping true NV2A/platform/ABI/guest-fault/missing-body
   boundaries fenced.
+
+
+- **Phase 6K hardware:** the global-gap harvester consumed multiple additional
+  dynamic targets before stopping cleanly at
+  `DIRECT_FRONTIER 0x0023A3CE -> 0x0016B7F0`; `fault=0`,
+  `ticks=97909`, `trace=9423`, direct dispatches 1162, ICALL dispatches
+  2156, harness PASS, XAPI return 0. No NV2A MMIO/VRAM touch was observed.
+- **Phase 6L:** cached Phase-6K baseline, mandatory root `0x0016B7F0`, same
+  caller/root + stratified-global harvest policy and 1536-new-member cap to
+  confirm the multi-frontier acceleration remains repeatable.
