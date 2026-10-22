@@ -493,7 +493,7 @@ def main() -> int:
         for va, names in sorted(pruned.items())
     ]
 
-    (args.out_dir / "phase6m-manifest.json").write_text(
+    (args.out_dir / "phase6n-manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
 
