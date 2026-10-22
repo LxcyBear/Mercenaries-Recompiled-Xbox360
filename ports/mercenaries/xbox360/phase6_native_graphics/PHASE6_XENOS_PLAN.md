@@ -238,3 +238,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   support exceptions. Increase only `PHASE4C_EXEC_BUDGET` from 200000 to 600000
   blocks, retain all NV2A/platform/ABI/guest-fault/missing-support hard stops, and
   keep the VS-friendly sharded build layout.
+
+
+- **Phase 6P hardware:** raising the finite execution watchdog to 600000 proved
+  Phase 6O had not entered an infinite loop. The run advanced to
+  `DIRECT_FRONTIER 0x0023A3CE -> 0x001F9FD0`, `fault=0`,
+  `ticks=415202`, `trace=129649`, direct dispatches 1357, ICALL dispatches
+  8204, last packed ICALL `0x00252A20`, and harness PASS/XAPI 0. No budget
+  boundary was reached.
+- **Phase 6Q:** safe-text saturation. Start from the hardware-proven Phase-6P
+  600k-budget monolithic cache, seed mandatory root `0x001F9FD0`, retain only
+  the already-proven `cos()` CRT support exception, and attempt every remaining
+  generated `.text` function (4096 safety cap) under the existing support-clean
+  pruning rules. This is intended to remove ordinary generated-body coverage as
+  a recurring source of blue boundaries; unresolved support, NV2A, ABI/platform,
+  and guest-memory faults remain hard stops.
