@@ -20,7 +20,7 @@ $paths = @{
     bc = Join-Path $p5 "emit_phase5bc_broad_sweep.py"
 }
 foreach ($v in $paths.Values + @($python)) {
-    if (-not (Test-Path -LiteralPath $v)) { throw "Missing Phase 6R input: $v" }
+    if (-not (Test-Path -LiteralPath $v)) { throw "Missing Phase 6S input: $v" }
 }
 
 $baseManifestPath = Join-Path $baseDir "phase6r-manifest.json"
@@ -31,13 +31,13 @@ $baseFiles = @(
 )
 foreach ($f in $baseFiles) {
     if (-not (Test-Path -LiteralPath $f)) {
-        throw "Phase 6R fast baseline missing: $f. Keep the successful Phase 6R generated output."
+        throw "Phase 6S fast baseline missing: $f. Keep the successful Phase 6R generated output."
     }
 }
 
 $baseManifest = Get-Content $baseManifestPath -Raw | ConvertFrom-Json
 if ($baseManifest.phase -ne "6R" -or $baseManifest.build_tag -ne "P6R-XPP-FRONTIER-002D66A2-20261022-A") {
-    throw "Phase 6R cached Phase 6R baseline identity mismatch"
+    throw "Phase 6S cached Phase 6R baseline identity mismatch"
 }
 
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
@@ -74,7 +74,7 @@ finally {
 }
 if ($rc -ne 0) {
     Get-Content $log -Tail 200
-    throw "Phase 6R emission failed (exit $rc)"
+    throw "Phase 6S emission failed (exit $rc)"
 }
 
 $main = Join-Path $out "main.cpp"
@@ -82,28 +82,28 @@ $monolithic = Join-Path $out "main_monolithic.cpp"
 $env = Join-Path $out "phase5_env.cpp"
 $manifest = Join-Path $out "phase6s-manifest.json"
 foreach ($f in @($main,$monolithic,$env,$manifest)) {
-    if (-not (Test-Path $f)) { throw "Phase 6R missing output: $f" }
+    if (-not (Test-Path $f)) { throw "Phase 6S missing output: $f" }
 }
 
 $m = Get-Content $manifest -Raw | ConvertFrom-Json
 if ($m.phase -ne "6S" -or $m.build_tag -ne "P6S-DSOUND-FRONTIER-002A0159-20261022-A") {
-    throw "Phase 6R manifest identity mismatch"
+    throw "Phase 6S manifest identity mismatch"
 }
 $g = $m.phase6s_dsound_frontier
 if ($g.root -ne "0x002A0159" -or $g.target_section -ne "DSOUND" -or -not [bool]$g.phase6r_hardware_pass -or [int]$g.packed_new_members -lt 1) {
-    throw "Phase 6R manifest gate mismatch"
+    throw "Phase 6S manifest gate mismatch"
 }
 $crtSupport = @($g.phase_owned_crt_support)
 if ($crtSupport.Count -ne 2 -or $crtSupport[0] -ne "cos" -or $crtSupport[1] -ne "sin") {
-    throw "Phase 6R CRT support gate mismatch"
+    throw "Phase 6S CRT support gate mismatch"
 }
 
 if ($null -eq $g.source_layout -or [int]$g.source_layout.shard_count -lt 1) {
-    throw "Phase 6R source-shard manifest gate mismatch"
+    throw "Phase 6S source-shard manifest gate mismatch"
 }
 $shardDir = Join-Path $out ([string]$g.source_layout.shard_directory)
 if (-not (Test-Path -LiteralPath $shardDir)) {
-    throw "Phase 6R translated shard directory missing: $shardDir"
+    throw "Phase 6S translated shard directory missing: $shardDir"
 }
 
 Write-Host ""
