@@ -23,18 +23,19 @@ foreach ($v in $paths.Values + @($python)) {
     if (-not (Test-Path -LiteralPath $v)) { throw "Missing Phase 6M input: $v" }
 }
 
+$baseManifestPath = Join-Path $baseDir "phase6l-manifest.json"
 $baseFiles = @(
     (Join-Path $baseDir "main_monolithic.cpp"),
     (Join-Path $baseDir "phase5_env.cpp"),
-    (Join-Path $baseDir "phase6l-manifest.json")
+    $baseManifestPath
 )
 foreach ($f in $baseFiles) {
     if (-not (Test-Path -LiteralPath $f)) {
-        throw "Phase 6M fast baseline missing: $f. Keep the successful Phase 6K generated output."
+        throw "Phase 6M fast baseline missing: $f. Keep the successful Phase 6L generated output."
     }
 }
 
-$baseManifest = Get-Content (Join-Path $baseDir "phase6k-manifest.json") -Raw | ConvertFrom-Json
+$baseManifest = Get-Content $baseManifestPath -Raw | ConvertFrom-Json
 if ($baseManifest.phase -ne "6L" -or $baseManifest.build_tag -ne "P6L-GLOBAL-HARVEST-0016B7F0-20261022-A") {
     throw "Phase 6M cached Phase 6L baseline identity mismatch"
 }
