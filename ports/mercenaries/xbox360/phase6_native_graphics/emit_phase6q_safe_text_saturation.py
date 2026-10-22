@@ -9,7 +9,7 @@ translated-code boundary:
 Rather than sampling another subset, 6Q starts from the exact hardware-proven
 Phase-6P 600k-budget baseline and attempts to pack every still-unpacked generated
 .text function, subject to the existing support-clean pruning rules. The already
-certified cos() CRT support remains allowed; no new support symbol is invented.
+certified cos() CRT support remains allowed, and the live-root x87 FSIN dependency is mapped to native CRT sin().
 
 The goal is to eliminate ordinary generated-body coverage as a recurring source
 of blue frontiers. Genuine NV2A/platform/ABI/guest-fault/missing-support
@@ -225,9 +225,12 @@ def main() -> int:
     validate(ROOT, by_va, generated)
     validate(CALLER, by_va, generated)
 
-    # Phase 6O proved native CRT cos() support on hardware; keep that one
-    # support exception available while all other unresolved helpers remain fenced.
+    # Phase 6O proved native CRT cos() support on hardware. The Phase 6P
+    # frontier root 0x001F9FD0 translates x87 FSIN directly to sin(), so
+    # certify that real CRT dependency as well. All other unresolved helpers
+    # remain support-clean fenced.
     base.STANDARD_CALLS.add("cos")
+    base.STANDARD_CALLS.add("sin")
     if "#include <math.h>" not in main_text:
         raise SystemExit("[Phase6Q] inherited Phase 6P source lost <math.h>")
 
@@ -371,7 +374,7 @@ def main() -> int:
     new_policy = (
         "Policy: start from the hardware-proven Phase-6P 600k-budget baseline, seed exact "
         "DIRECT_FRONTIER root 001F9FD0, saturate every remaining support-clean generated .text "
-        "function, retain only the hardware-proven cos() CRT support exception, and hard-stop "
+        "function, retain only the hardware-proven cos() plus live-root sin() CRT support exceptions, and hard-stop "
         "on genuine NV2A/platform/ABI/guest-fault/missing-support boundaries"
     )
     if old_policy not in main_text:
@@ -457,11 +460,11 @@ def main() -> int:
         "quiet_dispatch_logging_inherited": True,
         "c4102_generated_label_warning_suppressed": True,
         "xenos_surface_inherited": True,
-        "phase_owned_crt_support": ["cos"],
+        "phase_owned_crt_support": ["cos", "sin"],
         "source_layout": source_layout,
         "strategy": (
             "frozen hardware-proven Phase-6P monolithic base with 600k execution budget; "
-            "mandatory 0x001F9FD0 live root; exact caller/root closures; then every remaining "
+            "mandatory 0x001F9FD0 live root with native sin() support; exact caller/root closures; then every remaining "
             "generated .text function up to the 4096-member saturation cap; support-clean pruning authoritative"
         ),
         "runtime_policy": (
