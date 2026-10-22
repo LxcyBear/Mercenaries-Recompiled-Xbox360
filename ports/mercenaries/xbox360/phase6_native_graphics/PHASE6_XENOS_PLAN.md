@@ -199,3 +199,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   `0x00179850`, same caller/root + stratified-global 1536-member harvest policy.
   Build output remains editor-friendly via wrapper `main.cpp` + function-boundary
   translated shards, while the monolithic file is retained only as emitter cache.
+
+
+- **Phase 6M hardware (first launch after retail-data copy):** persistent Partition0 backing
+  was recreated, Mercenaries changed the cache config and intentionally requested
+  kernel ordinal 49 / firmware return routine 2. The diagnostic harness trapped that
+  non-returning action safely; this was a one-time storage initialization path, not a
+  translated frontier regression.
+- **Phase 6M hardware (second launch):** Partition0 backing loaded successfully and the
+  normal translated harvest resumed. It stopped cleanly at
+  `DIRECT_FRONTIER 0x0023A3CE -> 0x00222B20`, `fault=0`,
+  `ticks=129800`, `trace=19957`, direct dispatches 1207, ICALL dispatches 6838,
+  harness PASS, XAPI return 0. No NV2A MMIO/VRAM touch was observed.
+- **Phase 6N:** cached Phase-6M monolithic baseline, mandatory root `0x00222B20`,
+  same caller/root + stratified-global 1536-member harvest policy and sharded
+  Visual Studio build layout.
