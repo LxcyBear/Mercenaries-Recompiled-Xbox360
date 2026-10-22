@@ -83,6 +83,112 @@ def stratified(values, count):
     last = len(values) - 1
     return unique_in_order(values[(i * last) // (count - 1)] for i in range(count))
 
+
+SHARD_TARGET_CHARS = 750000
+
+def write_sharded_main(out_dir: Path, main_text: str, base) -> dict:
+    """Write an editor-friendly wrapper while preserving one C++ translation unit.
+
+    The monolithic source remains available for the next emitter's static analysis.
+    The build-facing main.cpp includes function-boundary .inl shards between the
+    existing optimize-off/on pragmas, so preprocessing reconstructs the same source
+    order and linkage semantics.
+    """
+    off_marker = '#pragma optimize("", off)\n'
+    on_marker = '\n#pragma optimize("", on)'
+
+    off_pos = main_text.find(off_marker)
+    if off_pos < 0:
+        raise SystemExit("[Phase6L] translated-body optimize-off marker missing")
+    body_start = off_pos + len(off_marker)
+    on_pos = main_text.find(on_marker, body_start)
+    if on_pos < 0:
+        raise SystemExit("[Phase6L] translated-body optimize-on marker missing")
+
+    body = main_text[body_start:on_pos]
+    masked = base.mask_noncode(body)
+    matches = list(base.FUNC_RE.finditer(masked))
+    if not matches:
+        raise SystemExit("[Phase6L] translated-body block contains no functions")
+
+    # Cut only after complete translated functions. Preserve all whitespace and
+    # directives between functions verbatim inside the same shard/order.
+    function_ends = []
+    for match in matches:
+        open_index = masked.find("{", match.start(), match.end())
+        if open_index < 0:
+            raise SystemExit("[Phase6L] translated function opening brace missing")
+        function_ends.append(base.closing_brace(masked, open_index))
+
+    cut_points = []
+    chunk_start = 0
+    last_end = 0
+    for end in function_ends:
+        last_end = end
+        if end - chunk_start >= SHARD_TARGET_CHARS:
+            cut_points.append(end)
+            chunk_start = end
+    if last_end < len(body):
+        # Trailing whitespace/directives belong to the final shard.
+        last_end = len(body)
+    if not cut_points or cut_points[-1] != last_end:
+        cut_points.append(last_end)
+
+    shard_dir = out_dir / "translated_shards"
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    for stale in shard_dir.glob("phase6l_*.inl"):
+        stale.unlink()
+
+    shards = []
+    start = 0
+    for index, end in enumerate(cut_points):
+        if end <= start:
+            continue
+        name = f"phase6l_{index:03d}.inl"
+        path = shard_dir / name
+        payload = body[start:end]
+        path.write_text(payload, encoding="utf-8")
+        shards.append({
+            "name": name,
+            "chars": len(payload),
+            "lines": payload.count("\n") + 1,
+        })
+        start = end
+
+    if start != len(body):
+        raise SystemExit("[Phase6L] shard writer did not consume full body block")
+
+    include_block = "".join(
+        f'#include "translated_shards/{row["name"]}"\n'
+        for row in shards
+    )
+    wrapper = main_text[:body_start] + include_block + main_text[on_pos:]
+
+    (out_dir / "main_monolithic.cpp").write_text(main_text, encoding="utf-8")
+    (out_dir / "main.cpp").write_text(wrapper, encoding="utf-8")
+
+    # Strong reconstruction check: replacing the include block with shard text
+    # must reproduce the exact monolithic source byte-for-byte.
+    reconstructed_body = "".join(
+        (shard_dir / row["name"]).read_text(encoding="utf-8")
+        for row in shards
+    )
+    if reconstructed_body != body:
+        raise SystemExit("[Phase6L] shard reconstruction identity mismatch")
+
+    return {
+        "build_main": "main.cpp",
+        "monolithic_cache": "main_monolithic.cpp",
+        "shard_directory": "translated_shards",
+        "shard_count": len(shards),
+        "target_chars": SHARD_TARGET_CHARS,
+        "body_chars": len(body),
+        "body_lines": body.count("\n") + 1,
+        "wrapper_chars": len(wrapper),
+        "wrapper_lines": wrapper.count("\n") + 1,
+        "shards": shards,
+    }
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-dir", type=Path, required=True)
@@ -307,7 +413,7 @@ def main() -> int:
             raise SystemExit(f"[Phase6L] generated main lost marker: {item}")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    (args.out_dir / "main.cpp").write_text(main_text, encoding="utf-8")
+    source_layout = write_sharded_main(args.out_dir, main_text, base)
     (args.out_dir / "phase5_env.cpp").write_text(env_text, encoding="utf-8")
 
     manifest.update({
@@ -362,6 +468,7 @@ def main() -> int:
         "quiet_dispatch_logging_inherited": True,
         "c4102_generated_label_warning_suppressed": True,
         "xenos_surface_inherited": True,
+        "source_layout": source_layout,
         "strategy": (
             "frozen Phase-6K base; mandatory 0x0016B7F0 root; remaining exact caller "
             "0x0023A3CE targets; caller depth-2 closure; root depth-12 closure; "
@@ -398,6 +505,12 @@ def main() -> int:
         f"new_source_bytes={total_new_source}"
     )
     print("[Phase6L] FAST BASE: reused existing Phase 6K generated main/env/manifest")
+    print(
+        f"[Phase6L] SOURCE SHARDS: wrapper_lines={source_layout['wrapper_lines']} "
+        f"translated_body_lines={source_layout['body_lines']} "
+        f"shards={source_layout['shard_count']} "
+        f"monolithic_cache={source_layout['monolithic_cache']}"
+    )
     print("[Phase6L] GLOBAL COVERAGE: stratified generated-text reserve enabled")
     print("[Phase6L] HARD STOP: NV2A/platform/ABI/guest-fault/missing-body boundaries remain fenced")
     print("[Phase6L] EMIT RESULT: PASS")
