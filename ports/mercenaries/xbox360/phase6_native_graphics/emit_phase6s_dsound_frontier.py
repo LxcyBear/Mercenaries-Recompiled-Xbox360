@@ -277,26 +277,26 @@ def main() -> int:
     if ROOT not in new_members:
         raise SystemExit(
             "[Phase6S] support-clean pruning removed mandatory DSOUND root; "
-            "a real XPP/platform support implementation is required"
+            "a real DSOUND/platform support implementation is required"
         )
 
     main_text = replace_unique(
         main_text,
         "P6R XPP FRONTIER SUMMARY:",
         "P6S DSOUND FRONTIER SUMMARY:",
-        "Phase 6Q summary token",
+        "Phase 6R summary token",
     )
     main_text = replace_unique(
         main_text,
         "s_phase6rRootEntered &&",
         "s_phase6sRootEntered &&",
-        "Phase 6Q root result gate",
+        "Phase 6R root result gate",
     )
 
-    result_old = "PHASE 6S DSOUND FRONTIER RESULT"
+    result_old = "PHASE 6R XPP FRONTIER RESULT"
     result_count = main_text.count(result_old)
     if result_count < 1:
-        raise SystemExit("[Phase6S] Phase 6Q result token missing")
+        raise SystemExit("[Phase6S] Phase 6R result token missing")
     main_text = main_text.replace(
         result_old,
         "PHASE 6S DSOUND FRONTIER RESULT",
@@ -324,15 +324,15 @@ def main() -> int:
         "Phase 6R build tag",
     )
     main_text = main_text.replace(
-        "phase6s_env_build_cookie",
+        "phase6r_env_build_cookie",
         "phase6s_env_build_cookie",
     )
     env_text = env_text.replace(
-        "phase6q_env_build_cookie",
+        "phase6r_env_build_cookie",
         "phase6s_env_build_cookie",
     )
     main_text = main_text.replace("50365252", "50365353")
-    env_text = env_text.replace("50365151", "50365252")
+    env_text = env_text.replace("50365252", "50365353")
 
     main_text = (
         main_text
@@ -342,19 +342,19 @@ def main() -> int:
     )
     env_text = (
         env_text
-        .replace("PHASE 6Q", "PHASE 6R")
-        .replace("Phase 6Q", "Phase 6R")
+        .replace("PHASE 6R", "PHASE 6S")
+        .replace("Phase 6R", "Phase 6S")
     )
 
     required = (
         BUILD_TAG,
         "case 0x002A0159u:",
-        "s_phase6rRootEntered = 1;",
+        "s_phase6sRootEntered = 1;",
         "P6S XENOS: PASS Direct3D_CreateDevice",
         "P6S FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
         "P6S FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
         "P6S DSOUND FRONTIER SUMMARY",
-        "PHASE 6R XPP FRONTIER RESULT",
+        "PHASE 6S DSOUND FRONTIER RESULT",
         "#pragma warning(disable:4102)",
     )
     for item in required:
@@ -374,8 +374,8 @@ def main() -> int:
     manifest["phase6s_dsound_frontier"] = {
         "source_phase": "6R",
         "cached_base": True,
-        "phase6s_hardware_pass": True,
-        "phase6s_observed_boundary": {
+        "phase6r_hardware_pass": True,
+        "phase6r_observed_boundary": {
             "kind": "ICALL_SAFE",
             "caller": "0x0023A3CE",
             "target": "0x002A0159",
@@ -409,7 +409,7 @@ def main() -> int:
         "xenos_surface_inherited": True,
         "source_layout": source_layout,
         "runtime_policy": (
-            "exact generated DSOUND target/closure only; no broad XPP sweep; "
+            "exact generated DSOUND target with bounded depth-4/cap-256 closure; "
             "interior-entry, missing-body, unresolved support, NV2A, platform/ABI, "
             "and guest-memory faults remain hard stops"
         ),
