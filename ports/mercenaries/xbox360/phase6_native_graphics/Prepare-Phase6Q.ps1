@@ -20,7 +20,7 @@ $paths = @{
     bc = Join-Path $p5 "emit_phase5bc_broad_sweep.py"
 }
 foreach ($v in $paths.Values + @($python)) {
-    if (-not (Test-Path -LiteralPath $v)) { throw "Missing Phase 6O input: $v" }
+    if (-not (Test-Path -LiteralPath $v)) { throw "Missing Phase 6Q input: $v" }
 }
 
 $baseManifestPath = Join-Path $baseDir "phase6p-manifest.json"
@@ -31,13 +31,13 @@ $baseFiles = @(
 )
 foreach ($f in $baseFiles) {
     if (-not (Test-Path -LiteralPath $f)) {
-        throw "Phase 6O fast baseline missing: $f. Keep the successful Phase 6P generated output."
+        throw "Phase 6Q fast baseline missing: $f. Keep the successful Phase 6P generated output."
     }
 }
 
 $baseManifest = Get-Content $baseManifestPath -Raw | ConvertFrom-Json
 if ($baseManifest.phase -ne "6P" -or $baseManifest.build_tag -ne "P6P-BUDGET600K-20261022-A") {
-    throw "Phase 6O cached Phase 6P baseline identity mismatch"
+    throw "Phase 6Q cached Phase 6P baseline identity mismatch"
 }
 
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
@@ -47,6 +47,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path $log -Parent) | Out-Null
 Write-Host "[Phase6Q] CACHED SAFE-TEXT SATURATION"
 Write-Host "[Phase6Q] Phase 6P hardware boundary: DIRECT_FRONTIER 0023A3CE -> 001F9FD0, fault=0"
 Write-Host "[Phase6Q] FAST BASE: reusing existing Phase 6P 600k-budget monolithic cache"
+Write-Host "[Phase6Q] Support: native cos() + live-root sin(); all other unresolved helpers fenced"
 Write-Host "[Phase6Q] Coverage: mandatory 001F9FD0 + caller/root closures + every remaining support-clean generated .text member"
 Write-Host "[Phase6Q] Safety cap: 4096 candidate members; unresolved support still pruned"
 Write-Host "[Phase6Q] Purple remains reserved for genuine NV2A MMIO/VRAM boundary"
@@ -72,7 +73,7 @@ finally {
 }
 if ($rc -ne 0) {
     Get-Content $log -Tail 200
-    throw "Phase 6O emission failed (exit $rc)"
+    throw "Phase 6Q emission failed (exit $rc)"
 }
 
 $main = Join-Path $out "main.cpp"
@@ -80,24 +81,28 @@ $monolithic = Join-Path $out "main_monolithic.cpp"
 $env = Join-Path $out "phase5_env.cpp"
 $manifest = Join-Path $out "phase6q-manifest.json"
 foreach ($f in @($main,$monolithic,$env,$manifest)) {
-    if (-not (Test-Path $f)) { throw "Phase 6O missing output: $f" }
+    if (-not (Test-Path $f)) { throw "Phase 6Q missing output: $f" }
 }
 
 $m = Get-Content $manifest -Raw | ConvertFrom-Json
 if ($m.phase -ne "6Q" -or $m.build_tag -ne "P6Q-SAFE-TEXT-SATURATION-001F9FD0-20261022-A") {
-    throw "Phase 6O manifest identity mismatch"
+    throw "Phase 6Q manifest identity mismatch"
 }
 $g = $m.phase6q_safe_text_saturation
 if ($g.root -ne "0x001F9FD0" -or -not [bool]$g.phase6p_hardware_pass -or [int]$g.packed_new_members -lt 1) {
-    throw "Phase 6O manifest gate mismatch"
+    throw "Phase 6Q manifest gate mismatch"
+}
+$crtSupport = @($g.phase_owned_crt_support)
+if ($crtSupport.Count -ne 2 -or $crtSupport[0] -ne "cos" -or $crtSupport[1] -ne "sin") {
+    throw "Phase 6Q CRT support gate mismatch"
 }
 
 if ($null -eq $g.source_layout -or [int]$g.source_layout.shard_count -lt 1) {
-    throw "Phase 6O source-shard manifest gate mismatch"
+    throw "Phase 6Q source-shard manifest gate mismatch"
 }
 $shardDir = Join-Path $out ([string]$g.source_layout.shard_directory)
 if (-not (Test-Path -LiteralPath $shardDir)) {
-    throw "Phase 6O translated shard directory missing: $shardDir"
+    throw "Phase 6Q translated shard directory missing: $shardDir"
 }
 
 Write-Host ""
