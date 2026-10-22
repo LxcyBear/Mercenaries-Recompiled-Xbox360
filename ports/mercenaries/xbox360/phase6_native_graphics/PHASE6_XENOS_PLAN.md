@@ -226,3 +226,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   Phase-owned support explicitly certifies only `cos()` (with `<math.h>`);
   all other unresolved helpers remain support-clean fenced. Existing 1536-member
   caller/root + stratified-global harvesting and VS-friendly sharding remain active.
+
+
+- **Phase 6O hardware:** the explicit `cos()` support fence at `0x00251CD0`
+  was crossed successfully. Native Xenos device creation remained healthy and the
+  translated run advanced to direct=1354 / ICALL=8185 before stopping only on the
+  finite 200000-block watchdog: `BUDGET 0x0023A3CE -> 0x002527B5`,
+  `fault=0`, `ticks=200001`, `trace=43586`. Harness PASS; no new support
+  exception or guest fault was observed.
+- **Phase 6P:** exact cached Phase-6O translated pack, no new members and no new
+  support exceptions. Increase only `PHASE4C_EXEC_BUDGET` from 200000 to 600000
+  blocks, retain all NV2A/platform/ABI/guest-fault/missing-support hard stops, and
+  keep the VS-friendly sharded build layout.
