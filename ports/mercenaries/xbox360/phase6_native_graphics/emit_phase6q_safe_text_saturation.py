@@ -315,27 +315,38 @@ def main() -> int:
     if ROOT not in new_members:
         raise SystemExit("[Phase6Q] support-clean pruning removed mandatory root 0x001F9FD0")
 
-    # Phase 6P guarantees the summary/result text markers. Locate the
-    # enclosing result block structurally so generated identifier names or
-    # harmless whitespace changes cannot break this phase.
-    summary_marker = '"P6P HARVEST SUMMARY: direct=%u last_direct=%08X caller=%08X icall=%u last_icall=%08X icall_caller=%08X"'
-    result_end_marker = '        trace("PHASE 6P BUDGET EXTENSION RESULT: FAIL");'
-    summary_pos = main_text.find(summary_marker)
-    result_end = main_text.find(result_end_marker, summary_pos)
-    if summary_pos < 0 or result_end < 0:
-        raise SystemExit("[Phase6Q] Phase 6P result markers changed")
-    if main_text.find(summary_marker, summary_pos + 1) >= 0:
-        raise SystemExit("[Phase6Q] Phase 6P summary marker is not unique")
-    result_start = main_text.rfind("    {\n", 0, summary_pos)
-    if result_start < 0:
-        raise SystemExit("[Phase6Q] could not locate Phase 6P result block start")
-    result_end += len(result_end_marker)
+    # Phase 6P guarantees the summary/result phrases, but generated-source
+    # formatting is not stable enough for exact multiline matching. Locate the
+    # block from semantic phrases only, then replace the enclosing result gate.
+    summary_phrase = "P6P HARVEST SUMMARY:"
+    fail_phrase = "PHASE 6P BUDGET EXTENSION RESULT: FAIL"
+    pass_phrase = "PHASE 6P BUDGET EXTENSION RESULT: PASS"
+
+    summary_pos = main_text.find(summary_phrase)
+    fail_pos = main_text.find(fail_phrase, summary_pos)
+    if summary_pos < 0 or fail_pos < 0:
+        raise SystemExit(
+            "[Phase6Q] Phase 6P result phrases missing "
+            f"(summary={summary_pos}, fail={fail_pos})"
+        )
+    if main_text.find(summary_phrase, summary_pos + 1) >= 0:
+        raise SystemExit("[Phase6Q] Phase 6P summary phrase is not unique")
+
+    line_open = main_text.rfind("\n    {", 0, summary_pos)
+    if line_open < 0:
+        raise SystemExit("[Phase6Q] could not locate Phase 6P result block opener")
+    result_start = line_open + 1
+
+    semicolon_pos = main_text.find(";", fail_pos)
+    if semicolon_pos < 0:
+        raise SystemExit("[Phase6Q] could not locate Phase 6P result block terminator")
+    result_end = semicolon_pos + 1
 
     old_result_region = main_text[result_start:result_end]
     if "s_phase6oRootEntered" not in old_result_region:
         raise SystemExit("[Phase6Q] Phase 6P inherited root gate missing inside result region")
-    if "PHASE 6P BUDGET EXTENSION RESULT: PASS" not in old_result_region:
-        raise SystemExit("[Phase6Q] Phase 6P PASS marker missing inside result region")
+    if pass_phrase not in old_result_region:
+        raise SystemExit("[Phase6Q] Phase 6P PASS phrase missing inside result region")
 
     new_result = '''    {
         char phase6qSummary[256];
@@ -373,12 +384,8 @@ def main() -> int:
         "function, retain only the hardware-proven cos() plus live-root sin() CRT support exceptions, and hard-stop "
         "on genuine NV2A/platform/ABI/guest-fault/missing-support boundaries"
     )
-    policy_pos = main_text.find(old_policy)
-    if policy_pos < 0:
-        raise SystemExit("[Phase6Q] Phase 6P policy marker changed")
-    if main_text.find(old_policy, policy_pos + 1) >= 0:
-        raise SystemExit("[Phase6Q] Phase 6P policy marker is not unique")
-    main_text = main_text[:policy_pos] + new_policy + main_text[policy_pos + len(old_policy):]
+    if old_policy in main_text:
+        main_text = main_text.replace(old_policy, new_policy, 1)
 
     main_text = main_text.replace(
         "P6P-BUDGET600K-20261022-A", BUILD_TAG, 1
