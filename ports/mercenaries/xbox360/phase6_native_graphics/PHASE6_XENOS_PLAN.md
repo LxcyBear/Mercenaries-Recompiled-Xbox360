@@ -188,3 +188,14 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
 - **Phase 6L:** cached Phase-6K baseline, mandatory root `0x0016B7F0`, same
   caller/root + stratified-global harvest policy and 1536-new-member cap to
   confirm the multi-frontier acceleration remains repeatable.
+
+
+- **Phase 6L hardware:** the sharded-source/global harvester preserved native Xenos
+  device creation and exact-retail startup behavior, then advanced to
+  `DIRECT_FRONTIER 0x0023A3CE -> 0x00179850`; `fault=0`,
+  `ticks=129724`, `trace=19928`, direct dispatches 1196, ICALL dispatches
+  6832, harness PASS, XAPI return 0. No NV2A MMIO/VRAM touch was observed.
+- **Phase 6M:** cached Phase-6L `main_monolithic.cpp` baseline, mandatory root
+  `0x00179850`, same caller/root + stratified-global 1536-member harvest policy.
+  Build output remains editor-friendly via wrapper `main.cpp` + function-boundary
+  translated shards, while the monolithic file is retained only as emitter cache.
