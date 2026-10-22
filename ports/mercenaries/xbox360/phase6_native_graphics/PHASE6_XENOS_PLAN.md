@@ -1,6 +1,6 @@
 # Phase 6 — Native Xbox 360 graphics (Xenos)
 
-> **Status:** ACTIVE · Phase 6F hardware PASS; Phase 6G symmetric sibling harvester ready
+> **Status:** ACTIVE · Phase 6G hardware PASS; Phase 6H cached caller harvester ready
 >
 > **Immediate target:** render an independent native Xenos test surface, then
 > connect the translated Mercenaries graphics path far enough to capture the
@@ -146,3 +146,14 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   siblings symmetrically, then add depth-12 direct closure, then symmetric fill
   from `0x00120000..0x0018FFFF` under a 512-new-member cap. Unknown support is
   pruned; true NV2A/platform/ABI/guest-fault/missing-body boundaries remain fenced.
+
+- **Phase 6G hardware:** consumed `0x00150E20`, continued through
+  `0x00153080`, then stopped at `DIRECT_FRONTIER 0x0023A3CE -> 0x00015B30`;
+  `fault=0`, `ticks=75063`, `trace=7455`; harness PASS and XAPI return 0.
+  This is the first hardware proof that one harvester XEX can clear multiple
+  previously unknown direct holes before reaching the next frontier.
+- **Phase 6H:** switches to a frozen local Phase-6G baseline instead of replaying
+  the full emitter ancestry, prioritizes exact generated direct-call targets encoded
+  by caller `0x0023A3CE`, then adds caller/root closures and a local reserve under
+  a 1024-new-member cap. Proven DIRECT/ICALL logging is throttled with a dense window
+  around the old frontier plus a final dispatch summary.
