@@ -248,7 +248,7 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   boundary was reached.
 - **Phase 6Q:** safe-text saturation. Start from the hardware-proven Phase-6P
   600k-budget monolithic cache, seed mandatory root `0x001F9FD0`, retain only
-  the already-proven `cos()` CRT support exception, and attempt every remaining
+  the already-proven `cos()` CRT support plus the live-root x87 `sin()` dependency, and attempt every remaining
   generated `.text` function (4096 safety cap) under the existing support-clean
   pruning rules. This is intended to remove ordinary generated-body coverage as
   a recurring source of blue boundaries; unresolved support, NV2A, ABI/platform,
