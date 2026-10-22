@@ -385,18 +385,18 @@ def main() -> int:
     env_text = env_text.replace("phase6p_env_build_cookie", "phase6q_env_build_cookie")
     main_text = main_text.replace("50365050", "50365151")
     env_text = env_text.replace("50365050", "50365151")
-    main_text = main_text.replace("PHASE 6N", "PHASE 6O").replace("Phase 6N", "Phase 6O").replace('"P6N ', '"P6O ')
-    env_text = env_text.replace("PHASE 6N", "PHASE 6O").replace("Phase 6N", "Phase 6O")
+    main_text = main_text.replace("PHASE 6P", "PHASE 6Q").replace("Phase 6P", "Phase 6Q").replace('"P6P ', '"P6Q ')
+    env_text = env_text.replace("PHASE 6P", "PHASE 6Q").replace("Phase 6P", "Phase 6Q")
 
     required = (
         BUILD_TAG,
         "case 0x001F9FD0u: return sub_001F9FD0;",
         "s_phase6qRootEntered = 1;",
-        "P6O XENOS: PASS Direct3D_CreateDevice",
-        "P6O FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
-        "P6O FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
-        "P6O HARVEST SUMMARY",
-        "PHASE 6O COS HARVEST RESULT",
+        "P6Q XENOS: PASS Direct3D_CreateDevice",
+        "P6Q FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
+        "P6Q FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
+        "P6Q SATURATION SUMMARY",
+        "PHASE 6Q SAFE-TEXT SATURATION RESULT",
         "#pragma warning(disable:4102)",
     )
     for item in required:
