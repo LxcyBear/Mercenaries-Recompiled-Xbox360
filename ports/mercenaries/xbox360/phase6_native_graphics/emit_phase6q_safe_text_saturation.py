@@ -315,62 +315,33 @@ def main() -> int:
     if ROOT not in new_members:
         raise SystemExit("[Phase6Q] support-clean pruning removed mandatory root 0x001F9FD0")
 
-    # Phase 6P guarantees the summary/result phrases, but generated-source
-    # formatting is not stable enough for exact multiline matching. Locate the
-    # block from semantic phrases only, then replace the enclosing result gate.
-    summary_phrase = "P6P HARVEST SUMMARY:"
-    fail_phrase = "PHASE 6P BUDGET EXTENSION RESULT: FAIL"
-    pass_phrase = "PHASE 6P BUDGET EXTENSION RESULT: PASS"
-
-    summary_pos = main_text.find(summary_phrase)
-    fail_pos = main_text.find(fail_phrase, summary_pos)
-    if summary_pos < 0 or fail_pos < 0:
+    # Patch only the semantic Phase-6P result tokens. Do not depend on the
+    # generated C++ block layout, summary variable name, indentation, or whether
+    # the PASS/FAIL strings live in identical source shapes.
+    summary_old = "P6P HARVEST SUMMARY:"
+    summary_new = "P6Q SATURATION SUMMARY:"
+    summary_count = main_text.count(summary_old)
+    if summary_count != 1:
         raise SystemExit(
-            "[Phase6Q] Phase 6P result phrases missing "
-            f"(summary={summary_pos}, fail={fail_pos})"
+            f"[Phase6Q] expected one Phase 6P summary token, found {summary_count}"
         )
-    if main_text.find(summary_phrase, summary_pos + 1) >= 0:
-        raise SystemExit("[Phase6Q] Phase 6P summary phrase is not unique")
+    main_text = main_text.replace(summary_old, summary_new, 1)
 
-    line_open = main_text.rfind("\n    {", 0, summary_pos)
-    if line_open < 0:
-        raise SystemExit("[Phase6Q] could not locate Phase 6P result block opener")
-    result_start = line_open + 1
+    root_gate_old = "s_phase6oRootEntered &&"
+    root_gate_new = "s_phase6qRootEntered &&"
+    root_gate_count = main_text.count(root_gate_old)
+    if root_gate_count != 1:
+        raise SystemExit(
+            f"[Phase6Q] expected one inherited Phase 6P root gate, found {root_gate_count}"
+        )
+    main_text = main_text.replace(root_gate_old, root_gate_new, 1)
 
-    semicolon_pos = main_text.find(";", fail_pos)
-    if semicolon_pos < 0:
-        raise SystemExit("[Phase6Q] could not locate Phase 6P result block terminator")
-    result_end = semicolon_pos + 1
-
-    old_result_region = main_text[result_start:result_end]
-    if "s_phase6oRootEntered" not in old_result_region:
-        raise SystemExit("[Phase6Q] Phase 6P inherited root gate missing inside result region")
-    if pass_phrase not in old_result_region:
-        raise SystemExit("[Phase6Q] Phase 6P PASS phrase missing inside result region")
-
-    new_result = '''    {
-        char phase6qSummary[256];
-        sprintf(
-            phase6qSummary,
-            "P6Q SATURATION SUMMARY: direct=%u last_direct=%08X caller=%08X icall=%u last_icall=%08X icall_caller=%08X",
-            (unsigned int)s_phase5bcPackedDirectDispatchCount,
-            (unsigned int)s_phase5bcPackedDirectLastTarget,
-            (unsigned int)s_phase5bcPackedDirectLastCaller,
-            (unsigned int)s_phase5bcPackedIcallDispatchCount,
-            (unsigned int)s_phase5bcPackedIcallLastTarget,
-            (unsigned int)s_phase5bcPackedIcallLastCaller);
-        trace(phase6qSummary);
-    }
-
-    if (s_phase6qRootEntered &&
-        s_traceCount > 0u &&
-        (s_phase4cBoundaryKind != PHASE4C_BOUNDARY_NONE ||
-         boundedPass))
-        trace("PHASE 6Q SAFE-TEXT SATURATION RESULT: PASS");
-    else
-        trace("PHASE 6Q SAFE-TEXT SATURATION RESULT: FAIL");'''
-
-    main_text = main_text[:result_start] + new_result + main_text[result_end:]
+    result_old = "PHASE 6P BUDGET EXTENSION RESULT"
+    result_new = "PHASE 6Q SAFE-TEXT SATURATION RESULT"
+    result_count = main_text.count(result_old)
+    if result_count < 1:
+        raise SystemExit("[Phase6Q] Phase 6P result token missing")
+    main_text = main_text.replace(result_old, result_new)
 
     old_policy = (
         "Policy: start from the frozen hardware-proven Phase-6N generated baseline, certify "
