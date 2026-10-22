@@ -167,3 +167,14 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   caller/root harvest policy and 1024-new-member cap. Generated `main.cpp`
   suppresses only MSVC C4102 because translated basic-block labels can remain
   intentionally unreferenced after pruning/lowering; runtime semantics are unchanged.
+
+
+- **Phase 6J hardware:** consumed `0x00063F80` and stopped cleanly at
+  `DIRECT_FRONTIER 0x0023A3CE -> 0x000D4A30`; `fault=0`, `ticks=93860`,
+  `trace=8085`, direct dispatches 1153, ICALL dispatches 1556, harness PASS,
+  XAPI return 0. No NV2A MMIO/VRAM touch was observed.
+- **Phase 6K:** cached Phase-6J baseline, mandatory root `0x000D4A30`, caller/root
+  closures plus a 768-entry stratified global generated-text reserve and 192-entry
+  local reserve under a 1536-new-member cap. This targets the now non-local dynamic
+  frontier pattern while keeping true NV2A/platform/ABI/guest-fault/missing-body
+  boundaries fenced.
