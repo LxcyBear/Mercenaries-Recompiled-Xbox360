@@ -253,3 +253,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   pruning rules. This is intended to remove ordinary generated-body coverage as
   a recurring source of blue boundaries; unresolved support, NV2A, ABI/platform,
   and guest-memory faults remain hard stops.
+
+
+- **Phase 6Q hardware:** safe-text saturation passed on hardware and eliminated the
+  recurring ordinary generated-.text frontier class. Native Xenos creation remained
+  healthy. The run advanced to direct=1765 / ICALL=9065 and stopped cleanly at
+  `ICALL_SAFE 0x0023A3CE -> 0x002D66A2`, `fault=0`, `ticks=430987`,
+  `trace=131961`. The target lies in the retail XBE `XPP` section
+  (`0x002D4300-0x002DBCC8`), not Mercenaries `.text`. No NV2A MMIO/VRAM touch
+  and no DATAxbox access were observed; harness PASS and XAPI return 0.
+- **Phase 6R:** exact XPP frontier resolver. Reuse the hardware-proven Phase-6Q
+  saturation cache, require `0x002D66A2` to be an exact generated XPP function,
+  and pack only a bounded depth-2/cap-64 generated closure. Interior XPP entries,
+  missing translated bodies, unresolved support, NV2A/platform/ABI boundaries, and
+  guest-memory faults remain hard stops. Existing native `cos()`/`sin()` support
+  is retained.
