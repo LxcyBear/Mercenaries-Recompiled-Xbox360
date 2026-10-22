@@ -282,3 +282,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   Existing native `cos()`/`sin()` support remains active. Interior DSOUND entries,
   missing bodies, unresolved support, NV2A/platform/ABI boundaries, and guest-memory
   faults remain hard stops.
+
+
+- **Phase 6S hardware:** the exact DSOUND root `0x002A0159` executed successfully,
+  but the same table-walk caller stopped five ticks later at
+  `ICALL_SAFE 0x0023A3CE -> 0x002A0164`, `fault=0`, `ticks=430997`,
+  `trace=131963`. Summary: direct=1765, ICALL=9067, last packed ICALL
+  `0x002A0159`. The +0xB sibling step shows a call-graph closure is the wrong
+  batching shape for this DSOUND registration/table walk.
+- **Phase 6T:** broad DSOUND sibling sweep. Reuse the hardware-proven Phase-6S
+  cache, require `0x002A0164` to be an exact generated DSOUND function start,
+  enumerate remaining exact generated starts across DSOUND itself, prioritize
+  the frontier and all later starts, then fill any remaining capacity from
+  pre-frontier starts. Candidate cap is 1024 and existing support-clean pruning
+  remains authoritative; unresolved helpers, interior entries, missing bodies,
+  NV2A/platform/ABI boundaries, and guest faults remain hard stops.
