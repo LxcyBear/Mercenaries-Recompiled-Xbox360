@@ -337,3 +337,17 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   helper names; otherwise it validates an exact generated function start and
   packs a bounded depth-4/cap-256 generated closure. The 2M budget and 32 MiB
   title heap remain unchanged.
+
+
+- **Phase 6W preflight finding:** live frontier `0x0017FE90` was confirmed to
+  be one of Phase-6Q's previously support-pruned functions. The exact unresolved
+  host-patch dependencies are `recomp_frame_ticks_with_remainder` and
+  `recomp_freecam_game_ticks`.
+- **Phase 6W support implementation:** reviewed against the canonical upstream
+  Mercenaries-Recompiled host patch layer. The fractional frame-tick helper now
+  carries sub-tick remainder across updates with invalid-input reset semantics.
+  The freecam game-tick helper uses the canonical normal/off-mode identity
+  behavior because the Xbox 360 port exposes no freecam enable/time-control
+  path. These are support-owned compiled bodies, not names added to a whitelist.
+  Any dependency drift beyond these exact two helpers remains a hard stop before
+  packing `0x0017FE90`.
