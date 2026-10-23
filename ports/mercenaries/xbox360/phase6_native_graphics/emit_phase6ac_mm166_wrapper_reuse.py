@@ -280,10 +280,14 @@ def main() -> int:
         "ECX=size EDX=low EAX=high and owns a saved-ESI spill below the +24 kernel frame"
     )
 
+    # The Mm166 handler can appear before the later Phase-6 root-state block.
+    # Declare the provenance flag immediately before the handler so every use is
+    # guaranteed to have a prior declaration in old MSVC/XDK C++ mode.
     main_text = replace_unique(
         main_text,
-        "static int s_phase6aaRootEntered;",
-        "static int s_phase6aaRootEntered;\nstatic int s_phase6acMm166WrapperActive;",
+        "static void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)",
+        "static int s_phase6acMm166WrapperActive;\n\n"
+        "static void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)",
         "wrapper provenance state declaration",
     )
     main_text = replace_unique(
