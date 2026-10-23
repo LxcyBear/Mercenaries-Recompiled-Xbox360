@@ -68,6 +68,67 @@ def replace_policy_line(text: str, new_policy: str) -> str:
     return text[:line_start] + replacement + text[line_end:]
 
 
+def install_renderer_recovery_support(main_text: str) -> str:
+    enum_old = (
+        "    PHASE4C_BOUNDARY_DEBUGBREAK = 7,\n"
+        "    PHASE4C_BOUNDARY_HEAP_EXHAUSTED = 8\n"
+        "};"
+    )
+    enum_new = (
+        "    PHASE4C_BOUNDARY_DEBUGBREAK = 7,\n"
+        "    PHASE4C_BOUNDARY_HEAP_EXHAUSTED = 8,\n"
+        "    PHASE4C_BOUNDARY_RENDERER_FATAL = 9\n"
+        "};"
+    )
+    if enum_old not in main_text:
+        raise SystemExit("[Phase6AA] boundary enum marker changed")
+    main_text = main_text.replace(enum_old, enum_new, 1)
+
+    name_old = '    case PHASE4C_BOUNDARY_HEAP_EXHAUSTED: return "HEAP_EXHAUSTED";'
+    name_new = name_old + '\n    case PHASE4C_BOUNDARY_RENDERER_FATAL: return "RENDERER_FATAL";'
+    if name_old not in main_text:
+        raise SystemExit("[Phase6AA] boundary-name marker changed")
+    main_text = main_text.replace(name_old, name_new, 1)
+
+    insert_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    if insert_marker not in main_text:
+        raise SystemExit("[Phase6AA] renderer support insertion marker changed")
+
+    support = r"""
+static void recomp_renderer_recovery_report(uint32_t result, uint32_t stage)
+{
+    char line[256];
+    sprintf(
+        line,
+        "Phase 6AA renderer recovery report stage=%u HRESULT=%08X esp=%08X",
+        (unsigned)stage,
+        (unsigned)result,
+        (unsigned)g_esp);
+    trace(line);
+
+    if (stage == 1u)
+    {
+        trace("Phase 6AA renderer recovery: CreateDevice allocation failure; retail non-AA retry permitted");
+        return;
+    }
+
+    if (stage == 2u)
+    {
+        trace("Phase 6AA renderer recovery: non-AA CreateDevice result observed");
+        return;
+    }
+
+    trace("Phase 6AA renderer recovery: terminal CreateDevice failure; refusing null-device rendering");
+    phase4c_escape(
+        PHASE4C_BOUNDARY_RENDERER_FATAL,
+        result ? result : 0x80004005u,
+        g_esp);
+}
+
+"""
+    return main_text.replace(insert_marker, support + insert_marker, 1)
+
+
 def validate_exact(root: int, by_va: dict, generated: dict) -> None:
     if root not in by_va:
         hit = [r for r in by_va.values() if int(r["start"]) < root < int(r["end"])]
