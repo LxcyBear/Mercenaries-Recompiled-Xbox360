@@ -478,3 +478,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   hardware-proven Phase 6Z graphics pool and Mm166 repair unchanged. Genuine
   NV2A/MMIO/VRAM, platform, ABI, guest-fault, or unresolved-support boundaries
   remain hard stops.
+
+
+- **Phase 6AA reviewed renderer recovery support:** local preflight proved the
+  exact `0x0020FAE0` root depends on upstream helper
+  `recomp_renderer_recovery_report(result, stage)`. Upstream defines stages
+  1/2 as diagnostic-only with no guest-register/resource-ownership mutation;
+  terminal/unknown stages must not return into null-device rendering. The Xbox
+  360 harness maps that terminal case to explicit `RENDERER_FATAL` boundary
+  evidence with the HRESULT preserved. The companion
+  `recomp_renderer_test_oom(multisample)` is an opt-in PC regression
+  injection upstream; Xbox 360 production/default semantics are the canonical
+  disabled-state return 0. Phase 6AA-B installs both before support-clean audit.
