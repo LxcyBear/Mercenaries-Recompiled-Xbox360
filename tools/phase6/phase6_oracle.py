@@ -7,12 +7,13 @@ import json
 from pathlib import Path
 
 KINDS = {
-    "direct", "icall", "kernel", "vm", "heap", "file",
+    "session", "direct", "icall", "kernel", "vm", "heap", "file",
     "mmio-read", "mmio-write", "vram-read", "vram-write",
     "pfifo", "pgraph", "draw", "shader",
 }
 
 COMPARE_FIELDS = {
+    "session": ("format",),
     "direct": ("caller", "target"),
     "icall": ("caller", "target"),
     "kernel": ("ordinal",),
