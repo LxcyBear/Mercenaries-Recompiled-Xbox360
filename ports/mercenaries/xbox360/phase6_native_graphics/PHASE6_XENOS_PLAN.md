@@ -369,3 +369,17 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   closure while inheriting the proven Phase-6W timing support, 2M execution
   budget, 32 MiB title heap, native Xenos surface, and all NV2A/platform/ABI/
   guest-fault hard stops unchanged.
+
+
+- **Phase 6X preflight finding:** the live graphics-pool root `0x0020F9C0`
+  was previously support-pruned only because its generated body calls
+  `xbox_GetExtendedGraphicsPool`.
+- **Phase 6X graphics-memory support:** upstream defines
+  `xbox_GetExtendedGraphicsPool()` as `0x04000000` only when the optional
+  PC extended graphics bank is enabled and mapped; otherwise it returns zero.
+  The Xbox 360 port intentionally keeps the original retail 64 MiB guest layout,
+  so 6X installs the canonical disabled-state result (`0`). This selects the
+  retail graphics-pool path (`0x02980000` start / `0x01680000` size in the
+  upstream native graphics-memory test) rather than inventing a second guest
+  graphics bank. The helper is a compiled support-owned body, not a whitelist
+  entry, and any dependency drift still hard-stops before packing.
