@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; translated retail startup now runs through the 32 MiB title-heap fix and has reached the retail graphics-pool initializer at `0x0020F9C0`. Phase 6X is resolving that graphics-memory frontier; the first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
+> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; the retail 22.5 MiB graphics-pool claim now succeeds at `0x02880000`, the generalized ordinal-166 allocation wrapper is hardware-proven, and Phase 6AD crossed `AvGetSavedDataAddress` to the exact ordinal-2 `AvSendTVEncoderOption@16` frontier. Phase 6AE-B is the active safe retry after 6AE-A was invalidated by a host-side startup logging overflow. The first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -57,7 +57,7 @@ Each phase has independently checkable checkpoints below.
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
 | **5 — Subsystem bring-up under native game execution** | **COMPLETE — repeatability 3/3 PASS + exit reconnaissance READY/PASS** | Stable translated/runtime path, classified endpoint, subsystem inventory, first-touch baseline, risk map and ordered Phase-6 handoff |
-| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — native Xenos surface proven; translated startup reached retail graphics-pool init `0x0020F9C0`; guest NV2A first touch pending** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
+| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — native Xenos surface, 22.5 MiB retail graphics-pool claim, generalized Mm166 wrapper and AV ordinal 1 hardware-proven; 6AE-B targets the compact AV display family; guest NV2A first touch pending** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
 | 7 — Audio, movies, input and streaming integration | Not started | Functional startup media/menu audio/input with stable timing and storage streaming |
 | 8 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -78,20 +78,47 @@ ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
 **Present blockers:** Phase 5 is complete and frozen. Phase 6 has already
 proved native Xbox 360 D3D/Xenos device creation and physical presentation on
-real hardware. The translated retail startup path has subsequently crossed XPP
-and DSOUND frontiers, survived the formerly fatal 19,503,520-byte allocation
-after widening the synthetic title heap to 32 MiB, and crossed the
-`0x0017FE90` timing-helper fence. Phase 6W hardware then reached
-`DIRECT_FRONTIER 0x0023A3CE -> 0x0020F9C0` with `fault=0`,
-`ticks=670776`, `trace=179920`, direct=1812 and ICALL=9075.
-Upstream Mercenaries-Recompiled identifies `sub_0020F9C0` as the retail
-graphics-pool initializer. Phase 6X crossed that graphics-pool root on hardware; the active frontier is now Phase 6Y, which resolves the observed ordinal-166 `MmAllocateContiguousMemoryEx` +28 saved-ESP frame while preserving the canonical +24 ABI everywhere else. Its only
-known support dependency, `xbox_GetExtendedGraphicsPool`, is now implemented
-with the canonical retail disabled-state result (`0`) because this port keeps
-the original 64 MiB guest layout rather than the optional PC-only second
-graphics bank. The next hardware goal is to cross graphics-pool initialization
-and capture the next real renderer/platform boundary. No genuine guest NV2A
-MMIO/VRAM first touch or DATAxbox asset open has been observed yet.
+real hardware. The translated retail startup path crossed XPP/DSOUND, the
+32 MiB title-heap repair, the retail graphics-pool root at `0x0020F9C0`, and
+the hardware-observed ordinal-166 physical-allocation wrapper. Phase 6Z then
+proved the retail 22.5 MiB graphics-pool reservation at guest
+`0x02880000-0x03EFFFFF`; Phase 6AA/6AB crossed the post-pool renderer path
+and relocated `HalBootSMCVideoMode` as a DATA export; Phase 6AC proved the
+same +28 Mm166 wrapper on a later 96-byte allocation without weakening the
+canonical +24 ABI.
+
+Phase 6AD is the latest clean hardware PASS. It crossed ordinal 1
+`AvGetSavedDataAddress` with the exact +4 frame and advanced to ordinal 2
+`AvSendTVEncoderOption@16` at `esp=0x008BF948`,
+`saved_esp=0x008BF95C` (exact +20 frame), `fault=0`. Its safe cleanup pass
+also proved semantics-neutral: maintained CRT `_msize` still executed 601
+times while 590 repetitive trace lines were suppressed, and the run ended with
+clean XAPI return 0.
+
+### Current Phase-6 hardware map
+
+- **6W/6X:** reached and crossed retail graphics-pool root `0x0020F9C0`.
+- **6Y/6Z:** proved the generated +28 ordinal-166 wrapper shape and successful
+  22.5 MiB retail graphics-pool claim at `0x02880000`.
+- **6AA/6AB:** advanced through the post-pool renderer path and relocated
+  `HalBootSMCVideoMode` DATA.
+- **6AC:** generalized the proven Mm166 wrapper class and crossed the later
+  96-byte allocation request.
+- **6AD — hardware PASS:** crossed `AvGetSavedDataAddress`; next genuine
+  frontier is ordinal 2 `AvSendTVEncoderOption@16`, exact +20 frame.
+- **6AE-A — INVALID TEST:** never reached the AV bridge. A 518-character
+  startup Policy trace overflowed the host logging path and produced a repeated
+  `0xC0000005` exception storm before Xenos or translated execution.
+- **6AE-B — ACTIVE:** same bounded compact AV-family/display-handoff experiment
+  with the startup Policy trace shortened and preflight-length guarded. The
+  native Xenos device remains the physical display owner; original-Xbox
+  encoder/NV2A register writes are not performed by the compatibility bridge.
+
+The immediate hardware goal is to cross the observed ordinal-2 AV frontier,
+capture the title's real encoder/display intent (and ordinal 3
+`AvSetDisplayMode@24` if reached), then continue toward the first genuine
+guest NV2A MMIO/VRAM touch. No DATAxbox asset open or Mercenaries-rendered
+frame has been observed yet.
 
 ### Immediate next tests
 
