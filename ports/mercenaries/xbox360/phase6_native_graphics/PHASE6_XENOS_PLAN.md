@@ -351,3 +351,21 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   path. These are support-owned compiled bodies, not names added to a whitelist.
   Any dependency drift beyond these exact two helpers remains a hard stop before
   packing `0x0017FE90`.
+
+
+- **Phase 6W hardware:** crossed the previously support-pruned `0x0017FE90`
+  root successfully. The reviewed frame-tick/freecam-tick support stayed stable,
+  the 19,503,520-byte title-heap allocation still succeeded at `0x008C2980`,
+  and execution reached a new `DIRECT_FRONTIER 0x0023A3CE -> 0x0020F9C0`
+  at ticks=670776, trace=179920, fault=0. Summary advanced to direct=1812 /
+  ICALL=9075; the phase returned PASS/XAPI 0. No FIRST GRAPHICS TOUCH or
+  DATAxbox event occurred before the frontier.
+- **Phase 6X:** `0x0020F9C0` is materially interesting: upstream
+  Mercenaries-Recompiled's native graphics-memory tests call
+  `sub_0020F9C0` as the retail graphics-pool initializer, and its optional
+  extended-graphics-memory transformations target `0x0020F9C0` and
+  `0x0020F9D3` with no host helper at those patch sites. 6X therefore packs
+  the exact generated `0x0020F9C0` root plus a support-clean depth-4/cap-256
+  closure while inheriting the proven Phase-6W timing support, 2M execution
+  budget, 32 MiB title heap, native Xenos surface, and all NV2A/platform/ABI/
+  guest-fault hard stops unchanged.
