@@ -70,21 +70,21 @@ def replace_policy_line(text: str, new_policy: str) -> str:
 
 def install_renderer_recovery_support(main_text: str) -> str:
     enum_old = (
-        "    PHASE4C_BOUNDARY_DEBUGBREAK = 7,\n"
-        "    PHASE4C_BOUNDARY_HEAP_EXHAUSTED = 8\n"
+        "    PHASE4C_BOUNDARY_STORAGE_IO = 17,\n"
+        "    PHASE4C_BOUNDARY_FILE_INFORMATION = 18\n"
         "};"
     )
     enum_new = (
-        "    PHASE4C_BOUNDARY_DEBUGBREAK = 7,\n"
-        "    PHASE4C_BOUNDARY_HEAP_EXHAUSTED = 8,\n"
-        "    PHASE4C_BOUNDARY_RENDERER_FATAL = 9\n"
+        "    PHASE4C_BOUNDARY_STORAGE_IO = 17,\n"
+        "    PHASE4C_BOUNDARY_FILE_INFORMATION = 18,\n"
+        "    PHASE4C_BOUNDARY_RENDERER_FATAL = 19\n"
         "};"
     )
     if enum_old not in main_text:
         raise SystemExit("[Phase6AA] boundary enum marker changed")
     main_text = main_text.replace(enum_old, enum_new, 1)
 
-    name_old = '    case PHASE4C_BOUNDARY_HEAP_EXHAUSTED: return "HEAP_EXHAUSTED";'
+    name_old = '    case PHASE4C_BOUNDARY_FILE_INFORMATION: return "FILE_INFORMATION";'
     name_new = name_old + '\n    case PHASE4C_BOUNDARY_RENDERER_FATAL: return "RENDERER_FATAL";'
     if name_old not in main_text:
         raise SystemExit("[Phase6AA] boundary-name marker changed")
@@ -456,7 +456,7 @@ def main() -> int:
         "static uint32_t xbox_GetExtendedGraphicsPool(void)",
         "static uint32_t recomp_renderer_test_oom(uint32_t multisample)",
         "static void recomp_renderer_recovery_report(uint32_t result, uint32_t stage)",
-        "PHASE4C_BOUNDARY_RENDERER_FATAL = 9",
+        "PHASE4C_BOUNDARY_RENDERER_FATAL = 19",
         'case PHASE4C_BOUNDARY_RENDERER_FATAL: return "RENDERER_FATAL";',
     )
     for item in required:
