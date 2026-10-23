@@ -133,17 +133,25 @@ def main() -> int:
     ):
         raise SystemExit("[Phase6Z] inherited Phase 6Y ABI proof is incomplete")
 
+    # Gate on the semantic symbols/capacities 6Z actually consumes rather
+    # than whitespace-sensitive declaration formatting.  The inherited
+    # Phase5BB donor intentionally line-wraps the reservation array and uses
+    # Xbox/XDK BYTE/DWORD aliases for the page tables.
     required_base_markers = (
         "#define PHASE4C_TITLE_HEAP_BASE  0x008C0000u",
         "#define PHASE4C_TITLE_HEAP_END   (PHASE4C_TITLE_HEAP_BASE + 0x02000000u)",
-        "static Phase4CHeapBlock s_phase4cHeap[PHASE4C_HEAP_BLOCKS];",
-        "static DWORD s_phase4cHeapCount;",
+        "typedef struct Phase4CHeapBlock",
+        "s_phase4cHeap[PHASE4C_HEAP_BLOCKS];",
+        "s_phase4cHeapCount;",
         "static void phase4c_heap_init(void)",
         "static void phase4c_heap_remove(DWORD index)",
-        "static uint32_t s_phase4cVmPageNext",
-        "static Phase4CVmReservation s_phase4cVmReservations",
-        "static uint32_t s_phase4cVmReservationCount",
-        "static uint8_t s_phase4cVmPageState",
+        "#define PHASE4C_VM_RESERVATION_CAP 64u",
+        "typedef struct Phase4CVmReservation",
+        "s_phase4cVmReservations[PHASE4C_VM_RESERVATION_CAP];",
+        "s_phase4cVmReservationCount;",
+        "s_phase4cVmPageNext = RAM_SIZE;",
+        "#define PHASE4C_VM_PAGE_UNMANAGED 0u",
+        "s_phase4cVmPageState[PHASE4C_VM_PAGE_COUNT];",
         "P6Y-GFXPOOL-MM166-FRAME-20261023-B",
         "size!=0x01680000u || extra!=g_esi",
         "resumeEsp=c+24u",
