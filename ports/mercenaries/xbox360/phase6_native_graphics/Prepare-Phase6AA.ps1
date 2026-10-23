@@ -134,14 +134,15 @@ if ($rc -ne 0) {
     $reasonLines = @(
         $tail | Where-Object {
             ($_ -match "\[Phase6AA\]|\[Phase5BC\]") -and
+            ($_ -notmatch "CategoryInfo|FullyQualifiedErrorId") -and
             ($_ -match "missing|not an exact|absent|unresolved|requires|refusing|lost|changed|failed|drift|expected|already present")
         }
     )
     if (@($dependencyLines).Count -gt 0) {
-        $primary = [string]@($dependencyLines)[@($dependencyLines).Count - 1]
+        $primary = [string]@($dependencyLines)[0]
     }
     elseif (@($reasonLines).Count -gt 0) {
-        $primary = [string]@($reasonLines)[@($reasonLines).Count - 1]
+        $primary = [string]@($reasonLines)[0]
     }
     else {
         $primary = "see $log"
