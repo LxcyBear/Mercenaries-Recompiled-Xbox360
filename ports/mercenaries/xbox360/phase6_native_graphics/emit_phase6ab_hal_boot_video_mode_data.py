@@ -184,11 +184,44 @@ def main() -> int:
         "HalBootSMCVideoMode readback invariant",
     )
 
+    # Preserve the inherited C-string escaping verbatim. Matching the entire
+    # Python-decoded path is brittle because the source contains doubled
+    # backslashes (\\\\Device...) while a normal Python literal decodes them.
+    success_prefix = (
+        '"PASS: startup data imports '
+        '40/41/42(optional)/156/164/322/324/326 relocated; '
+    )
+    success_lines = [
+        line for line in main_text.splitlines()
+        if success_prefix in line
+    ]
+    if len(success_lines) != 1:
+        raise SystemExit(
+            f"[Phase6AB] expected one startup data success format, "
+            f"found {len(success_lines)}"
+        )
+    success_line_old = success_lines[0]
+    success_line_new = success_line_old
+    success_line_new = success_line_new.replace(
+        "40/41/42(optional)/156/164/322/324/326 relocated",
+        "40/41/42(optional)/156/164/322/324/326/356 relocated",
+        1,
+    )
+    success_line_new = success_line_new.replace(
+        "seen326=%u LaunchDataPage=NULL",
+        "seen326=%u seen356=%u LaunchDataPage=NULL "
+        "HalBootSMCVideoMode=0",
+        1,
+    )
+    if success_line_new == success_line_old:
+        raise SystemExit(
+            "[Phase6AB] startup data success format rewrite made no change"
+        )
     main_text = replace_unique(
         main_text,
-        "PASS: startup data imports 40/41/42(optional)/156/164/322/324/326 relocated; disk_cache_parts=3 seen40=%u seen41=%u seen42=%u seen326=%u LaunchDataPage=NULL XeImageFileName=\\Device\\CdRom0\\default.xbe",
-        "PASS: startup data imports 40/41/42(optional)/156/164/322/324/326/356 relocated; disk_cache_parts=3 seen40=%u seen41=%u seen42=%u seen326=%u seen356=%u LaunchDataPage=NULL HalBootSMCVideoMode=0 XeImageFileName=\\Device\\CdRom0\\default.xbe",
-        "startup data success format",
+        success_line_old,
+        success_line_new,
+        "startup data success format line",
     )
 
     # This argument sequence is unique in the success trace after the failure
