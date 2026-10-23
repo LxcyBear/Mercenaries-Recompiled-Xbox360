@@ -516,6 +516,19 @@ def main() -> int:
             f"0x{x:08X}" for x in sorted(frontiers)
         ],
         "graphics_pool_model_inherited_unchanged": True,
+        "reviewed_support": {
+            "recomp_renderer_recovery_report": {
+                "upstream_contract": (
+                    "stages 1/2 report only and do not mutate guest registers "
+                    "or resource ownership; terminal stage must not return into "
+                    "null-device rendering"
+                ),
+                "xbox360_terminal_mapping": (
+                    "PHASE4C_BOUNDARY_RENDERER_FATAL with HRESULT preserved as "
+                    "boundary target"
+                ),
+            },
+        },
         "execution_budget_inherited": 2000000,
         "source_layout": source_layout,
         "runtime_policy": (
