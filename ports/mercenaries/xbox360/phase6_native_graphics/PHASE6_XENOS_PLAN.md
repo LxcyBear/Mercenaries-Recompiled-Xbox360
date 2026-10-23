@@ -386,12 +386,12 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
 
 
 - **Phase 6X local build automation:** `Prepare-Phase6X.ps1` now invokes the
-  reusable `Invoke-VS17Xbox360Build.ps1` helper by default. The helper targets
+  reusable `Invoke-VS2017Xbox360Build.ps1` helper by default. The helper targets
   the local `Mercenaries-PPC-Port` solution, discovers the project compiling
   `main.cpp`, replaces that source plus the compiled env CPP and entire
   `translated_shards` directory with the freshly generated Phase-6X output,
   verifies hashes/build-tag/env-cookie identity, refuses to compile
-  `main_monolithic.cpp`, then runs VS17 `devenv.com` command-line
+  `main_monolithic.cpp`, then runs VS2017 `devenv.com` command-line
   `/Clean` and `/Build` for `Release|Xbox 360`. This removes the manual
   Visual Studio copy/clean/build step while retaining stale-build guards.
 
