@@ -121,8 +121,25 @@ if ($rc -ne 0) {
     Write-Host "[Phase6AA] PREP STOPPED BEFORE BUILD."
     Write-Host "[Phase6AA] Exact-start/body validation or support-clean closure audit failed."
     Write-Host "[Phase6AA] Emitter log tail:"
-    Get-Content -LiteralPath $log -Tail 140
-    throw "Phase 6AA emission/preflight failed (exit $rc)"
+
+    $tail = @(Get-Content -LiteralPath $log -Tail 140)
+    $tail | ForEach-Object { Write-Host $_ }
+
+    $reasonLines = @(
+        $tail | Where-Object {
+            ($_ -match "\[Phase6AA\]|\[Phase5BC\]") -and
+            ($_ -match "missing|not an exact|absent|unresolved|requires|refusing|lost|changed|failed|drift|expected|already present")
+        }
+    )
+    if (@($reasonLines).Count -gt 0) {
+        $primary = [string]@($reasonLines)[@($reasonLines).Count - 1]
+    }
+    else {
+        $primary = "see $log"
+    }
+
+    Write-Host ("[Phase6AA] PRIMARY FAILURE: {0}" -f $primary)
+    throw ("Phase 6AA emission/preflight failed (exit {0}); PRIMARY: {1}" -f $rc, $primary)
 }
 
 $main = Join-Path $out "main.cpp"
