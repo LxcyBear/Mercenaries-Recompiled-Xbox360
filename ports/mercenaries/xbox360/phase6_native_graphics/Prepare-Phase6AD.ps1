@@ -209,6 +209,7 @@ if (-not $SkipSolutionBuild) {
         Platform = $Platform
         CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6ad-vs2017-clean.log")
         BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6ad-vs2017-build.log")
+        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AD.xex")
     }
 
     & $paths.build @buildArgs
@@ -216,6 +217,7 @@ if (-not $SkipSolutionBuild) {
     Write-Host ""
     Write-Host "[Phase6AD] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
     Write-Host "[Phase6AD] Hardware tag to verify: P6AD-AV-SAVED-DATA-CLEANUP-20261023-A"
+    Write-Host ("[Phase6AD] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AD.xex"))
 }
 else {
     Write-Host "[Phase6AD] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
