@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Phase 5 is 100% COMPLETE: 5BV passed 3/3 frozen-pack hardware repeatability and the mandatory exit reconnaissance reported `READY / PASS`, classifying `0x0014CD30` as exact generated title code and producing the complete Phase-6 handoff.
+> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; translated retail startup now runs through the 32 MiB title-heap fix and has reached the retail graphics-pool initializer at `0x0020F9C0`. Phase 6X is resolving that graphics-memory frontier; the first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -57,7 +57,7 @@ Each phase has independently checkable checkpoints below.
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
 | **5 — Subsystem bring-up under native game execution** | **COMPLETE — repeatability 3/3 PASS + exit reconnaissance READY/PASS** | Stable translated/runtime path, classified endpoint, subsystem inventory, first-touch baseline, risk map and ordered Phase-6 handoff |
-| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — inventory complete; backend abstraction cleanup / first Xenos surface next** | Repeatable native Xenos first frame, functional title/menu graphics and reproducible 3D scene |
+| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — native Xenos surface proven; translated startup reached retail graphics-pool init `0x0020F9C0`; guest NV2A first touch pending** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
 | 7 — Audio, movies, input and streaming integration | Not started | Functional startup media/menu audio/input with stable timing and storage streaming |
 | 8 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -76,18 +76,22 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 5 is complete. The same frozen
-`P5BV-REPEATABILITY-20261021-A` XEX reproduced the exact
-`DIRECT_FRONTIER caller=0x0023A3CE target=0x0014CD30` endpoint and counters
-on three consecutive real-hardware boots with `fault=0`, guest-arena release,
-proof end and XAPI return 0. The mandatory exit reconnaissance then reported
-`READY / PASS`, classified `0x0014CD30` as exact generated title code in
-`recomp_0006.c` (original range `0x0014CD30-0x0014CD9C`), inventoried the
-five required subsystem families, ranked six Phase-6 risks and generated all
-five handoff artifacts. The active blocker is now Phase 6 implementation:
-isolate the remaining D3D11/DXGI-specific backend assumptions and bring up the
-first independent Xbox 360/Xenos render surface without regressing the frozen
-Phase-5 runtime baseline.
+**Present blockers:** Phase 5 is complete and frozen. Phase 6 has already
+proved native Xbox 360 D3D/Xenos device creation and physical presentation on
+real hardware. The translated retail startup path has subsequently crossed XPP
+and DSOUND frontiers, survived the formerly fatal 19,503,520-byte allocation
+after widening the synthetic title heap to 32 MiB, and crossed the
+`0x0017FE90` timing-helper fence. Phase 6W hardware then reached
+`DIRECT_FRONTIER 0x0023A3CE -> 0x0020F9C0` with `fault=0`,
+`ticks=670776`, `trace=179920`, direct=1812 and ICALL=9075.
+Upstream Mercenaries-Recompiled identifies `sub_0020F9C0` as the retail
+graphics-pool initializer. Phase 6X is therefore the active frontier. Its only
+known support dependency, `xbox_GetExtendedGraphicsPool`, is now implemented
+with the canonical retail disabled-state result (`0`) because this port keeps
+the original 64 MiB guest layout rather than the optional PC-only second
+graphics bank. The next hardware goal is to cross graphics-pool initialization
+and capture the next real renderer/platform boundary. No genuine guest NV2A
+MMIO/VRAM first touch or DATAxbox asset open has been observed yet.
 
 ### Immediate next tests
 
@@ -487,12 +491,30 @@ Phase-5 runtime baseline.
     input and cross-cutting surfaces were inventoried; six Phase-6 risks were
     ranked; and all five required handoff artifacts were generated. **Phase 5
     is 100% COMPLETE.**
-89. **Phase 6 active — Native Xbox 360 graphics (Xenos):** the Mercenaries
-    NV2A/pushbuffer/format/state/shader/surface inventory is complete. The
-    backend-neutral interface seam is **in progress** because maintained
-    D3D8/NV2A semantic layers exist but D3D11/DXGI backend assumptions still
-    need isolation. Immediate target: initialize a native Xbox 360 graphics
-    device and render an independent Xenos test surface. Plan:
+89. **Done — Phase 6A native Xenos presentation:** real Xbox 360 hardware
+    created the D3D device/backbuffer and visibly presented the expected
+    dark-green -> blue -> red -> grey/white sequence. The independent native
+    Xenos presentation path is therefore proven.
+90. **Done — Phase 6Q/6R/6S/6T frontier saturation:** safe translated-text
+    saturation crossed ordinary generated-title frontiers, then exact XPP and
+    DSOUND roots, followed by a broad DSOUND sibling sweep. The DSOUND sweep
+    exposed a real 19,503,520-byte title-heap request rather than another code
+    frontier.
+91. **Done — Phase 6U title-heap fix:** widening the synthetic title heap from
+    1 MiB to 32 MiB allowed the 19,503,520-byte allocation to succeed at
+    `0x008C2980`; hardware then stopped only at the old 600,001-tick budget.
+92. **Done — Phase 6V/6W deeper translated startup:** the 2,000,000-tick pass
+    reached `0x0017FE90`; reviewed implementations of
+    `recomp_frame_ticks_with_remainder` and `recomp_freecam_game_ticks`
+    then let Phase 6W cross that fence and reach
+    `DIRECT_FRONTIER 0x0023A3CE -> 0x0020F9C0` with `fault=0`,
+    direct=1812 and ICALL=9075.
+93. **Active — Phase 6X retail graphics-pool frontier:** upstream native tests
+    identify `sub_0020F9C0` as the retail graphics-pool initializer. The
+    generated body depends on `xbox_GetExtendedGraphicsPool`; this port now
+    supplies the canonical retail-mode result `0` (no optional PC extended
+    graphics bank). Next test: regenerate/build Phase 6X, cross
+    `0x0020F9C0`, and capture the next renderer/platform boundary. Plan:
     `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
 
 
@@ -515,12 +537,32 @@ Phase-5 runtime baseline.
 
 - Phase 6A visibly presented the intended native Xenos color sequence on real
   Xbox 360 hardware: dark green -> blue -> red -> grey/white.
-- This proves the native Xbox 360 D3D device/backbuffer/present path reaches the
-  physical display.
-- Full Phase-6A gate closure remains pending the xbWatson/debug PASS tail and
-  clean XAPI return 0.
-- No Mercenaries guest renderer is connected yet; this is the standalone native
-  graphics baseline that Phase 6B will wrap behind the backend seam.
+- Native Xbox 360 D3D device/backbuffer/present is therefore proven on the
+  physical display and remains alive alongside translated startup execution.
+- This is still a native presentation baseline, not a game-rendered frame.
+
+### 2026-10-22 to 2026-10-23 — translated startup reaches graphics-pool initialization
+
+- Phase 6Q saturated ordinary support-clean generated `.text` coverage and
+  advanced into XPP; 6R crossed the exact XPP frontier; 6S/6T crossed DSOUND
+  and its sibling-table walk.
+- Phase 6T exposed a 19,503,520-byte ordinary title-heap allocation. Phase 6U
+  widened only that synthetic title heap from 1 MiB to 32 MiB, and hardware
+  proved the same request succeeds at guest VA `0x008C2980`.
+- Phase 6V raised only the finite execution watchdog to 2,000,000 ticks and
+  reached a genuine translated frontier at `0x0017FE90`.
+- Phase 6W added reviewed upstream semantics for
+  `recomp_frame_ticks_with_remainder` plus retail/default
+  `recomp_freecam_game_ticks`, crossed `0x0017FE90`, and reached
+  `DIRECT_FRONTIER 0x0023A3CE -> 0x0020F9C0` at ticks=670776,
+  trace=179920, direct=1812, ICALL=9075, `fault=0`, PASS/XAPI 0.
+- Upstream Mercenaries-Recompiled's graphics-memory tests explicitly use
+  `sub_0020F9C0` as the retail graphics-pool initializer. Phase 6X now
+  supplies the canonical disabled-state `xbox_GetExtendedGraphicsPool() == 0`
+  for the retail 64 MiB guest layout and is preparing the next hardware run.
+- No genuine guest NV2A MMIO/VRAM first touch and no DATAxbox asset open have
+  yet been observed. Purple remains reserved for the first real guest GPU
+  boundary, not synthetic/native test output.
 
 ### Evidence policy
 
@@ -770,25 +812,37 @@ hardware evidence invalidates a proven invariant.
 ### Phase 6 — Native Xbox 360 graphics (Xenos)
 
 **Purpose:** replace NV2A/PGRAPH-to-D3D11 hosting with a correct native
-Xbox 360/Xenos graphics backend.
+Xbox 360/Xenos graphics backend while continuing the real translated retail
+startup path on hardware.
 
 - [x] Inventory actual Mercenaries NV2A pushbuffers, texture formats,
       swizzle, render states, vertex programs, combiners and surface aliases.
-      Phase-5 exit reconnaissance plus the maintained NV2A/PGRAPH/D3D8
-      semantic implementation provide the evidence-backed starting inventory.
-- [ ] Introduce backend-neutral presentation/texture/draw interfaces.
-      **IN PROGRESS:** the semantic/resource layers exist, but D3D11/DXGI
-      backend assumptions still need to be isolated behind the Xenos seam.
-- [ ] Initialize an Xbox 360 graphics device and render an independent test
-      surface (not yet the game). **Immediate target.**
-- [ ] Implement compatible 2D, textured draw and flip operations.
-- [ ] Translate needed shaders and vertex formats; validate depth/stencil,
-      blending, alpha testing, render targets and synchronization.
-- [ ] Capture the first guest-rendered frame; then the main menu;
-      then a reproducible 3D scene, comparing to the working PC reference.
+- [x] Initialize an Xbox 360 graphics device and present an independent native
+      Xenos test surface on real hardware. Phase 6A visibly produced the
+      dark-green -> blue -> red -> grey/white sequence.
+- [x] Keep the native Xenos device alive while hardware-proven translated
+      startup advances through XPP, DSOUND, CRT/timing and title-memory setup.
+- [x] Expand the synthetic ordinary title heap only as required by observed
+      hardware behavior: the 19,503,520-byte request now succeeds inside the
+      32 MiB title-heap window.
+- [x] Reach the retail graphics-pool initialization path:
+      Phase 6W stopped at exact translated root `0x0020F9C0`, which upstream
+      native graphics-memory tests identify as `sub_0020F9C0`.
+- [ ] Cross `0x0020F9C0` on hardware with Phase 6X. The only known support
+      dependency, `xbox_GetExtendedGraphicsPool`, now uses the canonical
+      retail disabled-state result `0`; no optional PC-only second graphics
+      bank is exposed on Xbox 360.
+- [ ] Capture the first genuine guest NV2A MMIO/VRAM touch and translate that
+      exact operation to the native Xenos backend. Do not treat synthetic
+      native color output as a guest-rendered frame.
+- [ ] Implement the compatible 2D/textured draw, flip, shader/vertex-format,
+      depth/stencil, blend, render-target and synchronization operations
+      actually observed on the retail path.
+- [ ] Capture the first game-rendered frame, then the main menu, then a
+      reproducible 3D scene and compare behavior to the working PC reference.
 - [ ] Measure frame time, GPU memory and renderer errors on hardware.
 
-**Gate 6:** repeatable native Xenos first frame and functional
+**Gate 6:** repeatable native Xenos first **game-rendered** frame and functional
 title/menu/scene graphics.
 
 Detailed active plan:
