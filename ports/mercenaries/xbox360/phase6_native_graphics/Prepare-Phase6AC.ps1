@@ -234,7 +234,7 @@ if (-not $SkipSolutionBuild) {
     catch {
         $buildLogPath = [string]$buildArgs.BuildLog
         Write-Host ""
-        Write-Host "[Phase6AC] VS BUILD FAILED — extracting compiler/linker diagnostics:"
+        Write-Host "[Phase6AC] VS BUILD FAILED - extracting compiler/linker diagnostics:"
         if (Test-Path -LiteralPath $buildLogPath) {
             $diagnostics = @(
                 Select-String -LiteralPath $buildLogPath -Pattern @(
