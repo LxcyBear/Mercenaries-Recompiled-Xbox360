@@ -507,3 +507,29 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   and readbacks zero, requires exactly one ordinal-356 import, and otherwise
   preserves the hardware-proven 6AA renderer closure, recovery helpers,
   graphics pool, timing semantics, and all hard stops unchanged.
+
+
+- **Phase 6AB hardware — PASS:** the HalBootSMCVideoMode DATA relocation at
+  `0x0087E098` worked on real Xbox 360 hardware. Native Xenos device creation,
+  the proven `0x02880000` / `0x01680000` graphics pool, storage setup, and
+  the translated renderer path all remained healthy. The run advanced to
+  direct=1816 / ICALL=9075 and stopped at
+  `KERNEL_FRAME 0x0023A3CE -> 0x800000A6`, ticks=670830,
+  trace=179938, fault=0. The live frame is esp=`0x008BF7C0`,
+  saved_esp=`0x008BF7DC` (28 bytes). Boundary registers were
+  EAX=`0xFFFFFFFF`, ECX=`0x00000060`, EDX=`0x00000000`,
+  ESI=`0x00299380`. The last translated DIRECT target before the boundary was
+  `0x0022AEE9`, the same physical-allocation wrapper structurally proven in
+  Phase 6Y.
+- **Phase 6AC active — Mm166 wrapper reuse:** retire the temporary 6Y
+  one-size-only +28 gate. Emission re-proves the generated `sub_0022AEE9`
+  shape (saved ESI + five MmAllocateContiguousMemoryEx arguments + dummy
+  return), instruments only its single `RECOMP_ICALL_SAFE` with a transient
+  wrapper-active marker, and permits the +28 ordinal-166 frame only while that
+  exact wrapper call is active and the c+24 spill still equals live ESI.
+  Canonical +24 Mm166 calls remain unchanged, and the existing 22.5 MiB retail
+  graphics-pool special allocation path remains restricted to its exact
+  size/range/protection signature. Using the proven push mapping, the 6AB
+  boundary registers decode the new request as size=`0x60`, low=0,
+  high=`0xFFFFFFFF`; 6AC deliberately fixes the wrapper class rather than
+  special-casing that single size.
