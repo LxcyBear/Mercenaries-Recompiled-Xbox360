@@ -203,17 +203,20 @@ def instrument_rendered_wrapper(main_text: str, wrapper_name: str) -> str:
         )
 
     call = calls[0]
-    line_start = rendered.rfind("\n", 0, call.start()) + 1
-    indent_match = re.match(r"[ \t]*", rendered[line_start:call.start()])
-    indent = indent_match.group(0) if indent_match else ""
     call_text = rendered[call.start():call.end()]
 
+    # Preserve the surrounding generated syntax exactly.  The ICALL may be the
+    # body of an if/else or share a generated line with other syntax, so replacing
+    # from the beginning of the source line is unsafe.  A do/while wrapper is one
+    # statement in every such context and scopes only this proven ICALL.
     replacement = (
-        f"{indent}s_phase6acMm166WrapperActive = 1;\n"
-        f"{indent}{call_text}\n"
-        f"{indent}s_phase6acMm166WrapperActive = 0;"
+        "do { "
+        "s_phase6acMm166WrapperActive = 1; "
+        + call_text
+        + " s_phase6acMm166WrapperActive = 0; "
+        "} while (0);"
     )
-    rendered = rendered[:line_start] + replacement + rendered[call.end():]
+    rendered = rendered[:call.start()] + replacement + rendered[call.end():]
     return main_text[:start] + rendered + main_text[end:]
 
 
