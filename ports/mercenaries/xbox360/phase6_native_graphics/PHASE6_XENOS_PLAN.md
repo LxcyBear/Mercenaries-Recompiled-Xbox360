@@ -561,3 +561,24 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   for neatness while the frontier is moving. Plan at most two dedicated cleanup
   passes: (1) structural consolidation after first real Mercenaries pixels are
   reached, and (2) release/hardening cleanup after stable rendering.
+
+
+- **Phase 6AD hardware - PASS:** the combined AV saved-data + safe cleanup
+  stage worked as intended. Ordinal 1 \`AvGetSavedDataAddress\` crossed with
+  address NULL and exact +4 ABI. The next hard stop is ordinal 2
+  \`AvSendTVEncoderOption@16\` with esp=\`0x008BF948\`,
+  saved_esp=\`0x008BF95C\` (exact +20 frame), ticks=670848,
+  trace=179942, fault=0. The inherited graphics-pool and 96-byte Mm166 paths
+  both still pass. Safe cleanup was semantics-neutral: maintained CRT
+  \`_msize\` executed 601 calls while 590 repetitive trace lines were
+  suppressed. Phase result PASS, XAPI return 0.
+- **Phase 6AE active - compact AV-family display handoff:** handle ordinals
+  1-4 as one bounded compatibility unit. Ordinal 2 uses its hardware-proven
+  +20 frame and models TV-encoder controls as logical port state; bounded
+  query options receive stable compatibility values. Ordinal 3
+  \`AvSetDisplayMode@24\` is pre-armed with a strict +28 frame and records
+  register-base, step, mode, format, pitch and framebuffer while returning
+  success without writing original-Xbox NV2A/encoder registers. The native
+  Xbox 360 Xenos device remains the physical display owner. Ordinal 4 keeps
+  the maintained saved-data setter. Genuine NV2A MMIO/VRAM and unrelated
+  platform/ABI/guest-fault boundaries remain hard stops.
