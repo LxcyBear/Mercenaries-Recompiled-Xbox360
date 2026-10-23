@@ -30,6 +30,44 @@ ROOT_DEPTH = 4
 ROOT_CAP = 256
 SHARD_TARGET_CHARS = 750000
 
+EXPECTED_ROOT_SUPPORT = {
+    "xbox_GetExtendedGraphicsPool",
+}
+
+
+def install_phase6x_graphics_support(main_text: str) -> str:
+    """Install the reviewed extended-graphics-pool query before support audit.
+
+    Canonical upstream semantics:
+        return g_memory_base && g_extended_graphics_memory ? 0x04000000 : 0;
+
+    This Xbox 360 port deliberately exposes the retail 64 MiB guest layout and
+    does not enable the optional PC-only second graphics bank, so the canonical
+    disabled-state result is 0. This preserves the original retail graphics-pool
+    initialization path at sub_0020F9C0.
+    """
+    marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    if marker not in main_text:
+        raise SystemExit("[Phase6X] graphics support insertion marker changed")
+
+    support = r"""
+/* Phase 6X reviewed graphics-memory support.
+ * Canonical upstream:
+ *   xbox_GetExtendedGraphicsPool() returns 0x04000000 only when the optional
+ *   PC extended graphics bank is enabled and mapped.
+ *
+ * This Xbox 360 port intentionally keeps the original retail 64 MiB guest
+ * layout, so extended graphics memory is disabled and the canonical return is
+ * zero. sub_0020F9C0 therefore follows the retail graphics-pool path.
+ */
+static uint32_t xbox_GetExtendedGraphicsPool(void)
+{
+    return 0u;
+}
+
+"""
+    return main_text.replace(marker, support + marker, 1)
+
 
 def load(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -184,20 +222,38 @@ def main() -> int:
     for marker in (
         "static double recomp_frame_ticks_with_remainder(double ticks)",
         "static uint32_t recomp_freecam_game_ticks(uint32_t ticks)",
+        "static uint32_t xbox_GetExtendedGraphicsPool(void)",
     ):
         if marker not in main_text:
             raise SystemExit("[Phase6X] inherited Phase 6W reviewed timing support is missing")
 
     inherited_pruned = manifest.get("phase6q_pruned_members", [])
+    root_prune = None
     for row in inherited_pruned:
         if str(row.get("address", "")).upper() == f"0X{ROOT:08X}":
-            names = [str(x) for x in row.get("unresolved_support", [])]
-            if names:
-                raise SystemExit(
-                    f"[Phase6X] PREVIOUSLY PRUNED TARGET 0x{ROOT:08X}: "
-                    f"unresolved support = {', '.join(names)}. "
-                    "Implement real support semantics before packing this graphics frontier."
-                )
+            root_prune = row
+            break
+
+    if root_prune is None:
+        raise SystemExit(
+            "[Phase6X] expected inherited 6Q prune record for graphics root "
+            "0x0020F9C0, but none was found"
+        )
+
+    observed_support = set(str(x) for x in root_prune.get("unresolved_support", []))
+    if observed_support != EXPECTED_ROOT_SUPPORT:
+        raise SystemExit(
+            "[Phase6X] graphics-root support dependency set changed: expected "
+            + ", ".join(sorted(EXPECTED_ROOT_SUPPORT))
+            + "; observed "
+            + (", ".join(sorted(observed_support)) or "<none>")
+        )
+
+    print(
+        "[Phase6X] REVIEWED GRAPHICS SUPPORT: "
+        + ", ".join(sorted(observed_support))
+        + " -> retail disabled-state return 0"
+    )
 
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated_root, by_name)
@@ -205,6 +261,11 @@ def main() -> int:
     validate_exact(CALLER, by_va, generated)
     base.STANDARD_CALLS.add("cos")
     base.STANDARD_CALLS.add("sin")
+
+    # Install reviewed graphics-memory support before Phase5BC snapshots the
+    # support symbols, so the normal unresolved-dependency audit validates the
+    # root against an actual compiled implementation.
+    main_text = install_phase6x_graphics_support(main_text)
 
     old = {int(x, 0) for x in manifest.get("members", [])}
     if ROOT in old:
@@ -345,6 +406,11 @@ def main() -> int:
         "execution_budget_inherited": 2000000,
         "title_heap_end_inherited": "0x028C0000",
         "reviewed_phase6w_timing_support_inherited": True,
+        "reviewed_graphics_support": {
+            "xbox_GetExtendedGraphicsPool": (
+                "canonical disabled-state semantics for retail 64 MiB guest layout; returns 0"
+            ),
+        },
         "root": f"0x{ROOT:08X}",
         "root_name": generated[ROOT]["name"],
         "frontier_caller": f"0x{CALLER:08X}",
@@ -358,6 +424,7 @@ def main() -> int:
         "source_layout": source_layout,
         "runtime_policy": (
             "exact generated graphics-pool root/closure only; inherited reviewed timing support; "
+            "reviewed canonical disabled-state xbox_GetExtendedGraphicsPool support; "
             "support-clean pruning authoritative; no unknown helper stubs; "
             "NV2A/platform/ABI/guest-fault remain hard stops"
         ),
@@ -383,6 +450,7 @@ def main() -> int:
     print("[Phase6X] EXECUTION BUDGET: inherited 2000000 ticks")
     print("[Phase6X] TITLE HEAP: inherited 32 MiB")
     print("[Phase6X] REVIEWED PHASE 6W TIMING SUPPORT: inherited unchanged")
+    print("[Phase6X] REVIEWED GRAPHICS SUPPORT: xbox_GetExtendedGraphicsPool -> 0 (retail mode)")
     print("[Phase6X] EMIT RESULT: PASS")
     return 0
 
