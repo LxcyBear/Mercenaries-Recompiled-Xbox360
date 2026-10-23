@@ -95,6 +95,16 @@ def install_renderer_recovery_support(main_text: str) -> str:
         raise SystemExit("[Phase6AA] renderer support insertion marker changed")
 
     support = r"""
+static uint32_t recomp_renderer_test_oom(uint32_t multisample)
+{
+    /*
+     * Upstream enables this only through explicit PC test-injection
+     * environment variables. Production/default behavior is false.
+     */
+    (void)multisample;
+    return 0u;
+}
+
 static void recomp_renderer_recovery_report(uint32_t result, uint32_t stage)
 {
     char line[256];
@@ -444,6 +454,7 @@ def main() -> int:
         "static double recomp_frame_ticks_with_remainder(double ticks)",
         "static uint32_t recomp_freecam_game_ticks(uint32_t ticks)",
         "static uint32_t xbox_GetExtendedGraphicsPool(void)",
+        "static uint32_t recomp_renderer_test_oom(uint32_t multisample)",
         "static void recomp_renderer_recovery_report(uint32_t result, uint32_t stage)",
         "PHASE4C_BOUNDARY_RENDERER_FATAL = 9",
         'case PHASE4C_BOUNDARY_RENDERER_FATAL: return "RENDERER_FATAL";',
@@ -517,6 +528,13 @@ def main() -> int:
         ],
         "graphics_pool_model_inherited_unchanged": True,
         "reviewed_support": {
+            "recomp_renderer_test_oom": {
+                "upstream_contract": (
+                    "opt-in PC diagnostic failure injection; default production "
+                    "behavior returns 0"
+                ),
+                "xbox360_mapping": "diagnostic injection disabled; return 0",
+            },
             "recomp_renderer_recovery_report": {
                 "upstream_contract": (
                     "stages 1/2 report only and do not mutate guest registers "
