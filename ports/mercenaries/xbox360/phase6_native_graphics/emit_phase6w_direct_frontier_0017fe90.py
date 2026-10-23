@@ -7,10 +7,18 @@ frontier:
     ticks=670295, trace=179827, fault=0
 
 Before packing anything, 6W consults the inherited Phase-6Q support-clean prune
-table. If 0x0017FE90 was previously rejected, emission hard-stops and prints the
-exact unresolved support names so the next change implements real semantics.
-Otherwise, 6W validates that the target is an exact generated function start and
-packs a bounded generated closure rooted there.
+table. Hardware reached a root previously fenced only by two upstream host-patch
+helpers: recomp_frame_ticks_with_remainder and recomp_freecam_game_ticks.
+
+6W now installs reviewed support-owned implementations before the normal
+support-clean audit:
+  * frame tick helper: canonical fractional carry/remainder semantics;
+  * freecam tick helper: retail/default identity semantics because this Xbox 360
+    port exposes no freecam enable/time-control path.
+
+Any additional or changed unresolved dependency still hard-stops. The target
+must also validate as an exact generated function start before a bounded
+generated closure is packed.
 
 The 2,000,000 tick budget, 32 MiB title heap, native Xenos surface, and all
 existing NV2A/platform/ABI/guest-fault hard stops remain unchanged.
@@ -29,6 +37,68 @@ CALLER = 0x0023A3CE
 ROOT_DEPTH = 4
 ROOT_CAP = 256
 SHARD_TARGET_CHARS = 750000
+
+EXPECTED_ROOT_SUPPORT = {
+    "recomp_frame_ticks_with_remainder",
+    "recomp_freecam_game_ticks",
+}
+
+
+def install_phase6w_support(main_text: str) -> str:
+    """Install reviewed host-patch support before the support-clean audit.
+
+    The first helper follows the canonical upstream implementation's behavior
+    for valid non-negative values while avoiding a new modf/isfinite dependency
+    in the XDK build. For valid inputs floor()+subtraction is equivalent to
+    modf(); NaN/negative/too-large values reset the carry and pass through.
+
+    The second helper is intentionally retail-preserving for Xbox 360. Upstream
+    only changes ticks when its optional free-camera mode is enabled; this port
+    has no freecam enable/time-control path, so normal/off-mode semantics are
+    exactly an identity transform.
+    """
+    marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    if marker not in main_text:
+        raise SystemExit("[Phase6W] support insertion marker changed")
+
+    support = r"""
+/* Phase 6W reviewed host-patch support.
+ * Canonical source basis:
+ * KraftMacAndChee/Mercenaries-Recompiled
+ *   recomp_frame_ticks_with_remainder()
+ *   recomp_freecam_game_ticks()
+ */
+static double s_phase6wFrameTickRemainder;
+
+static double recomp_frame_ticks_with_remainder(double ticks)
+{
+    double whole;
+
+    /* Canonical reset/pass-through conditions. ticks != ticks is the
+     * portable NaN test for this XDK build; +/-infinity are caught by bounds. */
+    if (ticks != ticks || ticks < 0.0 || ticks > 2147483647.0)
+    {
+        s_phase6wFrameTickRemainder = 0.0;
+        return ticks;
+    }
+
+    ticks += s_phase6wFrameTickRemainder;
+    whole = floor(ticks);
+    s_phase6wFrameTickRemainder = ticks - whole;
+    return whole;
+}
+
+static uint32_t recomp_freecam_game_ticks(uint32_t ticks)
+{
+    /* Upstream optional freecam normal/off mode is identity. The Xbox 360
+     * port has no freecam enable/time-control path, so preserve retail ticks. */
+    return ticks;
+}
+
+"""
+    return main_text.replace(marker, support + marker, 1)
+
+
 
 
 def load(path: Path, name: str):
@@ -203,18 +273,35 @@ def main() -> int:
     if not isinstance(deep, dict) or deep.get("new_budget_ticks") != 2000000:
         raise SystemExit("[Phase6W] inherited Phase 6V 2M-budget provenance missing")
 
-    # If 6Q already told us this target was unsafe, surface the exact reason
-    # before touching generated source.
+    # Hardware proved this exact previously-pruned target is now live. Accept
+    # only the two reviewed upstream host-patch helpers discovered by 6Q. Any
+    # dependency drift remains a hard stop.
     inherited_pruned = manifest.get("phase6q_pruned_members", [])
+    root_prune = None
     for row in inherited_pruned:
         if str(row.get("address", "")).upper() == f"0X{ROOT:08X}":
-            names = row.get("unresolved_support", [])
-            joined = ", ".join(str(x) for x in names) if names else "<unknown>"
-            raise SystemExit(
-                f"[Phase6W] PREVIOUSLY PRUNED TARGET 0x{ROOT:08X}: "
-                f"unresolved support = {joined}. "
-                "Implement real support semantics before packing this frontier."
-            )
+            root_prune = row
+            break
+
+    if root_prune is None:
+        raise SystemExit(
+            "[Phase6W] expected inherited 6Q prune record for live root "
+            "0x0017FE90, but none was found"
+        )
+
+    observed_support = set(str(x) for x in root_prune.get("unresolved_support", []))
+    if observed_support != EXPECTED_ROOT_SUPPORT:
+        raise SystemExit(
+            "[Phase6W] live-root support dependency set changed: expected "
+            + ", ".join(sorted(EXPECTED_ROOT_SUPPORT))
+            + "; observed "
+            + (", ".join(sorted(observed_support)) or "<none>")
+        )
+
+    print(
+        "[Phase6W] REVIEWED ROOT SUPPORT: "
+        + ", ".join(sorted(observed_support))
+    )
 
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated_root, by_name)
@@ -223,6 +310,11 @@ def main() -> int:
 
     base.STANDARD_CALLS.add("cos")
     base.STANDARD_CALLS.add("sin")
+
+    # Install the reviewed support-owned bodies before Phase5BC snapshots
+    # support_symbols(main_text), so the normal unresolved-dependency audit
+    # proves the root against real compiled definitions.
+    main_text = install_phase6w_support(main_text)
 
     old = {int(x, 0) for x in manifest.get("members", [])}
     if ROOT in old:
@@ -387,9 +479,18 @@ def main() -> int:
         "expanded_pack_members": len(expanded),
         "new_direct_frontier_targets": [f"0x{x:08X}" for x in sorted(frontiers)],
         "phase_owned_crt_support": ["cos", "sin"],
+        "reviewed_host_patch_support": {
+            "recomp_frame_ticks_with_remainder": (
+                "canonical fractional carry/remainder semantics; invalid input resets carry"
+            ),
+            "recomp_freecam_game_ticks": (
+                "retail/default identity semantics; Xbox 360 port has no freecam enable path"
+            ),
+        },
         "source_layout": source_layout,
         "runtime_policy": (
-            "exact generated root/closure only; support-clean pruning authoritative; "
+            "exact generated root/closure only; reviewed canonical/default host-patch "
+            "support for frame ticks/freecam ticks; support-clean pruning authoritative; "
             "no unknown helper stubs; NV2A/platform/ABI/guest-fault remain hard stops"
         ),
     }
@@ -417,6 +518,10 @@ def main() -> int:
         f"[Phase6W] SOURCE SHARDS: wrapper_lines={source_layout['wrapper_lines']} "
         f"translated_body_lines={source_layout['body_lines']} "
         f"shards={source_layout['shard_count']}"
+    )
+    print(
+        "[Phase6W] REVIEWED SUPPORT: recomp_frame_ticks_with_remainder + "
+        "recomp_freecam_game_ticks"
     )
     print("[Phase6W] EXECUTION BUDGET: inherited 2000000 ticks")
     print("[Phase6W] TITLE HEAP: inherited 32 MiB")
