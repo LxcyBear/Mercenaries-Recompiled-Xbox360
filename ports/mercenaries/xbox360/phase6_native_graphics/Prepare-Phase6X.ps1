@@ -77,7 +77,8 @@ Write-Host "[Phase6X] Phase 6W hardware: DIRECT_FRONTIER 0023A3CE -> 0020F9C0"
 Write-Host "[Phase6X] Hardware boundary: ticks=670776 trace=179920 fault=0"
 Write-Host "[Phase6X] Upstream role: sub_0020F9C0 initializes the retail graphics pool"
 Write-Host "[Phase6X] Upstream optional extended-graphics patch sites: 0020F9C0 / 0020F9D3"
-Write-Host "[Phase6X] Local generated body remains authoritative; unresolved support still hard-stops"
+Write-Host "[Phase6X] Reviewed support: xbox_GetExtendedGraphicsPool uses canonical retail disabled-state return 0"
+Write-Host "[Phase6X] Any dependency drift beyond that exact helper still hard-stops"
 Write-Host "[Phase6X] Pack root + bounded depth-4/cap-256 generated closure"
 Write-Host "[Phase6X] Inherit Phase 6W timing helpers + 2M budget + 32 MiB title heap"
 Write-Host "[Phase6X] Purple remains reserved for genuine NV2A MMIO/VRAM boundary"
@@ -154,6 +155,9 @@ if (-not $mainText.Contains("static double recomp_frame_ticks_with_remainder(dou
 if (-not $mainText.Contains("static uint32_t recomp_freecam_game_ticks(uint32_t ticks)")) {
     throw "Phase 6X inherited retail/default freecam tick support missing"
 }
+if (-not $mainText.Contains("static uint32_t xbox_GetExtendedGraphicsPool(void)")) {
+    throw "Phase 6X retail graphics-pool query support body missing"
+}
 if (-not $mainText.Contains("#define PHASE4C_EXEC_BUDGET 2000000u")) {
     throw "Phase 6X inherited 2M budget gate mismatch"
 }
@@ -185,6 +189,7 @@ Write-Host ("[Phase6X] Expanded pack members        : {0}" -f [int]$g.expanded_p
 Write-Host ("[Phase6X] Generated .inl shards        : {0}" -f $shards.Count)
 Write-Host "[Phase6X] Upstream role                 : retail graphics-pool initialization"
 Write-Host "[Phase6X] Reviewed Phase 6W support     : inherited unchanged"
+Write-Host "[Phase6X] Reviewed graphics support     : xbox_GetExtendedGraphicsPool -> 0 (retail mode)"
 Write-Host "[Phase6X] Build BOTH fresh sources:"
 Write-Host "[Phase6X]   $main"
 Write-Host "[Phase6X]   $env"
