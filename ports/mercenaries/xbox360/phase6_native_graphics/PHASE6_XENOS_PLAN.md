@@ -414,3 +414,13 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
      remain visible diagnostics/hard stops during development.
   Initial tooling lives under `tools/phase6/` and the complete contract is in
   `PHASE6_ORACLE_REPLAY_SHADER_PLAN.md`.
+
+
+- **PC oracle implementation milestone:** the fork now contains an opt-in
+  `phase6_oracle` JSONL writer compiled with the kernel runtime. Setting
+  `MERCENARIES_PHASE6_ORACLE_PATH` enables it; normal runs remain unchanged
+  when the variable is absent. The first live producer hooks are at
+  `pfifo_process_pushbuffer()` and `pgraph_method()`, recording PFIFO
+  submission geometry plus decoded/resolved PGRAPH method events. The
+  `tools/phase6/phase6_oracle.py` normalizer/differ can consume this stream.
+  Direct/ICALL/kernel/storage event producers are the next oracle expansion.
