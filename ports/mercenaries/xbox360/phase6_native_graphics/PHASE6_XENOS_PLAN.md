@@ -490,3 +490,20 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   `recomp_renderer_test_oom(multisample)` is an opt-in PC regression
   injection upstream; Xbox 360 production/default semantics are the canonical
   disabled-state return 0. Phase 6AA-B installs both before support-clean audit.
+
+
+- **Phase 6AA-B hardware — PASS:** exact generated renderer root
+  `sub_0020FAE0` executed on Xbox 360 while the Phase 6Z retail graphics pool
+  remained valid at `0x02880000` / `0x01680000`. The run advanced to
+  direct=1814 with last_direct=`0x0020FAE0` and ended with the Phase 6AA
+  post-graphics-pool result PASS. The next boundary is a 32-bit guest read from
+  `0x80000164` at caller `0x0023A3CE`, ticks=670797, trace=179929,
+  fault=1. This value is kernel ordinal 356, `HalBootSMCVideoMode`, a DATA
+  export rather than a function.
+- **Phase 6AB active — HalBootSMCVideoMode DATA relocation:** upstream uses the
+  same kernel-data base `0x0087E000`, places `HalBootSMCVideoMode` at
+  offset `0x98`, and initializes the 32-bit value to zero. 6AB therefore
+  relocates the exact retail ordinal-356 thunk to `0x0087E098`, initializes
+  and readbacks zero, requires exactly one ordinal-356 import, and otherwise
+  preserves the hardware-proven 6AA renderer closure, recovery helpers,
+  graphics pool, timing semantics, and all hard stops unchanged.
