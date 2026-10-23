@@ -19,7 +19,8 @@ param(
     [string]$Configuration = "Release",
     [string]$Platform = "Xbox 360",
     [string]$CleanLog = "",
-    [string]$BuildLog = ""
+    [string]$BuildLog = "",
+    [string]$PublishedXex = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -352,9 +353,21 @@ if (@($xexCandidates).Count -gt 0) {
     Write-Host "[XDK-BUILD] Fresh XEX      : $($builtXex.FullName)"
     Write-Host "[XDK-BUILD] XEX timestamp  : $($builtXex.LastWriteTime)"
     Write-Host "[XDK-BUILD] XEX size       : $($builtXex.Length) bytes"
+
+    if (-not [string]::IsNullOrWhiteSpace($PublishedXex)) {
+        $publishParent = Split-Path -Parent $PublishedXex
+        if (-not (Test-Path -LiteralPath $publishParent -PathType Container)) {
+            New-Item -ItemType Directory -Force -Path $publishParent | Out-Null
+        }
+        Copy-Item -LiteralPath $builtXex.FullName -Destination $PublishedXex -Force
+        Assert-FileHashMatch -Expected $builtXex.FullName -Actual $PublishedXex -Label "Published XEX"
+        $published = Get-Item -LiteralPath $PublishedXex
+        Write-Host "[XDK-BUILD] Published XEX  : $($published.FullName)"
+        Write-Host "[XDK-BUILD] Published size : $($published.Length) bytes"
+    }
 }
 else {
-    Write-Warning "VS17 reported build success, but no newly-written .xex was found under '$SolutionRoot'."
+    throw "VS17 reported build success, but no newly-written .xex was found under '$SolutionRoot'."
 }
 
 Write-Host "[XDK-BUILD] FULL PIPELINE: PASS"
