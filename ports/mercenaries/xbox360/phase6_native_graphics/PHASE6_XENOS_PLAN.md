@@ -582,3 +582,16 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   Xbox 360 Xenos device remains the physical display owner. Ordinal 4 keeps
   the maintained saved-data setter. Genuine NV2A MMIO/VRAM and unrelated
   platform/ABI/guest-fault boundaries remain hard stops.
+
+
+- **Phase 6AE-A hardware - INVALID / host logging overflow:** hardware never
+  reached the AV bridge. The run began with the 6AE-A build tag, then faulted
+  while emitting the startup Policy trace with repeated 0xC0000005 reads at
+  0x910D0A00. No Xenos startup, ordinal-2 PASS, translated boundary or phase
+  result was reached. Root cause: the 6AE-A Policy literal was 518 characters,
+  crossing the logging helper's practical 512-byte boundary once prefix/NUL
+  overhead is included. Treat this as a host-side observability regression,
+  not evidence against the combined AV-family strategy.
+- **Phase 6AE-B active:** shorten the startup Policy trace to a bounded string,
+  add emitter/prep guards rejecting an oversized policy trace, retain the same
+  AV-family runtime semantics, and publish a distinctly named P6AE-B XEX.
