@@ -105,11 +105,11 @@ def prove_generated_wrapper_shape(base, generated_root: Path, functions: Path) -
         )
 
     save_match = re.search(
-        r"\\{\\s*uint32_t\\s+_icall_esp\\s*=\\s*g_esp\\s*;",
+        r"\{\s*uint32_t\s+_icall_esp\s*=\s*g_esp\s*;",
         source,
     )
     call_match = re.search(
-        r"RECOMP_ICALL_SAFE\\([^;]*?_icall_esp\\s*\\)\\s*;",
+        r"RECOMP_ICALL_SAFE\([^;]*?_icall_esp\s*\)\s*;",
         source,
         re.S,
     )
@@ -121,11 +121,15 @@ def prove_generated_wrapper_shape(base, generated_root: Path, functions: Path) -
 
     call_setup = source[save_match.end():call_match.start()]
     push_exprs = re.findall(
-        r"PUSH32\\(esp,\\s*(.*?)\\)\\s*;",
+        r"PUSH32\(esp,\s*(.*?)\)\s*;",
         call_setup,
         re.S,
     )
-    normalized = [re.sub(r"\\s+", "", expr) for expr in push_exprs]
+    normalized = [re.sub(r"\s+", "", expr) for expr in push_exprs]
+    print(
+        "[Phase6Y] GENERATED PUSH SEQUENCE: "
+        + " | ".join(normalized)
+    )
     expected = [
         "esi",
         "GUEST_READ32(ebp+0x14)",
