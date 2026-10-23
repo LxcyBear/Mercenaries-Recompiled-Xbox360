@@ -1,5 +1,10 @@
 [CmdletBinding()]
-param()
+param(
+    [string]$SolutionRoot = "C:\Users\jorda\OneDrive\Desktop\My Xbox\My Projects\Mercenaries - Xbox 360\Mercenaries-PPC-Port",
+    [string]$Configuration = "Release",
+    [string]$Platform = "Xbox 360",
+    [switch]$SkipSolutionBuild
+)
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -18,6 +23,7 @@ $paths = @{
     base = Join-Path $p4 "emit_phase4c_startup_slice.py"
     bb = Join-Path $p5 "emit_phase5bb_frontier22dda4.py"
     bc = Join-Path $p5 "emit_phase5bc_broad_sweep.py"
+    build = Join-Path $p6 "Invoke-VS17Xbox360Build.ps1"
 }
 foreach ($v in $paths.Values + @($python)) {
     if (-not (Test-Path -LiteralPath $v)) {
@@ -198,3 +204,34 @@ Write-Host "[Phase6X]   $monolithic"
 Write-Host "[Phase6X] Keep translated_shards beside main.cpp and d3d9.lib linked."
 Write-Host "[Phase6X] Expected tag: P6X-GFXPOOL-FRONTIER-0020F9C0-20261023-A"
 Write-Host "[Phase6X] Hardware goal: cross graphics-pool init and expose the next real renderer/platform boundary."
+
+if (-not $SkipSolutionBuild) {
+    Write-Host ""
+    Write-Host "[Phase6X] AUTO-BUILD: syncing generated sources into the VS17 Xbox 360 solution"
+    Write-Host "[Phase6X] AUTO-BUILD: cleaning and building Release | Xbox 360 without opening Studio"
+
+    $buildArgs = @{
+        GeneratedMain = $main
+        GeneratedEnv = $env
+        GeneratedShardDir = $shardDir
+        ExpectedBuildTag = "P6X-GFXPOOL-FRONTIER-0020F9C0-20261023-A"
+        ExpectedEnvCookie = "phase6x_env_build_cookie"
+        SolutionRoot = $SolutionRoot
+        Configuration = $Configuration
+        Platform = $Platform
+        CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6x-vs17-clean.log")
+        BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6x-vs17-build.log")
+    }
+
+    & $paths.build @buildArgs
+    if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+        throw "Phase 6X VS17/Xbox 360 command-line build helper failed (exit $LASTEXITCODE)"
+    }
+
+    Write-Host ""
+    Write-Host "[Phase6X] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
+    Write-Host "[Phase6X] Hardware tag to verify: P6X-GFXPOOL-FRONTIER-0020F9C0-20261023-A"
+}
+else {
+    Write-Host "[Phase6X] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
+}
