@@ -533,3 +533,31 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   boundary registers decode the new request as size=`0x60`, low=0,
   high=`0xFFFFFFFF`; 6AC deliberately fixes the wrapper class rather than
   special-casing that single size.
+
+
+- **Phase 6AC hardware - PASS:** the generalized sub_0022AEE9 ordinal-166
+  wrapper repair is now proven for both the 22.5 MiB retail graphics-pool
+  request and the later 96-byte aligned request. The latter reached the
+  intended audio-allocation fallback with fault=0. Execution advanced to
+  ICALL_SAFE target \`0x80000001\` at ticks=670846 / trace=179942 with
+  esp=\`0x008BF958\`, saved_esp=\`0x008BF95C\` (4 bytes), and the run ended
+  PASS/XAPI 0. Summary advanced to direct=1817 with
+  last_direct=\`0x00290450\`, inside the retail D3D section.
+- **Phase 6AD active - AV saved-data + safe cleanup pass #1:** ordinal 1 is
+  \`AvGetSavedDataAddress(void)\`; implement only its exact observed +4 frame
+  and maintained saved-address return, initially NULL. Pre-arm its natural
+  ordinal-4 partner \`AvSetSavedDataAddress(PVOID)\` with a strict +8 frame so
+  get/set semantics remain coherent if the title reaches it. Hardware-facing
+  AV ordinals 2/3 remain hard stops. In the same build, throttle repetitive
+  maintained \`_msize\` PASS logging without changing any helper result,
+  allocation lookup, register, stack or counter semantics, and rename emitted
+  translated shards to a phase-correct \`phase6ad_*\` prefix with byte-identical
+  reconstruction required.
+- **Cleanup policy from 6AD onward:** avoid serial cleanup phases. Safe cleanup
+  may ride along with frontier builds only when it is semantics-free
+  (diagnostic throttling, source/shard naming, deterministic preflight,
+  comments/docs, or build-artifact hygiene). Do not refactor proven allocator,
+  stack, VM, storage, timing, Xenos, graphics-pool or renderer semantics merely
+  for neatness while the frontier is moving. Plan at most two dedicated cleanup
+  passes: (1) structural consolidation after first real Mercenaries pixels are
+  reached, and (2) release/hardening cleanup after stable rendering.
