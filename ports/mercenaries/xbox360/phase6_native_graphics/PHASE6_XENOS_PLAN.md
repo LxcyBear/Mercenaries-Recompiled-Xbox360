@@ -447,3 +447,28 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   still equals live `ESI`; it resumes at `c+24 == savedEsp-4` so the
   wrapper can perform its later `POP32(esp, esi)`. Canonical +24 calls remain
   unchanged; every other shape still hard-stops.
+
+
+- **Phase 6Y-B hardware:** the saved-ESI / ordinal-166 ABI repair is proven on
+  real hardware. `MmAllocateContiguousMemoryEx` received exactly the retail
+  graphics request `size=0x01680000` (22.5 MiB), `low=0`,
+  `high=0xFFFFFFFF`, `align=0`, `protect=0x404`, with the expected
+  +28 wrapper frame. The continuation preserved the wrapper spill and resumed
+  at `savedEsp-4`; execution continued with `fault=0`. The allocation
+  itself returned NULL (`base=0`, rounded=0) and the title immediately set
+  last-error 8 before reaching `DIRECT_FRONTIER 0x0020FAE0` at ticks=670789
+  / trace=179925. Therefore `0x0020FAE0` is treated as allocation-failure
+  path evidence, not as the next safe frontier to pack.
+- **Phase 6Z active — retail graphics-pool dual frontier:** the OOM is caused
+  by the focused Xbox360 allocator treating the full 32 MiB synthetic
+  title-heap *capacity* as occupied. The maintained production memory model
+  instead grows ordinary heap allocations upward and page-backed/contiguous
+  allocations downward until their live frontiers meet. With the existing
+  1 MiB VM reservation, the page frontier is `0x03F00000`; subtracting the
+  retail `0x01680000` request yields `0x02880000`. That candidate overlaps
+  only the final `0x00040000` (256 KiB) of the old synthetic heap ceiling.
+  6Z requires that overlap to be a free tail, requires every target page to be
+  unmanaged, proves no live heap block crosses the candidate, trims only that
+  free tail, commits the graphics range `0x02880000-0x03EFFFFF`, and moves
+  the page frontier down. It does **not** hard-code upstream's test-fixture
+  `0x02980000` return and does **not** pack the observed OOM branch.
