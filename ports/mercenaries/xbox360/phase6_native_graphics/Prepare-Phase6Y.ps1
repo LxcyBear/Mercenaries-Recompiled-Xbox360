@@ -75,9 +75,9 @@ Write-Host "[Phase6Y] GRAPHICS-POOL MM166 ABI REPAIR"
 Write-Host "[Phase6Y] Hardware: KERNEL_FRAME target=800000A6 ordinal=166"
 Write-Host "[Phase6Y] Hardware frame: esp=008BF9E0 saved_esp=008BF9FC delta=28"
 Write-Host "[Phase6Y] Hardware state: ECX=01680000, ticks=670780 trace=179922 fault=0"
-Write-Host "[Phase6Y] Offline gate: local generated sub_0022AEE9 must prove one ICALL_SAFE with saved-ESP +28"
-Write-Host "[Phase6Y] Runtime gate: +28 repair only for retail graphics pool size 01680000"
-Write-Host "[Phase6Y] Canonical +24 MmAllocateContiguousMemoryEx ABI remains accepted"
+Write-Host "[Phase6Y] Offline gate: sub_0022AEE9 must prove _icall_esp snapshot + saved ESI + five Mm166 args + dummy return"
+Write-Host "[Phase6Y] Runtime gate: +28 repair only for retail size 01680000 with c+24 spill == live ESI"
+Write-Host "[Phase6Y] Stack resume: consume canonical 24-byte Mm166 frame; preserve saved ESI for wrapper POP"
 Write-Host "[Phase6Y] Purple remains reserved for genuine NV2A MMIO/VRAM"
 
 $args = @(
@@ -121,7 +121,7 @@ foreach ($f in @($main,$monolithic,$env,$manifest,$shardDir)) {
 
 $m = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($m.phase -ne "6Y" -or
-    $m.build_tag -ne "P6Y-GFXPOOL-MM166-FRAME-20261023-A") {
+    $m.build_tag -ne "P6Y-GFXPOOL-MM166-FRAME-20261023-B") {
     throw "Phase 6Y manifest identity mismatch"
 }
 
@@ -137,10 +137,11 @@ $mainText = Get-Content -LiteralPath $main -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
 foreach ($marker in @(
-    "P6Y-GFXPOOL-MM166-FRAME-20261023-A",
+    "P6Y-GFXPOOL-MM166-FRAME-20261023-B",
     "PASS: Phase 6Y ordinal 166 MmAllocateContiguousMemoryEx",
     "frameBytes!=24u && frameBytes!=28u",
-    "size!=0x01680000u",
+    "size!=0x01680000u || extra!=g_esi",
+    "resumeEsp=c+24u",
     "phase6y_env_build_cookie",
     "#define PHASE4C_EXEC_BUDGET 2000000u",
     "#define PHASE4C_TITLE_HEAP_END   (PHASE4C_TITLE_HEAP_BASE + 0x02000000u)"
@@ -162,9 +163,9 @@ Write-Host ""
 Write-Host "[Phase6Y] READY"
 Write-Host ("[Phase6Y] Generated shards              : {0}" -f $shards.Count)
 Write-Host "[Phase6Y] MM166 canonical frame         : +24"
-Write-Host "[Phase6Y] Hardware-proven repair frame  : +28"
-Write-Host "[Phase6Y] Repair scope                  : retail 01680000 graphics-pool request only"
-Write-Host "[Phase6Y] Expected tag                  : P6Y-GFXPOOL-MM166-FRAME-20261023-A"
+Write-Host "[Phase6Y] Hardware-proven wrapper frame : +28 (= +24 Mm166 + 4-byte saved ESI)"
+Write-Host "[Phase6Y] Repair scope                  : retail 01680000 + verified saved-ESI spill only"
+Write-Host "[Phase6Y] Expected tag                  : P6Y-GFXPOOL-MM166-FRAME-20261023-B"
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -174,7 +175,7 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6Y-GFXPOOL-MM166-FRAME-20261023-A"
+        ExpectedBuildTag = "P6Y-GFXPOOL-MM166-FRAME-20261023-B"
         ExpectedEnvCookie = "phase6y_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
@@ -189,7 +190,7 @@ if (-not $SkipSolutionBuild) {
 
     Write-Host ""
     Write-Host "[Phase6Y] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6Y] Hardware tag to verify: P6Y-GFXPOOL-MM166-FRAME-20261023-A"
+    Write-Host "[Phase6Y] Hardware tag to verify: P6Y-GFXPOOL-MM166-FRAME-20261023-B"
 }
 else {
     Write-Host "[Phase6Y] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
