@@ -31,7 +31,7 @@ function Resolve-VS17Devenv {
         $candidate = [string]$command.Source
         try {
             $major = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($candidate).ProductMajorPart
-            if ($major -eq 17) {
+            if ($major -eq 15) {
                 return $candidate
             }
         }
@@ -42,7 +42,7 @@ function Resolve-VS17Devenv {
     $vswhere = Join-Path $programFilesX86 "Microsoft Visual Studio\Installer\vswhere.exe"
     if (Test-Path -LiteralPath $vswhere) {
         $found = @(
-            & $vswhere -products * -version "[17.0,18.0)" -find "Common7\IDE\devenv.com" 2>$null |
+            & $vswhere -products * -version "[15.0,16.0)" -find "Common7\IDE\devenv.com" 2>$null |
                 Where-Object { $_ -and (Test-Path -LiteralPath $_) }
         )
 
@@ -52,9 +52,10 @@ function Resolve-VS17Devenv {
     }
 
     $fallbacks = @(
-        "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.com",
-        "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\devenv.com",
-        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\devenv.com"
+        "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\devenv.com",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\Common7\IDE\devenv.com",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\Common7\IDE\devenv.com",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\Common7\IDE\devenv.com"
     )
     foreach ($candidate in $fallbacks) {
         if (Test-Path -LiteralPath $candidate) {
@@ -62,7 +63,7 @@ function Resolve-VS17Devenv {
         }
     }
 
-    throw "Visual Studio 17 devenv.com was not found. Install/repair the VS17 Xbox 360 Debugger/XDK integration first."
+    throw "Visual Studio 2017 devenv.com was not found. The helper searched VS 2017 / version 15.x plus the standard 2017 install paths."
 }
 
 function Get-ProjectCompiledFiles {
@@ -269,7 +270,7 @@ Write-Host "[XDK-BUILD] SOURCE SYNC: PASS"
 Write-Host "[XDK-BUILD] Shards synced  : $(@($sourceShards).Count)"
 
 $devenv = Resolve-VS17Devenv
-Write-Host "[XDK-BUILD] VS17 builder   : $devenv"
+Write-Host "[XDK-BUILD] VS2017 builder   : $devenv"
 
 if ([string]::IsNullOrWhiteSpace($CleanLog)) {
     $CleanLog = Join-Path $SolutionRoot "phase6-vs17-clean.log"
