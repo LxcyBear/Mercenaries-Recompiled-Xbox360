@@ -156,6 +156,7 @@ if (-not [bool]$ac.phase6ab_hardware_pass -or
 }
 
 $mainText = Get-Content -LiteralPath $main -Raw
+$monolithicText = Get-Content -LiteralPath $monolithic -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
 foreach ($marker in @(
@@ -173,18 +174,21 @@ foreach ($marker in @(
     "PHASE 6AC MM166 WRAPPER REUSE RESULT",
     "phase6ac_env_build_cookie"
 )) {
-    if (-not $mainText.Contains($marker)) {
-        throw "Phase 6AC generated main gate missing: $marker"
+    # main.cpp is intentionally only the small wrapper around translated_shards.
+    # Validate semantic/source markers against the monolithic emitter cache so
+    # markers inside translated function bodies are visible to preflight.
+    if (-not $monolithicText.Contains($marker)) {
+        throw "Phase 6AC generated source gate missing: $marker"
     }
 }
 
-if ($mainText.Contains("size!=0x01680000u || extra!=g_esi")) {
+if ($monolithicText.Contains("size!=0x01680000u || extra!=g_esi")) {
     throw "Phase 6AC stale one-size-only +28 gate remains"
 }
 if ($envText -notmatch "phase6ac_env_build_cookie") {
     throw "Phase 6AC env cookie gate missing"
 }
-if ($mainText -match "phase6ab_env_build_cookie" -or
+if ($monolithicText -match "phase6ab_env_build_cookie" -or
     $envText -match "phase6ab_env_build_cookie") {
     throw "Phase 6AC stale Phase 6AB cookie remains"
 }
