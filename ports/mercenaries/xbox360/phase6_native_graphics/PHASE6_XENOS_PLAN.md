@@ -459,16 +459,22 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   last-error 8 before reaching `DIRECT_FRONTIER 0x0020FAE0` at ticks=670789
   / trace=179925. Therefore `0x0020FAE0` is treated as allocation-failure
   path evidence, not as the next safe frontier to pack.
-- **Phase 6Z active — retail graphics-pool dual frontier:** the OOM is caused
-  by the focused Xbox360 allocator treating the full 32 MiB synthetic
-  title-heap *capacity* as occupied. The maintained production memory model
-  instead grows ordinary heap allocations upward and page-backed/contiguous
-  allocations downward until their live frontiers meet. With the existing
-  1 MiB VM reservation, the page frontier is `0x03F00000`; subtracting the
-  retail `0x01680000` request yields `0x02880000`. That candidate overlaps
-  only the final `0x00040000` (256 KiB) of the old synthetic heap ceiling.
-  6Z requires that overlap to be a free tail, requires every target page to be
-  unmanaged, proves no live heap block crosses the candidate, trims only that
-  free tail, commits the graphics range `0x02880000-0x03EFFFFF`, and moves
-  the page frontier down. It does **not** hard-code upstream's test-fixture
-  `0x02980000` return and does **not** pack the observed OOM branch.
+- **Phase 6Z hardware — PASS:** the bounded dual-frontier repair worked on
+  real Xbox 360 hardware. The retail graphics-pool claim succeeded at
+  `0x02880000` for the full `0x01680000` bytes (22.5 MiB), moving
+  `page_next` from `0x03F00000` to `0x02880000`. The live title-heap
+  high-water was only `0x01B5C320`; exactly `0x00040000` (256 KiB) of the
+  prior synthetic free tail was trimmed, with two VM reservations active.
+  Ordinal 166 returned `base=0x02880000`, `graphics_claim=1`, and preserved
+  the proven wrapper stack repair. No genuine NV2A/MMIO/VRAM first touch was
+  observed before the next boundary.
+- **Corrected 6Z inference:** `0x0020FAE0` is **not** OOM-only. Hardware
+  reached `DIRECT_FRONTIER 0x0023A3CE -> 0x0020FAE0` after the successful
+  graphics-pool allocation, at ticks=670788 / trace=179924 / fault=0 with
+  EAX=1. The earlier failure-path assumption is retired.
+- **Phase 6AA active — post-graphics-pool frontier:** require
+  `0x0020FAE0` to be an exact locally generated function start/body, then
+  pack only a depth-4/cap-256 support-clean closure rooted there. Preserve the
+  hardware-proven Phase 6Z graphics pool and Mm166 repair unchanged. Genuine
+  NV2A/MMIO/VRAM, platform, ABI, guest-fault, or unresolved-support boundaries
+  remain hard stops.
