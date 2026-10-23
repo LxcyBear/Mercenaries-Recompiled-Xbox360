@@ -118,7 +118,7 @@ foreach ($f in @($main,$monolithic,$env,$manifest,$shardDir)) {
 
 $m = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($m.phase -ne "6AE" -or
-    $m.build_tag -ne "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-A") {
+    $m.build_tag -ne "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-B") {
     throw "Phase 6AE manifest identity mismatch"
 }
 
@@ -137,8 +137,16 @@ $mainText = Get-Content -LiteralPath $main -Raw
 $monolithicText = Get-Content -LiteralPath $monolithic -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
+$policyMatch = [regex]::Match($monolithicText, 'trace\("Policy:([^"]*)"\);')
+if (-not $policyMatch.Success) {
+    throw "Phase 6AE startup policy trace missing"
+}
+if ($policyMatch.Groups[1].Value.Length -gt 240) {
+    throw "Phase 6AE startup policy trace exceeds safe length"
+}
+
 foreach ($marker in @(
-    "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-A",
+    "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-B",
     "static void phase6ae_av_send_tv_encoder_option(uint32_t savedEsp)",
     "static void phase6ae_av_set_display_mode(uint32_t savedEsp)",
     "_phase4c_target == 0x80000002u",
@@ -181,7 +189,7 @@ Write-Host "[Phase6AE] Ordinal 2         : strict +20 encoder-option bridge"
 Write-Host "[Phase6AE] Ordinal 3         : strict +28 display-mode handoff pre-armed"
 Write-Host "[Phase6AE] Xbox AV hardware  : no original-Xbox register writes"
 Write-Host "[Phase6AE] Xenos             : inherited native display owner"
-Write-Host "[Phase6AE] Expected tag      : P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-A"
+Write-Host "[Phase6AE] Expected tag      : P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-B"
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -191,22 +199,22 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-A"
+        ExpectedBuildTag = "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-B"
         ExpectedEnvCookie = "phase6ae_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
         Platform = $Platform
         CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6ae-vs2017-clean.log")
         BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6ae-vs2017-build.log")
-        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AE.xex")
+        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AE-B.xex")
     }
 
     & $paths.build @buildArgs
 
     Write-Host ""
     Write-Host "[Phase6AE] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AE] Hardware tag to verify: P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-A"
-    Write-Host ("[Phase6AE] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AE.xex"))
+    Write-Host "[Phase6AE] Hardware tag to verify: P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-B"
+    Write-Host ("[Phase6AE] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AE-B.xex"))
 }
 else {
     Write-Host "[Phase6AE] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
