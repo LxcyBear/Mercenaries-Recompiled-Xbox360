@@ -438,8 +438,12 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   No FIRST GRAPHICS TOUCH or DATAxbox event occurred before this boundary.
 - **Phase 6Y:** resolve that ABI shape without globally weakening ordinal 166.
   Emission first inspects the local generated `sub_0022AEE9` physical
-  allocation wrapper and requires exactly one `RECOMP_ICALL_SAFE` whose
-  saved-ESP expression proves +28. Runtime then accepts +28 only for the known
-  retail `0x01680000` graphics-pool request; canonical +24 remains valid for
-  ordinary `MmAllocateContiguousMemoryEx` calls. All other frame shapes or
-  non-retail +28 requests still hard-stop.
+  allocation wrapper and structurally proves its exact call setup:
+  `_icall_esp` is snapshotted, then saved `ESI`, the five ordinal-166
+  arguments, and the dummy return are pushed. Therefore the hardware-observed
+  +28 delta is **24 bytes owned by `MmAllocateContiguousMemoryEx` plus a
+  4-byte wrapper-owned saved-ESI spill**. Runtime accepts that +28 shape only
+  for the retail `0x01680000` graphics-pool request and only when the spill
+  still equals live `ESI`; it resumes at `c+24 == savedEsp-4` so the
+  wrapper can perform its later `POP32(esp, esi)`. Canonical +24 calls remain
+  unchanged; every other shape still hard-stops.
