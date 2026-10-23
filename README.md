@@ -845,13 +845,23 @@ startup path on hardware.
 **Gate 6:** repeatable native Xenos first **game-rendered** frame and functional
 title/menu/scene graphics.
 
-94. **Active — Phase 6Y ordinal-166 graphics allocation frame:** Phase 6X
+94. **Done — Phase 6Y ordinal-166 graphics allocation frame:** Phase 6X
     executed `sub_0020F9C0` and reached kernel ordinal 166
     (`MmAllocateContiguousMemoryEx`) with a hardware-observed 28-byte
     saved-ESP frame at the retail `0x01680000` graphics-pool request. 6Y
     proves that +28 shape from the local generated `sub_0022AEE9` wrapper
     before enabling a narrowly scoped repair; canonical +24 calls remain
     unchanged.
+
+95. **Active — Phase 6Z graphics-pool dual frontier:** Phase 6Y-B proved
+    the +28 saved-ESI frame repair, then the exact 22.5 MiB retail contiguous
+    allocation returned NULL/error 8 because the focused allocator treated the
+    entire 32 MiB synthetic title-heap capacity as occupied. 6Z restores the
+    production-style two-frontier policy for this hardware-proven request:
+    ordinary heap stays below its live high-water while the graphics claim
+    grows downward from `0x03F00000` to `0x02880000`, trimming only a
+    proven-free 256 KiB heap tail. The OOM-path frontier `0x0020FAE0` is
+    intentionally not packed.
 
 Detailed active plan:
 `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
