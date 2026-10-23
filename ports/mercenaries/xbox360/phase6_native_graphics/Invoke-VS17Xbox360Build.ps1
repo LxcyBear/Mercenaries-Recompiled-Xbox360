@@ -79,7 +79,7 @@ function Get-ProjectCompiledFiles {
     foreach ($match in $matches) {
         $include = [string]$match.Groups[1].Value
         if ([string]::IsNullOrWhiteSpace($include)) { continue }
-        if ($include.Contains("$(")) { continue }
+        if ($include.Contains('$(')) { continue }
 
         $relative = $include -replace '/', '\'
         $full = [System.IO.Path]::GetFullPath((Join-Path $projectDir $relative))
@@ -139,6 +139,12 @@ function Resolve-SolutionProjectAndSources {
     }
 
     $project = $projects[0]
+
+    $monolithic = @($project.Compiled | Where-Object { $_.Leaf -ieq "main_monolithic.cpp" })
+    if ($monolithic.Count -gt 0) {
+        throw "main_monolithic.cpp is listed as a compiled source in '$($project.Path)'. Remove/exclude it before building."
+    }
+
     $envMatches = @($project.Compiled | Where-Object { $_.Leaf -ieq "phase4c_env.cpp" })
     if ($envMatches.Count -eq 0) {
         $envMatches = @($project.Compiled | Where-Object { $_.Leaf -ieq "phase5_env.cpp" })
