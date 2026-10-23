@@ -207,8 +207,8 @@ Write-Host "[Phase6X] Hardware goal: cross graphics-pool init and expose the nex
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
-    Write-Host "[Phase6X] AUTO-BUILD: syncing generated sources into the VS17 Xbox 360 solution"
-    Write-Host "[Phase6X] AUTO-BUILD: cleaning and building Release | Xbox 360 without opening Studio"
+    Write-Host "[Phase6X] AUTO-BUILD: syncing generated sources into the VS2017 Xbox 360 solution"
+    Write-Host "[Phase6X] AUTO-BUILD: cleaning and building Release | Xbox 360 without opening Visual Studio"
 
     $buildArgs = @{
         GeneratedMain = $main
