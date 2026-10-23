@@ -424,3 +424,22 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   submission geometry plus decoded/resolved PGRAPH method events. The
   `tools/phase6/phase6_oracle.py` normalizer/differ can consume this stream.
   Direct/ICALL/kernel/storage event producers are the next oracle expansion.
+
+
+- **Phase 6X hardware:** PASS/XAPI 0 with the intended
+  `P6X-GFXPOOL-FRONTIER-0020F9C0-20261023-A` image. The exact translated
+  `0x0020F9C0` graphics-pool root executed successfully; summary advanced to
+  direct=1813 with last_direct=`0x0020F9C0`, ICALL=9075, and the next
+  boundary is `KERNEL_FRAME target=0x800000A6` (ordinal 166,
+  `MmAllocateContiguousMemoryEx`) at ticks=670780 / trace=179922 / fault=0.
+  The live frame is esp=`0x008BF9E0`, saved_esp=`0x008BF9FC` (28 bytes),
+  while the canonical five-argument kernel frame is 24 bytes. ECX was
+  `0x01680000`, exactly the retail graphics-pool size validated by upstream.
+  No FIRST GRAPHICS TOUCH or DATAxbox event occurred before this boundary.
+- **Phase 6Y:** resolve that ABI shape without globally weakening ordinal 166.
+  Emission first inspects the local generated `sub_0022AEE9` physical
+  allocation wrapper and requires exactly one `RECOMP_ICALL_SAFE` whose
+  saved-ESP expression proves +28. Runtime then accepts +28 only for the known
+  retail `0x01680000` graphics-pool request; canonical +24 remains valid for
+  ordinary `MmAllocateContiguousMemoryEx` calls. All other frame shapes or
+  non-retail +28 requests still hard-stop.
