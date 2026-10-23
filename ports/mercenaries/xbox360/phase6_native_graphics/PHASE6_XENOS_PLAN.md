@@ -394,3 +394,23 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   `main_monolithic.cpp`, then runs VS17 `devenv.com` command-line
   `/Clean` and `/Build` for `Release|Xbox 360`. This removes the manual
   Visual Studio copy/clean/build step while retaining stale-build guards.
+
+
+- **Phase 6 parallel acceleration track (active):** startup/frontier work and
+  renderer work are no longer serialized. The project now maintains three
+  complementary tracks alongside the live hardware frontier:
+  1. **PC semantic oracle:** normalize guest-visible dispatch/kernel/storage/
+     NV2A/PFIFO/PGRAPH events from the working PC runtime and diff the Xbox 360
+     trace at the first semantic divergence rather than discovering every next
+     boundary blind.
+  2. **Local GPU capture/replay:** capture a content-addressed local pushbuffer
+     plus only the guest memory/state it depends on, validate every blob by
+     SHA-256, and replay it in a narrow standalone XEX. Captures may contain
+     retail-derived bytes and are developer-local only; they are never a repo
+     or release artifact.
+  3. **Typed hash-keyed Xenos shader table:** reuse upstream NV2A combiner/
+     vertex semantic identities, compile Xenos bytecode offline, and look it up
+     by shader kind + semantic key with source-hash provenance. Missing entries
+     remain visible diagnostics/hard stops during development.
+  Initial tooling lives under `tools/phase6/` and the complete contract is in
+  `PHASE6_ORACLE_REPLAY_SHADER_PLAN.md`.
