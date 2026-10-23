@@ -188,8 +188,14 @@ if ($a.phase6z_hardware.graphics_pool.base -ne "0x02880000" -or
 }
 
 $mainText = Get-Content -LiteralPath $main -Raw
+$monolithicText = Get-Content -LiteralPath $monolithic -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
+# main.cpp is intentionally only the lightweight wrapper after source sharding.
+# Root-entry instrumentation and translated bodies live in the .inl shards.
+# main_monolithic.cpp is the authoritative pre-sharding identity source and
+# therefore the correct place to validate markers that may reside in either
+# wrapper/support code or translated function bodies.
 foreach ($marker in @(
     "P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-B",
     "case 0x0020FAE0u:",
@@ -207,15 +213,15 @@ foreach ($marker in @(
     "#define PHASE4C_EXEC_BUDGET 2000000u",
     "phase6aa_env_build_cookie"
 )) {
-    if (-not $mainText.Contains($marker)) {
-        throw "Phase 6AA generated main gate missing: $marker"
+    if (-not $monolithicText.Contains($marker)) {
+        throw "Phase 6AA generated monolithic gate missing: $marker"
     }
 }
 
 if ($envText -notmatch "phase6aa_env_build_cookie") {
     throw "Phase 6AA env cookie gate missing"
 }
-if ($mainText -match "phase6z_env_build_cookie" -or
+if ($monolithicText -match "phase6z_env_build_cookie" -or
     $envText -match "phase6z_env_build_cookie") {
     throw "Phase 6AA stale Phase 6Z cookie remains"
 }
@@ -223,6 +229,19 @@ if ($mainText -match "phase6z_env_build_cookie" -or
 $shards = @(Get-ChildItem -LiteralPath $shardDir -Filter "*.inl" -File)
 if ($shards.Count -lt 1) {
     throw "Phase 6AA translated shard output is empty"
+}
+
+# Prove the translated-root instrumentation survived sharding too, rather than
+# relying only on the monolithic cache.
+$rootMarkerFoundInShard = $false
+foreach ($shard in $shards) {
+    if ((Get-Content -LiteralPath $shard.FullName -Raw).Contains("s_phase6aaRootEntered = 1;")) {
+        $rootMarkerFoundInShard = $true
+        break
+    }
+}
+if (-not $rootMarkerFoundInShard) {
+    throw "Phase 6AA translated shard gate missing: s_phase6aaRootEntered = 1;"
 }
 
 Write-Host ""
