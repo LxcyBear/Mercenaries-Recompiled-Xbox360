@@ -225,9 +225,44 @@ if (-not $SkipSolutionBuild) {
         BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6ac-vs2017-build.log")
     }
 
-    & $paths.build @buildArgs
-    if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
-        throw "Phase 6AC Visual Studio 2017/Xbox 360 build failed (exit $LASTEXITCODE)"
+    try {
+        & $paths.build @buildArgs
+        if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+            throw "Phase 6AC Visual Studio 2017/Xbox 360 build failed (exit $LASTEXITCODE)"
+        }
+    }
+    catch {
+        $buildLogPath = [string]$buildArgs.BuildLog
+        Write-Host ""
+        Write-Host "[Phase6AC] VS BUILD FAILED — extracting compiler/linker diagnostics:"
+        if (Test-Path -LiteralPath $buildLogPath) {
+            $diagnostics = @(
+                Select-String -LiteralPath $buildLogPath -Pattern @(
+                    "fatal error C[0-9]+",
+                    "error C[0-9]+",
+                    "fatal error LNK[0-9]+",
+                    "error LNK[0-9]+",
+                    "error MSB[0-9]+",
+                    ": error "
+                ) -CaseSensitive:$false -ErrorAction SilentlyContinue
+            )
+            if ($diagnostics.Count -gt 0) {
+                $diagnostics | Select-Object -Last 100 | ForEach-Object {
+                    Write-Host $_.Line
+                }
+            }
+            else {
+                Write-Host "[Phase6AC] No canonical error signature matched; build log tail follows:"
+                Get-Content -LiteralPath $buildLogPath -Tail 220 | ForEach-Object {
+                    Write-Host $_
+                }
+            }
+            Write-Host ("[Phase6AC] Full VS build log: {0}" -f $buildLogPath)
+        }
+        else {
+            Write-Host "[Phase6AC] Build log was not created: $buildLogPath"
+        }
+        throw
     }
 
     Write-Host ""
