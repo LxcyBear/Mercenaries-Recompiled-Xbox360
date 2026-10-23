@@ -10,6 +10,7 @@
 
 #include "nv2a_state.h"
 #include "nv2a_pgraph_d3d11.h"
+#include "kernel/phase6_oracle.h"
 
 /* ============================================================
  * Global state
@@ -795,6 +796,8 @@ void pgraph_method(NV2AState *d, uint32_t subchannel,
         }
     }
     g_pgraph_method_count++;
+    phase6_oracle_pgraph(g_pgraph_method_count, subchannel, method, param,
+                         graphics_class);
 
     if (g_pgraph_trace_enabled < 0) {
         const char *trace = getenv("MERCENARIES_TRACE_PGRAPH" );
@@ -992,6 +995,9 @@ static void pfifo_process_pushbuffer(NV2AState *d, uint32_t put)
     g_nv2a_pfifo_diag_get = get;
     g_nv2a_pfifo_diag_put = put;
     g_nv2a_pfifo_diag_stage = 1u;
+
+    phase6_oracle_pfifo(submission_index, get, put, dma_instance, dma_base,
+                        (uint32_t)dma_len);
 
     if (!trace_target_initialized) {
         const char *value = getenv("MERCENARIES_TRACE_PFIFO_SUBMISSION");
