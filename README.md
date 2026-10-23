@@ -853,15 +853,23 @@ title/menu/scene graphics.
     before enabling a narrowly scoped repair; canonical +24 calls remain
     unchanged.
 
-95. **Active — Phase 6Z graphics-pool dual frontier:** Phase 6Y-B proved
+95. **Done — Phase 6Z graphics-pool dual frontier:** Phase 6Y-B proved
     the +28 saved-ESI frame repair, then the exact 22.5 MiB retail contiguous
     allocation returned NULL/error 8 because the focused allocator treated the
     entire 32 MiB synthetic title-heap capacity as occupied. 6Z restores the
     production-style two-frontier policy for this hardware-proven request:
     ordinary heap stays below its live high-water while the graphics claim
     grows downward from `0x03F00000` to `0x02880000`, trimming only a
-    proven-free 256 KiB heap tail. The OOM-path frontier `0x0020FAE0` is
-    intentionally not packed.
+    proven-free 256 KiB heap tail. Hardware confirmed the full 22.5 MiB pool
+    at `0x02880000` and showed that `0x0020FAE0` is reached after success,
+    correcting the earlier OOM-only inference.
+
+96. **Active — Phase 6AA post-graphics-pool frontier:** Phase 6Z
+    successfully allocated the retail 22.5 MiB graphics pool and then reached
+    `DIRECT_FRONTIER 0x0023A3CE -> 0x0020FAE0` with fault=0. 6AA validates
+    that target as an exact generated function and packs a bounded
+    depth-4/cap-256 support-clean closure while preserving the proven graphics
+    pool and ordinal-166 stack/memory semantics unchanged.
 
 Detailed active plan:
 `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
