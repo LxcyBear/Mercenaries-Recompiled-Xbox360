@@ -27,7 +27,7 @@ import json
 import re
 from pathlib import Path
 
-BUILD_TAG = "P6Y-GFXPOOL-MM166-FRAME-20261023-A"
+BUILD_TAG = "P6Y-GFXPOOL-MM166-FRAME-20261023-B"
 BASE_TAG = "P6X-GFXPOOL-FRONTIER-0020F9C0-20261023-A"
 WRAPPER_VA = 0x0022AEE9
 RETAIL_POOL_SIZE = 0x01680000
@@ -104,22 +104,61 @@ def prove_generated_wrapper_shape(base, generated_root: Path, functions: Path) -
             f"found {call_count}; refusing ABI guess"
         )
 
-    if not re.search(r"(?:g_)?esp\s*\+\s*(?:28|0x1[Cc])(?:u|U)?", source):
-        compact = " ".join(
-            line.strip() for line in source.splitlines()
-            if "RECOMP_ICALL_SAFE" in line or "esp" in line
-        )
+    save_match = re.search(
+        r"\\{\\s*uint32_t\\s+_icall_esp\\s*=\\s*g_esp\\s*;",
+        source,
+    )
+    call_match = re.search(
+        r"RECOMP_ICALL_SAFE\\([^;]*?_icall_esp\\s*\\)\\s*;",
+        source,
+        re.S,
+    )
+    if save_match is None or call_match is None or call_match.start() <= save_match.end():
         raise SystemExit(
-            "[Phase6Y] sub_0022AEE9 does not prove the observed +28 saved-ESP "
-            f"shape. Relevant generated text: {compact[:1200]}"
+            "[Phase6Y] sub_0022AEE9 no longer snapshots _icall_esp before its "
+            "kernel ICALL; refusing ABI guess"
         )
+
+    call_setup = source[save_match.end():call_match.start()]
+    push_exprs = re.findall(
+        r"PUSH32\\(esp,\\s*(.*?)\\)\\s*;",
+        call_setup,
+        re.S,
+    )
+    normalized = [re.sub(r"\\s+", "", expr) for expr in push_exprs]
+    expected = [
+        "esi",
+        "GUEST_READ32(ebp+0x14)",
+        "GUEST_READ32(ebp+0x10)",
+        "eax",
+        "edx",
+        "ecx",
+        "0",
+    ]
+    if normalized != expected:
+        raise SystemExit(
+            "[Phase6Y] sub_0022AEE9 kernel-call push shape changed; expected "
+            "saved ESI + five Mm166 args + dummy return. Observed: "
+            + ", ".join(normalized)
+        )
+
+    canonical_bytes = 6 * 4  # dummy return + five stdcall arguments
+    spill_bytes = 4          # wrapper-saved ESI below the kernel frame
+    proven_bytes = canonical_bytes + spill_bytes
+    if proven_bytes != OBSERVED_FRAME_BYTES:
+        raise SystemExit("[Phase6Y] internal Mm166 frame proof arithmetic drift")
 
     return {
         "name": row["name"],
         "recomp_icall_safe_count": call_count,
-        "observed_saved_esp_delta_proven": OBSERVED_FRAME_BYTES,
+        "saved_esp_snapshot": "_icall_esp = g_esp",
+        "push_sequence": normalized,
+        "canonical_kernel_frame_bytes": canonical_bytes,
+        "wrapper_spill": "esi",
+        "wrapper_spill_bytes": spill_bytes,
+        "observed_saved_esp_delta_proven": proven_bytes,
+        "resume_policy": "consume 24-byte kernel frame; leave saved ESI on stack",
     }
-
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -150,8 +189,8 @@ def main() -> int:
         base, args.generated_root, args.functions
     )
     print(
-        "[Phase6Y] GENERATED ABI PROOF: sub_0022AEE9 "
-        "has one RECOMP_ICALL_SAFE and saved-ESP +28"
+        "[Phase6Y] GENERATED ABI PROOF: sub_0022AEE9 snapshots _icall_esp, "
+        "then pushes saved ESI + five Mm166 args + dummy return = 28 bytes"
     )
 
     signature = "static void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)"
@@ -163,7 +202,8 @@ def main() -> int:
     uint32_t frameBytes=savedEsp-c;
     uint32_t extra=0u;
     uint32_t repaired=0u;
-    char line[640];
+    uint32_t resumeEsp=0u;
+    char line[704];
 
     if(frameBytes!=24u && frameBytes!=28u)
         phase4c_escape(PHASE4C_BOUNDARY_KERNEL_FRAME,0x800000A6u,savedEsp);
@@ -183,18 +223,28 @@ def main() -> int:
         phase4c_escape(PHASE4C_BOUNDARY_KERNEL_FRAME,0x800000A6u,savedEsp);
 
     /*
-     * Phase 6X hardware proved a +28 saved-ESP frame while entering the retail
-     * graphics-pool allocator. The local generated sub_0022AEE9 body must prove
-     * that same +28 call shape before this source is emitted. Keep the repair
-     * narrowly scoped to the known retail pool request; all other ordinal-166
-     * calls retain the canonical +24 return+five-argument ABI.
+     * Local generated sub_0022AEE9 proves the +28 shape is:
+     *   c+00 dummy return
+     *   c+04..c+20 five MmAllocateContiguousMemoryEx arguments
+     *   c+24 saved ESI spill owned by the wrapper
+     *
+     * The ordinal owns only the first 24 bytes. Require the spill to still
+     * equal live ESI; the proven wrapper does not modify ESI between PUSH esi
+     * and RECOMP_ICALL_SAFE.
      */
     if(frameBytes==28u)
     {
-        if(size!=0x01680000u)
+        if(size!=0x01680000u || extra!=g_esi)
             phase4c_escape(PHASE4C_BOUNDARY_KERNEL_FRAME,0x800000A6u,savedEsp);
         repaired=1u;
     }
+
+    /*
+     * Consume only the canonical kernel frame. For +24 this equals savedEsp.
+     * For the +28 wrapper it equals savedEsp-4, preserving saved ESI for the
+     * wrapper's later POP32(esp, esi).
+     */
+    resumeEsp=c+24u;
 
     ++s_phase5bbMmCallCount;
     s_phase5bbMmLastOrdinal=166u;
@@ -203,14 +253,14 @@ def main() -> int:
     s_phase5bbMmLastBase=va;
     s_phase5bbMmLastSize=actual;
     g_eax=va;
-    g_esp=savedEsp;
+    g_esp=resumeEsp;
 
     sprintf(
         line,
-        "PASS: Phase 6Y ordinal 166 MmAllocateContiguousMemoryEx size=%u low=%08X high=%08X align=%u protect=%08X base=%08X rounded=%u frame=%u extra=%08X repair=%u new_esp=%08X",
+        "PASS: Phase 6Y ordinal 166 MmAllocateContiguousMemoryEx size=%u low=%08X high=%08X align=%u protect=%08X base=%08X rounded=%u frame=%u spill=%08X repair=%u resume_esp=%08X saved_esp=%08X",
         (unsigned)size,(unsigned)low,(unsigned)high,(unsigned)align,
         (unsigned)prot,(unsigned)va,(unsigned)actual,(unsigned)frameBytes,
-        (unsigned)extra,(unsigned)repaired,(unsigned)g_esp);
+        (unsigned)extra,(unsigned)repaired,(unsigned)g_esp,(unsigned)savedEsp);
     trace(line);
 }'''
 
@@ -240,7 +290,8 @@ def main() -> int:
         "phase6y_env_build_cookie",
         "PASS: Phase 6Y ordinal 166 MmAllocateContiguousMemoryEx",
         "frameBytes!=24u && frameBytes!=28u",
-        "size!=0x01680000u",
+        "size!=0x01680000u || extra!=g_esi",
+        "resumeEsp=c+24u",
         "P6Y XENOS: PASS Direct3D_CreateDevice",
         "P6Y FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
         "P6Y FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
@@ -295,9 +346,10 @@ def main() -> int:
         "canonical_frame_bytes": 24,
         "repaired_frame_bytes": 28,
         "repair_policy": (
-            "accept +28 only when local generated sub_0022AEE9 proves the shape "
-            "and runtime size is the retail 0x01680000 graphics-pool request; "
-            "otherwise retain +24 or hard-stop"
+            "accept +28 only when local generated sub_0022AEE9 proves saved ESI "
+            "+ five Mm166 args + dummy return, runtime size is retail 0x01680000, "
+            "and spill equals live ESI; consume only the canonical 24-byte kernel "
+            "frame so the wrapper can later POP its saved ESI"
         ),
         "source_layout": source_layout,
     }
@@ -306,9 +358,9 @@ def main() -> int:
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
 
-    print("[Phase6Y] MM166 ABI REPAIR: proven +28 retail graphics-pool frame")
-    print("[Phase6Y] CANONICAL MM166 FRAME: +24 remains accepted")
-    print("[Phase6Y] RETAIL REPAIR GATE: size must equal 0x01680000")
+    print("[Phase6Y] MM166 ABI REPAIR: +28 = 24-byte Mm166 frame + saved ESI spill")
+    print("[Phase6Y] CANONICAL MM166 FRAME: +24 accepted; +28 resumes at savedEsp-4")
+    print("[Phase6Y] RETAIL REPAIR GATE: size=0x01680000 and spill==live ESI")
     print("[Phase6Y] EXECUTION BUDGET: inherited 2000000 ticks")
     print("[Phase6Y] TITLE HEAP: inherited 32 MiB")
     print("[Phase6Y] EMIT RESULT: PASS")
