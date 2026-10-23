@@ -31,7 +31,7 @@ import json
 from pathlib import Path
 
 BASE_TAG = "P6AD-AV-SAVED-DATA-CLEANUP-20261023-A"
-BUILD_TAG = "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-A"
+BUILD_TAG = "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-B"
 COOKIE_OLD = "phase6ad_env_build_cookie"
 COOKIE_NEW = "phase6ae_env_build_cookie"
 SHARD_TARGET_CHARS = 750000
@@ -521,14 +521,12 @@ def main() -> int:
     )
 
     new_policy = (
-        "Policy: inherit hardware-proven Phase-6AD Xenos, graphics pool, "
-        "generalized Mm166 wrapper, ordinal-1 saved-data bridge and semantics-free "
-        "cleanup; bridge the compact AV ordinal 1-4 family with strict ABI frames, "
-        "model ordinal 2 encoder controls as logical port state with bounded query "
-        "results, model ordinal 3 AvSetDisplayMode as a state-capture success handoff "
-        "without original-Xbox NV2A/encoder writes, preserve ordinal 4 get/set pairing, "
-        "and keep genuine NV2A MMIO/VRAM plus platform/ABI/guest-fault frontiers hard"
+        "Policy: inherit 6AD; bridge AV ordinals 1-4 with strict frames; "
+        "record encoder/display intent only; Xenos remains display owner; "
+        "keep NV2A/MMIO/VRAM and unrelated fault boundaries hard"
     )
+    if len(new_policy) > 240:
+        raise SystemExit("[Phase6AE] startup policy trace exceeds safe length")
     main_text = replace_policy_line(main_text, new_policy)
 
     main_text = replace_unique(main_text, BASE_TAG, BUILD_TAG, "build tag")
