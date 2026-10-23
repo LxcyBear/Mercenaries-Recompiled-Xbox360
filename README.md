@@ -848,6 +848,14 @@ title/menu/scene graphics.
 Detailed active plan:
 `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
 
+Phase 6 now also runs a **parallel acceleration track**: the working PC port is
+used as a guest-semantic oracle, local developer-only GPU captures can be
+validated/replayed independently of startup, and observed NV2A shader states are
+planned as an offline-compiled typed/hash-keyed Xenos shader table. This allows
+real-console startup/frontier work and renderer bring-up to progress in
+parallel. Retail-derived capture bytes remain local and are not distributable
+project assets.
+
 ### Phase 7 — Audio, movies, input, asset streaming and timing
 
 - [x] Inventory original Xbox APU/DirectSound/XACT, XMV/WMADEC, input and
