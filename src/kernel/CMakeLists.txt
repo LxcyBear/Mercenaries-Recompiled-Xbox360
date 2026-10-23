@@ -20,6 +20,7 @@ set(KERNEL_SOURCES
     kernel_thunks.c
     kernel_bridge.c
     xbox_memory_layout.c
+    phase6_oracle.c
 )
 
 if(WIN32)
