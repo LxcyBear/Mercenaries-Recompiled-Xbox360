@@ -85,7 +85,7 @@ after widening the synthetic title heap to 32 MiB, and crossed the
 `DIRECT_FRONTIER 0x0023A3CE -> 0x0020F9C0` with `fault=0`,
 `ticks=670776`, `trace=179920`, direct=1812 and ICALL=9075.
 Upstream Mercenaries-Recompiled identifies `sub_0020F9C0` as the retail
-graphics-pool initializer. Phase 6X is therefore the active frontier. Its only
+graphics-pool initializer. Phase 6X crossed that graphics-pool root on hardware; the active frontier is now Phase 6Y, which resolves the observed ordinal-166 `MmAllocateContiguousMemoryEx` +28 saved-ESP frame while preserving the canonical +24 ABI everywhere else. Its only
 known support dependency, `xbox_GetExtendedGraphicsPool`, is now implemented
 with the canonical retail disabled-state result (`0`) because this port keeps
 the original 64 MiB guest layout rather than the optional PC-only second
@@ -509,7 +509,7 @@ MMIO/VRAM first touch or DATAxbox asset open has been observed yet.
     then let Phase 6W cross that fence and reach
     `DIRECT_FRONTIER 0x0023A3CE -> 0x0020F9C0` with `fault=0`,
     direct=1812 and ICALL=9075.
-93. **Active — Phase 6X retail graphics-pool frontier:** upstream native tests
+93. **Done — Phase 6X retail graphics-pool frontier:** upstream native tests
     identify `sub_0020F9C0` as the retail graphics-pool initializer. The
     generated body depends on `xbox_GetExtendedGraphicsPool`; this port now
     supplies the canonical retail-mode result `0` (no optional PC extended
@@ -844,6 +844,14 @@ startup path on hardware.
 
 **Gate 6:** repeatable native Xenos first **game-rendered** frame and functional
 title/menu/scene graphics.
+
+94. **Active — Phase 6Y ordinal-166 graphics allocation frame:** Phase 6X
+    executed `sub_0020F9C0` and reached kernel ordinal 166
+    (`MmAllocateContiguousMemoryEx`) with a hardware-observed 28-byte
+    saved-ESP frame at the retail `0x01680000` graphics-pool request. 6Y
+    proves that +28 shape from the local generated `sub_0022AEE9` wrapper
+    before enabling a narrowly scoped repair; canonical +24 calls remain
+    unchanged.
 
 Detailed active plan:
 `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
