@@ -311,3 +311,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   1 MiB to 32 MiB (heap end `0x028C0000`), and retain all existing hard-stop
   behavior. This leaves the heap below the proven `0x03F00000` top-down VM
   frontier while allowing the observed 18.6 MiB allocation to fit.
+
+
+- **Phase 6U hardware:** the 32 MiB title-heap expansion worked. The previously
+  fatal `0x012999A0` / 19,503,520-byte `RtlAllocateHeap` request succeeded
+  at guest VA `0x008C2980`. Execution then reached the harness budget at
+  `ticks=600001`, `trace=165774`, target `0x001F6BF8`, `fault=0`.
+  Summary advanced to direct=1779 / ICALL=9073 and the phase returned PASS/XAPI 0.
+- **Phase 6V:** reuse the exact hardware-proven Phase-6U source, translated
+  pack, shards, 32 MiB heap, and hard-stop policy unchanged; raise only
+  `PHASE4C_EXEC_BUDGET` from 600,000 to 2,000,000 ticks. This is intended to
+  let the long post-allocation translated initialization complete and expose
+  the next genuine boundary without another small budget-only hardware cycle.
