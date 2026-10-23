@@ -200,6 +200,7 @@ foreach ($marker in @(
     "PHASE 6AA POST-GFXPOOL FRONTIER RESULT",
     "P6AA FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
     "P6AA FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
+    "static uint32_t recomp_renderer_test_oom(uint32_t multisample)",
     "static void recomp_renderer_recovery_report(uint32_t result, uint32_t stage)",
     "PHASE4C_BOUNDARY_RENDERER_FATAL = 9",
     "#define PHASE4C_EXEC_BUDGET 2000000u",
