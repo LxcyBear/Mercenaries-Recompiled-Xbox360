@@ -323,3 +323,17 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   `PHASE4C_EXEC_BUDGET` from 600,000 to 2,000,000 ticks. This is intended to
   let the long post-allocation translated initialization complete and expose
   the next genuine boundary without another small budget-only hardware cycle.
+
+
+- **Phase 6V hardware:** the 2,000,000-tick deep-budget pass cleared the old
+  600,001-tick harness stop and reached a genuine new translated-code frontier:
+  `DIRECT_FRONTIER 0x0023A3CE -> 0x0017FE90`, ticks=670295,
+  trace=179827, fault=0. Direct dispatches advanced to 1795 while ICALL stayed
+  at 9073. The previously fatal 19,503,520-byte heap allocation still succeeds.
+  No FIRST GRAPHICS TOUCH or DATAxbox event was observed before the frontier.
+- **Phase 6W:** exact frontier resolver for `0x0017FE90`. Before packing, the
+  emitter consults the inherited Phase-6Q support-clean prune table. If this
+  target was previously pruned, prep hard-stops and prints the exact unresolved
+  helper names; otherwise it validates an exact generated function start and
+  packs a bounded depth-4/cap-256 generated closure. The 2M budget and 32 MiB
+  title heap remain unchanged.
