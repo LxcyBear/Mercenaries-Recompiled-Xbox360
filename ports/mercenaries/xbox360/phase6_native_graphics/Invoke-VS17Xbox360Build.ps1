@@ -42,11 +42,12 @@ function Resolve-VS17Devenv {
     $vswhere = Join-Path $programFilesX86 "Microsoft Visual Studio\Installer\vswhere.exe"
     if (Test-Path -LiteralPath $vswhere) {
         $found = @(
-            & $vswhere -products * -version "[17.0,18.0)" -find "Common7\IDE\devenv.com" 2>$null
-        ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+            & $vswhere -products * -version "[17.0,18.0)" -find "Common7\IDE\devenv.com" 2>$null |
+                Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+        )
 
-        if ($found.Count -gt 0) {
-            return [string]$found[0]
+        if (@($found).Count -gt 0) {
+            return [string]@($found)[0]
         }
     }
 
@@ -101,11 +102,11 @@ function Resolve-SolutionProjectAndSources {
     }
 
     $solutions = @(Get-ChildItem -LiteralPath $RootPath -Filter "*.sln" -File)
-    if ($solutions.Count -eq 0) {
+    if (@($solutions).Count -eq 0) {
         $solutions = @(Get-ChildItem -LiteralPath $RootPath -Filter "*.sln" -File -Recurse)
     }
-    if ($solutions.Count -ne 1) {
-        throw "Expected exactly one .sln under '$RootPath', found $($solutions.Count)."
+    if (@($solutions).Count -ne 1) {
+        throw "Expected exactly one .sln under '$RootPath', found $(@($solutions).Count)."
     }
 
     $solution = $solutions[0]
@@ -124,7 +125,7 @@ function Resolve-SolutionProjectAndSources {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) {
             $compiled = @(Get-ProjectCompiledFiles -ProjectPath $candidate)
             $mainMatches = @($compiled | Where-Object { $_.Leaf -ieq "main.cpp" })
-            if ($mainMatches.Count -eq 1) {
+            if (@($mainMatches).Count -eq 1) {
                 $projects += [pscustomobject]@{
                     Path = $candidate
                     Compiled = $compiled
@@ -134,26 +135,26 @@ function Resolve-SolutionProjectAndSources {
         }
     }
 
-    if ($projects.Count -ne 1) {
-        throw "Expected exactly one solution project compiling main.cpp, found $($projects.Count)."
+    if (@($projects).Count -ne 1) {
+        throw "Expected exactly one solution project compiling main.cpp, found $(@($projects).Count)."
     }
 
     $project = $projects[0]
 
     $monolithic = @($project.Compiled | Where-Object { $_.Leaf -ieq "main_monolithic.cpp" })
-    if ($monolithic.Count -gt 0) {
+    if (@($monolithic).Count -gt 0) {
         throw "main_monolithic.cpp is listed as a compiled source in '$($project.Path)'. Remove/exclude it before building."
     }
 
     $envMatches = @($project.Compiled | Where-Object { $_.Leaf -ieq "phase4c_env.cpp" })
-    if ($envMatches.Count -eq 0) {
+    if (@($envMatches).Count -eq 0) {
         $envMatches = @($project.Compiled | Where-Object { $_.Leaf -ieq "phase5_env.cpp" })
     }
-    if ($envMatches.Count -eq 0) {
+    if (@($envMatches).Count -eq 0) {
         $envMatches = @($project.Compiled | Where-Object { $_.Leaf -match "(?i)env\.cpp$" })
     }
-    if ($envMatches.Count -ne 1) {
-        throw "Expected exactly one compiled env CPP in '$($project.Path)', found $($envMatches.Count)."
+    if (@($envMatches).Count -ne 1) {
+        throw "Expected exactly one compiled env CPP in '$($project.Path)', found $(@($envMatches).Count)."
     }
 
     return @{
@@ -244,10 +245,10 @@ Assert-FileHashMatch -Expected $GeneratedEnv -Actual $envPath -Label "env CPP"
 
 $sourceShards = @(Get-ChildItem -LiteralPath $GeneratedShardDir -Filter "*.inl" -File | Sort-Object Name)
 $destShards = @(Get-ChildItem -LiteralPath $destinationShards -Filter "*.inl" -File | Sort-Object Name)
-if ($sourceShards.Count -ne $destShards.Count) {
-    throw "translated_shards count mismatch: generated=$($sourceShards.Count), solution=$($destShards.Count)"
+if (@($sourceShards).Count -ne @($destShards).Count) {
+    throw "translated_shards count mismatch: generated=$(@($sourceShards).Count), solution=$(@($destShards).Count)"
 }
-for ($i = 0; $i -lt $sourceShards.Count; $i++) {
+for ($i = 0; $i -lt @($sourceShards).Count; $i++) {
     if ($sourceShards[$i].Name -ne $destShards[$i].Name) {
         throw "translated_shards filename mismatch at index $i"
     }
@@ -265,7 +266,7 @@ if ($solutionMainText -notmatch [regex]::Escape($ExpectedEnvCookie) -or
 }
 
 Write-Host "[XDK-BUILD] SOURCE SYNC: PASS"
-Write-Host "[XDK-BUILD] Shards synced  : $($sourceShards.Count)"
+Write-Host "[XDK-BUILD] Shards synced  : $(@($sourceShards).Count)"
 
 $devenv = Resolve-VS17Devenv
 Write-Host "[XDK-BUILD] VS17 builder   : $devenv"
@@ -325,7 +326,7 @@ Write-Host "[XDK-BUILD] BUILD: PASS"
 Write-Host "[XDK-BUILD] Clean log      : $CleanLog"
 Write-Host "[XDK-BUILD] Build log      : $BuildLog"
 
-if ($xexCandidates.Count -gt 0) {
+if (@($xexCandidates).Count -gt 0) {
     $builtXex = $xexCandidates[0]
     Write-Host "[XDK-BUILD] Fresh XEX      : $($builtXex.FullName)"
     Write-Host "[XDK-BUILD] XEX timestamp  : $($builtXex.LastWriteTime)"
