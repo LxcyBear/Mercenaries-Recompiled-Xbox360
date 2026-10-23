@@ -321,8 +321,9 @@ def insert_pack_members(
             for line in item["context"].splitlines():
                 print(f"[Phase5BC]     {line}")
         raise SystemExit(
-            "[Phase5BC] broad-sweep seed requires a real support implementation; "
-            "refusing to guess"
+            "[Phase5BC] broad-sweep seed requires real support implementation: "
+            + ", ".join(names)
+            + "; refusing to guess"
         )
 
     pruned = {
