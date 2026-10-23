@@ -222,7 +222,6 @@ def main() -> int:
     for marker in (
         "static double recomp_frame_ticks_with_remainder(double ticks)",
         "static uint32_t recomp_freecam_game_ticks(uint32_t ticks)",
-        "static uint32_t xbox_GetExtendedGraphicsPool(void)",
     ):
         if marker not in main_text:
             raise SystemExit("[Phase6X] inherited Phase 6W reviewed timing support is missing")
@@ -362,6 +361,7 @@ def main() -> int:
         "#define PHASE4C_TITLE_HEAP_END   (PHASE4C_TITLE_HEAP_BASE + 0x02000000u)",
         "static double recomp_frame_ticks_with_remainder(double ticks)",
         "static uint32_t recomp_freecam_game_ticks(uint32_t ticks)",
+        "static uint32_t xbox_GetExtendedGraphicsPool(void)",
     )
     for item in required:
         if item not in main_text:
