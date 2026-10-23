@@ -871,6 +871,11 @@ title/menu/scene graphics.
     depth-4/cap-256 support-clean closure while preserving the proven graphics
     pool and ordinal-166 stack/memory semantics unchanged.
 
+Phase 6AA-B now includes the upstream renderer-recovery helper contract:
+diagnostic-only stages 1/2, terminal null-device prevention via an explicit
+`RENDERER_FATAL` harness boundary, plus the canonical disabled-state
+`recomp_renderer_test_oom` behavior used outside PC regression injection.
+
 Detailed active plan:
 `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
 
