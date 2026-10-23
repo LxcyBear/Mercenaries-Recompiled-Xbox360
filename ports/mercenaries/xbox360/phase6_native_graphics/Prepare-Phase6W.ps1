@@ -79,9 +79,10 @@ New-Item -ItemType Directory -Force -Path (Split-Path $log -Parent) | Out-Null
 Write-Host "[Phase6W] DIRECT FRONTIER 0017FE90"
 Write-Host "[Phase6W] Phase 6V hardware: DIRECT_FRONTIER 0023A3CE -> 0017FE90"
 Write-Host "[Phase6W] Hardware boundary: ticks=670295 trace=179827 fault=0"
-Write-Host "[Phase6W] Preflight: inherited 6Q prune table is checked before packing"
-Write-Host "[Phase6W] If previously pruned, exact unresolved helper names will be printed"
-Write-Host "[Phase6W] If support-clean, pack root + bounded depth-4/cap-256 generated closure"
+Write-Host "[Phase6W] Preflight: inherited 6Q prune table must match exactly two reviewed host helpers"
+Write-Host "[Phase6W] Support: canonical fractional frame-tick carry + retail/default freecam tick identity"
+Write-Host "[Phase6W] Any changed/additional unresolved helper still hard-stops"
+Write-Host "[Phase6W] Then pack root + bounded depth-4/cap-256 generated closure"
 Write-Host "[Phase6W] 2M budget + 32 MiB heap remain unchanged"
 Write-Host "[Phase6W] Purple remains reserved for genuine NV2A MMIO/VRAM boundary"
 
@@ -108,7 +109,7 @@ finally {
 if ($rc -ne 0) {
     Write-Host ""
     Write-Host "[Phase6W] PREP STOPPED BEFORE BUILD."
-    Write-Host "[Phase6W] This is intentional if the live root was previously support-pruned."
+    Write-Host "[Phase6W] This now means dependency drift, exact-start failure, or another real support blocker."
     Write-Host "[Phase6W] Emitter log tail:"
     Get-Content $log -Tail 80
     throw "Phase 6W emission/preflight failed (exit $rc)"
@@ -150,6 +151,12 @@ if (-not $mainText.Contains("P6W-DIRECT-FRONTIER-0017FE90-20261023-A")) {
 if (-not $mainText.Contains("case 0x0017FE90u:")) {
     throw "Phase 6W root dispatch gate missing"
 }
+if (-not $mainText.Contains("static double recomp_frame_ticks_with_remainder(double ticks)")) {
+    throw "Phase 6W fractional frame-tick support body missing"
+}
+if (-not $mainText.Contains("static uint32_t recomp_freecam_game_ticks(uint32_t ticks)")) {
+    throw "Phase 6W retail/default freecam tick support body missing"
+}
 if (-not $mainText.Contains("#define PHASE4C_EXEC_BUDGET 2000000u")) {
     throw "Phase 6W inherited 2M budget gate mismatch"
 }
@@ -179,6 +186,7 @@ Write-Host ("[Phase6W] Pruned unsafe members        : {0}" -f [int]$g.pruned_mem
 Write-Host ("[Phase6W] Packed new members           : {0}" -f [int]$g.packed_new_members)
 Write-Host ("[Phase6W] Expanded pack members        : {0}" -f [int]$g.expanded_pack_members)
 Write-Host ("[Phase6W] Generated .inl shards        : {0}" -f $shards.Count)
+Write-Host "[Phase6W] Reviewed host support         : frame tick carry + freecam tick identity"
 Write-Host "[Phase6W] Build BOTH fresh sources:"
 Write-Host "[Phase6W]   $main"
 Write-Host "[Phase6W]   $env"
