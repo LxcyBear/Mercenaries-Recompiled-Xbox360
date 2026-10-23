@@ -297,3 +297,17 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   pre-frontier starts. Candidate cap is 1024 and existing support-clean pruning
   remains authoritative; unresolved helpers, interior entries, missing bodies,
   NV2A/platform/ABI boundaries, and guest faults remain hard stops.
+
+
+- **Phase 6T hardware:** broad DSOUND sibling sweep successfully broke the +0xB
+  sibling frontier pattern. The run advanced to direct=1769 / ICALL=9073 and
+  stopped at `HEAP_EXHAUSTED`, `fault=0`, request/target `0x012999A0`
+  (~18.6 MiB), ticks=431056, trace=131985. This is not a code frontier: the
+  Phase-4C synthetic ordinary title heap is still only 1 MiB. Hardware showed
+  the only VM reservation before the stop was 1 MiB at `0x03F00000`, with
+  page_next remaining `0x03F00000`.
+- **Phase 6U:** reuse the exact hardware-proven Phase-6T translated pack and
+  shards unchanged, widen only the synthetic ordinary title heap window from
+  1 MiB to 32 MiB (heap end `0x028C0000`), and retain all existing hard-stop
+  behavior. This leaves the heap below the proven `0x03F00000` top-down VM
+  frontier while allowing the observed 18.6 MiB allocation to fit.
