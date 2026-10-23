@@ -305,8 +305,28 @@ Write-Host "[XDK-BUILD] BUILD: $solutionConfiguration"
 & $devenv $solutionPath /Build $solutionConfiguration /Out $BuildLog
 $buildRc = $LASTEXITCODE
 if ($buildRc -ne 0) {
-    Write-Host "[XDK-BUILD] BUILD LOG TAIL:"
     if (Test-Path -LiteralPath $BuildLog) {
+        Write-Host "[XDK-BUILD] COMPILER/LINKER ERRORS:"
+        $errorLines = @(
+            Select-String -LiteralPath $BuildLog -Pattern @(
+                "error C[0-9]+",
+                "fatal error C[0-9]+",
+                "error LNK[0-9]+",
+                "fatal error LNK[0-9]+",
+                "error MSB[0-9]+",
+                ": error "
+            ) -CaseSensitive:$false -ErrorAction SilentlyContinue
+        )
+        if ($errorLines.Count -gt 0) {
+            $errorLines | Select-Object -Last 80 | ForEach-Object {
+                Write-Host $_.Line
+            }
+        }
+        else {
+            Write-Host "[XDK-BUILD] No canonical compiler/linker error line matched; showing tail."
+        }
+
+        Write-Host "[XDK-BUILD] BUILD LOG TAIL:"
         Get-Content -LiteralPath $BuildLog -Tail 180
     }
     throw "VS17 Xbox 360 Release build failed (exit $buildRc)"
