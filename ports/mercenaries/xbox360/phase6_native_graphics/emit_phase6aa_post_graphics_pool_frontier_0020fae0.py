@@ -444,6 +444,9 @@ def main() -> int:
         "static double recomp_frame_ticks_with_remainder(double ticks)",
         "static uint32_t recomp_freecam_game_ticks(uint32_t ticks)",
         "static uint32_t xbox_GetExtendedGraphicsPool(void)",
+        "static void recomp_renderer_recovery_report(uint32_t result, uint32_t stage)",
+        "PHASE4C_BOUNDARY_RENDERER_FATAL = 9",
+        'case PHASE4C_BOUNDARY_RENDERER_FATAL: return "RENDERER_FATAL";',
     )
     for item in required:
         if item not in main_text:
