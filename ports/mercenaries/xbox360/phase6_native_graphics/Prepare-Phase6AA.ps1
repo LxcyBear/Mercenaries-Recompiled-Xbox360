@@ -125,13 +125,22 @@ if ($rc -ne 0) {
     $tail = @(Get-Content -LiteralPath $log -Tail 140)
     $tail | ForEach-Object { Write-Host $_ }
 
+    $dependencyLines = @(
+        $tail | Where-Object {
+            $_ -match "sweep root .* unresolved support dependencies:" -or
+            $_ -match "broad-sweep seed requires real support implementation:"
+        }
+    )
     $reasonLines = @(
         $tail | Where-Object {
             ($_ -match "\[Phase6AA\]|\[Phase5BC\]") -and
             ($_ -match "missing|not an exact|absent|unresolved|requires|refusing|lost|changed|failed|drift|expected|already present")
         }
     )
-    if (@($reasonLines).Count -gt 0) {
+    if (@($dependencyLines).Count -gt 0) {
+        $primary = [string]@($dependencyLines)[@($dependencyLines).Count - 1]
+    }
+    elseif (@($reasonLines).Count -gt 0) {
         $primary = [string]@($reasonLines)[@($reasonLines).Count - 1]
     }
     else {
