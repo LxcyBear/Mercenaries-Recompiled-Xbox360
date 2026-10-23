@@ -314,6 +314,12 @@ def main() -> int:
     base.STANDARD_CALLS.add("cos")
     base.STANDARD_CALLS.add("sin")
 
+    main_text = install_renderer_recovery_support(main_text)
+    print(
+        "[Phase6AA] REVIEWED SUPPORT: recomp_renderer_recovery_report "
+        "stages 1/2 diagnostic-only; terminal -> RENDERER_FATAL"
+    )
+
     old = {int(x, 0) for x in manifest.get("members", [])}
     if not old:
         raise SystemExit("[Phase6AA] inherited translated pack membership is empty")
