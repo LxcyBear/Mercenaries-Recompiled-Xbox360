@@ -25,16 +25,33 @@ $baseFiles = @(
     (Join-Path $baseDir "translated_shards"),
     $baseManifestPath
 )
-foreach ($f in $baseFiles) {
-    if (-not (Test-Path -LiteralPath $f)) {
-        throw "Phase 6U fast baseline missing: $f. Keep the successful Phase 6T generated output."
+
+$missingBaseFiles = @(
+    $baseFiles | Where-Object { -not (Test-Path -LiteralPath $_) }
+)
+if ($missingBaseFiles.Count -gt 0) {
+    $phase6tPrep = Join-Path $p6 "Prepare-Phase6T.ps1"
+    if (-not (Test-Path -LiteralPath $phase6tPrep)) {
+        throw "Phase 6U baseline is missing and Phase 6T regeneration script was not found: $phase6tPrep"
+    }
+
+    Write-Host "[Phase6U] Cached Phase 6T generated output is missing."
+    Write-Host "[Phase6U] Regenerating the exact Phase 6T baseline automatically..."
+    & $phase6tPrep
+
+    $missingAfterRegen = @(
+        $baseFiles | Where-Object { -not (Test-Path -LiteralPath $_) }
+    )
+    if ($missingAfterRegen.Count -gt 0) {
+        throw ("Phase 6U could not regenerate the Phase 6T baseline. Still missing: " +
+            ($missingAfterRegen -join ", "))
     }
 }
 
 $baseManifest = Get-Content $baseManifestPath -Raw | ConvertFrom-Json
 if ($baseManifest.phase -ne "6T" -or
     $baseManifest.build_tag -ne "P6T-DSOUND-SIBLING-SWEEP-002A0164-20261022-A") {
-    throw "Phase 6U cached Phase 6T baseline identity mismatch"
+    throw "Phase 6U cached/regenerated Phase 6T baseline identity mismatch"
 }
 
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
@@ -97,7 +114,8 @@ $envText = Get-Content $env -Raw
 if ($mainText -notmatch "P6U-TITLE-HEAP32M-20261023-A") {
     throw "Phase 6U main build tag gate mismatch"
 }
-if ($mainText -notmatch "PHASE4C_TITLE_HEAP_BASE + 0x02000000u") {
+if (-not $mainText.Contains(
+        "#define PHASE4C_TITLE_HEAP_END   (PHASE4C_TITLE_HEAP_BASE + 0x02000000u)")) {
     throw "Phase 6U heap-size source gate mismatch"
 }
 if ($mainText -notmatch "phase6u_env_build_cookie" -or
