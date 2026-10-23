@@ -165,7 +165,7 @@ foreach ($f in @($main,$monolithic,$env,$manifest,$shardDir)) {
 
 $m = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($m.phase -ne "6AA" -or
-    $m.build_tag -ne "P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-A") {
+    $m.build_tag -ne "P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-B") {
     throw "Phase 6AA manifest identity mismatch"
 }
 
@@ -190,7 +190,7 @@ $mainText = Get-Content -LiteralPath $main -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 
 foreach ($marker in @(
-    "P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-A",
+    "P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-B",
     "case 0x0020FAE0u:",
     "s_phase6aaRootEntered = 1;",
     "PASS: Phase 6AA retail graphics pool claim",
@@ -200,6 +200,8 @@ foreach ($marker in @(
     "PHASE 6AA POST-GFXPOOL FRONTIER RESULT",
     "P6AA FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
     "P6AA FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
+    "static void recomp_renderer_recovery_report(uint32_t result, uint32_t stage)",
+    "PHASE4C_BOUNDARY_RENDERER_FATAL = 9",
     "#define PHASE4C_EXEC_BUDGET 2000000u",
     "phase6aa_env_build_cookie"
 )) {
@@ -232,7 +234,7 @@ Write-Host ("[Phase6AA] Expanded pack members        : {0}" -f [int]$a.expanded_
 Write-Host ("[Phase6AA] Generated shards             : {0}" -f $shards.Count)
 Write-Host "[Phase6AA] Graphics pool                 : inherited 02880000-03EFFFFF"
 Write-Host "[Phase6AA] Old 0020FAE0 OOM-only theory : disproven by Phase 6Z hardware"
-Write-Host "[Phase6AA] Expected tag                  : P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-A"
+Write-Host "[Phase6AA] Expected tag                  : P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-B"
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -242,7 +244,7 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-A"
+        ExpectedBuildTag = "P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-B"
         ExpectedEnvCookie = "phase6aa_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
@@ -258,7 +260,7 @@ if (-not $SkipSolutionBuild) {
 
     Write-Host ""
     Write-Host "[Phase6AA] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AA] Hardware tag to verify: P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-A"
+    Write-Host "[Phase6AA] Hardware tag to verify: P6AA-POST-GFXPOOL-FRONTIER-0020FAE0-20261023-B"
 }
 else {
     Write-Host "[Phase6AA] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
