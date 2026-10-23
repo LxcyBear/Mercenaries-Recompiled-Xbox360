@@ -876,6 +876,15 @@ diagnostic-only stages 1/2, terminal null-device prevention via an explicit
 `RENDERER_FATAL` harness boundary, plus the canonical disabled-state
 `recomp_renderer_test_oom` behavior used outside PC regression injection.
 
+97. **Done — Phase 6AA post-graphics-pool frontier:** hardware crossed
+    exact renderer root `0x0020FAE0` with the proven graphics pool intact.
+    The next stop was a READ32 of raw kernel data thunk `0x80000164`.
+
+98. **Active — Phase 6AB HalBootSMCVideoMode DATA relocation:** ordinal 356
+    is a kernel DATA export, not a call. Relocate it to the canonical guest
+    kernel-data VA `0x0087E098` with initial value zero, preserving the 6AA
+    renderer closure and graphics-memory model unchanged.
+
 Detailed active plan:
 `ports/mercenaries/xbox360/phase6_native_graphics/PHASE6_XENOS_PLAN.md`.
 
