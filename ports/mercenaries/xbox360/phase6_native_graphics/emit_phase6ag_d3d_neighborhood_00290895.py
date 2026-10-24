@@ -26,10 +26,11 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 BASE_TAG = "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B"
-BUILD_TAG = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
+BUILD_TAG = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-C"
 COOKIE_OLD = "phase6af_env_build_cookie"
 COOKIE_NEW = "phase6ag_env_build_cookie"
 
@@ -131,27 +132,41 @@ def reset_state(main_text: str) -> str:
 
 
 def fix_result_gate(main_text: str) -> str:
-    # 6AF hardware proved the successful CreateDevice path can skip both
-    # ordinal-1 and ordinal-2 AV calls. Those inherited gates made the harness
-    # print FAIL despite a clean CreateDevice bridge and fault-free D3D frontier.
-    for stale in (
-        "        s_phase6aeAvEncoderCount != 0u &&\n",
-        "        s_phase6adAvGetCount != 0u &&\n",
+    # 6AF hardware proved the successful CreateDevice path can skip the old
+    # optional AV ordinal-1/2 calls. Match these gates by token rather than by
+    # exact indentation because the 6AF emitter inserted its condition inside
+    # an already-indented multiline expression.
+    for token in (
+        "s_phase6aeAvEncoderCount != 0u &&",
+        "s_phase6adAvGetCount != 0u &&",
     ):
-        if stale not in main_text:
-            raise SystemExit(
-                f"[Phase6AG] stale inherited AV gate marker missing: {stale.strip()}"
+        pattern = re.compile(
+            rf"(?m)^[ \t]*{re.escape(token)}[ \t]*\r?\n"
+        )
+        main_text, count = pattern.subn("", main_text, count=1)
+        if count == 0:
+            print(
+                f"[Phase6AG] RESULT GATE NOTE: optional inherited gate already "
+                f"absent: {token}"
             )
-        main_text = main_text.replace(stale, "", 1)
 
-    marker = "        s_phase6afCreateDeviceBridgeCount != 0u &&\n"
-    if marker not in main_text:
-        raise SystemExit("[Phase6AG] Phase 6AF CreateDevice result gate missing")
-    main_text = main_text.replace(
-        marker,
-        "        s_phase6agRootEntered &&\n" + marker,
-        1,
+    create_token = "s_phase6afCreateDeviceBridgeCount != 0u &&"
+    pattern = re.compile(
+        rf"(?m)^(?P<indent>[ \t]*){re.escape(create_token)}[ \t]*$"
     )
+    match = pattern.search(main_text)
+    if match is None:
+        raise SystemExit(
+            "[Phase6AG] Phase 6AF CreateDevice result gate missing "
+            "(token search, indentation ignored)"
+        )
+
+    indent = match.group("indent")
+    replacement = (
+        f"{indent}s_phase6agRootEntered &&\n"
+        f"{indent}{create_token}"
+    )
+    main_text = main_text[:match.start()] + replacement + main_text[match.end():]
 
     # The actual final driver token is inherited from the old cosine-harvest
     # harness. Rename it if present; keep the newer descriptive token too.
@@ -168,7 +183,6 @@ def fix_result_gate(main_text: str) -> str:
             1,
         )
     return main_text
-
 
 def write_sharded_main(out_dir: Path, main_text: str, base) -> dict:
     off_marker = '#pragma optimize("", off)\n'
