@@ -38,7 +38,34 @@ def replace_unique(text,old,new,label):
 def install_state(text):
     marker="static DWORD s_phase6bnRootEntries = 0u;\n"
     if marker not in text: raise SystemExit("[Phase6BO] inherited 6BN root-state anchor missing")
-    return text.replace(marker,marker+"static DWORD s_phase6boRootEntries = 0u;\n",1)
+    support = r'''static DWORD s_phase6boRootEntries = 0u;
+static DWORD s_phase6boPblCheckpointCalls = 0u;
+static DWORD s_phase6boPblCheckpointPhase1 = 0u;
+static DWORD s_phase6boPblCheckpointPhase2 = 0u;
+static uint32_t s_phase6boPblCheckpointLastObject = 0u;
+static uint32_t s_phase6boPblCheckpointLastValue = 0u;
+
+/*
+ * Maintained non-mutating checkpoint support for translated sub_00209810.
+ * The generated calls are diagnostic instrumentation inserted after the
+ * retail object writes; they are not retail file-I/O calls. Preserve title
+ * behavior by observing only: no guest writes, no register edits, no host I/O.
+ */
+static void recomp_pbl_file_checkpoint(
+    uint32_t phase,
+    uint32_t object,
+    uint32_t value)
+{
+    ++s_phase6boPblCheckpointCalls;
+    if (phase == 1u)
+        ++s_phase6boPblCheckpointPhase1;
+    else if (phase == 2u)
+        ++s_phase6boPblCheckpointPhase2;
+    s_phase6boPblCheckpointLastObject = object;
+    s_phase6boPblCheckpointLastValue = value;
+}
+'''
+    return text.replace(marker, marker + support, 1)
 
 def instrument_root(rendered,name):
     pos=rendered.find(name); brace=rendered.find("{",pos)
@@ -124,6 +151,28 @@ def main():
         raise SystemExit(f"[Phase6BO] support-clean pruning removed mandatory root 0x{ROOT:08X}; unresolved support={', '.join(map(str,pruned.get(ROOT,[])))}")
 
     main_text=insert_summary(main_text)
+
+    summary_marker = '"P6BO POST-XGRPH FRONTIER 00209810: entries=%u",'
+    summary_pos = main_text.find(summary_marker)
+    if summary_pos < 0:
+        raise SystemExit("[Phase6BO] checkpoint summary anchor missing")
+    stmt_end = main_text.find("trace(line);", summary_pos)
+    if stmt_end < 0:
+        raise SystemExit("[Phase6BO] checkpoint summary trace anchor missing")
+    stmt_end = main_text.find("\n", stmt_end)
+    checkpoint_summary = r'''
+    sprintf(
+        line,
+        "P6BO PBL CHECKPOINT: calls=%u phase1=%u phase2=%u object=%08X value=%08X",
+        (unsigned int)s_phase6boPblCheckpointCalls,
+        (unsigned int)s_phase6boPblCheckpointPhase1,
+        (unsigned int)s_phase6boPblCheckpointPhase2,
+        (unsigned int)s_phase6boPblCheckpointLastObject,
+        (unsigned int)s_phase6boPblCheckpointLastValue);
+    trace(line);
+'''
+    main_text = main_text[:stmt_end + 1] + checkpoint_summary + main_text[stmt_end + 1:]
+
     main_text=p6bl.replace_policy_line(main_text,"Policy: Phase 6BO post-XGRPH .text frontier 00209810 depth-4 cap-256 closure; preserve all 6BN GPU semantics and hard fences")
     main_text=replace_unique(main_text,BASE_TAG,BUILD_TAG,"build tag")
     main_text=main_text.replace(COOKIE_OLD,COOKIE_NEW)
@@ -134,6 +183,8 @@ def main():
     for marker in (BUILD_TAG,COOKIE_NEW,"case 0x00209810u:","s_phase6boRootEntries",
                    "PASS: Phase 6BO entered translated post-XGRPH frontier 00209810",
                    "P6BO POST-XGRPH FRONTIER 00209810:",
+                   "recomp_pbl_file_checkpoint",
+                   "P6BO PBL CHECKPOINT:",
                    "phase6be_pfifo_idle_write32(address, value)",
                    "phase6bj_pfb_zcomp_write32","phase6bg_pfb_tile_write32",
                    "phase6bh_pgraph_scoped_write32","#define PHASE4C_EXEC_BUDGET 8000000u"):
@@ -159,6 +210,15 @@ def main():
         "root_range":{"start":f"0x{int(root_row['start']):08X}","end":f"0x{int(root_row['end']):08X}"},
         "root_closure_depth":ROOT_DEPTH,"root_closure_cap":ROOT_CAP,
         "candidate_new_members":len(candidate_new),"packed_new_members":len(candidate_new),
+        "maintained_support":{
+            "recomp_pbl_file_checkpoint":{
+                "kind":"non-mutating diagnostic checkpoint",
+                "phases":[1,2],
+                "guest_memory_mutation":False,
+                "host_io":False,
+                "register_mutation":False
+            }
+        },
         "pruned_members":len(pruned),"expanded_pack_members":len(expanded),
         "new_direct_frontier_targets":[f"0x{x:08X}" for x in sorted(frontiers)],
         "all_phase6bn_gpu_bridges_inherited":True,
@@ -170,6 +230,7 @@ def main():
 
     print("[Phase6BO] 6BN hardware: translated XGRPH frontier 0029C8BE entered six times")
     print("[Phase6BO] next boundary DIRECT_FRONTIER 00209810 fault=0")
+    print("[Phase6BO] maintained support: recomp_pbl_file_checkpoint is non-mutating diagnostic-only")
     print(f"[Phase6BO] POST-XGRPH PACK: root=0x{ROOT:08X} name={root_name} candidates={len(candidate_new)} pruned={len(pruned)} packed_new={len(candidate_new)} total_pack={len(expanded)}")
     print(f"[Phase6BO] SOURCE SHARDS: {layout['shard_count']}")
     print("[Phase6BO] all 6BN GPU semantics, allocator geometry and 8M budget inherited unchanged")
