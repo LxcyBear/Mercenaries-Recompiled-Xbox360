@@ -139,10 +139,11 @@ clean XAPI return 0.
   `0x0028E700` with `fault=0`; last direct progress reached `0x0028EB90`.
   The old inherited cosine-harvest FAIL line is non-authoritative for 6AG.
 
-The immediate hardware goal is now to expand from the new fault-free retail D3D
-frontier `0x0028E700`, preserving the proven native CreateDevice handoff and
-exact `sub_00290895` split. The preferred next hard stop remains the first
-genuine guest NV2A MMIO/VRAM touch. No DATAxbox asset open or Mercenaries-rendered
+The immediate hardware goal is Phase 6AH: promote the fault-free retail D3D
+frontier `0x0028E700`, pack a deeper support-clean closure, then perform one
+bounded D3D-only saturation round for newly exposed exact/generated D3D
+frontiers. The preferred next hard stop remains the first genuine guest
+NV2A MMIO/VRAM touch. No DATAxbox asset open or Mercenaries-rendered
 frame has been observed yet.
 
 ### Immediate next tests
@@ -3423,3 +3424,5 @@ emulation and modding communities. See [upstream LICENSE](LICENSE),
 [dependency notices](docs/dependencies.md) and component source headers.
 *Mercenaries: Playground of Destruction* and its assets remain the property of
 their respective owners. This is an unofficial fan project.
+
+- **6AH — ACTIVE:** promote hardware-proven D3D frontier `0x0028E700`, auto-split it through the reviewed manual seed when needed, pack a depth-8/cap-512 support-clean closure, then pre-arm one bounded D3D-only saturation round (up to six exact/generated D3D frontiers, shallow closures, 192-member second-round cap). Native CreateDevice and exact `0x00290895` remain unchanged; ambiguous/non-D3D/NV2A boundaries stay hard.
