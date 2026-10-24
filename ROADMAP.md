@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | 6BX proved the faulting `0x8000018D` comes from thunk slot `0x002DBDBC`, identified by Phase-4A as ordinal 357 `IdexChannelObject`; 6BY DATA relocation is prepared |
+| 6 — Native Xenos graphics | **In progress** | 6BY relocated ordinal 357 and cleared the old low-KSEG-looking fault; retail now reaches `IdexChannelObject.DeviceQueue.DeviceListHead` at `+0x28`; 6BZ queue model is prepared |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -67,16 +67,17 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BV — hardware PASS / FILE_OBJECT dereference hypothesis disproven:** the exact proven `IoFileObjectType` + tagged-file-handle call returned diagnostic sentinel `0x04000000` successfully. Retail did not access that unmapped pointer before the next boundary; instead execution advanced cleanly to `ICALL_SAFE target=0x80000081`, ordinal 129 `KeRaiseIrqlToDpcLevel@0`, with canonical 4-byte frame and `fault=0`. No `FILE_OBJECT` shim is justified yet.
 - **Phase 6BW — hardware PASS / guest IRQL continuation:** ordinal-129 `KeRaiseIrqlToDpcLevel@0` received the canonical 4-byte return-slot-only frame and advanced maintained guest IRQL from `0` to `DISPATCH_LEVEL=2` exactly once without changing real Xenon processor IRQL. The very next checked operation is READ32 `0x8000018D`, producing `GUEST_FAULT` at retail path `0022AC56 -> 0022AC78 -> 0022AC89 -> 0022AC8F`. The exact 111-import audit contains no ordinal `0x18D/397`; because the address lies inside the deliberately fenced `0x80000000..0x80000FFF` low-KSEG ambiguity page, the fence remains intact pending origin proof.
 - **Phase 6BX — hardware PASS / low-KSEG false lead closed:** all four origin probes fired. At `0022AC8F`, EDX was still `00406298` before the translated instruction `edx = GUEST_READ32(0x2DBDBC)`; the immediate boundary then showed `EDX=8000018D` and READ32 `8000018D`. Phase-4A identifies slot 55 / `002DBDBC` as ordinal 357 `IdexChannelObject`, a DATA export. Therefore the fault is a missing pointer-valued data-import relocation, not a reason to relax the low-KSEG fence.
+- **Phase 6BY — hardware PASS / IdexChannelObject relocation crossed:** the raw retail token `80000165` at thunk slot `002DBDBC` was relocated to guest `0087E0A0`, and the old `READ32 8000018D` boundary disappeared. Retail then accessed `0087E0C8 = IdexChannelObject + 0x28`, matching Xbox `IDE_CHANNEL_OBJECT.DeviceQueue.DeviceListHead`. Because the temporary object was zeroed there, the queue walk later reached `READ32 FFFFFFFF`; execution nevertheless advanced through `0022AC9E/0022ACA1/0022ACD1`. The console surface changed from blue to orange during this run; treat that as a diagnostic presentation-state change, not yet as game pixels.
 
-### Current next step — Phase 6BY
+### Current next step — Phase 6BZ
 
-Phase 6BX is hardware-proven. The instrumented retail path fired at `0022AC56 -> 0022AC78 -> 0022AC89 -> 0022AC8F`. At the last probe, EDX was still `0x00406298`; the translated body then loads `GUEST_READ32(0x002DBDBC)`, after which the fault boundary records `EDX=0x8000018D` and the next `GUEST_READ32(EDX)` faults. This pins the origin to thunk slot `0x002DBDBC`.
+Phase 6BY is hardware-proven. The ordinal-357 thunk relocation is correct and eliminated the old `0x8000018D` fault. The next live access is `IdexChannelObject + 0x28 = 0x0087E0C8`, exactly the embedded `KDEVICE_QUEUE.DeviceListHead` in the Xbox `IDE_CHANNEL_OBJECT` layout. The temporary 6BY model left that list head zero, and retail's file-close queue walk eventually produced `READ32 0xFFFFFFFF`.
 
-The exact Phase-4A audit identifies that slot as import slot 55, ordinal 357 `IdexChannelObject`, kind DATA. The maintained kernel model defines `IdexChannelObject` as a pointer-valued export, so Phase 6BY represents the same shape in guest kernel-data: thunk `0x002DBDBC -> 0x0087E0A0` (exported PVOID slot), `[0x0087E0A0] -> 0x0087E0A4` (tiny identity object), and `[0x0087E0A4] = 0x49444558` (`'IDEX'`). The generic startup DATA-thunk map gains ordinal 357 and validates the exact raw retail token before execution. The low-KSEG ambiguity fence, guest IRQL model, FILE_OBJECT sentinel, file/delay/GPU semantics, allocator geometry and 8M execution budget remain unchanged.
+Phase 6BZ models the export directly as an `IDE_CHANNEL_OBJECT` at `0x0087E0A0`. Its embedded queue is initialized like Xbox `KeInitializeDeviceQueue`: `Type=0x14`, `Size=0x0C`, `Busy=0`, and `DeviceListHead.Flink/Blink` both point back to `0x0087E0C8`, representing the truthful empty queue for synchronous host-backed I/O. The low-KSEG ambiguity fence, guest IRQL model, FILE_OBJECT sentinel, file/delay/GPU semantics, allocator geometry and 8M execution budget remain unchanged.
 
 ## Next major graphics milestones
 
-1. Run Phase 6BY and verify ordinal-357 `IdexChannelObject` relocates to `002DBDBC -> 0087E0A0 -> 0087E0A4`, then capture the next retail/kernel frontier.
+1. Run Phase 6BZ and verify `IdexChannelObject+0x28` reads the self-referential empty DeviceQueue list, then capture the next retail/kernel frontier.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
