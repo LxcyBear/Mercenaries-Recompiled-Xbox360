@@ -198,7 +198,7 @@ def patch_createdevice(main_text: str) -> str:
     s_phase6arSlot1Before = GUEST_READ32(s_phase6afGuestDevice + 0x1A14u);
     if (s_accessFault)
     {
-        phase4c_escape(PHASE4C_BOUNDARY_GUEST_FAULT, 0x0028AD90u, c);
+        phase4c_escape(PHASE4C_BOUNDARY_GUEST_FAULT, s_phase6afGuestDevice + 0x1A10u, c);
         return;
     }
 
