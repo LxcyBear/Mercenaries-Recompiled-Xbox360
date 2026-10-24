@@ -979,3 +979,21 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   and the BE800000 fallback path. Determine whether the failed 0x00258000
   request can safely allocate from the remaining guest gap below 0x02880000
   without relaxing graphics/KSEG/MMIO/VRAM fences. No XEX build in this pass.
+
+- **Phase 6AS-A forensic - PASS / fixed-bound allocator bug proven:** the normal
+  page allocator rejects whenever s_phase4cVmPageNext <=
+  PHASE4C_TITLE_HEAP_END or the requested size exceeds the static gap to that
+  compile-time heap end. After the successful 0x01680000 retail graphics claim,
+  pageNext is 0x02880000 while the old fixed heap end is 0x028C0000, so every
+  later normal page-backed allocation is guaranteed to return zero even though
+  the heap block table was already trimmed safely and the live heap high-water
+  mark is far below the new frontier. This explains the 6AR 0x00258000
+  allocation failure and HRESULT 0x8007000E.
+- **Phase 6AT-A active - continue the D3D dual frontier safely:** inherit the
+  6AR selective sub_0028F9E0 repair. While that initializer alone is active,
+  ordinal 166 first attempts the existing normal allocator. If it returns NULL
+  for the proven full-range/protect=0x404 wrapper shape, a bounded fallback may
+  trim only the current free heap tail, provided no live heap allocation
+  crosses the proposed base and every page is unmanaged. The claim must be
+  exact-size/alignment with no hidden padding. Parent 0028FF80 remains bypassed;
+  all KSEG/NV2A/MMIO/VRAM fences remain hard.
