@@ -81,9 +81,9 @@ $text=Get-Content $mono -Raw
 foreach($marker in @(
   "caller == 0x0023A3CEu",
   "(caller == 0x0022A7A4u || caller == 0x0023A3CEu)",
-  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairCount;",
-  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairExtra;",
-  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp;",
+  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairCount = 0u;",
+  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairExtra = 0u;",
+  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp = 0u;",
   "P6BP POST-XGRPH FRONTIER 00209810:",
   "P6BP PBL CHECKPOINT:",
   "phase6bp_env_build_cookie",
