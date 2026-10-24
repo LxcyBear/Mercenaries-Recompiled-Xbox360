@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current blocker ordinal-218 `NtQueryVolumeInformationFile` KERNEL_FRAME at caller `0x0023A3CE` after the RtlInitAnsi repair and PBL phase-1 checkpoint |
+| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation and NV2A setup path proven; D3D/XGRPH closures execute; 6BQ crossed ordinal-218 and reached PBL phases 1+2; current blocker is clean `DIRECT_FRONTIER 0x00209A70` from caller `0x0023A3CE`, `fault=0` |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -59,16 +59,17 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BN — hardware PASS / return to title `.text`:** XGRPH root `0029C8BE` entered six times and execution advanced to clean `DIRECT_FRONTIER 00209810` with `fault=0`.
 - **Phase 6BO — hardware root-entry PASS / kernel-frame frontier:** exact translated root `00209810` entered once, then ordinal-289 `RtlInitAnsiString` stopped on caller context `0023A3CE` with 16-byte saved-ESP delta vs canonical 12 and `fault=0`.
 - **Phase 6BP — hardware PASS / PBL phase-1 progress:** the `0023A3CE` `RtlInitAnsiString` frame repair succeeded; `d:\\xesrb.tga` and `d:\\` opened successfully; PBL checkpoint phase 1 fired; next boundary is ordinal-218 `NtQueryVolumeInformationFile` with 28-byte delta vs canonical 24 and `fault=0`.
+- **Phase 6BQ — hardware PASS / PBL phase-2 progress:** the `0023A3CE` ordinal-218 `NtQueryVolumeInformationFile` 28→24-byte repair passed after canonical class-3 validation. The native volume query completed; two class-34 `NtQueryInformationFile` queries on `game:\\xesrb.tga` succeeded; the maintained PBL checkpoint reached `calls=2 phase1=1 phase2=1`; and execution advanced to clean `DIRECT_FRONTIER 0x00209A70` with `fault=0`.
 
-### Current next step — Phase 6BP
+### Current next step — Phase 6BR
 
-Phase 6BO reached and entered exact translated post-XGRPH root `00209810` once. Execution then stopped at a caller-local ordinal-289 `RtlInitAnsiString` frame mismatch: caller context `0023A3CE`, call ESP `008BF8C4`, saved ESP `008BF8D4`, observed delta 16 vs canonical 12, with `fault=0`. The later PBL diagnostic checkpoints were not reached before this kernel-frame boundary.
+Phase 6BQ is hardware-proven. The caller-local ordinal-218 `NtQueryVolumeInformationFile` repair normalized the observed 28-byte frame to the canonical 24-byte frame only after validating caller `0023A3CE`, the tagged handle, guest IOSB/info pointers, length, and class 3. The native query completed successfully. Execution continued through two `NtQueryInformationFile` calls for `game:\xesrb.tga`, and the maintained PBL observer advanced through both phases (`calls=2 phase1=1 phase2=1`).
 
-Phase 6BP preserves the translated pack and all Phase 6BO graphics/allocator/watchdog invariants, and extends the existing hardware-proven ordinal-289 saved-ESP repair policy only to exact caller context `0023A3CE`. The repair is accepted only after validating the canonical return slot plus destination/source guest pointers; it then resumes at `savedEsp-4` to restore the 12-byte frame.
+The new boundary is ordinary translated control flow: `DIRECT_FRONTIER caller=0023A3CE target=00209A70 esp=008BF908`, `fault=0`. Phase 6BR requires `00209A70` to be an exact generated function start, then adds only a bounded depth-4/cap-256 support-clean closure. Both caller-local ABI repairs, PFIFO/PFB/PGRAPH semantics, allocator geometry, unrelated MMIO/VRAM fences, and the 8M execution budget remain unchanged.
 
 ## Next major graphics milestones
 
-1. Cross the caller-local ordinal-218 `NtQueryVolumeInformationFile` 28→24-byte frame after the successful 6BP ANSI repair.
+1. Cross clean post-PBL `DIRECT_FRONTIER 0x00209A70` with exact-start proof and a bounded support-clean translated closure.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
