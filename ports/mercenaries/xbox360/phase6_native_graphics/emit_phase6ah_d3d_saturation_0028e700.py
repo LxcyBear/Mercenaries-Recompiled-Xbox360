@@ -29,7 +29,7 @@ import json
 from pathlib import Path
 
 BASE_TAG = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-D"
-BUILD_TAG = "P6AH-D3D-SATURATION-0028E700-20261023-A"
+BUILD_TAG = "P6AH-D3D-SATURATION-0028E700-20261023-B"
 COOKIE_OLD = "phase6ag_env_build_cookie"
 COOKIE_NEW = "phase6ah_env_build_cookie"
 
@@ -395,19 +395,41 @@ def main() -> int:
 
     second_frontiers = set()
     second_pruned = {}
+    saturation_fallback = False
     if saturation_new:
+        pre_sat_expanded = set(expanded)
+        pre_sat_main = main_text
         expanded.update(saturation_new)
-        main_text, rendered_sat, second_frontiers, second_pruned = (
-            p5bc.insert_pack_members(
-                main_text,
-                base,
-                p5bb,
-                generated,
-                saturation_new,
-                expanded,
-                require_sweep_root=False,
+        try:
+            main_text, rendered_sat, second_frontiers, second_pruned = (
+                p5bc.insert_pack_members(
+                    main_text,
+                    base,
+                    p5bb,
+                    generated,
+                    saturation_new,
+                    expanded,
+                    require_sweep_root=False,
+                )
             )
-        )
+        except SystemExit as exc:
+            # The saturation round is opportunistic only. If every optional
+            # candidate requires support we do not yet own, preserve the
+            # already-clean mandatory root pack and leave those D3D frontiers
+            # fenced for hardware instead of failing the whole 6AH stage.
+            msg = str(exc)
+            if "support-clean sweep unexpectedly lost all candidates" not in msg:
+                raise
+            saturation_fallback = True
+            main_text = pre_sat_main
+            expanded = pre_sat_expanded
+            second_frontiers = set()
+            second_pruned = {}
+            saturation_new[:] = []
+            print(
+                "[Phase6AH] SATURATION FALLBACK: optional D3D saturation had "
+                "no support-clean candidates; keeping mandatory root-only pack"
+            )
 
     retained_saturation_roots = [
         va for va in saturation_roots if va in expanded
@@ -550,6 +572,7 @@ def main() -> int:
             "candidate_new_members": len(saturation_new_all),
             "retained_new_members": len(saturation_new),
             "pruned_members": len(second_pruned),
+            "fallback_to_root_only": saturation_fallback,
         },
         "expanded_pack_members": len(expanded),
         "all_new_retained_members": len(all_new_retained),
@@ -588,6 +611,7 @@ def main() -> int:
         )
     )
     print(f"[Phase6AH] Saturation retained new members: {len(saturation_new)}")
+    print(f"[Phase6AH] Saturation fallback root-only: {int(saturation_fallback)}")
     print(f"[Phase6AH] Remaining direct frontiers: {len(final_frontiers)}")
     print("[Phase6AH] Native CreateDevice + exact 00290895: inherited unchanged")
     print("[Phase6AH] Purple remains reserved for genuine NV2A MMIO/VRAM")
