@@ -458,5 +458,9 @@
   {
     "start": "0x00290895",
     "reason": "Phase 6AF-B real Xbox 360 hardware proved a fault-free DIRECT_FRONTIER from translated caller 0x0023A3CE to retail D3D target 0x00290895 immediately after the native CreateDevice handoff; promote this runtime-discovered D3D entry as a reviewed hard function boundary."
+  },
+  {
+    "start": "0x0028E700",
+    "reason": "Phase 6AG-D real Xbox 360 hardware proved a fault-free DIRECT_FRONTIER from translated caller 0x0023A3CE to retail D3D target 0x0028E700 immediately after exact sub_00290895 executed; promote this runtime-discovered D3D entry as a reviewed hard function boundary."
   }
 ]
