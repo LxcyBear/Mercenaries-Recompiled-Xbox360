@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; the retail 22.5 MiB graphics-pool claim now succeeds at `0x02880000`, the generalized ordinal-166 allocation wrapper is hardware-proven, and Phase 6AD crossed `AvGetSavedDataAddress` to the exact ordinal-2 `AvSendTVEncoderOption@16` frontier. Phase 6AE-B is hardware-proven: it crossed ordinal 2 `AvSendTVEncoderOption@16` and exposed a terminal retail renderer `CreateDevice` recovery failure (`0x8007000E`, `fault=0`). Phase 6AF-B is hardware-proven: the exact retail `sub_0028CAA0` device-creation contract successfully hands off to the live native Xenos device, publishes guest device `0x00299380`, eliminates the prior `0x8007000E` terminal recovery failure, and advances directly into retail D3D. Phase 6AG-D is active at the fault-free D3D frontier `0x00290895`. The exact `sub_00290895` split is retained; after 6AG-C exposed that the inherited 6AF result expression is not stable enough to edit textually, 6AG-D emits its own authoritative D3D-neighborhood PASS/FAIL result instead. The first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
+> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; the retail 22.5 MiB graphics-pool claim now succeeds at `0x02880000`, the generalized ordinal-166 allocation wrapper is hardware-proven, and Phase 6AD crossed `AvGetSavedDataAddress` to the exact ordinal-2 `AvSendTVEncoderOption@16` frontier. Phase 6AE-B is hardware-proven: it crossed ordinal 2 `AvSendTVEncoderOption@16` and exposed a terminal retail renderer `CreateDevice` recovery failure (`0x8007000E`, `fault=0`). Phase 6AF-B is hardware-proven: the exact retail `sub_0028CAA0` device-creation contract successfully hands off to the live native Xenos device, publishes guest device `0x00299380`, eliminates the prior `0x8007000E` terminal recovery failure, and advances directly into retail D3D. Phase 6AG-D is hardware-proven: the exact `sub_00290895` entry executed successfully and Mercenaries advanced deeper into retail D3D to a new fault-free direct frontier at `0x0028E700`. The exact `sub_00290895` split is retained; after 6AG-C exposed that the inherited 6AF result expression is not stable enough to edit textually, 6AG-D emits its own authoritative D3D-neighborhood PASS/FAIL result instead. The first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -133,14 +133,16 @@ clean XAPI return 0.
 - **6AG-C — PREP PARTIAL PASS:** exact-root and neighborhood analysis passed,
   but emission still could not locate the inherited 6AF CreateDevice condition
   textually; no XEX was built.
-- **6AG-D — ACTIVE:** leave inherited legacy result gates untouched and emit a
-  separate authoritative result requiring only D3D root entry plus a successful
-  native CreateDevice bridge. The exact `sub_00290895` split remains retained.
+- **6AG-D — hardware PASS:** native CreateDevice handoff passed again, exact
+  `sub_00290895` executed on hardware, and the independent Phase-6AG result
+  reported PASS. Execution advanced deeper into retail D3D to direct frontier
+  `0x0028E700` with `fault=0`; last direct progress reached `0x0028EB90`.
+  The old inherited cosine-harvest FAIL line is non-authoritative for 6AG.
 
-The immediate hardware goal is now to prove Phase 6AG's support-clean retail
-D3D neighborhood expansion rooted at `0x00290895` and let the already-working
-native CreateDevice path run as far as one bounded hardware pass safely permits.
-The preferred next hard stop is the first genuine guest NV2A MMIO/VRAM touch. No DATAxbox asset open or Mercenaries-rendered
+The immediate hardware goal is now to expand from the new fault-free retail D3D
+frontier `0x0028E700`, preserving the proven native CreateDevice handoff and
+exact `sub_00290895` split. The preferred next hard stop remains the first
+genuine guest NV2A MMIO/VRAM touch. No DATAxbox asset open or Mercenaries-rendered
 frame has been observed yet.
 
 ### Immediate next tests
