@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier WRITE32 `0xFD003220` (zero clear) at VA `0x00292761` |
+| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier `DIRECT_FRONTIER 0x0028B180` (fault=0) |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -52,27 +52,18 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BF — hardware PASS:** `FD400700` was bridged twice with backend-equivalent zero. Retail D3D then allocated 1,228,800 bytes at `0x024FC000` and advanced to WRITE32 `0xFD100254`.\n- **Phase 6BG — hardware PASS:** `FD100254` (PFB tile #1 LIMIT) accepted `0x02627FFF`, and `FD100258` (tile #1 PITCH) accepted `0x00000A00`.
 - **Phase 6BH — hardware PASS:** PGRAPH writes `FD400914=02627FFF`, `FD400918=00000A00`, and `FD400910=024FC003` all crossed; execution advanced to PFB tile #1 BASE at `FD100250`.
 - **Phase 6BI — hardware PASS:** PFB tile #1 BASE `FD100250=024FC003` crossed and read back correctly; PGRAPH `0910/0918/0914` readbacks matched their shadowed values.
-- **Phase 6BJ — hardware PASS:** PFB ZCOMP tile #1 `FD100304=84000000` crossed, mirrored through PGRAPH `FD400984`, and both readbacks returned `84000000`. Execution advanced to WRITE32 `FD003220=00000000` at VA `00292761`.
+- **Phase 6BJ — hardware PASS:** PFB ZCOMP tile #1 `FD100304=84000000` crossed, mirrored through PGRAPH `FD400984`, and both readbacks returned `84000000`.
+- **Phase 6BK — hardware PASS / major frontier transition:** the later PFIFO `FD003220=0` clear completed; retail D3D root `00290895` PASS, internal D3D device PASS, D3D sync checkpoints=9, and the 640×480 D3D device summary populated. Execution then reached clean `DIRECT_FRONTIER 0028B180` with `fault=0`.
 
-### Current next step — Phase 6BK
+### Current next step — Phase 6BL
 
-Phase 6BK is prepared to reuse the exact PFIFO `NV_PFIFO_CACHE1_DMA_PUSH` zero-clear behavior already proven by Phase 6BE, but only for the later `sub_00292586` write observed on hardware:
+Phase 6BK is hardware-proven and marks the end of the previous MMIO-driven choke point. The later PFIFO `FD003220=0` clear completed, then the retail D3D root `0x00290895`, internal D3D device result, sync checkpoint summary and 640×480 device summary all reported PASS. The next boundary is no longer NV2A MMIO: it is a clean `DIRECT_FRONTIER 0x0028B180` with `fault=0`.
 
-- address: `FD003220`
-- value: `00000000`
-- translated VA: `00292761`
-
-Safety/accuracy rules for this step:
-
-- Reuse the existing `phase6be_pfifo_idle_write32` helper; do not invent new PFIFO behavior.
-- Accept only the exact `FD003220` address with zero value in the existing scoped setup wrapper.
-- Preserve PFB tile, ZCOMP and PGRAPH shadow semantics.
-- Keep every unrelated NV2A/MMIO/VRAM access fenced.
-- Preserve the proven allocator geometry and 8,000,000-tick watchdog.
+Phase 6BL is prepared to add the exact generated `sub_0028B180` retail D3D function plus a bounded depth-4/cap-256 support-clean dependency closure. All Phase 6BK PFIFO/PFB/ZCOMP/PGRAPH semantics, allocator geometry, 8,000,000-tick watchdog and unrelated NV2A/MMIO/VRAM hard fences remain unchanged.
 
 ## Next major graphics milestones
 
-1. Cross the current PFB ZCOMP setup at `FD100304` / `FD100324`.
+1. Cross the clean translated-code frontier at `0x0028B180` with its bounded dependency closure.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
