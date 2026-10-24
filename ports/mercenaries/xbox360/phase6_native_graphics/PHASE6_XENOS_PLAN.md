@@ -963,3 +963,19 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   immediate helper callees and refuses the build if any contains a literal
   absolute guest write at >=0x80000000. Parent 0028FF80 remains bypassed and
   all KSEG/NV2A/MMIO/VRAM fences remain hard.
+
+- **Phase 6AR-A hardware - major repair PASS / orange corruption eliminated:**
+  native Xenos CreateDevice still passes. The selective retail post-create
+  initializer sub_0028F9E0 runs with balanced guest stack and changes
+  device+0x1A10 from 0 to 2. The prior READ32 0x80000004 orange fault does not
+  recur. The new controlled stop is renderer-fatal HRESULT 0x8007000E after a
+  0x00258000-byte contiguous allocation returns base 0. The first stack slots
+  remain zero because initialization exits early on that allocation failure.
+  The earlier graphics-pool reservation successfully claims 0x01680000 bytes
+  at 0x02880000, exactly spanning the old page-next interval to 0x03F00000.
+- **Phase 6AS-A active - contiguous allocator policy audit:** PC-only inspect
+  the exact generated support code behind the successful 22.5 MiB graphics
+  pool claim, ordinal-166 wrapper provenance, normal contiguous allocation,
+  and the BE800000 fallback path. Determine whether the failed 0x00258000
+  request can safely allocate from the remaining guest gap below 0x02880000
+  without relaxing graphics/KSEG/MMIO/VRAM fences. No XEX build in this pass.
