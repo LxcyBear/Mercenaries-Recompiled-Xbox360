@@ -63,10 +63,16 @@ def patch_icall_dispatch(text: str) -> str:
 
 
 def install_ntsetinfo_support(text: str) -> str:
-    anchor = "static void phase5n_nt_query_information_file(uint32_t savedEsp)\n{"
+    # Insert immediately before the translated-pack lookup definition. This
+    # point is deliberately late in the support section: the tagged-handle,
+    # path, status-mapping and absolute-seek helpers are already defined, while
+    # all translated bodies that expand RECOMP_ICALL_SAFE come afterwards.
+    # Do not anchor this stage to a phase-specific NtQueryInformationFile
+    # helper name; that helper has been renamed/re-emitted by later phases.
+    anchor = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
     if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6BS] expected one NtQueryInformationFile support anchor, found {text.count(anchor)}"
+            f"[Phase6BS] expected one translated-pack lookup definition anchor, found {text.count(anchor)}"
         )
 
     support = r'''static uint32_t s_phase6bsNtSetInformationFileCallCount = 0u;
@@ -326,7 +332,7 @@ def main() -> int:
         "static HANDLE phase5c_read_native_handle(uint32_t token)",
         "static int phase5h_seek_absolute(HANDLE handle, uint32_t lowPart, uint32_t highPart)",
         "static uint32_t phase5b_open_status_from_error(DWORD error)",
-        "static void phase5n_nt_query_information_file(uint32_t savedEsp)",
+        "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{",
         "phase6be_pfifo_idle_write32(address, value)",
         "phase6bj_pfb_zcomp_write32",
         "phase6bg_pfb_tile_write32",
@@ -336,9 +342,9 @@ def main() -> int:
         if marker not in main_text:
             raise SystemExit(f"[Phase6BS] inherited 6BR marker missing: {marker}")
 
-    if "0x800000E2u" in main_text:
+    if "_phase4c_target == 0x800000E2u" in main_text or "phase6bs_nt_set_information_file" in main_text:
         raise SystemExit(
-            "[Phase6BS] ordinal 226 already appears in inherited source; inspect before adding duplicate handling"
+            "[Phase6BS] ordinal 226 dispatch/support already appears in inherited source; inspect before adding duplicate handling"
         )
 
     main_text = install_ntsetinfo_support(main_text)
