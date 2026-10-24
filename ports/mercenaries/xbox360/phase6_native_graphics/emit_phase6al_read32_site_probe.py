@@ -16,6 +16,7 @@ the actual read semantics remain unchanged.
 from __future__ import annotations
 
 import argparse
+import bisect
 import importlib.util
 import json
 import re
@@ -100,6 +101,11 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
     sites: list[dict] = []
     site_id = 0
 
+    # Precompute newline positions once. The original probe used
+    # body.count("\\n", 0, abs_start) for every site, repeatedly rescanning
+    # the giant translated body.
+    newline_offsets = [i for i, ch in enumerate(body) if ch == "\n"]
+
     for match in funcs:
         brace = masked.find("{", match.start(), match.end())
         if brace < 0:
@@ -129,7 +135,7 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
 
             abs_start = match.start() + token_start
             abs_end = match.start() + close_paren + 1
-            body_line = body.count("\n", 0, abs_start) + 1
+            body_line = bisect.bisect_right(newline_offsets, abs_start) + 1
             expression = " ".join(inner.strip().split())
 
             replacement = (
@@ -149,8 +155,20 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
     if not sites:
         raise SystemExit("[Phase6AL] no translated GUEST_READ32 call sites found")
 
-    for start, end, replacement in sorted(replacements, reverse=True):
-        body = body[:start] + replacement + body[end:]
+    # Apply every replacement in one linear reconstruction. Repeatedly slicing
+    # and rebuilding the entire multi-megabyte body once per READ32 site is
+    # effectively quadratic and made the first 6AL emitter run take far too
+    # long despite remaining CPU-active.
+    pieces: list[str] = []
+    cursor = 0
+    for start, end, replacement in sorted(replacements):
+        if start < cursor:
+            raise SystemExit("[Phase6AL] overlapping READ32 replacements")
+        pieces.append(body[cursor:start])
+        pieces.append(replacement)
+        cursor = end
+    pieces.append(body[cursor:])
+    body = "".join(pieces)
 
     return main_text[:body_start] + body + main_text[body_end:], sites
 
