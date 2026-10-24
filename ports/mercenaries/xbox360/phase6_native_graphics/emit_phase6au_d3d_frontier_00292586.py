@@ -348,10 +348,8 @@ def main() -> int:
     main_text = insert_summary(main_text)
 
     policy = (
-        "Policy: inherit hardware-proven 6AT dual-frontier allocator and "
-        "debugger bridge; cross exact D3D DIRECT_FRONTIER 00292586 with a "
-        "bounded depth-4/cap-256 support-clean translated closure; keep "
-        "KSEG/NV2A/MMIO/VRAM, unresolved-support and guest-fault fences hard"
+        "Policy: Phase 6AU D3D frontier 00292586; "
+        "depth-4 cap-256 closure; preserve 6AT allocator and fences"
     )
     if len(policy) > 250:
         raise SystemExit("[Phase6AU] startup policy trace exceeds safe length")
