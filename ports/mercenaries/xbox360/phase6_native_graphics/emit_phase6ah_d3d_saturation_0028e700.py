@@ -29,7 +29,7 @@ import json
 from pathlib import Path
 
 BASE_TAG = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-D"
-BUILD_TAG = "P6AH-D3D-SYNC-0028E700-20261023-C"
+BUILD_TAG = "P6AH-D3D-SYNC-0028E700-20261023-D"
 COOKIE_OLD = "phase6ag_env_build_cookie"
 COOKIE_NEW = "phase6ah_env_build_cookie"
 
