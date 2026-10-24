@@ -134,8 +134,8 @@ def install_tail_claim_helper(main_text: str) -> str:
     base = (oldPageNext - size) & ~(alignment - 1u);
     if (base < PHASE4C_TITLE_HEAP_START ||
         base >= oldPageNext ||
-        base + size > oldPageNext ||
-        !phase4c_vm_page_range(base, oldPageNext - base, &firstPage, &lastPage))
+        base + size != oldPageNext ||
+        !phase4c_vm_page_range(base, size, &firstPage, &lastPage))
         return 0u;
 
     phase4c_heap_init();
@@ -193,7 +193,7 @@ def install_tail_claim_helper(main_text: str) -> str:
         phase4c_heap_remove((DWORD)tailIndex);
 
     s_phase4cVmReservations[s_phase4cVmReservationCount].base = base;
-    s_phase4cVmReservations[s_phase4cVmReservationCount].size = oldPageNext - base;
+    s_phase4cVmReservations[s_phase4cVmReservationCount].size = size;
     s_phase4cVmReservations[s_phase4cVmReservationCount].protect = protect;
     s_phase4cVmReservations[s_phase4cVmReservationCount].inUse = 1u;
     ++s_phase4cVmReservationCount;
@@ -204,10 +204,10 @@ def install_tail_claim_helper(main_text: str) -> str:
         s_phase4cVmPageProtect[page] = protect;
     }
 
-    memset(g_ram + base, 0, oldPageNext - base);
+    memset(g_ram + base, 0, size);
     s_phase4cVmPageNext = base;
     if (actualSize)
-        *actualSize = oldPageNext - base;
+        *actualSize = size;
 
     ++s_phase6atTailClaimSuccesses;
     s_phase6atTailClaimLastBase = base;
@@ -220,7 +220,7 @@ def install_tail_claim_helper(main_text: str) -> str:
         (unsigned int)base,
         (unsigned int)requested,
         (unsigned int)size,
-        (unsigned int)(oldPageNext - base),
+        (unsigned int)size,
         (unsigned int)alignment,
         (unsigned int)oldPageNext,
         (unsigned int)s_phase4cVmPageNext,
