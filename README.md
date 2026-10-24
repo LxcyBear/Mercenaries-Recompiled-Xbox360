@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; the retail 22.5 MiB graphics-pool claim now succeeds at `0x02880000`, the generalized ordinal-166 allocation wrapper is hardware-proven, and Phase 6AD crossed `AvGetSavedDataAddress` to the exact ordinal-2 `AvSendTVEncoderOption@16` frontier. Phase 6AE-B is the active safe retry after 6AE-A was invalidated by a host-side startup logging overflow. The first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
+> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; the retail 22.5 MiB graphics-pool claim now succeeds at `0x02880000`, the generalized ordinal-166 allocation wrapper is hardware-proven, and Phase 6AD crossed `AvGetSavedDataAddress` to the exact ordinal-2 `AvSendTVEncoderOption@16` frontier. Phase 6AE-B is hardware-proven: it crossed ordinal 2 `AvSendTVEncoderOption@16` and exposed the next clean frontier as a terminal retail renderer `CreateDevice` recovery failure (`0x8007000E`, `fault=0`). The first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -109,15 +109,16 @@ clean XAPI return 0.
 - **6AE-A — INVALID TEST:** never reached the AV bridge. A 518-character
   startup Policy trace overflowed the host logging path and produced a repeated
   `0xC0000005` exception storm before Xenos or translated execution.
-- **6AE-B — ACTIVE:** same bounded compact AV-family/display-handoff experiment
-  with the startup Policy trace shortened and preflight-length guarded. The
-  native Xenos device remains the physical display owner; original-Xbox
-  encoder/NV2A register writes are not performed by the compatibility bridge.
+- **6AE-B — hardware PASS:** crossed ordinal 2 `AvSendTVEncoderOption@16`
+  with registerBase=0, option=9, param=1 and Result=NULL; the call was handled
+  as a non-query logical encoder write/no-op. Ordinal 3 was not reached. Native
+  Xenos remained alive, then the translated renderer stopped cleanly at
+  `RENDERER_FATAL` stage 3 with HRESULT `0x8007000E` (`fault=0`).
 
-The immediate hardware goal is to cross the observed ordinal-2 AV frontier,
-capture the title's real encoder/display intent (and ordinal 3
-`AvSetDisplayMode@24` if reached), then continue toward the first genuine
-guest NV2A MMIO/VRAM touch. No DATAxbox asset open or Mercenaries-rendered
+The immediate hardware goal is now to diagnose and bridge the retail renderer
+CreateDevice/recovery path that returns terminal HRESULT `0x8007000E` after the
+successful ordinal-2 AV call, while keeping native Xenos as the physical display
+owner and preserving the first genuine guest NV2A/MMIO/VRAM hard stop. No DATAxbox asset open or Mercenaries-rendered
 frame has been observed yet.
 
 ### Immediate next tests
