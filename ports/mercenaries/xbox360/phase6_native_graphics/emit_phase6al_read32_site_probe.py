@@ -16,7 +16,6 @@ the actual read semantics remain unchanged.
 from __future__ import annotations
 
 import argparse
-import bisect
 import importlib.util
 import json
 import re
@@ -90,6 +89,13 @@ def translated_bounds(main_text: str) -> tuple[int, int]:
 
 
 def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]:
+    """Instrument READ32s without rewriting individual expressions.
+
+    Nested GUEST_READ32 calls make source-range replacement ambiguous. Instead,
+    give every translated function a local phase6al_function_va and temporarily
+    redefine GUEST_READ32 across the translated body. The preprocessor then
+    handles nested expressions naturally.
+    """
     body_start, body_end = translated_bounds(main_text)
     body = main_text[body_start:body_end]
     masked = base.mask_noncode(body)
@@ -97,14 +103,9 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
     if not funcs:
         raise SystemExit("[Phase6AL] translated body contains no functions")
 
-    replacements: list[tuple[int, int, str]] = []
-    sites: list[dict] = []
-    site_id = 0
-
-    # Precompute newline positions once. The original probe used
-    # body.count("\\n", 0, abs_start) for every site, repeatedly rescanning
-    # the giant translated body.
-    newline_offsets = [i for i, ch in enumerate(body) if ch == "\n"]
+    insertions: list[tuple[int, str]] = []
+    rows: list[dict] = []
+    total_reads = 0
 
     for match in funcs:
         brace = masked.find("{", match.start(), match.end())
@@ -113,6 +114,9 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
         func_end = base.closing_brace(masked, brace)
         func_source = body[match.start():func_end]
         func_masked = masked[match.start():func_end]
+        read_count = len(READ32_RE.findall(func_masked))
+        if read_count == 0:
+            continue
 
         trace_match = TRACE_RE.search(func_masked)
         if trace_match:
@@ -121,57 +125,65 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
             name = match.group(1)
             m = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
             if not m:
-                continue
+                raise SystemExit(
+                    f"[Phase6AL] READ32-bearing translated function has no VA: {name}"
+                )
             function_va = int(m.group(1), 16)
 
-        for read_match in READ32_RE.finditer(func_masked):
-            token_start = read_match.start()
-            open_paren = func_masked.find("(", read_match.start(), read_match.end())
-            if open_paren < 0:
-                continue
-            close_paren = matching_paren(func_masked, open_paren)
-            inner = func_source[open_paren + 1:close_paren]
-            site_id += 1
-
-            abs_start = match.start() + token_start
-            abs_end = match.start() + close_paren + 1
-            body_line = bisect.bisect_right(newline_offsets, abs_start) + 1
-            expression = " ".join(inner.strip().split())
-
-            replacement = (
-                f"phase6al_read32_site(0x{function_va:08X}u, "
-                f"{site_id}u, {inner})"
+        # Insert immediately after the opening brace. Every GUEST_READ32 in
+        # this translated function can then reference the local VA, including
+        # nested reads on the same source line.
+        insertions.append(
+            (
+                brace + 1,
+                f"\n    const DWORD phase6al_function_va = 0x{function_va:08X}u;"
             )
-            replacements.append((abs_start, abs_end, replacement))
-            sites.append(
-                {
-                    "site": site_id,
-                    "function": f"0x{function_va:08X}",
-                    "body_line": body_line,
-                    "expression": expression,
-                }
-            )
+        )
+        rows.append(
+            {
+                "function": f"0x{function_va:08X}",
+                "read32_count": read_count,
+            }
+        )
+        total_reads += read_count
 
-    if not sites:
+    if total_reads == 0:
         raise SystemExit("[Phase6AL] no translated GUEST_READ32 call sites found")
 
-    # Apply every replacement in one linear reconstruction. Repeatedly slicing
-    # and rebuilding the entire multi-megabyte body once per READ32 site is
-    # effectively quadratic and made the first 6AL emitter run take far too
-    # long despite remaining CPU-active.
     pieces: list[str] = []
     cursor = 0
-    for start, end, replacement in sorted(replacements):
-        if start < cursor:
-            raise SystemExit("[Phase6AL] overlapping READ32 replacements")
-        pieces.append(body[cursor:start])
-        pieces.append(replacement)
-        cursor = end
+    for pos, payload in sorted(insertions):
+        if pos < cursor:
+            raise SystemExit("[Phase6AL] overlapping function-VA insertions")
+        pieces.append(body[cursor:pos])
+        pieces.append(payload)
+        cursor = pos
     pieces.append(body[cursor:])
     body = "".join(pieces)
 
-    return main_text[:body_start] + body + main_text[body_end:], sites
+    # Limit the macro override strictly to translated code. The wrapper calls
+    # recomp_guest_read32 directly, so there is no recursive macro expansion.
+    prefix = (
+        "#undef GUEST_READ32\n"
+        "#define GUEST_READ32(addr) "
+        "phase6al_read32_site(phase6al_function_va, (DWORD)__LINE__, "
+        "(uint32_t)(addr))\n"
+    )
+    suffix = (
+        "\n#undef GUEST_READ32\n"
+        "#define GUEST_READ32(addr) recomp_guest_read32((uint32_t)(addr))\n"
+    )
+    body = prefix + body + suffix
 
+    rows.insert(
+        0,
+        {
+            "instrumented_read32_sites": total_reads,
+            "instrumented_functions": len(insertions),
+            "site_identity": "translated function VA + compiler __LINE__",
+        },
+    )
+    return main_text[:body_start] + body + main_text[body_end:], rows
 
 def install_site_support(main_text: str) -> str:
     marker = '#pragma optimize("", off)\n'
@@ -181,32 +193,33 @@ def install_site_support(main_text: str) -> str:
 
     block = r'''
 static DWORD s_phase6alRead32Function = 0u;
-static DWORD s_phase6alRead32Site = 0u;
+static DWORD s_phase6alRead32Line = 0u;
 static DWORD s_phase6alRead32Address = 0u;
 static DWORD s_phase6alRead32Hits = 0u;
 
 static uint32_t phase6al_read32_site(
     DWORD functionVa,
-    DWORD siteId,
+    DWORD sourceLine,
     uint32_t address)
 {
     uint32_t value;
 
     s_phase6alRead32Function = functionVa;
-    s_phase6alRead32Site = siteId;
+    s_phase6alRead32Line = sourceLine;
     s_phase6alRead32Address = address;
     ++s_phase6alRead32Hits;
 
-    value = GUEST_READ32(address);
+    /* Call the checked helper directly. Do not recurse through GUEST_READ32. */
+    value = recomp_guest_read32(address);
 
     if (s_accessFault)
     {
         char line[256];
         sprintf(
             line,
-            "P6AL READ32 FAULT SITE: func=%08X site=%u address=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X",
+            "P6AL READ32 FAULT SITE: func=%08X line=%u address=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X",
             (unsigned int)functionVa,
-            (unsigned int)siteId,
+            (unsigned int)sourceLine,
             (unsigned int)address,
             (unsigned int)eax,
             (unsigned int)ecx,
@@ -229,7 +242,6 @@ static uint32_t phase6al_read32_site(
 '''
     return main_text[:pos] + block + main_text[pos:]
 
-
 def install_summary(main_text: str, site_count: int) -> str:
     marker = "P6AJ D3D SOURCE PROBE:"
     pos = main_text.find(marker)
@@ -243,10 +255,10 @@ def install_summary(main_text: str, site_count: int) -> str:
     block = (
         f'{indent}sprintf(\n'
         f'{indent}    line,\n'
-        f'{indent}    "P6AL READ32 SITE PROBE: calls=%u last_func=%08X last_site=%u last_address=%08X instrumented={site_count}",\n'
+        f'{indent}    "P6AL READ32 SITE PROBE: calls=%u last_func=%08X last_line=%u last_address=%08X instrumented={site_count}",\n'
         f'{indent}    (unsigned int)s_phase6alRead32Hits,\n'
         f'{indent}    (unsigned int)s_phase6alRead32Function,\n'
-        f'{indent}    (unsigned int)s_phase6alRead32Site,\n'
+        f'{indent}    (unsigned int)s_phase6alRead32Line,\n'
         f'{indent}    (unsigned int)s_phase6alRead32Address);\n'
         f'{indent}trace(line);\n'
     )
@@ -371,8 +383,9 @@ def main() -> int:
             raise SystemExit(f"[Phase6AL] inherited marker missing: {marker}")
 
     main_text, sites = instrument_translated_read32(main_text, base)
+    instrumented_read32_sites = int(sites[0]["instrumented_read32_sites"])
     main_text = install_site_support(main_text)
-    main_text = install_summary(main_text, len(sites))
+    main_text = install_summary(main_text, instrumented_read32_sites)
 
     policy = (
         "Policy: inherit 6AJ-A; wrap translated READ32 sites and escape on the "
@@ -409,11 +422,7 @@ def main() -> int:
     site_map_txt = args.out_dir / "phase6al-read32-site-map.txt"
     site_map_json = args.out_dir / "phase6al-read32-site-map.json"
     site_map_txt.write_text(
-        "\n".join(
-            f"{row['site']:05d} {row['function']} body_line={row['body_line']} expr={row['expression']}"
-            for row in sites
-        )
-        + "\n",
+        "\n".join(json.dumps(row, sort_keys=True) for row in sites) + "\n",
         encoding="utf-8",
     )
     site_map_json.write_text(json.dumps(sites, indent=2) + "\n", encoding="utf-8")
@@ -435,7 +444,7 @@ def main() -> int:
         "probe_only": True,
         "guest_memory_semantics_changed": False,
         "boundary_timing_changed": True,
-        "instrumented_read32_sites": len(sites),
+        "instrumented_read32_sites": instrumented_read32_sites,
         "site_map_txt": site_map_txt.name,
         "site_map_json": site_map_json.name,
         "source_layout": layout,
@@ -445,11 +454,11 @@ def main() -> int:
     )
 
     print("[Phase6AL] EXACT READ32 SITE PROBE: READY")
-    print(f"[Phase6AL] Instrumented translated READ32 sites: {len(sites)}")
+    print(f"[Phase6AL] Instrumented translated READ32 sites: {instrumented_read32_sites}")
     print("[Phase6AL] Guest-memory/KSEG/D3D/MMIO/VRAM semantics unchanged")
     print("[Phase6AL] Boundary timing: immediate escape after first latched READ32 fault")
     print(f"[Phase6AL] Site map: {site_map_txt}")
-    print("[Phase6AL] Hardware money line: P6AL READ32 FAULT SITE: ...")
+    print("[Phase6AL] Hardware money line: P6AL READ32 FAULT SITE: func=... line=... address=...")
     print("[Phase6AL] EMIT RESULT: PASS")
     return 0
 
