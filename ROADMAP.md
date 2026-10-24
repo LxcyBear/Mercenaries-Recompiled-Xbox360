@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier WRITE32 `0xFD400914` |
+| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier WRITE32 `0xFD100250` |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -49,7 +49,8 @@ The graphics path has moved from speculative initialization debugging into the r
   - `FD003220 -> 0x00` — DMA pusher idle/state clear
   - zero clear of `FD003220` accepted
 - After the PFIFO wait completed, translated execution advanced through `002922BE -> 002922D9 -> 0029259D -> 00292610 -> 0029528C`.
-- **Phase 6BF — hardware PASS:** `FD400700` was bridged twice with backend-equivalent zero. Retail D3D then allocated 1,228,800 bytes at `0x024FC000` and advanced to WRITE32 `0xFD100254`.\n- **Phase 6BG — hardware PASS:** `FD100254` (PFB tile #1 LIMIT) accepted `0x02627FFF`, and `FD100258` (tile #1 PITCH) accepted `0x00000A00`. Execution then advanced to WRITE32 `0xFD400914` in PGRAPH.
+- **Phase 6BF — hardware PASS:** `FD400700` was bridged twice with backend-equivalent zero. Retail D3D then allocated 1,228,800 bytes at `0x024FC000` and advanced to WRITE32 `0xFD100254`.\n- **Phase 6BG — hardware PASS:** `FD100254` (PFB tile #1 LIMIT) accepted `0x02627FFF`, and `FD100258` (tile #1 PITCH) accepted `0x00000A00`.
+- **Phase 6BH — hardware PASS:** PGRAPH writes `FD400914=02627FFF`, `FD400918=00000A00`, and `FD400910=024FC003` all crossed; execution advanced to PFB tile #1 BASE at `FD100250`.
 
 ### Current next step — Phase 6BF
 
