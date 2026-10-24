@@ -997,3 +997,13 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   crosses the proposed base and every page is unmanaged. The claim must be
   exact-size/alignment with no hidden padding. Parent 0028FF80 remains bypassed;
   all KSEG/NV2A/MMIO/VRAM fences remain hard.
+
+- **Phase 6AT-B debugger-assisted variant active:** retain the 6AT dual-frontier
+  allocator repair unchanged and add an xbWatson runtime address banner for
+  X360DebuggerWV. The banner reports the native PPC addresses of
+  sub_0028F9E0, the 6AT tail-claim helper, the ordinal-166 allocator wrapper,
+  and the first graphics-pool claim helper; native addresses of the emulated
+  x86 register globals; the native base of g_ram plus allocator-state roots;
+  and the guest-device/native-Xenos device bridge. This lets hardware runs pair
+  xbWatson lifecycle evidence with precise PPC breakpoints and live memory
+  inspection without confusing guest VAs with native PPC addresses.
