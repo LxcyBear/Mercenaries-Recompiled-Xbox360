@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; the retail 22.5 MiB graphics-pool claim now succeeds at `0x02880000`, the generalized ordinal-166 allocation wrapper is hardware-proven, and Phase 6AD crossed `AvGetSavedDataAddress` to the exact ordinal-2 `AvSendTVEncoderOption@16` frontier. Phase 6AE-B is hardware-proven: it crossed ordinal 2 `AvSendTVEncoderOption@16` and exposed a terminal retail renderer `CreateDevice` recovery failure (`0x8007000E`, `fault=0`). Phase 6AF-B is hardware-proven: the exact retail `sub_0028CAA0` device-creation contract successfully hands off to the live native Xenos device, publishes guest device `0x00299380`, eliminates the prior `0x8007000E` terminal recovery failure, and advances directly into retail D3D. Phase 6AG-D is hardware-proven: the exact `sub_00290895` entry executed successfully and Mercenaries advanced deeper into retail D3D to a new fault-free direct frontier at `0x0028E700`. The exact `sub_00290895` split is retained; after 6AG-C exposed that the inherited 6AF result expression is not stable enough to edit textually, 6AG-D emits its own authoritative D3D-neighborhood PASS/FAIL result instead. The first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
+> **Last roadmap review:** October 24, 2026 · **Current focus:** Phase 6 — native Xbox 360 graphics (Xenos). The native Xenos device/backbuffer/present path is hardware-proven. Phase 6BD restored the retail D3D child NV2A base (`0xFD000000`) and produced the first genuine guest NV2A MMIO touch at `0xFD003214`; the diagnostic display turned **purple** exactly at that hardware-facing boundary. Phase 6BE then bridged only the proven PFIFO idle/quiescence reads, escaped the prior wait loop, and advanced to a new faulting PGRAPH read at `0xFD400700`. Phase 6BF is prepared to bridge only that backend-equivalent PGRAPH idle-status read while leaving all other MMIO/VRAM accesses fenced. No Mercenaries-rendered frame has appeared yet.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -57,7 +57,7 @@ Each phase has independently checkable checkpoints below.
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
 | **5 — Subsystem bring-up under native game execution** | **COMPLETE — repeatability 3/3 PASS + exit reconnaissance READY/PASS** | Stable translated/runtime path, classified endpoint, subsystem inventory, first-touch baseline, risk map and ordered Phase-6 handoff |
-| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — native Xenos surface, 22.5 MiB retail graphics-pool claim, generalized Mm166 wrapper and AV ordinal 1 hardware-proven; 6AE-B targets the compact AV display family; guest NV2A first touch pending** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
+| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — native Xenos presentation proven; first genuine guest NV2A MMIO touch proven (purple); PFIFO idle wait crossed; current frontier READ32 `0xFD400700` in PGRAPH** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
 | 7 — Audio, movies, input and streaming integration | Not started | Functional startup media/menu audio/input with stable timing and storage streaming |
 | 8 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -76,25 +76,11 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 5 is complete and frozen. Phase 6 has already
-proved native Xbox 360 D3D/Xenos device creation and physical presentation on
-real hardware. The translated retail startup path crossed XPP/DSOUND, the
-32 MiB title-heap repair, the retail graphics-pool root at `0x0020F9C0`, and
-the hardware-observed ordinal-166 physical-allocation wrapper. Phase 6Z then
-proved the retail 22.5 MiB graphics-pool reservation at guest
-`0x02880000-0x03EFFFFF`; Phase 6AA/6AB crossed the post-pool renderer path
-and relocated `HalBootSMCVideoMode` as a DATA export; Phase 6AC proved the
-same +28 Mm166 wrapper on a later 96-byte allocation without weakening the
-canonical +24 ABI.
+**Present blockers:** Phase 5 is complete and frozen. Phase 6 has now crossed from graphics-startup reconnaissance into the real Xbox GPU command path. Native Xbox 360 D3D/Xenos device creation and physical presentation remain hardware-proven, as do the retail title heap and both contiguous graphics-memory claims (`0x02880000` for 23,592,960 bytes and `0x02628000` for 2,457,600 bytes).
 
-Phase 6AD is the latest clean hardware PASS. It crossed ordinal 1
-`AvGetSavedDataAddress` with the exact +4 frame and advanced to ordinal 2
-`AvSendTVEncoderOption@16` at `esp=0x008BF948`,
-`saved_esp=0x008BF95C` (exact +20 frame), `fault=0`. Its safe cleanup pass
-also proved semantics-neutral: maintained CRT `_msize` still executed 601
-times while 590 repetitive trace lines were suppressed, and the run ended with
-clean XAPI return 0.
+Phase 6BD proved the missing retail child-context relationship: `D3DState 0x00299380 + 0x1C28 = 0x0029AFA8`, and the retail constructor helper `sub_00291F31` initializes that child object's first dword to the NV2A BAR0 base `0xFD000000`. Restoring only that proven field caused the first real guest GPU access, READ8 `0xFD003214`, and the hardware diagnostic turned **purple**. Phase 6BE then supplied only the existing-backend PFIFO idle semantics for `FD003214`, `FD002400`, and `FD003220`; the translated wait completed and execution advanced to READ32 `0xFD400700` at translated function `0x0029528C`.
 
+The immediate blocker is therefore no longer a null D3D child context or an opaque spin. It is the next explicit NV2A/PGRAPH register read. Phase 6BF is prepared to return the backend-equivalent zero value for exactly `FD400700` while preserving the hard fence for every other NV2A/MMIO/VRAM address.
 ### Current Phase-6 hardware map
 
 - **6W/6X:** reached and crossed retail graphics-pool root `0x0020F9C0`.
@@ -138,13 +124,20 @@ clean XAPI return 0.
   reported PASS. Execution advanced deeper into retail D3D to direct frontier
   `0x0028E700` with `fault=0`; last direct progress reached `0x0028EB90`.
   The old inherited cosine-harvest FAIL line is non-authoritative for 6AG.
+- **6BD — hardware PASS / first real NV2A touch:** restored only the
+  constructor-proven child graphics base at `[0x0029AFA8] = 0xFD000000`.
+  The very next translated GPU access was READ8 `0xFD003214`, producing the
+  reserved **purple** diagnostic and a clean `GUEST_FAULT` boundary.
+- **6BE — hardware PASS:** bridged only the PFIFO idle/quiescence semantics
+  already represented by the maintained NV2A backend:
+  `FD003214 -> 0x10`, `FD002400 -> 0x10`, and `FD003220 -> 0`
+  (including the zero clear). The PFIFO wait completed and the next hard
+  boundary became READ32 `0xFD400700` at `sub_0029528C`.
+- **6BF — PREPARED / hardware test pending:** bridge only the exact
+  `FD400700` PGRAPH idle-status read with backend-equivalent value zero.
+  All other NV2A/MMIO/VRAM accesses remain fenced.
 
-The immediate hardware goal is Phase 6AH: promote the fault-free retail D3D
-frontier `0x0028E700`, pack a deeper support-clean closure, then perform one
-bounded D3D-only saturation round for newly exposed exact/generated D3D
-frontiers. The preferred next hard stop remains the first genuine guest
-NV2A MMIO/VRAM touch. No DATAxbox asset open or Mercenaries-rendered
-frame has been observed yet.
+The immediate hardware goal is Phase 6BF: cross the hardware-proven PGRAPH read at `0xFD400700` without widening the MMIO/VRAM fence, then capture the next genuine GPU operation. From this point forward, each bridge must be justified by either the maintained NV2A backend or direct retail/oracle evidence. The next major visual milestone is the first **Mercenaries-generated pixel/frame**; purple is now reserved and hardware-proven as the "real NV2A boundary reached" diagnostic.
 
 ### Immediate next tests
 
@@ -616,6 +609,29 @@ frame has been observed yet.
 - No genuine guest NV2A MMIO/VRAM first touch and no DATAxbox asset open have
   yet been observed. Purple remains reserved for the first real guest GPU
   boundary, not synthetic/native test output.
+
+### 2026-10-24 — first genuine NV2A boundary / purple milestone
+
+- Phase 6AU entered the exact retail D3D frontier `0x00292586`; 6AV/6AW
+  proved the subsequent 2M/8M watchdog stop was a deterministic translated D3D
+  spin rather than a missing code frontier.
+- Static correlation traced the spin to `sub_00292271`. Hardware showed its
+  child pointer path using `ecx=0x0029AFA8` with a null first dword.
+- Phase 6BB/6BC reconstructed the retail relationship:
+  `0x00299380 + 0x1C28 = 0x0029AFA8`, and constructor helper
+  `sub_00291F31` writes `0xFD000000` into that embedded child object's
+  first dword before touching NV2A MMIO.
+- **Phase 6BD hardware PASS:** restored only that proven field. Hardware
+  immediately attempted READ8 `0xFD003214`; the MMIO fence fired and the
+  reserved diagnostic display turned **purple**. This is the first genuine
+  guest NV2A MMIO touch on the Xbox 360 port.
+- **Phase 6BE hardware PASS:** the exact PFIFO idle loop was bridged using the
+  maintained NV2A backend's semantics. The wait exited and the next boundary
+  advanced to READ32 `0xFD400700` at `sub_0029528C`.
+- **Phase 6BF:** prepared to bridge exactly that PGRAPH idle-status read with
+  value zero; no broader MMIO emulation or fence relaxation is allowed.
+- No game-rendered frame is claimed yet. The next major milestone is first
+  Mercenaries-generated pixels.
 
 ### Evidence policy
 
