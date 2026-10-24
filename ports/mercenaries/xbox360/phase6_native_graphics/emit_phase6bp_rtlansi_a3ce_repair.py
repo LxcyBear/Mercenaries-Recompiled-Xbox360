@@ -21,103 +21,17 @@ def replace_unique(text,old,new,label):
     return text.replace(old,new,1)
 
 def patch_rtlansi_a3ce(text):
-    anchor="static DWORD s_phase6boPblCheckpointCalls = 0u;\n"
-    if anchor not in text: raise SystemExit("[Phase6BP] 6BO state anchor missing")
-    text=text.replace(anchor,anchor+"static DWORD s_phase6bpRtlInitAnsiA3ceRepairCount = 0u;\n",1)
-
-    start_marker="    if (frameBytes == 16u && caller == 0x0022A7A4u)\n    {"
-    end_marker="\n    if (frameBytes != 12u)\n    {"
-    start=text.find(start_marker)
-    end=text.find(end_marker,start)
-    if start<0 or end<0: raise SystemExit("[Phase6BP] inherited ordinal-289 repair block changed")
-    if text.find(start_marker,start+1)>=0: raise SystemExit("[Phase6BP] multiple ordinal-289 repair blocks found")
-
-    block=r'''    if (frameBytes == 16u &&
-        (caller == 0x0022A7A4u || caller == 0x0023A3CEu))
-    {
-        uint32_t probeReturn = GUEST_READ32(callEsp + 0u);
-        uint32_t probeDestination = GUEST_READ32(callEsp + 4u);
-        uint32_t probeSource = GUEST_READ32(callEsp + 8u);
-        uint32_t probeExtra = GUEST_READ32(callEsp + 12u);
-        BYTE* probeDestinationPtr =
-            probeDestination ? guest_ptr((DWORD)probeDestination, 8u) : NULL;
-        BYTE* probeSourcePtr =
-            probeSource ? guest_ptr((DWORD)probeSource, 1u) : (BYTE*)1;
-
-        if (s_accessFault)
-        {
-            phase4c_escape(
-                PHASE4C_BOUNDARY_GUEST_FAULT,
-                0x80000121u,
-                savedEsp);
-            return;
-        }
-
-        sprintf(
-            line,
-            "RtlInitAnsiString SAVEDESP REPAIR PROBE: caller=%08X ret=%08X destination=%08X source=%08X extra=%08X esp=%08X saved_esp=%08X",
-            (unsigned int)caller,
-            (unsigned int)probeReturn,
-            (unsigned int)probeDestination,
-            (unsigned int)probeSource,
-            (unsigned int)probeExtra,
-            (unsigned int)callEsp,
-            (unsigned int)savedEsp);
-        trace(line);
-
-        if (probeReturn != 0u ||
-            probeDestination == 0u ||
-            probeDestinationPtr == NULL ||
-            probeSourcePtr == NULL)
-        {
-            sprintf(
-                line,
-                "RtlInitAnsiString SAVEDESP REPAIR REJECTED: caller=%08X did not match canonical ordinal-289 arguments",
-                (unsigned int)caller);
-            trace(line);
-            phase4c_escape(
-                PHASE4C_BOUNDARY_KERNEL_FRAME,
-                0x80000121u,
-                savedEsp);
-            return;
-        }
-
-        resumeEsp = savedEsp - 4u;
-        frameBytes = 12u;
-        ++s_phase5ayRtlInitAnsiSavedEspRepairCount;
-        s_phase5ayRtlInitAnsiSavedEspRepairExtra = probeExtra;
-        s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp = resumeEsp;
-
-        if (caller == 0x0023A3CEu)
-            ++s_phase6bpRtlInitAnsiA3ceRepairCount;
-
-        sprintf(
-            line,
-            "PASS: Phase 6BP RtlInitAnsiString caller %08X saved-ESP repair extra=%08X %08X->%08X restores 12-byte ordinal-289 frame",
-            (unsigned int)caller,
-            (unsigned int)probeExtra,
-            (unsigned int)savedEsp,
-            (unsigned int)resumeEsp);
-        trace(line);
-    }
-'''
-    text=text[:start]+block+text[end:]
-
-    summary_anchor='"P6BO PBL CHECKPOINT: calls=%u phase1=%u phase2=%u object=%08X value=%08X",'
-    p=text.find(summary_anchor)
-    if p<0: raise SystemExit("[Phase6BP] PBL summary anchor missing")
-    t=text.find("trace(line);",p)
-    if t<0: raise SystemExit("[Phase6BP] PBL summary trace missing")
-    le=text.find("\n",t)
-    if le<0: le=len(text)
-    summary=r'''
-    sprintf(
-        line,
-        "P6BP RTLANSI A3CE REPAIR: count=%u",
-        (unsigned int)s_phase6bpRtlInitAnsiA3ceRepairCount);
-    trace(line);
-'''
-    return text[:le+1]+summary+text[le+1:]
+    old = "    if (frameBytes == 16u && caller == 0x0022A7A4u)\n    {"
+    new = (
+        "    if (frameBytes == 16u &&\n"
+        "        (caller == 0x0022A7A4u || caller == 0x0023A3CEu))\n"
+        "    {"
+    )
+    if text.count(old) != 1:
+        raise SystemExit(
+            f"[Phase6BP] expected one inherited ordinal-289 caller gate, found {text.count(old)}"
+        )
+    return text.replace(old, new, 1)
 
 def main():
     ap=argparse.ArgumentParser()
@@ -171,9 +85,7 @@ def main():
 
     for marker in (
         BUILD_TAG,COOKIE_NEW,"caller == 0x0023A3CEu",
-        "s_phase6bpRtlInitAnsiA3ceRepairCount",
-        "PASS: Phase 6BP RtlInitAnsiString caller %08X saved-ESP repair",
-        "P6BP RTLANSI A3CE REPAIR: count=%u",
+        "(caller == 0x0022A7A4u || caller == 0x0023A3CEu)",
         "P6BP POST-XGRPH FRONTIER 00209810:","P6BP PBL CHECKPOINT:",
         "phase6be_pfifo_idle_write32(address, value)",
         "phase6bj_pfb_zcomp_write32","phase6bg_pfb_tile_write32",
