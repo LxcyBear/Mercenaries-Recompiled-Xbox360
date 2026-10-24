@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 6AT-A: continue the dual-frontier allocator during retail D3D init.
+"""Phase 6AT-B: continue the dual-frontier allocator during retail D3D init.
 
 6AR hardware proved the selective retail initializer is correct enough to:
   * eliminate the old READ32 0x80000004 orange corruption;
@@ -30,7 +30,7 @@ import json
 from pathlib import Path
 
 BASE_TAG = "P6AR-POST-CREATE-STATE-INIT-20261024-A"
-BUILD_TAG = "P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-A"
+BUILD_TAG = "P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-B"
 COOKIE_OLD = "phase6ar_env_build_cookie"
 COOKIE_NEW = "phase6at_env_build_cookie"
 SHARD_TARGET_CHARS = 750000
@@ -383,6 +383,59 @@ def install_summary(main_text: str) -> str:
     return main_text[:line_start] + block + main_text[line_start:]
 
 
+def install_debugger_banner(main_text: str) -> str:
+    marker = "P6AT D3D TAIL CLAIM:"
+    pos = main_text.find(marker)
+    if pos < 0:
+        raise SystemExit("[Phase6AT] tail-claim summary marker missing for debugger banner")
+    stmt = main_text.rfind("sprintf(", 0, pos)
+    if stmt < 0 or pos - stmt > 5000:
+        raise SystemExit("[Phase6AT] could not locate summary insertion point for debugger banner")
+    line_start = main_text.rfind("\n", 0, stmt) + 1
+    indent = main_text[line_start:stmt]
+
+    block = (
+        f'{indent}sprintf(\n'
+        f'{indent}    line,\n'
+        f'{indent}    "P6AT X360DBG PPC1: sub_0028F9E0=%08X tail_claim=%08X mm166=%08X graphics_claim=%08X",\n'
+        f'{indent}    (unsigned int)(uintptr_t)&sub_0028F9E0,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&phase6at_claim_post_create_tail,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&phase5bb_mm_allocate_contiguous_ex,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&phase6z_claim_retail_graphics_pool);\n'
+        f'{indent}trace(line);\n'
+        f'{indent}sprintf(\n'
+        f'{indent}    line,\n'
+        f'{indent}    "P6AT X360DBG GUESTREG: eax=%08X ebx=%08X ecx=%08X edx=%08X esi=%08X edi=%08X ebp=%08X esp=%08X",\n'
+        f'{indent}    (unsigned int)(uintptr_t)&g_eax,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&g_ebx,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&g_ecx,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&g_edx,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&g_esi,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&g_edi,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&g_ebp,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&g_esp);\n'
+        f'{indent}trace(line);\n'
+        f'{indent}sprintf(\n'
+        f'{indent}    line,\n'
+        f'{indent}    "P6AT X360DBG MEMORY1: g_ram=%08X page_next_var=%08X heap=%08X reservations=%08X page_state=%08X",\n'
+        f'{indent}    (unsigned int)(uintptr_t)g_ram,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&s_phase4cVmPageNext,\n'
+        f'{indent}    (unsigned int)(uintptr_t)&s_phase4cHeap[0],\n'
+        f'{indent}    (unsigned int)(uintptr_t)&s_phase4cVmReservations[0],\n'
+        f'{indent}    (unsigned int)(uintptr_t)&s_phase4cVmPageState[0]);\n'
+        f'{indent}trace(line);\n'
+        f'{indent}sprintf(\n'
+        f'{indent}    line,\n'
+        f'{indent}    "P6AT X360DBG MEMORY2: guest_device=%08X guest_device_host=%08X xenos_slot=%08X xenos_value=%08X",\n'
+        f'{indent}    (unsigned int)s_phase6afGuestDevice,\n'
+        f'{indent}    (unsigned int)((uintptr_t)g_ram + (uintptr_t)s_phase6afGuestDevice),\n'
+        f'{indent}    (unsigned int)(uintptr_t)&s_phase6bXenosDevice,\n'
+        f'{indent}    (unsigned int)(uintptr_t)s_phase6bXenosDevice);\n'
+        f'{indent}trace(line);\n'
+    )
+    return main_text[:line_start] + block + main_text[line_start:]
+
+
 def write_sharded_main(out_dir: Path, main_text: str, base) -> dict:
     off_marker = '#pragma optimize("", off)\n'
     on_marker = '\n#pragma optimize("", on)'
@@ -521,7 +574,7 @@ def main() -> int:
     policy = (
         "Policy: inherit 6AR selective retail D3D init; during sub_0028F9E0 "
         "only, let proven ordinal-166 full-range contiguous requests trim the "
-        "current free heap tail after normal allocation fails; keep all fences hard"
+        "current free heap tail after normal allocation fails; emit X360DebuggerWV live-address banner; keep all fences hard"
     )
     if len(policy) > 240:
         raise SystemExit("[Phase6AT] startup policy trace exceeds safe length")
@@ -584,6 +637,28 @@ def main() -> int:
                 "result": "0x00000000",
             },
         },
+        "debugger_banner": {
+            "tool": "X360DebuggerWV",
+            "live_runtime_addresses": True,
+            "ppc_breakpoints": [
+                "sub_0028F9E0",
+                "phase6at_claim_post_create_tail",
+                "phase5bb_mm_allocate_contiguous_ex",
+                "phase6z_claim_retail_graphics_pool",
+            ],
+            "guest_register_globals": [
+                "g_eax", "g_ebx", "g_ecx", "g_edx",
+                "g_esi", "g_edi", "g_ebp", "g_esp",
+            ],
+            "memory_roots": [
+                "g_ram",
+                "s_phase4cVmPageNext",
+                "s_phase4cHeap",
+                "s_phase4cVmReservations",
+                "s_phase4cVmPageState",
+                "s_phase6bXenosDevice",
+            ],
+        },
         "repair": {
             "normal_allocator_first": True,
             "scope": "only while sub_0028F9E0 is active",
@@ -610,7 +685,7 @@ def main() -> int:
     print("[Phase6AT] Tail fallback scope  : active sub_0028F9E0 only")
     print("[Phase6AT] Ordinal shape        : 166 / full range / prot 00000404")
     print("[Phase6AT] Heap safety          : free-tail only / no live overlap")
-    print("[Phase6AT] KSEG/MMIO/VRAM       : unchanged / hard fenced")
+    print("[Phase6AT] X360DebuggerWV banner : live PPC/guest/memory addresses enabled")\n    print("[Phase6AT] KSEG/MMIO/VRAM       : unchanged / hard fenced")
     print("[Phase6AT] EMIT RESULT: PASS")
     return 0
 
