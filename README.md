@@ -3428,4 +3428,5 @@ their respective owners. This is an unofficial fan project.
 - **6AH-A — PREP INVALID:** emission stopped before VS2017; no XEX/hardware conclusion.
 - **6AH-B — PREP SUPPORT BLOCKER:** exact root `0x0028E700` was valid, but support-clean emission found one unresolved helper: `recomp_d3d_sync_checkpoint`. Upstream confirms it is diagnostic-only and normally returns immediately when D3D-sync tracing is disabled; no XEX was built.
 - **6AH-C — PREP PARSER INVALID:** PowerShell was corrupted by a truncated failure-reporting block and duplicated tail; no emission/build/XEX occurred.
-- **6AH-D — ACTIVE:** repaired prep script, retained the explicit diagnostic-only D3D-sync checkpoint support/proof counter, and preserved the bounded optional saturation policy.
+- **6AH-D — HARDWARE PASS:** native CreateDevice, prior `0x00290895`, new `0x0028E700`, and six D3D-sync checkpoints all passed. The next boundary is an orange guest fault: READ32 `0x80000004` with EAX=`0x80000000`; the first KSEG page remains deliberately fenced.
+- **6AI-A — ACTIVE FORENSIC:** extract the exact cached `sub_0028E700` / `loc_0028E7AE` source block that produced the orange fault before changing any memory semantics. No XEX is built in this source-only pass.
