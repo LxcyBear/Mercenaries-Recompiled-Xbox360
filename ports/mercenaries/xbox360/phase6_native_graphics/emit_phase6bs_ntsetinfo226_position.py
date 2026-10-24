@@ -52,23 +52,27 @@ def patch_icall_dispatch(text: str) -> str:
         raise SystemExit("[Phase6BS] RECOMP_ITAIL anchor missing after RECOMP_ICALL_SAFE")
 
     macro = text[macro_start:next_macro]
-    if "PHASE4C_BOUNDARY_ICALL_SAFE" not in macro or "_phase4c_target" not in macro:
-        raise SystemExit("[Phase6BS] RECOMP_ICALL_SAFE macro shape is not the expected kernel-dispatch form")
-
+    if "_phase4c_target" not in macro:
+        raise SystemExit("[Phase6BS] RECOMP_ICALL_SAFE macro is not the expected kernel-dispatch form")
     if "_phase4c_target == 0x800000E2u" in macro:
         raise SystemExit("[Phase6BS] ordinal 226 is already dispatched by RECOMP_ICALL_SAFE")
 
-    # Later phases accumulated many maintained kernel continuations here.
-    # Avoid matching the entire historical macro body. Insert immediately
-    # before the final fallback else that escapes unknown ICALL_SAFE targets.
-    fallback = "} else { \\"
-    fallback_pos = macro.rfind(fallback)
-    if fallback_pos < 0:
-        raise SystemExit("[Phase6BS] final RECOMP_ICALL_SAFE fallback else not found")
+    # Locate the actual unknown-kernel escape first, then walk backward to
+    # the `else` that owns it. This avoids confusing nested/later else blocks
+    # added by later Phase-5/6 continuations with the ICALL_SAFE fallback.
+    escape_token = "PHASE4C_BOUNDARY_ICALL_SAFE"
+    escape_pos = macro.rfind(escape_token)
+    if escape_pos < 0:
+        raise SystemExit("[Phase6BS] ICALL_SAFE escape token missing from RECOMP_ICALL_SAFE")
 
-    fallback_tail = macro[fallback_pos:]
-    if "PHASE4C_BOUNDARY_ICALL_SAFE" not in fallback_tail:
-        raise SystemExit("[Phase6BS] final RECOMP_ICALL_SAFE else is not the ICALL_SAFE escape")
+    fallback = "} else { \\"
+    fallback_pos = macro.rfind(fallback, 0, escape_pos)
+    if fallback_pos < 0:
+        raise SystemExit("[Phase6BS] owning else for ICALL_SAFE escape not found")
+
+    span = macro[fallback_pos:escape_pos + len(escape_token)]
+    if "phase4c_escape" not in span:
+        raise SystemExit("[Phase6BS] owning else does not contain phase4c_escape")
 
     branch = (
         "} else if (_phase4c_target == 0x800000E2u) { \\\n"
