@@ -3425,4 +3425,5 @@ emulation and modding communities. See [upstream LICENSE](LICENSE),
 *Mercenaries: Playground of Destruction* and its assets remain the property of
 their respective owners. This is an unofficial fan project.
 
-- **6AH — ACTIVE:** promote hardware-proven D3D frontier `0x0028E700`, auto-split it through the reviewed manual seed when needed, pack a depth-8/cap-512 support-clean closure, then pre-arm one bounded D3D-only saturation round (up to six exact/generated D3D frontiers, shallow closures, 192-member second-round cap). Native CreateDevice and exact `0x00290895` remain unchanged; ambiguous/non-D3D/NV2A boundaries stay hard.
+- **6AH-A — PREP INVALID:** emission stopped before VS2017; no XEX/hardware conclusion.
+- **6AH-B — ACTIVE:** keep `0x0028E700` as the mandatory support-clean root, but treat the extra D3D saturation round as opportunistic. If every optional saturation candidate is support-unsafe, fall back to the clean root-only pack instead of aborting. Failure reporting now carries the underlying emitter reason into the final PowerShell exception.
