@@ -82,7 +82,8 @@ if($a.phase6bw_hardware.ke_raise_irql_successes-ne1-or
 if($a.classification.inside_low_kseg_synthetic_fence-ne$true-or
    $a.classification.phase4a_exact_import_ordinal_397_present-ne$false-or
    $a.classification.do_not_route_as_kernel_export-ne$true-or
-   $a.classification.low_kseg_alias_not_relaxed-ne$true){
+   $a.classification.low_kseg_alias_not_relaxed-ne$true-or
+   $a.classification.guest_read32_router_byte_identical-ne$true){
   throw "Phase 6BX low-KSEG classification gate failed"
 }
 if($a.probe.non_mutating-ne$true-or
@@ -97,15 +98,15 @@ $text=Get-Content $mono -Raw
 foreach($marker in @(
   "P6BX LOWKSEG ORIGIN: va=%08X",
   "P6BX LOWKSEG ORIGIN: hits=%u",
-  "MERC_SYNTH_FENCE_BASE",
-  "MERC_SYNTH_FENCE_END",
+  "recomp_guest_read32",
+  "PHASE4C_BOUNDARY_GUEST_FAULT",
   "phase6bx_env_build_cookie",
   "#define PHASE4C_EXEC_BUDGET 8000000u"
 )){
   if(-not$text.Contains($marker)){throw "Phase 6BX source gate missing: $marker"}
 }
 
-Write-Host "[Phase6BX] READY probe_vas=0022AC56,0022AC78,0022AC89,0022AC8F fence_unchanged=1 semantics_changed=0"
+Write-Host "[Phase6BX] READY probe_vas=0022AC56,0022AC78,0022AC89,0022AC8F read32_router_identical=1 fence_unchanged=1 semantics_changed=0"
 
 if(-not$SkipSolutionBuild){
   $buildArgs=@{
