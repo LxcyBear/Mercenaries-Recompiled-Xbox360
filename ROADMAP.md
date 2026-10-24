@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier WRITE32 `0xFD100250` |
+| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier WRITE32 `0xFD100304` |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -51,24 +51,30 @@ The graphics path has moved from speculative initialization debugging into the r
 - After the PFIFO wait completed, translated execution advanced through `002922BE -> 002922D9 -> 0029259D -> 00292610 -> 0029528C`.
 - **Phase 6BF — hardware PASS:** `FD400700` was bridged twice with backend-equivalent zero. Retail D3D then allocated 1,228,800 bytes at `0x024FC000` and advanced to WRITE32 `0xFD100254`.\n- **Phase 6BG — hardware PASS:** `FD100254` (PFB tile #1 LIMIT) accepted `0x02627FFF`, and `FD100258` (tile #1 PITCH) accepted `0x00000A00`.
 - **Phase 6BH — hardware PASS:** PGRAPH writes `FD400914=02627FFF`, `FD400918=00000A00`, and `FD400910=024FC003` all crossed; execution advanced to PFB tile #1 BASE at `FD100250`.
+- **Phase 6BI — hardware PASS:** PFB tile #1 BASE `FD100250=024FC003` crossed and read back correctly; PGRAPH `0910/0918/0914` readbacks matched their shadowed values, then execution advanced through `00292708` to WRITE32 `FD100304=84000000` (PFB ZCOMP tile #1).
 
-### Current next step — Phase 6BF
+### Current next step — Phase 6BJ
 
-Phase 6BF is prepared to bridge **only** READ32 `0xFD400700` with the maintained NV2A backend-equivalent value `0x00000000`.
+Phase 6BJ is prepared to bridge the documented PFB Z-compression state used by the same retail tile-setup routine:
+
+- per-tile `NV_PFB_ZCOMP` dwords at `FD100300..FD10031C`
+- exact `NV_PFB_ZCOMP_OFFSET` at `FD100324`
+- hardware-observed tile #1 write: `FD100304=84000000`
 
 Safety/accuracy rules for this step:
 
+- Keep the bridge reachable only through `sub_00292586`'s existing scoped dword wrapper.
+- Preserve the proven PFB tile BASE/LIMIT/PITCH and PGRAPH shadow behavior.
 - Do not globally bypass the NV2A/MMIO fence.
 - Do not map original-Xbox MMIO directly onto Xbox 360 Xenos registers.
-- Do not invent ready bits or arbitrary register values.
 - Preserve the proven allocator geometry and 8,000,000-tick watchdog.
-- Keep every other `FDxxxxxx` access fenced so the next unsupported GPU operation is observable.
+- Keep every unrelated `FDxxxxxx` access fenced so the next unsupported GPU operation is observable.
 
 ## Next major graphics milestones
 
-1. Cross the PGRAPH `0xFD400700` idle/status read.
+1. Cross the current PFB ZCOMP setup at `FD100304` / `FD100324`.
 2. Capture and classify the next NV2A register or command-stream access.
-3. Route proven PFIFO/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
+3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
 5. Produce the first **Mercenaries-generated pixels**.
 6. Produce a recognizable title/loading/menu frame.
