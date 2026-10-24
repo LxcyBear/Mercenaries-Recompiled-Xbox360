@@ -793,3 +793,21 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
 - **Phase 6AI-C active:** fix both the exact EAX+4 and generic +4 source
   matchers, compile them explicitly before scanning, and retain the pre-E7AE
   predecessor-window inspection. This remains a source-only forensic pass.
+
+
+- **Phase 6AI-C forensic - PASS:** the exact cached \`sub_0028E700\`
+  predecessor window contains no literal EAX+4 access. The first relevant
+  internal-device read is \`GUEST_READ32(esi + 0x1C20)\`; fixed
+  \`GUEST_READ32(0x00298ED0)\` is the only other read before the phase-3
+  checkpoint/branch. The E7AE target itself is only the POP/RET path.
+- **Phase 6AI-D active - restore internal D3D device global:** upstream
+  Mercenaries host code treats \`0x00299378\` as the current guest D3D device
+  pointer and dereferences fields from it. Phase 6AF published successful guest
+  identity \`0x00299380\` only through the game-facing CreateDevice output
+  \`0x007AD604\`. 6AI-D restores the missing internal-XDK side effect by
+  publishing and immediately reading back \`0x00299378 = 0x00299380\` during
+  the proven CreateDevice bridge. The root is instrumented to report its local
+  \`this\`, internal-global value, and \`this + 0x1C20\`; for the intended
+  device identity that field address is \`0x0029AFA0\`. The KSEG first-page
+  fence remains unchanged and no D3D object fields, NV2A MMIO or VRAM state are
+  fabricated.
