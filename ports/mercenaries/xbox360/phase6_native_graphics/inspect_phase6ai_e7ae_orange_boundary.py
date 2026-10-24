@@ -78,19 +78,6 @@ def main() -> int:
     if label_pos < 0:
         raise SystemExit("[Phase6AI] loc_0028E7AE label missing from translated root")
 
-    # Bound the forensic block from E7AE to the next local label, or 96 lines.
-    after = function[label_pos:]
-    line_list = after.splitlines()
-    stop = min(len(line_list), 96)
-    for index in range(1, min(len(line_list), 96)):
-        stripped = line_list[index].strip()
-        if re.match(r"^loc_[0-9A-Fa-f]+:\s*;?$", stripped):
-            stop = index
-            break
-    block_lines = line_list[:stop]
-    block = "\n".join(block_lines) + "\n"
-
-    # Add a wider context window to make register provenance visible.
     all_lines = function.splitlines()
     label_line = next(
         (i for i, line in enumerate(all_lines) if LABEL in line),
@@ -98,8 +85,31 @@ def main() -> int:
     )
     if label_line is None:
         raise SystemExit("[Phase6AI] could not resolve E7AE source line")
-    wide_first = max(0, label_line - 28)
-    wide_last = min(len(all_lines), label_line + 80)
+
+    # 6AI-A proved E7AE itself is only POP/RET. Hardware stopped after sync
+    # phase 3 and before phase 4, so inspect the predecessor region feeding
+    # E7AE instead of the return block.
+    prev_label_line = 0
+    prev_label_name = "<function-entry>"
+    for index in range(label_line - 1, -1, -1):
+        stripped = all_lines[index].strip()
+        if re.match(r"^loc_[0-9A-Fa-f]+:\\s*;?$", stripped):
+            prev_label_line = index
+            prev_label_name = stripped
+            break
+
+    block_first = max(prev_label_line, label_line - 80)
+    block_last = min(len(all_lines), label_line + 6)
+    block_lines = all_lines[block_first:block_last]
+    block = "\n".join(
+        f"{block_first + i + 1:04d}: {line}"
+        for i, line in enumerate(block_lines)
+    ) + "\n"
+
+    # Wider context makes register/address provenance visible even if the
+    # faulting read is expressed through a register other than EAX.
+    wide_first = max(0, label_line - 96)
+    wide_last = min(len(all_lines), label_line + 24)
     wide_lines = all_lines[wide_first:wide_last]
     wide = "\n".join(
         f"{wide_first + i + 1:04d}: {line}"
@@ -113,17 +123,22 @@ def main() -> int:
 
     eax_plus4 = [
         row for row in mem32
-        if re.search(r"(?:GUEST_READ32|MEM32)\s*\(\s*eax\s*\+\s*(?:4|0x4)\s*\)", row["source"])
+        if re.search(
+            r"(?:GUEST_READ32|MEM32)\\s*\\(\\s*eax\\s*\\+\\s*(?:4|0x4)\\s*\\)",
+            row["source"],
+        )
+    ]
+    offset4_reads = [
+        row for row in mem32
+        if re.search(r"\\+\\s*(?:4|0x4)\\s*\\)", row["source"])
     ]
 
-    # Hardware puts EAX=80000000 at the READ32 80000004 boundary. If the exact
-    # E7AE neighborhood contains [eax+4], flag it as a textual match, but do
-    # not assume the correct value/semantics of that read.
-    classification = (
-        "eax_plus_4_textual_candidate"
-        if eax_plus4
-        else "no_eax_plus_4_in_context"
-    )
+    if eax_plus4:
+        classification = "eax_plus_4_textual_candidate"
+    elif offset4_reads:
+        classification = "other_plus_4_read_candidate"
+    else:
+        classification = "no_plus_4_read_in_context"
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_txt = args.out_dir / "phase6ai-e7ae-context.txt"
@@ -137,7 +152,7 @@ def main() -> int:
         "hardware_checkpoint_last_phase=3\n"
         f"classification={classification}\n"
         f"function_chars={len(function)} source_range={start}:{end}\n\n"
-        "=== EXACT E7AE BLOCK ===\n"
+        "=== PRE-E7AE WINDOW ===\n"
         + block
         + "\n=== WIDE CONTEXT ===\n"
         + wide
@@ -150,7 +165,7 @@ def main() -> int:
     report_json.write_text(
         json.dumps(
             {
-                "phase": "6AI-A",
+                "phase": "6AI-B",
                 "baseline": BASE_TAG,
                 "root": "0x0028E700",
                 "label": "0x0028E7AE",
@@ -164,7 +179,9 @@ def main() -> int:
                     "sync_calls": 6,
                 },
                 "classification": classification,
+                "predecessor_label": prev_label_name,
                 "eax_plus_4_candidates": eax_plus4,
+                "offset4_read_candidates": offset4_reads,
                 "memory_expressions": mem32,
                 "exact_block": block,
                 "wide_context": wide,
@@ -178,15 +195,19 @@ def main() -> int:
     print(f"[Phase6AI] Root: 0x0028E700 / label 0x0028E7AE")
     print(f"[Phase6AI] Hardware: READ32 80000004 with EAX=80000000 after sync phase 3")
     print(f"[Phase6AI] Classification: {classification}")
+    print(f"[Phase6AI] Predecessor label: {prev_label_name}")
     if eax_plus4:
         for row in eax_plus4:
             print(f"[Phase6AI] EAX+4 candidate line {row['line']}: {row['source']}")
+    elif offset4_reads:
+        for row in offset4_reads:
+            print(f"[Phase6AI] +4 read candidate line {row['line']}: {row['source']}")
     print(f"[Phase6AI] REPORT: {report_txt}")
     print("[Phase6AI] NO BUILD BY DESIGN - inspect the exact block before changing KSEG/memory semantics")
-    print("[Phase6AI] EXACT E7AE BLOCK BEGIN")
+    print("[Phase6AI] PRE-E7AE WINDOW BEGIN")
     for line in block.rstrip().splitlines():
         print(f"[Phase6AI] | {line}")
-    print("[Phase6AI] EXACT E7AE BLOCK END")
+    print("[Phase6AI] PRE-E7AE WINDOW END")
     return 0
 
 
