@@ -131,58 +131,33 @@ def reset_state(main_text: str) -> str:
     )
 
 
-def fix_result_gate(main_text: str) -> str:
-    # 6AF hardware proved the successful CreateDevice path can skip the old
-    # optional AV ordinal-1/2 calls. Match these gates by token rather than by
-    # exact indentation because the 6AF emitter inserted its condition inside
-    # an already-indented multiline expression.
-    for token in (
-        "s_phase6aeAvEncoderCount != 0u &&",
-        "s_phase6adAvGetCount != 0u &&",
-    ):
-        pattern = re.compile(
-            rf"(?m)^[ \t]*{re.escape(token)}[ \t]*\r?\n"
-        )
-        main_text, count = pattern.subn("", main_text, count=1)
-        if count == 0:
-            print(
-                f"[Phase6AG] RESULT GATE NOTE: optional inherited gate already "
-                f"absent: {token}"
-            )
+def install_phase_result(main_text: str) -> str:
+    # Do not mutate the inherited 6AF/AV-era boolean result expression. The
+    # successful 6AF hardware path proved those optional AV conditions are no
+    # longer authoritative. Emit a separate Phase-6AG result beside the durable
+    # D3D-device summary using only the two states this stage actually requires.
+    marker = "P6AF D3D DEVICE:"
+    pos = main_text.find(marker)
+    if pos < 0:
+        raise SystemExit("[Phase6AG] inherited P6AF D3D device summary missing")
 
-    create_token = "s_phase6afCreateDeviceBridgeCount != 0u &&"
-    pattern = re.compile(
-        rf"(?m)^(?P<indent>[ \t]*){re.escape(create_token)}[ \t]*\r?$"
+    stmt = main_text.rfind("sprintf(", 0, pos)
+    if stmt < 0 or pos - stmt > 2600:
+        raise SystemExit("[Phase6AG] could not locate inherited D3D summary statement")
+
+    line_start = main_text.rfind("\n", 0, stmt) + 1
+    indent = main_text[line_start:stmt]
+
+    block = (
+        f'{indent}sprintf(\n'
+        f'{indent}    line,\n'
+        f'{indent}    "PHASE 6AG D3D NEIGHBORHOOD RESULT: %s",\n'
+        f'{indent}    (s_phase6agRootEntered && '
+        f's_phase6afCreateDeviceBridgeCount != 0u) ? "PASS" : "FAIL");\n'
+        f'{indent}trace(line);\n'
     )
-    match = pattern.search(main_text)
-    if match is None:
-        raise SystemExit(
-            "[Phase6AG] Phase 6AF CreateDevice result gate missing "
-            "(token search, indentation ignored)"
-        )
 
-    indent = match.group("indent")
-    replacement = (
-        f"{indent}s_phase6agRootEntered &&\n"
-        f"{indent}{create_token}"
-    )
-    main_text = main_text[:match.start()] + replacement + main_text[match.end():]
-
-    # The actual final driver token is inherited from the old cosine-harvest
-    # harness. Rename it if present; keep the newer descriptive token too.
-    if "PHASE 6AF COS HARVEST RESULT" in main_text:
-        main_text = main_text.replace(
-            "PHASE 6AF COS HARVEST RESULT",
-            "PHASE 6AG D3D NEIGHBORHOOD RESULT",
-            1,
-        )
-    if "PHASE 6AF NATIVE D3D DEVICE HANDOFF RESULT" in main_text:
-        main_text = main_text.replace(
-            "PHASE 6AF NATIVE D3D DEVICE HANDOFF RESULT",
-            "PHASE 6AG NATIVE D3D NEIGHBORHOOD RESULT",
-            1,
-        )
-    return main_text
+    return main_text[:line_start] + block + main_text[line_start:]
 
 def write_sharded_main(out_dir: Path, main_text: str, base) -> dict:
     off_marker = '#pragma optimize("", off)\n'
@@ -401,7 +376,7 @@ def main() -> int:
             f"0x{ROOT:08X}; unresolved support={joined}"
         )
 
-    main_text = fix_result_gate(main_text)
+    main_text = install_phase_result(main_text)
 
     new_policy = (
         "Policy: inherit 6AF-B native CreateDevice; pack support-clean D3D "
@@ -434,7 +409,8 @@ def main() -> int:
         "s_phase6agRootEntered = 1;",
         "PASS: Phase 6AG retail D3D root 00290895 entered",
         "PASS: Phase 6AG native D3D CreateDevice handoff",
-        "s_phase6agRootEntered &&",
+        "PHASE 6AG D3D NEIGHBORHOOD RESULT: %s",
+        "s_phase6agRootEntered && s_phase6afCreateDeviceBridgeCount != 0u",
         "P6AG XENOS: PASS Direct3D_CreateDevice",
         "P6AG FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
         "P6AG FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
@@ -444,10 +420,6 @@ def main() -> int:
         if marker not in main_text:
             raise SystemExit(f"[Phase6AG] generated source lost marker: {marker}")
 
-    if "s_phase6aeAvEncoderCount != 0u &&" in main_text:
-        raise SystemExit("[Phase6AG] stale AV ordinal-2 result gate remains")
-    if "s_phase6adAvGetCount != 0u &&" in main_text:
-        raise SystemExit("[Phase6AG] stale AV ordinal-1 result gate remains")
     if COOKIE_OLD in main_text or COOKIE_OLD in env_text:
         raise SystemExit("[Phase6AG] stale Phase 6AF cookie remains")
 
@@ -510,7 +482,8 @@ def main() -> int:
         "new_direct_frontier_targets": [
             f"0x{x:08X}" for x in sorted(frontiers)
         ],
-        "stale_av_result_gate_removed": True,
+        "independent_phase_result_gate": True,
+        "inherited_av_result_gate_left_untouched": True,
         "native_createdevice_handoff_inherited_unchanged": True,
         "source_layout": source_layout,
         "runtime_policy": (
@@ -537,7 +510,7 @@ def main() -> int:
         )
     )
     print("[Phase6AG] 6AF native CreateDevice bridge inherited unchanged")
-    print("[Phase6AG] Stale optional AV result gates removed")
+    print("[Phase6AG] Independent phase result: root-entered + CreateDevice bridge")
     print("[Phase6AG] Purple remains reserved for genuine NV2A MMIO/VRAM")
     print("[Phase6AG] EMIT RESULT: PASS")
     return 0
