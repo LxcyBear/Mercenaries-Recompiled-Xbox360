@@ -21,6 +21,30 @@ def replace_unique(text,old,new,label):
     return text.replace(old,new,1)
 
 def patch_rtlansi_a3ce(text):
+    state_anchor = "static DWORD s_phase6boPblCheckpointCalls = 0u;\n"
+    if text.count(state_anchor) != 1:
+        raise SystemExit(
+            f"[Phase6BP] expected one 6BO support-state anchor, found {text.count(state_anchor)}"
+        )
+
+    declarations = (
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairCount = 0u;\n"
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairExtra = 0u;\n"
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp = 0u;\n"
+    )
+
+    for decl in (
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairCount",
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairExtra",
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp",
+    ):
+        if decl in text:
+            raise SystemExit(
+                f"[Phase6BP] inherited source unexpectedly already declares {decl}"
+            )
+
+    text = text.replace(state_anchor, state_anchor + declarations, 1)
+
     old = "    if (frameBytes == 16u && caller == 0x0022A7A4u)\n    {"
     new = (
         "    if (frameBytes == 16u &&\n"
@@ -64,9 +88,6 @@ def main():
         BASE_TAG,COOKIE_OLD,"P6BO POST-XGRPH FRONTIER 00209810:",
         "P6BO PBL CHECKPOINT:",
         "if (frameBytes == 16u && caller == 0x0022A7A4u)",
-        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairCount;",
-        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairExtra;",
-        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp;",
         "phase6be_pfifo_idle_write32(address, value)",
         "phase6bj_pfb_zcomp_write32","phase6bg_pfb_tile_write32",
         "phase6bh_pgraph_scoped_write32","#define PHASE4C_EXEC_BUDGET 8000000u"
@@ -89,9 +110,9 @@ def main():
     for marker in (
         BUILD_TAG,COOKIE_NEW,"caller == 0x0023A3CEu",
         "(caller == 0x0022A7A4u || caller == 0x0023A3CEu)",
-        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairCount;",
-        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairExtra;",
-        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp;",
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairCount = 0u;",
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairExtra = 0u;",
+        "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp = 0u;",
         "P6BP POST-XGRPH FRONTIER 00209810:","P6BP PBL CHECKPOINT:",
         "phase6be_pfifo_idle_write32(address, value)",
         "phase6bj_pfb_zcomp_write32","phase6bg_pfb_tile_write32",
