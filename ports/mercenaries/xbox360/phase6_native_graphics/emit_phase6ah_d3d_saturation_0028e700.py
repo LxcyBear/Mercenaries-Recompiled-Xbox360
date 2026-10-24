@@ -177,6 +177,12 @@ def install_phase_result(main_text: str) -> str:
     block = (
         f'{indent}sprintf(\n'
         f'{indent}    line,\n'
+        f'{indent}    "P6AH D3D SYNC CHECKPOINT: calls=%u last_phase=%u",\n'
+        f'{indent}    (unsigned int)s_phase6ahD3DSyncCheckpointCalls,\n'
+        f'{indent}    (unsigned int)s_phase6ahD3DSyncCheckpointLastPhase);\n'
+        f'{indent}trace(line);\n'
+        f'{indent}sprintf(\n'
+        f'{indent}    line,\n'
         f'{indent}    "PHASE 6AH D3D SATURATION RESULT: %s",\n'
         f'{indent}    (s_phase6ahRootEntered && s_phase6agRootEntered && '
         f's_phase6afCreateDeviceBridgeCount != 0u && '
@@ -496,6 +502,7 @@ def main() -> int:
         "PASS: Phase 6AH retail D3D root 0028E700 entered",
         "static void recomp_d3d_sync_checkpoint(uint32_t phase)",
         "++s_phase6ahD3DSyncCheckpointCalls;",
+        "P6AH D3D SYNC CHECKPOINT: calls=%u last_phase=%u",
         "PHASE 6AH D3D SATURATION RESULT: %s",
         "s_phase6ahRootEntered && s_phase6agRootEntered && "
         "s_phase6afCreateDeviceBridgeCount != 0u && "
