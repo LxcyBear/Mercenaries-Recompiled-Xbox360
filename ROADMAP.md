@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | 6BV proved the diagnostic `FILE_OBJECT*` sentinel survives without dereference; current frontier is canonical ordinal 129 `KeRaiseIrqlToDpcLevel@0`, `fault=0`; 6BW is prepared |
+| 6 — Native Xenos graphics | **In progress** | 6BW passed guest `KeRaiseIrqlToDpcLevel` (`0→2`); the immediate frontier is READ32 `0x8000018D` inside the intentionally fenced low-KSEG page; 6BX origin probe is prepared |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -65,16 +65,17 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BT — hardware PASS / relative wait continuation:** the live ordinal-99 `KeDelayExecutionThread` frame was canonical (`wait_mode=1`, `alertable=0`) with interval `FFFFFFFFFFE17B80`; the existing Phase-4B conversion executed it as a 200 ms relative wait successfully. The next clean boundary is `ICALL_SAFE target=0x800000F6` (ordinal 246 `ObReferenceObjectByHandle`) with canonical 16-byte frame and `fault=0`.
 - **Phase 6BU — hardware diagnostic PASS / file-object identity proven:** ordinal-246 `ObReferenceObjectByHandle` exposed `handle=48000001`, `native_resolved=1`, `path=game:\\xesrb.tga`, `object_type=80000047`, `ReturnedObject*=008BF928`; ordinal 71 `0x80000047` is `IoFileObjectType`. The stage intentionally synthesized no guest object pointer and stopped cleanly at the same fault-free boundary.
 - **Phase 6BV — hardware PASS / FILE_OBJECT dereference hypothesis disproven:** the exact proven `IoFileObjectType` + tagged-file-handle call returned diagnostic sentinel `0x04000000` successfully. Retail did not access that unmapped pointer before the next boundary; instead execution advanced cleanly to `ICALL_SAFE target=0x80000081`, ordinal 129 `KeRaiseIrqlToDpcLevel@0`, with canonical 4-byte frame and `fault=0`. No `FILE_OBJECT` shim is justified yet.
+- **Phase 6BW — hardware PASS / guest IRQL continuation:** ordinal-129 `KeRaiseIrqlToDpcLevel@0` received the canonical 4-byte return-slot-only frame and advanced maintained guest IRQL from `0` to `DISPATCH_LEVEL=2` exactly once without changing real Xenon processor IRQL. The very next checked operation is READ32 `0x8000018D`, producing `GUEST_FAULT` at retail path `0022AC56 -> 0022AC78 -> 0022AC89 -> 0022AC8F`. The exact 111-import audit contains no ordinal `0x18D/397`; because the address lies inside the deliberately fenced `0x80000000..0x80000FFF` low-KSEG ambiguity page, the fence remains intact pending origin proof.
 
-### Current next step — Phase 6BW
+### Current next step — Phase 6BX
 
-Phase 6BV is hardware-proven. The exact live `ObReferenceObjectByHandle` request returned diagnostic pointer `0x04000000` for handle `0x48000001` / `IoFileObjectType`, and retail never dereferenced it before the next kernel call. That means the port should not fabricate a guest `FILE_OBJECT` layout yet.
+Phase 6BW is hardware-proven. The live ordinal-129 `KeRaiseIrqlToDpcLevel@0` frame was canonical and the guest-only IRQL model transitioned `0 -> 2` successfully. Immediately afterward, translated execution attempted a 32-bit read at `0x8000018D` from caller `0x0023A3CE`; the final retail VA ring ends `0022AC56 -> 0022AC78 -> 0022AC89 -> 0022AC8F`.
 
-The new clean boundary is `ICALL_SAFE caller=0023A3CE target=80000081 esp=008BF8F8 saved_esp=008BF8FC`, `fault=0`. Xbox kernel ordinal 129 is `KeRaiseIrqlToDpcLevel@0`; the four-byte saved-ESP delta is the canonical synthetic return-slot-only frame. Phase 6BW models this as guest scheduling state only: previous guest KIRQL is returned in EAX, maintained guest IRQL is raised from PASSIVE/APC to `DISPATCH_LEVEL=2`, and the real Xenon/XDK processor IRQL is deliberately not changed. Matching lower-IRQL exports remain fenced until hardware reaches them. All 6BV sentinel, file, delay, ABI, GPU/MMIO, allocator and 8M-budget invariants remain unchanged.
+The address is deliberately not being classified as a kernel ordinal. The Phase-4A audit covers the exact 111 imports for this retail XBE and contains ordinal 129 at thunk `0x002DBDC0`, but no ordinal `397 / 0x18D`. At the same time, `0x8000018D` sits inside the existing `0x80000000..0x80000FFF` synthetic fence that protects the ambiguous low KSEG0 page. Phase 6BX therefore changes no guest semantics and does not relax that fence. It logs EAX/ECX/EDX/EBX/ESI/EDI/ESP at the four hardware-proven retail VAs so the exact instruction path that forms `0x8000018D` can be identified before any routing change. All 6BW FILE_OBJECT-sentinel, IRQL, file, delay, ABI, GPU/MMIO, allocator and 8M-budget invariants remain unchanged.
 
 ## Next major graphics milestones
 
-1. Run Phase 6BW through ordinal 129 `KeRaiseIrqlToDpcLevel`; if retail next reaches `KfLowerIrql` or another IRQL primitive, implement only the observed matching guest-state transition.
+1. Run Phase 6BX and classify how retail forms `0x8000018D` across `0022AC56/78/89/8F`; keep the low-KSEG ambiguity fence intact until the origin is hardware-proven.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
