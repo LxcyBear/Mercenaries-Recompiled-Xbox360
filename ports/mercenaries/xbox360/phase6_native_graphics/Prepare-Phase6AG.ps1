@@ -299,8 +299,9 @@ if (-not (Test-Phase6AGExactRoot)) {
     }
 
     $generatedHit = @(
-        Get-ChildItem -LiteralPath $generatedRoot -Filter "recomp_*.c" -File |
-            Select-String -SimpleMatch "void sub_00290895(void)" -List
+        Select-String -Path (Join-Path $generatedRoot "recomp_*.c") `
+            -SimpleMatch "void sub_00290895(void)" -List `
+            -ErrorAction SilentlyContinue
     )
     if ($generatedHit.Count -lt 1) {
         throw "Phase 6AG regenerated function inventory contains 0x00290895 but no generated sub_00290895 body was found"
