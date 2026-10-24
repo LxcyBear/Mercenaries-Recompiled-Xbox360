@@ -635,3 +635,25 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   the actual Xenos statics, removing the source-order dependency while
   preserving the exact same native CreateDevice handoff semantics. Prep also
   verifies exactly one helper definition before invoking VS2017.
+
+
+- **Phase 6AF-B hardware - PASS / major renderer milestone:** native Xenos
+  CreateDevice remained healthy, the retail CreateDevice bridge received the
+  exact live Mercenaries contract (adapter 0, type 1, behavior 0x40, 640x480,
+  format 6, one backbuffer, multisample 0x11, swap 1, auto-depth 1,
+  depth-format 0x2A), published guest device 0x00299380 through 0x007AD604,
+  returned S_OK, and eliminated the prior terminal 0x8007000E recovery failure.
+  Execution immediately advanced into retail D3D and stopped cleanly at
+  DIRECT_FRONTIER 0x0023A3CE -> 0x00290895 with
+  esp=saved_esp=0x008BF92C and fault=0. The old final harness printed FAIL only
+  because it still required optional AV ordinal-1/2 calls that this successful
+  path no longer executes; that gate is stale, not a runtime failure.
+- **Phase 6AG active - D3D neighborhood expansion:** promote hardware-proven
+  retail D3D target 0x00290895 as a reviewed manual seed and pack a
+  depth-6/cap-384 support-clean closure around it. Opportunistically include
+  the existing reviewed local D3D format-dispatch entries 0x00290881,
+  0x00290884 and 0x00290887 with small bounded closures when generated. Remove
+  the stale optional AV-call PASS requirements, preserve the 6AF native
+  CreateDevice handoff unchanged, and continue until the next genuine
+  D3D/NV2A/platform boundary. Purple remains reserved for the first actual
+  NV2A MMIO/VRAM touch.
