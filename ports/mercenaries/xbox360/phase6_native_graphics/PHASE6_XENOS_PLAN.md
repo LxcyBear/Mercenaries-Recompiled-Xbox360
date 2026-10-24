@@ -811,3 +811,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   device identity that field address is \`0x0029AFA0\`. The KSEG first-page
   fence remains unchanged and no D3D object fields, NV2A MMIO or VRAM state are
   fabricated.
+
+
+- **Phase 6AI-D hardware - PASS / orange persists:** native CreateDevice still
+  PASSes; the internal current-device publication is now proven correct on
+  hardware. \`sub_0028E700\` sees \`this=0x00299380\`,
+  \`0x00299378=0x00299380\`, and \`this+0x1C20=0x0029AFA0\` on both root
+  entries. The authoritative 6AI internal-device result is PASS. The next
+  boundary nevertheless remains READ32 \`0x80000004\`, proving that the missing
+  internal-device global was real but not the source of the orange fault.
+- **Phase 6AJ-A active - source-step probe:** preserve every 6AI-D semantic
+  unchanged and latch the exact source step immediately before each memory
+  access/branch/call in \`sub_0028E700\`. The existing guest-fault handler
+  reports the active step and three probe values. This is diagnostic-only and
+  leaves guest memory, KSEG, D3D, NV2A/MMIO/VRAM, ABI, and sync semantics
+  unchanged.
