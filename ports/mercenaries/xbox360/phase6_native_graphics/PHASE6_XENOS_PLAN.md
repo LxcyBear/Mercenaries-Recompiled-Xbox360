@@ -858,3 +858,16 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   instead of waiting for a later Phase4C budget tick. Guest memory routing,
   KSEG fencing, D3D state, NV2A/MMIO/VRAM behavior, and read semantics remain
   unchanged.
+
+- **Phase 6AL-A hardware - diagnostic PASS / exact faulting function captured:** native
+  CreateDevice and both `0x0028E700` entries still PASS with the repaired internal
+  device state. The orange boundary remains READ32 `0x80000004`. The READ32
+  instrumentation summary latched `last_func=0x0028BC60`,
+  `last_line=1957`, and `last_address=0x80000004` after 442,625 wrapped
+  reads, disproving the stale deferred `0x0023A3CE` caller as the precise
+  fault source.
+- **Phase 6AM-A active - exact 0x0028BC60 source forensic:** inspect the cached
+  6AL translated shard containing `sub_0028BC60`, verify hardware line 1957
+  lies inside that function, and print the exact source neighborhood plus the
+  full function. This is PC-only and intentionally builds no XEX; the next
+  semantic repair must be based on that exact expression.
