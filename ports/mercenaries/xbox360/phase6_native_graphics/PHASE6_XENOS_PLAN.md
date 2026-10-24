@@ -623,3 +623,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   remain hard stops. This stage is intended to cross the terminal
   \`0x8007000E\` renderer-creation frontier and expose multiple subsequent D3D
   boundaries in one hardware run when safely possible.
+
+
+- **Phase 6AF-A build - INVALID / not hardware-tested:** emission and source
+  sync passed, but VS2017 rejected the translated CreateDevice shard because it
+  directly referenced \`s_phase6bXenosReady\` and \`s_phase6bXenosDevice\`
+  before those native-Xenos statics were declared later in the monolithic
+  translation unit. No XEX was produced and this is not runtime evidence.
+- **Phase 6AF-B active:** the translated shard now calls a forward-declared
+  \`phase6af_native_xenos_ready()\` helper. Its implementation is emitted beside
+  the actual Xenos statics, removing the source-order dependency while
+  preserving the exact same native CreateDevice handoff semantics. Prep also
+  verifies exactly one helper definition before invoking VS2017.
