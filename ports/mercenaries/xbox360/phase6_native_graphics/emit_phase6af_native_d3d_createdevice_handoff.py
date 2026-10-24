@@ -33,7 +33,7 @@ import json
 from pathlib import Path
 
 BASE_TAG = "P6AE-AV-FAMILY-DISPLAY-HANDOFF-20261023-B"
-BUILD_TAG = "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-A"
+BUILD_TAG = "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B"
 COOKIE_OLD = "phase6ae_env_build_cookie"
 COOKIE_NEW = "phase6af_env_build_cookie"
 SHARD_TARGET_CHARS = 750000
@@ -95,6 +95,11 @@ static uint32_t s_phase6afCreateDeviceSwap;
 static uint32_t s_phase6afCreateDeviceAutoDepth;
 static uint32_t s_phase6afCreateDeviceDepthFormat;
 static uint32_t s_phase6afGuestDevice;
+
+/* The translated CreateDevice body lives in a shard before the native-Xenos
+ * support block. Keep only a prototype here; the implementation is emitted
+ * beside the actual s_phase6bXenos* statics later in the translation unit. */
+static int phase6af_native_xenos_ready(void);
 
 '''
     return main_text.replace(marker, state + marker, 1)
@@ -229,7 +234,7 @@ def replace_create_device(main_text: str, base) -> str:
         return;
     }
 
-    if (!s_phase6bXenosReady || s_phase6bXenosDevice == NULL)
+    if (!phase6af_native_xenos_ready())
     {
         trace("Phase 6AF CreateDevice handoff rejected: native Xenos device is not alive");
         phase4c_escape(PHASE4C_BOUNDARY_RENDERER_FATAL, 0x80004005u, c);
@@ -280,6 +285,27 @@ def replace_create_device(main_text: str, base) -> str:
 }
 '''
     return main_text[:start] + replacement + main_text[end:]
+
+
+def install_xenos_ready_helper(main_text: str) -> str:
+    marker = (
+        "static D3DDevice* s_phase6bXenosDevice = NULL;\n"
+        "static int s_phase6bXenosReady = 0;\n\n"
+        "static int phase6b_xenos_create(void)\n"
+    )
+    if marker not in main_text:
+        raise SystemExit("[Phase6AF] native Xenos state/create marker missing")
+
+    replacement = (
+        "static D3DDevice* s_phase6bXenosDevice = NULL;\n"
+        "static int s_phase6bXenosReady = 0;\n\n"
+        "static int phase6af_native_xenos_ready(void)\n"
+        "{\n"
+        "    return s_phase6bXenosReady && s_phase6bXenosDevice != NULL;\n"
+        "}\n\n"
+        "static int phase6b_xenos_create(void)\n"
+    )
+    return main_text.replace(marker, replacement, 1)
 
 
 def reset_state(main_text: str) -> str:
@@ -461,6 +487,7 @@ def main() -> int:
 
     main_text = install_state(main_text)
     main_text = replace_create_device(main_text, base)
+    main_text = install_xenos_ready_helper(main_text)
     main_text = reset_state(main_text)
     main_text = insert_summary(main_text)
 
@@ -506,6 +533,8 @@ def main() -> int:
         BUILD_TAG,
         "static void sub_0028CAA0(void)",
         "PASS: Phase 6AF native D3D CreateDevice handoff",
+        "static int phase6af_native_xenos_ready(void)",
+        "return s_phase6bXenosReady && s_phase6bXenosDevice != NULL;",
         "s_phase6afCreateDeviceBridgeCount != 0u &&",
         "P6AF D3D DEVICE:",
         "P6AF AV FAMILY:",
