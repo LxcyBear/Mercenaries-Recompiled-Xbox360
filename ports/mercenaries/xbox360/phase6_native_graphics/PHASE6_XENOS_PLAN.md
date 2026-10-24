@@ -871,3 +871,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   lies inside that function, and print the exact source neighborhood plus the
   full function. This is PC-only and intentionally builds no XEX; the next
   semantic repair must be based on that exact expression.
+
+- **Phase 6AM-A forensic - PASS / exact instruction identified:** cached 6AL
+  source proves hardware line 1957 is inside `sub_0028BC60` and is exactly
+  `ebp = GUEST_READ32(eax + 4);`. The immediately preceding instruction is
+  `eax = GUEST_READ32(edi);`, so the orange READ32 `0x80000004` occurs
+  because a device-context state-stack entry itself contains
+  `0x80000000`. This retires generic KSEG/arithmetic hypotheses.
+- **Phase 6AN-A active - D3D +0x1A10 state-stack probe:** inherit the proven
+  6AJ semantics and instrument only `sub_0028BC60`. Capture device fields
+  +0x1A04/+0x1A08/+0x1A0C, count +0x1A10, stack entries
+  +0x1A14/+0x1A18/+0x1A1C, selected top-object +4/+8 values, and the exact
+  loop index/EDX/EDI/ECX when an entry equals `0x80000000`. Do not skip the
+  retail dereference and do not map the KSEG first-page fence; the purpose is
+  to distinguish missing CreateDevice/device-context initialization from a
+  legitimate sentinel before applying semantics.
