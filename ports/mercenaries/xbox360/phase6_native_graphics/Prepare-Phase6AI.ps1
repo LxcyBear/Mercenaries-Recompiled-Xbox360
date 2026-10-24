@@ -88,7 +88,7 @@ foreach ($path in @($txt,$json)) {
 }
 
 $r = Get-Content -LiteralPath $json -Raw | ConvertFrom-Json
-if ($r.phase -ne "6AI-A" -or
+if ($r.phase -ne "6AI-B" -or
     $r.root -ne "0x0028E700" -or
     $r.label -ne "0x0028E7AE" -or
     $r.hardware.guest -ne "0x80000004" -or
@@ -101,5 +101,5 @@ Write-Host ""
 Write-Host "[Phase6AI] FORENSIC PREP: PASS"
 Write-Host ("[Phase6AI] Classification : {0}" -f [string]$r.classification)
 Write-Host ("[Phase6AI] Report         : {0}" -f $txt)
-Write-Host "[Phase6AI] SEND/PASTE THE CONSOLE OUTPUT FROM 'EXACT E7AE BLOCK BEGIN' THROUGH 'END'."
+Write-Host "[Phase6AI] SEND/PASTE THE CONSOLE OUTPUT FROM 'PRE-E7AE WINDOW BEGIN' THROUGH 'END'."
 Write-Host "[Phase6AI] No XEX was built. This pass only identifies the exact orange-fault instruction."
