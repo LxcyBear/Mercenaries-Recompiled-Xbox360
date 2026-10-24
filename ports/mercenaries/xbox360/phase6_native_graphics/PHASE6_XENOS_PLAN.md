@@ -695,3 +695,16 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   summary. It depends only on \`s_phase6agRootEntered\` and
   \`s_phase6afCreateDeviceBridgeCount != 0\`, leaving all inherited legacy result
   gates untouched. The successful exact \`sub_00290895\` split is retained.
+
+
+- **Phase 6AG-D hardware - PASS / best Phase-6 renderer run yet:** native Xenos
+  CreateDevice remained PASS. The exact live retail CreateDevice contract again
+  matched and published guest device 0x00299380 through 0x007AD604. The newly
+  regenerated exact retail D3D entry sub_00290895 executed successfully, proving
+  the hidden interior-entry split on hardware. Execution then continued farther
+  through retail D3D and stopped cleanly at DIRECT_FRONTIER
+  0x0023A3CE -> 0x0028E700 with esp=saved_esp=0x008BF918 and fault=0.
+  Last direct progress reached 0x0028EB90 inside the retail D3D section.
+  The independent \`PHASE 6AG D3D NEIGHBORHOOD RESULT\` reported PASS.
+  The inherited old cosine-harvest line still prints FAIL and is now explicitly
+  non-authoritative for Phase 6AG. No NV2A MMIO/VRAM touch has occurred yet.
