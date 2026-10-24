@@ -736,3 +736,20 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   stage. Prep also embeds the best available emitter failure text directly in
   the final thrown error so any remaining mandatory-root failure is visible
   even from a short console excerpt.
+
+
+- **Phase 6AH-B prep - SUPPORT BLOCKER IDENTIFIED / no build:** exact root
+  0x0028E700 is valid, but support-clean emission correctly rejected it because
+  the generated root calls \`recomp_d3d_sync_checkpoint\`. Upstream inspection
+  proved that helper is diagnostic-only: when
+  \`MERCENARIES_TRACE_D3D_SYNC\` is unset it returns immediately and does not
+  mutate guest registers, guest memory, D3D device state, or control flow.
+  Patch inventory entry 271 injects this diagnostic checkpoint at
+  0x0028A060, 0x0028E740, 0x0028E74C, 0x0028E764, 0x0028E769 and 0x0028E7AE.
+- **Phase 6AH-C active - maintained D3D sync diagnostic:** provide an exact
+  support-owned \`recomp_d3d_sync_checkpoint(uint32_t)\` implementation before
+  support-clean analysis. Xbox 360 preserves the upstream default semantics as
+  a guest/device no-op and records only host-side call count/last phase for
+  proof. 6AH's authoritative PASS now additionally requires that checkpoint
+  to execute at least once. Unknown helpers remain fenced; no global support
+  whitelist was added.
