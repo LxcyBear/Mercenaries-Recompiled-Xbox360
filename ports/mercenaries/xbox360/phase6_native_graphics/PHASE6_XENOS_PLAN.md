@@ -783,3 +783,13 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   block is the narrow target. 6AI-A intentionally does not invoke VS2017 or
   build an XEX; it refuses to change KSEG/memory semantics until the exact
   faulting expression and register provenance are visible.
+
+
+- **Phase 6AI-B prep - REGEX INVALID / no build:** the predecessor-window
+  forensic script reached the correct local source inspection path but used
+  over-escaped Python raw regexes. The generic +4 matcher raised
+  \`re.error: unbalanced parenthesis\` before report generation. No XEX or
+  hardware run occurred.
+- **Phase 6AI-C active:** fix both the exact EAX+4 and generic +4 source
+  matchers, compile them explicitly before scanning, and retain the pre-E7AE
+  predecessor-window inspection. This remains a source-only forensic pass.
