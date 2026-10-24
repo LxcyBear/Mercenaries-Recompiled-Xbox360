@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier `DIRECT_FRONTIER 0x0029C8BE` (fault=0, retail XGRPH section) |
+| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier `DIRECT_FRONTIER 0x00209810` (fault=0, retail .text after XGRPH) |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -55,17 +55,18 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BJ — hardware PASS:** PFB ZCOMP tile #1 `FD100304=84000000` crossed, mirrored through PGRAPH `FD400984`, and both readbacks returned `84000000`.
 - **Phase 6BK — hardware PASS / major frontier transition:** the later PFIFO `FD003220=0` clear completed; retail D3D root `00290895` PASS, internal D3D device PASS, D3D sync checkpoints=9, and the 640×480 D3D device summary populated.
 - **Phase 6BL — hardware PASS:** the translated closure rooted at `0028B180` entered successfully and advanced execution to clean `DIRECT_FRONTIER 00290970` with `fault=0`.
-- **Phase 6BM — hardware PASS / XGRPH transition:** translated root `00290970` entered; execution advanced to clean `DIRECT_FRONTIER 0029C8BE` with `fault=0`. The target and several final-ring VAs lie inside the retail `XGRPH` section.
+- **Phase 6BM — hardware PASS / XGRPH transition:** translated root `00290970` entered; execution advanced to clean `DIRECT_FRONTIER 0029C8BE` with `fault=0`.
+- **Phase 6BN — hardware PASS / return to title `.text`:** XGRPH root `0029C8BE` entered six times and execution advanced to clean `DIRECT_FRONTIER 00209810` with `fault=0`; the new target is back inside retail `.text`.
 
-### Current next step — Phase 6BN
+### Current next step — Phase 6BO
 
-Phase 6BM is hardware-proven: the `0x00290970` translated D3D closure entered, all inherited graphics semantics stayed coherent, and execution advanced to clean `DIRECT_FRONTIER 0x0029C8BE` with `fault=0`. `0x0029C8BE` lies inside the retail `XGRPH` section (`0x0029B880..0x0029CB7C`), and the final VA ring already includes nearby XGRPH addresses such as `0029BCC7`, `0029BCD0`, `0029CAA9`, and `0029CA5D`.
+Phase 6BN is hardware-proven: translated XGRPH root `0029C8BE` entered six times, inherited graphics semantics remained coherent, and execution advanced to clean `DIRECT_FRONTIER 00209810` with `fault=0`. The new target lies inside retail `.text` (`0x00011000..0x0025561C`), indicating the XGRPH path returned into title-side code before the next missing translated block.
 
-Phase 6BN is prepared with a mandatory exact-start gate against local `functions.json` + generated translated bodies. If exact, it packs a bounded depth-4/cap-256 support-clean closure rooted at `0x0029C8BE`; if interior, it refuses the entry and reports the containing function. All Phase 6BM PFIFO/PFB/ZCOMP/PGRAPH semantics, allocator geometry, 8,000,000-tick watchdog and unrelated NV2A/MMIO/VRAM hard fences remain unchanged.
+Phase 6BO is prepared with a mandatory exact-start gate against local `functions.json` + generated translated bodies. If exact, it packs a bounded depth-4/cap-256 support-clean closure rooted at `0x00209810`; if interior, it refuses the entry. All Phase 6BN PFIFO/PFB/ZCOMP/PGRAPH semantics, allocator geometry, 8,000,000-tick watchdog and unrelated NV2A/MMIO/VRAM hard fences remain unchanged.
 
 ## Next major graphics milestones
 
-1. Prove and cross the clean XGRPH frontier at `0x0029C8BE` with its bounded dependency closure.
+1. Prove and cross the clean post-XGRPH `.text` frontier at `0x00209810` with its bounded dependency closure.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
