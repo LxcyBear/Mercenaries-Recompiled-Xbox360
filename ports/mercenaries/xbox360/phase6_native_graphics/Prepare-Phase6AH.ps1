@@ -183,11 +183,19 @@ if ($rc -ne 0) {
             ($_ -match "not an exact|absent|missing|unresolved|requires|refusing|lost|drift|already present|failed")
         }
     )
+    $primaryFailure = $null
     if ($reason.Count -gt 0) {
-        Write-Host ("[Phase6AH] PRIMARY FAILURE: {0}" -f [string]$reason[0])
+        $primaryFailure = [string]$reason[0]
+        Write-Host ("[Phase6AH] PRIMARY FAILURE: {0}" -f $primaryFailure)
     }
-
-    throw "Phase 6AH emission/preflight failed (exit $rc)"
+    else {
+        $plain = @(
+            $tail | Where-Object {
+                ($_ -notmatch '^At ') -and
+                ($_ -notmatch '^\s*\+') -and
+                ($_ -notmatch '^\s*CategoryInfo') -and
+                ($_ -notmatch '^\s*FullyQualifiedErrorId') -and
+                ($_ -notmatch '^\s*
 }
 
 $main = Join-Path $out "main.cpp"
@@ -204,7 +212,7 @@ foreach ($f in @($main,$monolithic,$env,$manifest,$shardDir)) {
 
 $m = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($m.phase -ne "6AH" -or
-    $m.build_tag -ne "P6AH-D3D-SATURATION-0028E700-20261023-A") {
+    $m.build_tag -ne "P6AH-D3D-SATURATION-0028E700-20261023-B") {
     throw "Phase 6AH manifest identity mismatch"
 }
 
@@ -234,7 +242,7 @@ if ($policyMatch.Groups[1].Value.Length -gt 240) {
 }
 
 foreach ($marker in @(
-    "P6AH-D3D-SATURATION-0028E700-20261023-A",
+    "P6AH-D3D-SATURATION-0028E700-20261023-B",
     "case 0x0028E700u:",
     "s_phase6ahRootEntered = 1;",
     "PASS: Phase 6AH retail D3D root 0028E700 entered",
@@ -288,7 +296,7 @@ Write-Host ("[Phase6AH] Remaining direct frontiers   : {0}" -f @($ah.remaining_d
 Write-Host "[Phase6AH] Native CreateDevice           : inherited unchanged"
 Write-Host "[Phase6AH] Prior exact root 00290895     : inherited unchanged"
 Write-Host "[Phase6AH] Current root                  : 0028E700 exact/generated/support-clean"
-Write-Host "[Phase6AH] Expected tag                  : P6AH-D3D-SATURATION-0028E700-20261023-A"
+Write-Host "[Phase6AH] Expected tag                  : P6AH-D3D-SATURATION-0028E700-20261023-B"
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -298,22 +306,165 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AH-D3D-SATURATION-0028E700-20261023-A"
+        ExpectedBuildTag = "P6AH-D3D-SATURATION-0028E700-20261023-B"
         ExpectedEnvCookie = "phase6ah_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
         Platform = $Platform
         CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6ah-vs2017-clean.log")
         BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6ah-vs2017-build.log")
-        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AH.xex")
+        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AH-B.xex")
     }
 
     & $paths.build @buildArgs
 
     Write-Host ""
     Write-Host "[Phase6AH] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AH] Hardware tag to verify: P6AH-D3D-SATURATION-0028E700-20261023-A"
-    Write-Host ("[Phase6AH] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AH.xex"))
+    Write-Host "[Phase6AH] Hardware tag to verify: P6AH-D3D-SATURATION-0028E700-20261023-B"
+    Write-Host ("[Phase6AH] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AH-B.xex"))
+}
+else {
+    Write-Host "[Phase6AH] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
+}
+)
+            }
+        )
+        if ($plain.Count -gt 0) {
+            $primaryFailure = [string]$plain[$plain.Count - 1]
+            Write-Host ("[Phase6AH] PRIMARY FAILURE (fallback): {0}" -f $primaryFailure)
+        }
+    }
+
+    if ($null -ne $primaryFailure) {
+        throw ("Phase 6AH emission/preflight failed (exit {0}): {1}" -f $rc,$primaryFailure)
+    }
+    throw "Phase 6AH emission/preflight failed (exit $rc)"
+}
+
+$main = Join-Path $out "main.cpp"
+$monolithic = Join-Path $out "main_monolithic.cpp"
+$env = Join-Path $out "phase5_env.cpp"
+$manifest = Join-Path $out "phase6ah-manifest.json"
+$shardDir = Join-Path $out "translated_shards"
+
+foreach ($f in @($main,$monolithic,$env,$manifest,$shardDir)) {
+    if (-not (Test-Path -LiteralPath $f)) {
+        throw "Phase 6AH missing output: $f"
+    }
+}
+
+$m = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+if ($m.phase -ne "6AH" -or
+    $m.build_tag -ne "P6AH-D3D-SATURATION-0028E700-20261023-B") {
+    throw "Phase 6AH manifest identity mismatch"
+}
+
+$ah = $m.phase6ah_d3d_saturation
+if (-not [bool]$ah.phase6ag_hardware_pass -or
+    $ah.root -ne "0x0028E700" -or
+    $ah.frontier_caller -ne "0x0023A3CE" -or
+    [int]$ah.phase6ag_hardware.next_boundary.fault -ne 0 -or
+    $ah.phase6ag_hardware.next_boundary.target -ne "0x0028E700" -or
+    -not [bool]$ah.native_createdevice_handoff_inherited_unchanged -or
+    -not [bool]$ah.exact_00290895_split_inherited_unchanged -or
+    [int]$ah.root_retained_new_members -lt 1 -or
+    $ah.source_layout.shard_prefix -ne "phase6ah_") {
+    throw "Phase 6AH manifest saturation gate mismatch"
+}
+
+$mainText = Get-Content -LiteralPath $main -Raw
+$monolithicText = Get-Content -LiteralPath $monolithic -Raw
+$envText = Get-Content -LiteralPath $env -Raw
+
+$policyMatch = [regex]::Match($monolithicText, 'trace\("Policy:([^"]*)"\);')
+if (-not $policyMatch.Success) {
+    throw "Phase 6AH startup policy trace missing"
+}
+if ($policyMatch.Groups[1].Value.Length -gt 240) {
+    throw "Phase 6AH startup policy trace exceeds safe length"
+}
+
+foreach ($marker in @(
+    "P6AH-D3D-SATURATION-0028E700-20261023-B",
+    "case 0x0028E700u:",
+    "s_phase6ahRootEntered = 1;",
+    "PASS: Phase 6AH retail D3D root 0028E700 entered",
+    "PHASE 6AH D3D SATURATION RESULT: %s",
+    "s_phase6ahRootEntered && s_phase6agRootEntered && s_phase6afCreateDeviceBridgeCount != 0u",
+    "P6AH PRIOR D3D ROOT 00290895 RESULT: %s",
+    "PASS: Phase 6AH native D3D CreateDevice handoff",
+    "P6AH XENOS: PASS Direct3D_CreateDevice",
+    "P6AH FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
+    "P6AH FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
+    "phase6ah_env_build_cookie"
+)) {
+    if (-not $monolithicText.Contains($marker)) {
+        throw "Phase 6AH generated source gate missing: $marker"
+    }
+}
+
+if ($monolithicText -match "phase6ag_env_build_cookie" -or
+    $envText -match "phase6ag_env_build_cookie") {
+    throw "Phase 6AH stale Phase 6AG cookie remains"
+}
+
+$shards = @(Get-ChildItem -LiteralPath $shardDir -Filter "*.inl" -File)
+if ($shards.Count -lt 1) {
+    throw "Phase 6AH translated shard output is empty"
+}
+$wrongShards = @($shards | Where-Object { -not $_.Name.StartsWith("phase6ah_") })
+if ($wrongShards.Count -gt 0) {
+    throw "Phase 6AH translated shard prefix gate failed: $($wrongShards[0].Name)"
+}
+
+$rootInShard = $false
+foreach ($shard in $shards) {
+    if ((Get-Content -LiteralPath $shard.FullName -Raw).Contains("s_phase6ahRootEntered = 1;")) {
+        $rootInShard = $true
+        break
+    }
+}
+if (-not $rootInShard) {
+    throw "Phase 6AH D3D root instrumentation did not survive sharding"
+}
+
+Write-Host ""
+Write-Host "[Phase6AH] READY"
+Write-Host ("[Phase6AH] Generated shards             : {0}" -f $shards.Count)
+Write-Host ("[Phase6AH] Root candidate members       : {0}" -f [int]$ah.root_candidate_members)
+Write-Host ("[Phase6AH] Root retained new members    : {0}" -f [int]$ah.root_retained_new_members)
+Write-Host ("[Phase6AH] Saturation selected roots    : {0}" -f @($ah.saturation.selected_roots).Count)
+Write-Host ("[Phase6AH] Saturation retained new      : {0}" -f [int]$ah.saturation.retained_new_members)
+Write-Host ("[Phase6AH] Remaining direct frontiers   : {0}" -f @($ah.remaining_direct_frontiers).Count)
+Write-Host "[Phase6AH] Native CreateDevice           : inherited unchanged"
+Write-Host "[Phase6AH] Prior exact root 00290895     : inherited unchanged"
+Write-Host "[Phase6AH] Current root                  : 0028E700 exact/generated/support-clean"
+Write-Host "[Phase6AH] Expected tag                  : P6AH-D3D-SATURATION-0028E700-20261023-B"
+
+if (-not $SkipSolutionBuild) {
+    Write-Host ""
+    Write-Host "[Phase6AH] AUTO-BUILD: sync + clean + Release|Xbox 360 using Visual Studio 2017"
+
+    $buildArgs = @{
+        GeneratedMain = $main
+        GeneratedEnv = $env
+        GeneratedShardDir = $shardDir
+        ExpectedBuildTag = "P6AH-D3D-SATURATION-0028E700-20261023-B"
+        ExpectedEnvCookie = "phase6ah_env_build_cookie"
+        SolutionRoot = $SolutionRoot
+        Configuration = $Configuration
+        Platform = $Platform
+        CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6ah-vs2017-clean.log")
+        BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6ah-vs2017-build.log")
+        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AH-B.xex")
+    }
+
+    & $paths.build @buildArgs
+
+    Write-Host ""
+    Write-Host "[Phase6AH] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
+    Write-Host "[Phase6AH] Hardware tag to verify: P6AH-D3D-SATURATION-0028E700-20261023-B"
+    Write-Host ("[Phase6AH] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AH-B.xex"))
 }
 else {
     Write-Host "[Phase6AH] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
