@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Retail asset I/O is alive; 6BT completed the observed 200 ms `KeDelayExecutionThread`; current blocker is canonical ordinal-246 `ObReferenceObjectByHandle` at `0x800000F6`, `fault=0` |
+| 6 — Native Xenos graphics | **In progress** | Retail asset I/O is alive; 6BU proved `ObReferenceObjectByHandle` is for live `xesrb.tga` + `IoFileObjectType`; 6BV will expose the first `FILE_OBJECT` field actually dereferenced |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -63,16 +63,17 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BR — hardware PASS / post-PBL title progress:** exact generated root `00209A70` entered once and execution continued through `00209A7C/85/8C` into the `00229Fxx` title path. The PBL observer advanced to `calls=3`, retaining live file handle `0x48000001`. The next boundary is `ICALL_SAFE target=0x800000E2` (ordinal 226 `NtSetInformationFile`) with a canonical 24-byte frame and `fault=0`.
 - **Phase 6BS — hardware PASS / complete `xesrb.tga` consumption:** ordinal-226 `NtSetInformationFile` class-14 seeks succeeded three times. The game then read 786,432 bytes and the final 44 bytes from `game:\\xesrb.tga`, exactly matching its 786,476-byte EOF, proving complete retail asset-file consumption. Execution re-entered XGRPH, PBL advanced to `calls=4`, and the next boundary is `ICALL_SAFE target=0x80000063` (ordinal 99 `KeDelayExecutionThread`) with canonical 16-byte frame and `fault=0`.
 - **Phase 6BT — hardware PASS / relative wait continuation:** the live ordinal-99 `KeDelayExecutionThread` frame was canonical (`wait_mode=1`, `alertable=0`) with interval `FFFFFFFFFFE17B80`; the existing Phase-4B conversion executed it as a 200 ms relative wait successfully. The next clean boundary is `ICALL_SAFE target=0x800000F6` (ordinal 246 `ObReferenceObjectByHandle`) with canonical 16-byte frame and `fault=0`.
+- **Phase 6BU — hardware diagnostic PASS / file-object identity proven:** ordinal-246 `ObReferenceObjectByHandle` exposed `handle=48000001`, `native_resolved=1`, `path=game:\\xesrb.tga`, `object_type=80000047`, `ReturnedObject*=008BF928`; ordinal 71 `0x80000047` is `IoFileObjectType`. The stage intentionally synthesized no guest object pointer and stopped cleanly at the same fault-free boundary.
 
-### Current next step — Phase 6BU
+### Current next step — Phase 6BV
 
-Phase 6BT is hardware-proven. The live ordinal-99 `KeDelayExecutionThread` call used a canonical 16-byte frame with `wait_mode=1`, `alertable=0` and relative interval `0xFFFFFFFFFFE17B80`; the Phase-4B-derived delay bridge converted that interval to 200 ms and returned successfully.
+Phase 6BU is hardware-proven as a diagnostic pass. The live ordinal-246 `ObReferenceObjectByHandle` call is canonical and targets handle `0x48000001`, which resolves to `game:\xesrb.tga`. The object-type argument is `0x80000047`; Xbox kernel ordinal 71 is `IoFileObjectType`. The output pointer is valid at `0x008BF928`, and its prior contents were the same tagged handle value.
 
-Execution then advanced to `ICALL_SAFE caller=0023A3CE target=800000F6 esp=008BF8EC saved_esp=008BF8FC`, `fault=0`. Ordinal 246 is `ObReferenceObjectByHandle(HANDLE, ObjectType*, Object**)`; the observed frame size is canonical, but the live three arguments and required guest object representation are not yet proven. Phase 6BU is intentionally probe-only: it logs Handle, ObjectType and ReturnedObject*, classifies the handle through the existing tagged native-handle table, and synthesizes no object pointer. All 6BT file, delay, ABI, GPU/MMIO, allocator and 8M-budget invariants remain unchanged.
+Phase 6BV deliberately avoids inventing a complete Xbox `FILE_OBJECT`. For this exact proven IoFileObjectType + tagged-file-handle class it returns `STATUS_SUCCESS` and writes `0x04000000` as a diagnostic object pointer. The 64 MiB guest arena ends at `0x03FFFFFF`, so the next direct retail dereference should fault at `0x04000000 + field_offset`, exposing the first `FILE_OBJECT` field the game actually requires. That result will drive the smallest safe guest object shim. All 6BU file, delay, ABI, GPU/MMIO, allocator and 8M-budget invariants remain unchanged.
 
 ## Next major graphics milestones
 
-1. Probe ordinal 246 `ObReferenceObjectByHandle` live arguments without synthesizing an object pointer; use the hardware frame to decide whether a simple handle→guest-object mapping is sufficient.
+1. Run Phase 6BV and capture the first checked guest access relative to sentinel `0x04000000`; use that offset to implement only the `FILE_OBJECT` field(s) retail actually dereferences.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
