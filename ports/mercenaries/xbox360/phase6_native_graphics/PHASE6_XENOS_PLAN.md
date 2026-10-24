@@ -657,3 +657,14 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   CreateDevice handoff unchanged, and continue until the next genuine
   D3D/NV2A/platform boundary. Purple remains reserved for the first actual
   NV2A MMIO/VRAM touch.
+
+
+- **Phase 6AG-A prep - INVALID / no build:** preflight correctly refused
+  hardware target 0x00290895 because the cached Phase-3 inventory still owned
+  it as an interior entry of sub_00290887 (0x00290887-0x0029089B). No VS build
+  or XEX was produced.
+- **Phase 6AG-B active:** 0x00290895 is now a protected reviewed manual seed.
+  Prep detects a stale Phase-3 inventory and automatically reruns the isolated
+  Phase-3 analysis/generated-tree gate before 6AG emission. It then requires
+  0x00290895 to exist as an exact generated sub_00290895 body before the D3D
+  neighborhood closure or VS2017 build can proceed.
