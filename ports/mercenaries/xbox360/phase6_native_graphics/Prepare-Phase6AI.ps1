@@ -78,6 +78,12 @@ Write-Host "[Phase6AI] KSEG first page    : remains fenced"
 Write-Host "[Phase6AI] Hard stops         : NV2A/MMIO/VRAM, ABI, guest faults"
 Write-Host ""
 
+& $python -m py_compile $paths.emitter
+if ($LASTEXITCODE -ne 0) {
+    throw "Phase 6AI emitter Python syntax check failed"
+}
+Write-Host "[Phase6AI] Emitter syntax     : PASS"
+
 $emitArgs = @(
     "--base-dir",$baseDir,
     "--base-emitter",$paths.base,
