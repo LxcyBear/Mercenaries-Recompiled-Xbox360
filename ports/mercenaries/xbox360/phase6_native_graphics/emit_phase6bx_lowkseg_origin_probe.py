@@ -122,7 +122,7 @@ def instrument_budget_tick(text: str) -> str:
         s_phase6bxLowKsegLastEsp = g_esp;
         sprintf(
             p6bxLine,
-            "P6BX LOWKSEG ORIGIN: va=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X guest_irql=%u hits=%u",
+            "P6BX LOWKSEG ORIGIN: va=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X hits=%u",
             (unsigned int)va,
             (unsigned int)g_eax,
             (unsigned int)g_ecx,
@@ -131,7 +131,6 @@ def instrument_budget_tick(text: str) -> str:
             (unsigned int)g_esi,
             (unsigned int)g_edi,
             (unsigned int)g_esp,
-            (unsigned int)s_phase6bwGuestIrql,
             (unsigned int)s_phase6bxLowKsegProbeHits);
         trace(p6bxLine);
     }
@@ -272,6 +271,15 @@ def main() -> int:
     main_text = install_probe_state(main_text)
     main_text = instrument_budget_tick(main_text)
     main_text = install_summary(main_text)
+
+    budget_tick_start = main_text.find("static void phase4c_budget_tick(DWORD va)")
+    budget_tick_end = main_text.find("#define PHASE4C_BUDGET_TICK", budget_tick_start)
+    if budget_tick_start < 0 or budget_tick_end < 0:
+        raise SystemExit("[Phase6BX] could not isolate patched budget tick")
+    if "s_phase6bwGuestIrql" in main_text[budget_tick_start:budget_tick_end]:
+        raise SystemExit(
+            "[Phase6BX] origin probe must not depend on later 6BW IRQL state declaration"
+        )
 
     main_text = p6bl.replace_policy_line(
         main_text,
