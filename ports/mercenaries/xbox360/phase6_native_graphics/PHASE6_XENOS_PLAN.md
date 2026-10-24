@@ -886,3 +886,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   retail dereference and do not map the KSEG first-page fence; the purpose is
   to distinguish missing CreateDevice/device-context initialization from a
   legitimate sentinel before applying semantics.
+
+- **Phase 6AN-A build - INVALID / no hardware test:** emission and shard sync
+  passed, but VS2017 rejected the probe because the diagnostic helper functions
+  were emitted before `GUEST_READ32` and `trace` were declared. Errors were
+  C3861 at main.cpp lines 130-155/197. No XEX was produced; this is source-order
+  evidence only, not runtime evidence.
+- **Phase 6AN-B active - source-order-safe state-stack probe:** retain only the
+  probe globals at the early 6AJ state location and inject all guest reads and
+  sentinel capture inline inside `sub_0028BC60`, where the guest-access
+  macros are already valid. Preserve the same probe fields and hard fences.
+  Publish a distinct P6AN-B XEX and use the end-of-run
+  `P6AN D3D STACK SUMMARY` as the authoritative hardware evidence.
