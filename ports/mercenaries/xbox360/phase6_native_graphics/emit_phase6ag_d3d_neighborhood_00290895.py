@@ -30,7 +30,7 @@ import re
 from pathlib import Path
 
 BASE_TAG = "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B"
-BUILD_TAG = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-C"
+BUILD_TAG = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-D"
 COOKIE_OLD = "phase6af_env_build_cookie"
 COOKIE_NEW = "phase6ag_env_build_cookie"
 
@@ -152,7 +152,7 @@ def fix_result_gate(main_text: str) -> str:
 
     create_token = "s_phase6afCreateDeviceBridgeCount != 0u &&"
     pattern = re.compile(
-        rf"(?m)^(?P<indent>[ \t]*){re.escape(create_token)}[ \t]*$"
+        rf"(?m)^(?P<indent>[ \t]*){re.escape(create_token)}[ \t]*\r?$"
     )
     match = pattern.search(main_text)
     if match is None:
