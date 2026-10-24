@@ -8,7 +8,7 @@ with eax == 0x80000000.
 
 6AM source forensics proved eax is loaded from the D3D device's small
 +0x1A10-indexed state stack immediately before the dereference. This phase
-inherits the proven 6AJ-A semantics and adds host-side diagnostics only:
+inherits the proven 6AJ-A semantics and adds inline diagnostic state capture only:
 capture +1A04/+1A08, count +1A10, entries +1A14/+1A18/+1A1C, the selected
 top entry, and the exact loop slot that yields 0x80000000.
 
@@ -22,7 +22,7 @@ import json
 from pathlib import Path
 
 BASE_TAG = "P6AJ-D3D-ORANGE-SOURCE-PROBE-20261023-A"
-BUILD_TAG = "P6AN-D3D-STATE-STACK-PROBE-20261023-A"
+BUILD_TAG = "P6AN-D3D-STATE-STACK-PROBE-20261023-B"
 COOKIE_OLD = "phase6aj_env_build_cookie"
 COOKIE_NEW = "phase6an_env_build_cookie"
 SHARD_TARGET_CHARS = 750000
@@ -87,6 +87,9 @@ def install_state(main_text: str) -> str:
     if marker not in main_text:
         raise SystemExit("[Phase6AN] inherited 6AJ probe-state marker missing")
 
+    # State only. Keep this insertion source-order safe: the inherited 6AJ
+    # probe globals live before the guest-access/trace helpers are declared.
+    # All actual reads are injected inline into sub_0028BC60 below.
     state = r'''
 static DWORD s_phase6anStackCalls = 0u;
 static DWORD s_phase6anThis = 0u;
@@ -107,93 +110,6 @@ static DWORD s_phase6anSentinelEdi = 0u;
 static DWORD s_phase6anSentinelIndex = 0u;
 static DWORD s_phase6anSentinelEax = 0u;
 static DWORD s_phase6anSentinelEcx = 0u;
-
-static void phase6an_d3d_stack_entry(
-    DWORD thisVa,
-    DWORD count,
-    DWORD top,
-    DWORD top4,
-    DWORD top8)
-{
-    char line[320];
-
-    ++s_phase6anStackCalls;
-    s_phase6anThis = thisVa;
-    s_phase6anCount = count;
-    s_phase6anTop = top;
-    s_phase6anTop4 = top4;
-    s_phase6anTop8 = top8;
-
-    s_phase6anActive1A04 = GUEST_READ32(thisVa + 0x1A04u);
-    s_phase6anDepth1A08 = GUEST_READ32(thisVa + 0x1A08u);
-    s_phase6anField1A0C = GUEST_READ32(thisVa + 0x1A0Cu);
-    s_phase6anSlot1 = GUEST_READ32(thisVa + 0x1A14u);
-    s_phase6anSlot2 = GUEST_READ32(thisVa + 0x1A18u);
-    s_phase6anSlot3 = GUEST_READ32(thisVa + 0x1A1Cu);
-
-    if (s_accessFault)
-        return;
-
-    sprintf(
-        line,
-        "P6AN D3D STACK ENTRY: calls=%u this=%08X count=%u active1A04=%08X depth1A08=%08X field1A0C=%08X slot1=%08X slot2=%08X slot3=%08X top=%08X top4=%08X top8=%08X",
-        (unsigned int)s_phase6anStackCalls,
-        (unsigned int)thisVa,
-        (unsigned int)count,
-        (unsigned int)s_phase6anActive1A04,
-        (unsigned int)s_phase6anDepth1A08,
-        (unsigned int)s_phase6anField1A0C,
-        (unsigned int)s_phase6anSlot1,
-        (unsigned int)s_phase6anSlot2,
-        (unsigned int)s_phase6anSlot3,
-        (unsigned int)top,
-        (unsigned int)top4,
-        (unsigned int)top8);
-    trace(line);
-}
-
-static void phase6an_d3d_stack_loop(
-    DWORD thisVa,
-    DWORD edxValue,
-    DWORD ediValue,
-    DWORD eaxValue,
-    DWORD ecxValue)
-{
-    char line[320];
-
-    ++s_phase6anLoopCalls;
-    if (eaxValue != 0x80000000u)
-        return;
-
-    ++s_phase6anSentinelHits;
-    s_phase6anSentinelEdx = edxValue;
-    s_phase6anSentinelEdi = ediValue;
-    s_phase6anSentinelEax = eaxValue;
-    s_phase6anSentinelEcx = ecxValue;
-    if (ediValue >= thisVa + 0x1A10u)
-        s_phase6anSentinelIndex = (ediValue - (thisVa + 0x1A10u)) / 4u;
-    else
-        s_phase6anSentinelIndex = 0xFFFFFFFFu;
-
-    sprintf(
-        line,
-        "P6AN D3D STACK SENTINEL: hit=%u this=%08X count=%u loop_edx=%u index=%u edi=%08X eax=%08X ecx=%08X active=%08X depth=%08X slot1=%08X slot2=%08X slot3=%08X",
-        (unsigned int)s_phase6anSentinelHits,
-        (unsigned int)thisVa,
-        (unsigned int)s_phase6anCount,
-        (unsigned int)edxValue,
-        (unsigned int)s_phase6anSentinelIndex,
-        (unsigned int)ediValue,
-        (unsigned int)eaxValue,
-        (unsigned int)ecxValue,
-        (unsigned int)s_phase6anActive1A04,
-        (unsigned int)s_phase6anDepth1A08,
-        (unsigned int)s_phase6anSlot1,
-        (unsigned int)s_phase6anSlot2,
-        (unsigned int)s_phase6anSlot3);
-    trace(line);
-}
-
 '''
     return main_text.replace(marker, marker + state, 1)
 
@@ -216,7 +132,18 @@ def instrument_target(main_text: str, base) -> str:
         "    eax = GUEST_READ32(ecx + 8);\n"
         "    PUSH32(esp, ebx);\n"
         "    ebx = GUEST_READ32(ecx + 4);\n"
-        "    phase6an_d3d_stack_entry(esi, edx, ecx, ebx, eax);"
+        "    ++s_phase6anStackCalls;\n"
+        "    s_phase6anThis = esi;\n"
+        "    s_phase6anCount = edx;\n"
+        "    s_phase6anTop = ecx;\n"
+        "    s_phase6anTop4 = ebx;\n"
+        "    s_phase6anTop8 = eax;\n"
+        "    s_phase6anActive1A04 = GUEST_READ32(esi + 0x1A04);\n"
+        "    s_phase6anDepth1A08 = GUEST_READ32(esi + 0x1A08);\n"
+        "    s_phase6anField1A0C = GUEST_READ32(esi + 0x1A0C);\n"
+        "    s_phase6anSlot1 = GUEST_READ32(esi + 0x1A14);\n"
+        "    s_phase6anSlot2 = GUEST_READ32(esi + 0x1A18);\n"
+        "    s_phase6anSlot3 = GUEST_READ32(esi + 0x1A1C);"
     )
     if body.count(old_entry) != 1:
         raise SystemExit("[Phase6AN] sub_0028BC60 entry shape drift")
@@ -228,7 +155,19 @@ def instrument_target(main_text: str, base) -> str:
     )
     new_loop = (
         "    eax = GUEST_READ32(edi);\n"
-        "    phase6an_d3d_stack_loop(esi, edx, edi, eax, ecx);\n"
+        "    ++s_phase6anLoopCalls;\n"
+        "    if (eax == 0x80000000u)\n"
+        "    {\n"
+        "        ++s_phase6anSentinelHits;\n"
+        "        s_phase6anSentinelEdx = edx;\n"
+        "        s_phase6anSentinelEdi = edi;\n"
+        "        s_phase6anSentinelEax = eax;\n"
+        "        s_phase6anSentinelEcx = ecx;\n"
+        "        if (edi >= esi + 0x1A10u)\n"
+        "            s_phase6anSentinelIndex = (edi - (esi + 0x1A10u)) / 4u;\n"
+        "        else\n"
+        "            s_phase6anSentinelIndex = 0xFFFFFFFFu;\n"
+        "    }\n"
         "    ebp = GUEST_READ32(eax + 4);"
     )
     if body.count(old_loop) != 1:
@@ -454,8 +393,6 @@ def main() -> int:
     for marker in (
         BUILD_TAG,
         COOKIE_NEW,
-        "P6AN D3D STACK ENTRY:",
-        "P6AN D3D STACK SENTINEL:",
         "P6AN D3D STACK SUMMARY:",
     ):
         if marker not in main_text:
@@ -489,9 +426,7 @@ def main() -> int:
     print("[Phase6AN] D3D STATE-STACK PROBE: READY")
     print("[Phase6AN] Target: sub_0028BC60 / eax+4 orange read")
     print("[Phase6AN] Guest/KSEG/D3D/MMIO/VRAM semantics unchanged")
-    print("[Phase6AN] Hardware money lines:")
-    print("[Phase6AN]   P6AN D3D STACK ENTRY: ...")
-    print("[Phase6AN]   P6AN D3D STACK SENTINEL: ...")
+    print("[Phase6AN] Hardware money line: P6AN D3D STACK SUMMARY: ...")
     print("[Phase6AN] EMIT RESULT: PASS")
     return 0
 
