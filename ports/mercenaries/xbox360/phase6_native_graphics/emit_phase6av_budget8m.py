@@ -20,10 +20,10 @@ def patch_main(text):
     text = replace_once(text, OLD_BUDGET, NEW_BUDGET, "execution budget definition")
     text = replace_once(text, BASE_TAG, BUILD_TAG, "Phase 6AU build tag")
     text = text.replace("phase6au_env_build_cookie", "phase6av_env_build_cookie")
-    text = text.replace("PHASE 6AU", "PHASE 6AV").replace("Phase 6AU", "Phase 6AV").replace('"P6AU ', '"P6AV ')
     old_policy = "Policy: Phase 6AU D3D frontier 00292586; depth-4 cap-256 closure; preserve 6AT allocator and fences"
     new_policy = "Policy: Phase 6AV reuses 6AU exactly; budget 2M->8M only; preserve allocator, closure and all hard fences"
     text = replace_once(text, old_policy, new_policy, "Phase 6AU runtime policy")
+    text = text.replace("PHASE 6AU", "PHASE 6AV").replace("Phase 6AU", "Phase 6AV").replace('"P6AU ', '"P6AV ')
     if "phase6au_env_build_cookie" in text:
         raise SystemExit("[Phase6AV] stale Phase 6AU cookie remains in main")
     return text
