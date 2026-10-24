@@ -126,7 +126,7 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
             m = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
             if not m:
                 raise SystemExit(
-                    f"[Phase6AL] READ32-bearing translated function has no VA: {name}"
+                    f"[Phase6AL] translated function has no recoverable VA: {name}"
                 )
             function_va = int(m.group(1), 16)
 
@@ -142,7 +142,7 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
         rows.append(
             {
                 "function": f"0x{function_va:08X}",
-                "read32_count": read_count,
+                "literal_read32_count": read_count,
             }
         )
         total_reads += read_count
