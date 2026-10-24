@@ -102,19 +102,28 @@ static uint32_t s_phase6afGuestDevice;
 
 def replace_create_device(main_text: str, base) -> str:
     signature = f"static void {RETAIL_CREATE_DEVICE}(void)"
-    count = main_text.count(signature)
-    if count != 1:
+    masked = base.mask_noncode(main_text)
+
+    definitions = []
+    cursor = 0
+    while True:
+        pos = masked.find(signature, cursor)
+        if pos < 0:
+            break
+        after = pos + len(signature)
+        probe = after
+        while probe < len(masked) and masked[probe].isspace():
+            probe += 1
+        if probe < len(masked) and masked[probe] == "{":
+            definitions.append((pos, probe))
+        cursor = after
+
+    if len(definitions) != 1:
         raise SystemExit(
-            f"[Phase6AF] expected one {RETAIL_CREATE_DEVICE} definition, found {count}"
+            f"[Phase6AF] expected one {RETAIL_CREATE_DEVICE} definition, found {len(definitions)}"
         )
 
-    masked = base.mask_noncode(main_text)
-    start = masked.find(signature)
-    if start < 0:
-        raise SystemExit("[Phase6AF] could not locate CreateDevice definition")
-    brace = masked.find("{", start, start + len(signature) + 128)
-    if brace < 0:
-        raise SystemExit("[Phase6AF] CreateDevice opening brace missing")
+    start, brace = definitions[0]
     end = base.closing_brace(masked, brace)
 
     replacement = r'''static void sub_0028CAA0(void)
