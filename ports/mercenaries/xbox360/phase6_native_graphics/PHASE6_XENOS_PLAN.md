@@ -683,3 +683,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   6AG root requirement is inserted with the same indentation. The successful
   0x00290895 Phase-3 split is retained, so regeneration should be skipped on
   the next prep run.
+
+
+- **Phase 6AG-C prep - PARTIAL PASS / no build:** exact-root and D3D-neighborhood
+  analysis remained healthy, but emission still stopped because the inherited
+  6AF CreateDevice PASS condition was not present in the cached source under
+  the exact text expected by the gate editor. No VS build or XEX was produced.
+- **Phase 6AG-D active:** stop mutating the inherited AV-era/6AF boolean result
+  expression entirely. Emit a separate authoritative
+  \`PHASE 6AG D3D NEIGHBORHOOD RESULT: PASS/FAIL\` beside the durable D3D-device
+  summary. It depends only on \`s_phase6agRootEntered\` and
+  \`s_phase6afCreateDeviceBridgeCount != 0\`, leaving all inherited legacy result
+  gates untouched. The successful exact \`sub_00290895\` split is retained.
