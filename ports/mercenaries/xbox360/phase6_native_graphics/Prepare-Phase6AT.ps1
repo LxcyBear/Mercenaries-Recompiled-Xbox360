@@ -111,7 +111,7 @@ foreach ($path in @($main,$mono,$env,$manifest,$shardDir)) {
 
 $r = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($r.phase -ne "6AT" -or
-    $r.build_tag -ne "P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-A") {
+    $r.build_tag -ne "P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-B") {
     throw "Phase 6AT manifest identity mismatch"
 }
 
@@ -130,7 +130,7 @@ if (-not [bool]$at.repair.normal_allocator_first -or
 $monoText = Get-Content -LiteralPath $mono -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 foreach ($marker in @(
-    "P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-A",
+    "P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-B",
     "phase6at_claim_post_create_tail(",
     "s_phase6atPostCreateInitActive = 1u;",
     "post_init_tail_claim=%u",
@@ -163,9 +163,9 @@ Write-Host ("[Phase6AT] Generated shards      : {0}" -f $shards.Count)
 Write-Host "[Phase6AT] Normal allocator      : FIRST"
 Write-Host "[Phase6AT] Tail fallback scope   : active sub_0028F9E0 only"
 Write-Host "[Phase6AT] Heap safety           : free-tail only / no live overlap"
-Write-Host "[Phase6AT] Expected tag          : P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-A"
+Write-Host "[Phase6AT] Expected tag          : P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-B"
 Write-Host "[Phase6AT] Hardware money line 1 : PASS: Phase 6AT post-create tail claim ..."
-Write-Host "[Phase6AT] Hardware money line 2 : P6AT POST-CREATE D3D INIT: ..."
+Write-Host "[Phase6AT] Hardware money line 2 : P6AT POST-CREATE D3D INIT: ..."\nWrite-Host "[Phase6AT] Debugger line 1       : P6AT X360DBG PPC1: ..."\nWrite-Host "[Phase6AT] Debugger line 2       : P6AT X360DBG GUESTREG: ..."\nWrite-Host "[Phase6AT] Debugger line 3       : P6AT X360DBG MEMORY1: ..."\nWrite-Host "[Phase6AT] Debugger line 4       : P6AT X360DBG MEMORY2: ..."
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -175,22 +175,22 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-A"
+        ExpectedBuildTag = "P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-B"
         ExpectedEnvCookie = "phase6at_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
         Platform = $Platform
         CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6at-vs2017-clean.log")
         BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6at-vs2017-build.log")
-        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AT-A.xex")
+        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AT-B.xex")
     }
 
     & $builder @buildArgs
 
     Write-Host ""
     Write-Host "[Phase6AT] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AT] Hardware tag to verify: P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-A"
-    Write-Host ("[Phase6AT] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AT-A.xex"))
+    Write-Host "[Phase6AT] Hardware tag to verify: P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-B"
+    Write-Host ("[Phase6AT] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AT-B.xex"))
 }
 else {
     Write-Host "[Phase6AT] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
