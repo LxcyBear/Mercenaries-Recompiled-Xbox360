@@ -86,7 +86,7 @@ static DWORD s_phase6atTailClaimLastAlignment = 0u;
 
 
 def install_debug_address_helper(main_text: str) -> str:
-    marker = "static void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)\\n"
+    marker = "static void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)\n"
     if marker not in main_text:
         raise SystemExit("[Phase6AT] ordinal-166 handler marker missing for debugger helper")
 
