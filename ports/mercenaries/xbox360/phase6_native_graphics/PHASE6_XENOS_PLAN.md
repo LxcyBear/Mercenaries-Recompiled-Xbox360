@@ -930,3 +930,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   versus the later native bridge, highlighting any original path that reaches
   0028F9E0. Do not synthesize +0x1A10/+0x1A14 state until this provenance is
   recovered.
+
+- **Phase 6AP-A forensic - PASS / retail CreateDevice handoff recovered:** cached
+  pre-6AF sub_0028CAA0 has one retail-like body. It publishes internal device
+  0x00299380 to global 0x00299378, sets related globals, then calls the retail
+  initializer through phase4c_direct_frontier(0x0028FF80). On failure it calls
+  0x00290450 cleanup, clears the device object, clears 0x00299378, and returns
+  the failing HRESULT. On success it returns the guest device pointer. The
+  later 6AF native bridge replaced this whole body, so 0x0028FF80 is the prime
+  missing initialization path.
+- **Phase 6AQ-A active - trace 0x0028FF80 to the sole +0x1A10 writer:** PC-only
+  bounded direct/frontier call-graph audit rooted at sub_0028FF80, targeting
+  sub_0028F9E0. Dump the shortest path and flag hardware/MMIO-looking accesses
+  on every path function. The goal is to separate required guest D3D object
+  initialization from original Xbox/NV2A hardware work before restoring any
+  post-CreateDevice semantics.
