@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current frontier `DIRECT_FRONTIER 0x00209810` (fault=0, retail .text after XGRPH) |
+| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO/PGRAPH idle gates and PFB tile LIMIT/PITCH crossed; current blocker ordinal-289 `RtlInitAnsiString` KERNEL_FRAME at caller `0x0023A3CE` after entering `0x00209810` |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -56,17 +56,18 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BK — hardware PASS / major frontier transition:** the later PFIFO `FD003220=0` clear completed; retail D3D root `00290895` PASS, internal D3D device PASS, D3D sync checkpoints=9, and the 640×480 D3D device summary populated.
 - **Phase 6BL — hardware PASS:** the translated closure rooted at `0028B180` entered successfully and advanced execution to clean `DIRECT_FRONTIER 00290970` with `fault=0`.
 - **Phase 6BM — hardware PASS / XGRPH transition:** translated root `00290970` entered; execution advanced to clean `DIRECT_FRONTIER 0029C8BE` with `fault=0`.
-- **Phase 6BN — hardware PASS / return to title `.text`:** XGRPH root `0029C8BE` entered six times and execution advanced to clean `DIRECT_FRONTIER 00209810` with `fault=0`; the new target is back inside retail `.text`.
+- **Phase 6BN — hardware PASS / return to title `.text`:** XGRPH root `0029C8BE` entered six times and execution advanced to clean `DIRECT_FRONTIER 00209810` with `fault=0`.
+- **Phase 6BO — hardware root-entry PASS / kernel-frame frontier:** exact translated root `00209810` entered once, then ordinal-289 `RtlInitAnsiString` stopped on caller context `0023A3CE` with 16-byte saved-ESP delta vs canonical 12 and `fault=0`.
 
-### Current next step — Phase 6BO
+### Current next step — Phase 6BP
 
-Phase 6BN is hardware-proven: translated XGRPH root `0029C8BE` entered six times, inherited graphics semantics remained coherent, and execution advanced to clean `DIRECT_FRONTIER 00209810` with `fault=0`. The new target lies inside retail `.text` (`0x00011000..0x0025561C`), indicating the XGRPH path returned into title-side code before the next missing translated block.
+Phase 6BO reached and entered exact translated post-XGRPH root `00209810` once. Execution then stopped at a caller-local ordinal-289 `RtlInitAnsiString` frame mismatch: caller context `0023A3CE`, call ESP `008BF8C4`, saved ESP `008BF8D4`, observed delta 16 vs canonical 12, with `fault=0`. The later PBL diagnostic checkpoints were not reached before this kernel-frame boundary.
 
-Phase 6BO is prepared with a mandatory exact-start gate against local `functions.json` + generated translated bodies. If exact, it packs a bounded depth-4/cap-256 support-clean closure rooted at `0x00209810`; if interior, it refuses the entry. All Phase 6BN PFIFO/PFB/ZCOMP/PGRAPH semantics, allocator geometry, 8,000,000-tick watchdog and unrelated NV2A/MMIO/VRAM hard fences remain unchanged.
+Phase 6BP preserves the translated pack and all Phase 6BO graphics/allocator/watchdog invariants, and extends the existing hardware-proven ordinal-289 saved-ESP repair policy only to exact caller context `0023A3CE`. The repair is accepted only after validating the canonical return slot plus destination/source guest pointers; it then resumes at `savedEsp-4` to restore the 12-byte frame.
 
 ## Next major graphics milestones
 
-1. Prove and cross the clean post-XGRPH `.text` frontier at `0x00209810` with its bounded dependency closure.
+1. Cross the caller-local ordinal-289 `RtlInitAnsiString` frame mismatch after successful entry of `0x00209810`.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
