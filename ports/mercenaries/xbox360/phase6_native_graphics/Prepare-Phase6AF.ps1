@@ -170,7 +170,7 @@ if ($monolithicText -match "phase6ae_env_build_cookie" -or
     throw "Phase 6AF stale Phase 6AE cookie remains"
 }
 
-$createDeviceDefs = [regex]::Matches($monolithicText, 'static void sub_0028CAA0\(void\)')
+$createDeviceDefs = [regex]::Matches($monolithicText, 'static void sub_0028CAA0\(void\)\s*\{')
 if ($createDeviceDefs.Count -ne 1) {
     throw "Phase 6AF expected exactly one sub_0028CAA0 definition, found $($createDeviceDefs.Count)"
 }
