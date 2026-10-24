@@ -29,7 +29,7 @@ import json
 from pathlib import Path
 
 BASE_TAG = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-D"
-BUILD_TAG = "P6AH-D3D-SATURATION-0028E700-20261023-B"
+BUILD_TAG = "P6AH-D3D-SYNC-0028E700-20261023-C"
 COOKIE_OLD = "phase6ag_env_build_cookie"
 COOKIE_NEW = "phase6ah_env_build_cookie"
 
@@ -117,11 +117,22 @@ def install_state(main_text: str) -> str:
     marker = "static int s_phase6agRootEntered;\n"
     if marker not in main_text:
         raise SystemExit("[Phase6AH] inherited Phase 6AG root state marker missing")
-    return main_text.replace(
-        marker,
-        "static int s_phase6ahRootEntered;\n" + marker,
-        1,
+
+    support = (
+        "static int s_phase6ahRootEntered;\n"
+        "static uint32_t s_phase6ahD3DSyncCheckpointCalls;\n"
+        "static uint32_t s_phase6ahD3DSyncCheckpointLastPhase;\n\n"
+        "/* Upstream recomp_d3d_sync_checkpoint is an opt-in diagnostic only.\n"
+        " * Its normal path returns immediately when MERCENARIES_TRACE_D3D_SYNC\n"
+        " * is unset. Xbox 360 preserves that guest/device no-op behavior while\n"
+        " * retaining host-only counters so hardware can prove the call path. */\n"
+        "static void recomp_d3d_sync_checkpoint(uint32_t phase)\n"
+        "{\n"
+        "    ++s_phase6ahD3DSyncCheckpointCalls;\n"
+        "    s_phase6ahD3DSyncCheckpointLastPhase = phase;\n"
+        "}\n\n"
     )
+    return main_text.replace(marker, support + marker, 1)
 
 
 def reset_state(main_text: str) -> str:
@@ -130,7 +141,12 @@ def reset_state(main_text: str) -> str:
         raise SystemExit("[Phase6AH] inherited Phase 6AG root reset marker missing")
     return main_text.replace(
         marker,
-        "    s_phase6ahRootEntered = 0;\n" + marker,
+        (
+            "    s_phase6ahRootEntered = 0;\n"
+            "    s_phase6ahD3DSyncCheckpointCalls = 0u;\n"
+            "    s_phase6ahD3DSyncCheckpointLastPhase = 0u;\n"
+        )
+        + marker,
         1,
     )
 
@@ -163,7 +179,8 @@ def install_phase_result(main_text: str) -> str:
         f'{indent}    line,\n'
         f'{indent}    "PHASE 6AH D3D SATURATION RESULT: %s",\n'
         f'{indent}    (s_phase6ahRootEntered && s_phase6agRootEntered && '
-        f's_phase6afCreateDeviceBridgeCount != 0u) ? "PASS" : "FAIL");\n'
+        f's_phase6afCreateDeviceBridgeCount != 0u && '
+        f's_phase6ahD3DSyncCheckpointCalls != 0u) ? "PASS" : "FAIL");\n'
         f'{indent}trace(line);\n'
     )
     return main_text[:line_start] + block + main_text[line_start:]
@@ -439,9 +456,9 @@ def main() -> int:
     main_text = install_phase_result(main_text)
 
     new_policy = (
-        "Policy: inherit 6AG-D CreateDevice and exact 00290895; pack support-clean "
-        "D3D root 0028E700 plus one exact-entry D3D saturation round; continue "
-        "translated D3D; keep NV2A/MMIO/VRAM, platform, ABI and guest faults hard"
+        "Policy: inherit 6AG-D; maintain diagnostic-only D3D sync checkpoint; "
+        "pack support-clean 0028E700 plus one exact D3D saturation round; keep "
+        "NV2A/MMIO/VRAM, platform, ABI and guest faults hard"
     )
     if len(new_policy) > 240:
         raise SystemExit("[Phase6AH] startup policy trace exceeds safe length")
@@ -477,9 +494,12 @@ def main() -> int:
         "case 0x0028E700u:",
         "s_phase6ahRootEntered = 1;",
         "PASS: Phase 6AH retail D3D root 0028E700 entered",
+        "static void recomp_d3d_sync_checkpoint(uint32_t phase)",
+        "++s_phase6ahD3DSyncCheckpointCalls;",
         "PHASE 6AH D3D SATURATION RESULT: %s",
         "s_phase6ahRootEntered && s_phase6agRootEntered && "
-        "s_phase6afCreateDeviceBridgeCount != 0u",
+        "s_phase6afCreateDeviceBridgeCount != 0u && "
+        "s_phase6ahD3DSyncCheckpointCalls != 0u",
         "P6AH PRIOR D3D ROOT 00290895 RESULT: %s",
         "PASS: Phase 6AH native D3D CreateDevice handoff",
         "P6AH XENOS: PASS Direct3D_CreateDevice",
@@ -581,9 +601,15 @@ def main() -> int:
         ],
         "native_createdevice_handoff_inherited_unchanged": True,
         "exact_00290895_split_inherited_unchanged": True,
+        "d3d_sync_checkpoint_support": {
+            "upstream_semantics": "diagnostic-only; default path returns immediately when trace env is unset",
+            "xbox360_semantics": "guest/device no-op with host-only call counter",
+            "required_for_root": True,
+        },
         "authoritative_result": (
             "s_phase6ahRootEntered && s_phase6agRootEntered && "
-            "s_phase6afCreateDeviceBridgeCount != 0"
+            "s_phase6afCreateDeviceBridgeCount != 0 && "
+            "s_phase6ahD3DSyncCheckpointCalls != 0"
         ),
         "legacy_cos_result_non_authoritative": True,
         "source_layout": source_layout,
@@ -613,6 +639,7 @@ def main() -> int:
     print(f"[Phase6AH] Saturation retained new members: {len(saturation_new)}")
     print(f"[Phase6AH] Saturation fallback root-only: {int(saturation_fallback)}")
     print(f"[Phase6AH] Remaining direct frontiers: {len(final_frontiers)}")
+    print("[Phase6AH] D3D sync checkpoint: maintained diagnostic-only no-op")
     print("[Phase6AH] Native CreateDevice + exact 00290895: inherited unchanged")
     print("[Phase6AH] Purple remains reserved for genuine NV2A MMIO/VRAM")
     print("[Phase6AH] EMIT RESULT: PASS")
