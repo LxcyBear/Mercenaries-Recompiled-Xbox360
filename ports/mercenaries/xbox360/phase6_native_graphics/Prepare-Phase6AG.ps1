@@ -82,7 +82,56 @@ function Test-Phase6AGExactRoot {
     )
     foreach ($row in $rows) {
         $startText = ([string]$row.start).Trim()
-        if ($startText -match '^0x[0-9A-Fa-f]+
+        if ($startText -match '^0x[0-9A-Fa-f]+$') {
+            $startValue = [Convert]::ToUInt32($startText.Substring(2), 16)
+        }
+        else {
+            $startValue = [uint32]$startText
+        }
+
+        if ($startValue -eq 0x00290895) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+$manualSeedText = Get-Content -LiteralPath $manualSeeds -Raw
+if ($manualSeedText -notmatch '"0x00290895"') {
+    throw "Phase 6AG reviewed manual seed 0x00290895 is missing"
+}
+
+if (-not (Test-Phase6AGExactRoot)) {
+    Write-Host ""
+    Write-Host "[Phase6AG] Cached Phase-3 function inventory still owns 00290895 inside sub_00290887."
+    Write-Host "[Phase6AG] Regenerating the isolated Phase-3 analysis/generated tree using the reviewed hardware seed..."
+    Write-Host "[Phase6AG] This is analysis regeneration only; VS2017 has not started yet."
+
+    & $phase3nPrep
+
+    if (-not (Test-Phase6AGExactRoot)) {
+        throw "Phase 6AG regeneration did not promote 0x00290895 to an exact function entry"
+    }
+
+    $generatedHit = @(
+        Select-String -Path (Join-Path $generatedRoot "recomp_*.c") `
+            -SimpleMatch "void sub_00290895(void)" -List `
+            -ErrorAction SilentlyContinue
+    )
+    if ($generatedHit.Count -lt 1) {
+        throw "Phase 6AG regenerated function inventory contains 0x00290895 but no generated sub_00290895 body was found"
+    }
+
+    Write-Host "[Phase6AG] ENTRY REGENERATION: PASS - 00290895 is now an exact generated function entry."
+}
+
+$baseManifest = Get-Content -LiteralPath $baseManifestPath -Raw | ConvertFrom-Json
+if ($baseManifest.phase -ne "6AF" -or
+    $baseManifest.build_tag -ne "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B") {
+    throw "Phase 6AG Phase 6AF-B baseline identity mismatch"
+}
+
 $af = $baseManifest.phase6af_native_d3d_createdevice_handoff
 if (-not [bool]$af.phase6ae_hardware_pass -or
     $af.native_handoff.guest_device_identity -ne "0x00299380" -or
@@ -187,7 +236,7 @@ if ($policyMatch.Groups[1].Value.Length -gt 240) {
 }
 
 foreach ($marker in @(
-    "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-A",
+    "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B",
     "case 0x00290895u:",
     "s_phase6agRootEntered = 1;",
     "PASS: Phase 6AG retail D3D root 00290895 entered",
@@ -239,7 +288,7 @@ Write-Host ("[Phase6AG] Packed new D3D members : {0}" -f [int]$ag.packed_new_mem
 Write-Host ("[Phase6AG] Pruned unsafe members   : {0}" -f [int]$ag.pruned_members)
 Write-Host "[Phase6AG] Native CreateDevice     : inherited unchanged"
 Write-Host "[Phase6AG] D3D root                : 00290895 exact/generated/support-clean"
-Write-Host "[Phase6AG] Expected tag            : P6AG-D3D-NEIGHBORHOOD-00290895-20261023-A"
+Write-Host "[Phase6AG] Expected tag            : P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -249,7 +298,7 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-A"
+        ExpectedBuildTag = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
         ExpectedEnvCookie = "phase6ag_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
@@ -263,7 +312,7 @@ if (-not $SkipSolutionBuild) {
 
     Write-Host ""
     Write-Host "[Phase6AG] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AG] Hardware tag to verify: P6AG-D3D-NEIGHBORHOOD-00290895-20261023-A"
+    Write-Host "[Phase6AG] Hardware tag to verify: P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
     Write-Host ("[Phase6AG] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AG-B.xex"))
 }
 else {
@@ -420,7 +469,7 @@ if ($policyMatch.Groups[1].Value.Length -gt 240) {
 }
 
 foreach ($marker in @(
-    "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-A",
+    "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B",
     "case 0x00290895u:",
     "s_phase6agRootEntered = 1;",
     "PASS: Phase 6AG retail D3D root 00290895 entered",
@@ -472,7 +521,7 @@ Write-Host ("[Phase6AG] Packed new D3D members : {0}" -f [int]$ag.packed_new_mem
 Write-Host ("[Phase6AG] Pruned unsafe members   : {0}" -f [int]$ag.pruned_members)
 Write-Host "[Phase6AG] Native CreateDevice     : inherited unchanged"
 Write-Host "[Phase6AG] D3D root                : 00290895 exact/generated/support-clean"
-Write-Host "[Phase6AG] Expected tag            : P6AG-D3D-NEIGHBORHOOD-00290895-20261023-A"
+Write-Host "[Phase6AG] Expected tag            : P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -482,7 +531,7 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-A"
+        ExpectedBuildTag = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
         ExpectedEnvCookie = "phase6ag_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
@@ -496,7 +545,7 @@ if (-not $SkipSolutionBuild) {
 
     Write-Host ""
     Write-Host "[Phase6AG] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AG] Hardware tag to verify: P6AG-D3D-NEIGHBORHOOD-00290895-20261023-A"
+    Write-Host "[Phase6AG] Hardware tag to verify: P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
     Write-Host ("[Phase6AG] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AG-B.xex"))
 }
 else {
