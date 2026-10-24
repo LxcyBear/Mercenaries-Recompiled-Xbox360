@@ -247,7 +247,7 @@ def main() -> int:
     required = (
         BASE_TAG,
         COOKIE_OLD,
-        "P6BK PFIFO WRITE32 addr=FD003220",
+        "P6BK PFIFO WRITE32 addr=%08X value=%08X count=%u",
         "phase6be_pfifo_idle_write32(address, value)",
         "phase6bj_pfb_zcomp_write32",
         "phase6bg_pfb_tile_write32",
