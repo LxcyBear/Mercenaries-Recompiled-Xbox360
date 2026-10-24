@@ -232,37 +232,56 @@ def patch_idex_data_export(text: str) -> str:
 def patch_live_idex_trace(text: str, base) -> str:
     body, start, end = find_function(text, base, "sub_0022AC56")
 
+    # sub_0022AC56 contains more than one load from thunk slot 0x002DBDBC.
+    # Hardware 6BX identified the live one unambiguously: it executes in the
+    # translated block whose budget tick is 0x0022AC8F, immediately before the
+    # faulting GUEST_READ32(edx). Instrument only that proven occurrence.
+    tick = "PHASE4C_BUDGET_TICK(0x0022AC8Fu)"
+    tick_pos = body.find(tick)
+    if tick_pos < 0:
+        raise SystemExit("[Phase6BY] hardware-proven 0022AC8F block tick missing")
+
+    next_tick_pos = body.find("PHASE4C_BUDGET_TICK(", tick_pos + len(tick))
+
     load_slot = "    edx = GUEST_READ32(0x2DBDBC);\n"
-    if body.count(load_slot) != 1:
+    load_pos = body.find(load_slot, tick_pos)
+    if load_pos < 0 or (next_tick_pos >= 0 and load_pos >= next_tick_pos):
         raise SystemExit(
-            f"[Phase6BY] expected one Idex thunk load in sub_0022AC56, found {body.count(load_slot)}"
+            "[Phase6BY] 0022AC8F block does not contain the proven Idex thunk load"
         )
-    body = body.replace(
-        load_slot,
+
+    thunk_trace = (
         load_slot
         + "    if (!s_accessFault)\n"
         + "    {\n"
         + "        char p6byIdexLine[256];\n"
         + "        sprintf(p6byIdexLine, \"P6BY IDEX LIVE THUNK: slot=002DBDBC value=%08X expected_slot=0087E0A0\", (unsigned int)edx);\n"
         + "        trace(p6byIdexLine);\n"
-        + "    }\n",
-        1,
+        + "    }\n"
     )
+    body = body[:load_pos] + thunk_trace + body[load_pos + len(load_slot):]
 
+    # Recompute the block boundary after insertion, then instrument the first
+    # exported-pointer dereference in the same 0x0022AC8F block.
+    tick_pos = body.find(tick)
+    next_tick_pos = body.find("PHASE4C_BUDGET_TICK(", tick_pos + len(tick))
     deref = "    ecx = GUEST_READ32(edx);\n"
-    if body.count(deref) < 1:
-        raise SystemExit("[Phase6BY] Idex exported-pointer dereference missing")
-    body = body.replace(
-        deref,
+    deref_pos = body.find(deref, tick_pos)
+    if deref_pos < 0 or (next_tick_pos >= 0 and deref_pos >= next_tick_pos):
+        raise SystemExit(
+            "[Phase6BY] 0022AC8F block does not contain the proven Idex exported-pointer dereference"
+        )
+
+    object_trace = (
         deref
         + "    if (!s_accessFault)\n"
         + "    {\n"
         + "        char p6byIdexObjectLine[256];\n"
         + "        sprintf(p6byIdexObjectLine, \"P6BY IDEX LIVE OBJECT: pointer_slot=%08X object=%08X expected_object=0087E0A4\", (unsigned int)edx, (unsigned int)ecx);\n"
         + "        trace(p6byIdexObjectLine);\n"
-        + "    }\n",
-        1,
+        + "    }\n"
     )
+    body = body[:deref_pos] + object_trace + body[deref_pos + len(deref):]
 
     return text[:start] + body + text[end:]
 
