@@ -80,8 +80,10 @@ if($a.translated_membership_changed-ne$false-or
 $text=Get-Content $mono -Raw
 foreach($marker in @(
   "caller == 0x0023A3CEu",
-  "PASS: Phase 6BP RtlInitAnsiString caller %08X saved-ESP repair",
-  "P6BP RTLANSI A3CE REPAIR: count=%u",
+  "(caller == 0x0022A7A4u || caller == 0x0023A3CEu)",
+  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairCount;",
+  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairExtra;",
+  "static uint32_t s_phase5ayRtlInitAnsiSavedEspRepairLastResumeEsp;",
   "P6BP POST-XGRPH FRONTIER 00209810:",
   "P6BP PBL CHECKPOINT:",
   "phase6bp_env_build_cookie",
