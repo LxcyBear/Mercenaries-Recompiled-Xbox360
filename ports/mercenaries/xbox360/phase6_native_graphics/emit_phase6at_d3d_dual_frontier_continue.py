@@ -570,11 +570,12 @@ def main() -> int:
     main_text = patch_init_active(main_text)
     main_text = reset_state(main_text)
     main_text = install_summary(main_text)
+    main_text = install_debugger_banner(main_text)
 
     policy = (
         "Policy: inherit 6AR selective retail D3D init; during sub_0028F9E0 "
         "only, let proven ordinal-166 full-range contiguous requests trim the "
-        "current free heap tail after normal allocation fails; emit X360DebuggerWV live-address banner; keep all fences hard"
+        "current free heap tail after normal allocation fails; emit debugger address banner; keep all fences hard"
     )
     if len(policy) > 240:
         raise SystemExit("[Phase6AT] startup policy trace exceeds safe length")
@@ -604,6 +605,10 @@ def main() -> int:
         "post_init_tail_claim=%u",
         "P6AT D3D TAIL CLAIM:",
         "P6AT POST-CREATE D3D INIT:",
+        "P6AT X360DBG PPC1:",
+        "P6AT X360DBG GUESTREG:",
+        "P6AT X360DBG MEMORY1:",
+        "P6AT X360DBG MEMORY2:",
     )
     for marker in must:
         if marker not in main_text:
@@ -685,7 +690,8 @@ def main() -> int:
     print("[Phase6AT] Tail fallback scope  : active sub_0028F9E0 only")
     print("[Phase6AT] Ordinal shape        : 166 / full range / prot 00000404")
     print("[Phase6AT] Heap safety          : free-tail only / no live overlap")
-    print("[Phase6AT] X360DebuggerWV banner : live PPC/guest/memory addresses enabled")\n    print("[Phase6AT] KSEG/MMIO/VRAM       : unchanged / hard fenced")
+    print("[Phase6AT] X360DebuggerWV banner : live PPC/guest/memory addresses enabled")
+    print("[Phase6AT] KSEG/MMIO/VRAM       : unchanged / hard fenced")
     print("[Phase6AT] EMIT RESULT: PASS")
     return 0
 
