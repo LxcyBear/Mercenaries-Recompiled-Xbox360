@@ -1007,3 +1007,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   and the guest-device/native-Xenos device bridge. This lets hardware runs pair
   xbWatson lifecycle evidence with precise PPC breakpoints and live memory
   inspection without confusing guest VAs with native PPC addresses.
+
+- **Phase 6AT-B hardware - allocator repair PASS / next D3D frontier exposed:**
+  the post-CreateDevice 0x00258000 contiguous allocation now succeeds at
+  guest base 0x02628000, moving pageNext 0x02880000 -> 0x02628000. The prior
+  0x8007000E renderer-fatal is eliminated. Execution immediately reaches a
+  clean DIRECT_FRONTIER target 0x00292586 with fault=0. X360DebuggerWV runtime
+  bridge also passed and reported live PPC/data addresses, including
+  sub_0028F9E0=0x841EC6F0, tail_claim=0x820328D8, g_ram=0x40100030 and
+  guest-device host=0x403993B0.
+- **Phase 6AU-A active - D3D frontier 0x00292586:** validate the new target as
+  an exact generated function start, then pack a bounded depth-4/cap-256
+  support-clean closure over the hardware-proven 6AT allocator/debugger
+  baseline. Add a second X360DebuggerWV PPC banner for the newly packed root.
+  Refuse interior-entry redirects, unresolved helper guesses, and any
+  KSEG/NV2A/MMIO/VRAM or guest-fault fence relaxation.
