@@ -595,3 +595,16 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
 - **Phase 6AE-B active:** shorten the startup Policy trace to a bounded string,
   add emitter/prep guards rejecting an oversized policy trace, retain the same
   AV-family runtime semantics, and publish a distinctly named P6AE-B XEX.
+
+
+- **Phase 6AE-B hardware - PASS:** the bounded AV-family retry crossed the
+  hardware-observed ordinal 2 \`AvSendTVEncoderOption@16\` frontier with the
+  exact +20 frame. The observed call was registerBase=0, option=9, param=1,
+  Result=NULL; it was treated as a non-query logical encoder write/no-op and
+  returned success. Ordinal 3 \`AvSetDisplayMode@24\` was not reached.
+  Native Xenos device creation remained PASS. Immediately afterward the retail
+  renderer recovery hook reported terminal stage 3 with HRESULT \`0x8007000E\`
+  (E_OUTOFMEMORY) at esp \`0x008BF99C\`, producing a clean
+  \`RENDERER_FATAL\` boundary with fault=0. Phase harness result PASS, XAPI
+  return 0. The next frontier is therefore the retail CreateDevice/recovery
+  path rather than the AV bridge.
