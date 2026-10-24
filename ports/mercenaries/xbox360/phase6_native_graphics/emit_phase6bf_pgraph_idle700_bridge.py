@@ -75,7 +75,7 @@ static DWORD s_phase6bfPgraph700Read32Count = 0u;
 
 def patch_pgraph_wait_function(text: str, label: str) -> str:
     m = re.search(
-        r"(static\s+void\s+sub_0029528C\s*\(\s*void\s*\)\s*\{.*?\n\})",
+        r"((?:static\s+)?void\s+sub_0029528C\s*\(\s*void\s*\)\s*\{.*?\n\})",
         text,
         re.S | re.I,
     )
