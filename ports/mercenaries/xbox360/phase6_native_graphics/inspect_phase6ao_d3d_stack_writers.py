@@ -14,6 +14,7 @@ No source is modified and no XEX is built.
 from __future__ import annotations
 
 import argparse
+import bisect
 import importlib.util
 import json
 import re
@@ -71,16 +72,29 @@ def main() -> int:
     masked = base.mask_noncode(text)
     lines = text.splitlines()
 
+    # Precompute newline offsets once. Repeated text.count(..., 0, pos) calls
+    # over this multi-megabyte translation unit turn a simple function scan into
+    # quadratic work.
+    newline_offsets = [i for i, ch in enumerate(text) if ch == "\n"]
+
     funcs = []
-    for m in base.FUNC_RE.finditer(masked):
+    matches = list(base.FUNC_RE.finditer(masked))
+    total_matches = len(matches)
+    print(f"[Phase6AO] Function index      : {total_matches} translated definitions", flush=True)
+    for idx, m in enumerate(matches, start=1):
         brace = masked.find("{", m.start(), m.end())
         if brace < 0:
             continue
         end = base.closing_brace(masked, brace)
         name = m.group(1)
-        start_line = text.count("\n", 0, m.start()) + 1
-        end_line = text.count("\n", 0, end) + 1
+        start_line = bisect.bisect_right(newline_offsets, m.start()) + 1
+        end_line = bisect.bisect_right(newline_offsets, end) + 1
         funcs.append((m.start(), end, name, start_line, end_line))
+        if idx % 5000 == 0 or idx == total_matches:
+            print(
+                f"[Phase6AO] Index progress      : {idx}/{total_matches}",
+                flush=True,
+            )
 
     refs = []
     writes = []
@@ -94,7 +108,8 @@ def main() -> int:
             f"0x{DEVICE + off:08X}", f"0x{DEVICE + off:08x}",
         ]
 
-    for start, end, name, start_line, end_line in funcs:
+    total_funcs = len(funcs)
+    for func_idx, (start, end, name, start_line, end_line) in enumerate(funcs, start=1):
         body = text[start:end]
         body_lines = body.splitlines()
         body_abs_start = start_line
@@ -112,7 +127,6 @@ def main() -> int:
             })
 
         for i, line in enumerate(body_lines, start=body_abs_start):
-            compact = line.replace(" ", "")
             for off, tokens in offset_tokens.items():
                 if any(tok.lower() in line.lower() for tok in tokens):
                     row = {
@@ -138,6 +152,12 @@ def main() -> int:
                     "kind": classify_line(line),
                     "source": line.strip(),
                 })
+
+        if func_idx % 5000 == 0 or func_idx == total_funcs:
+            print(
+                f"[Phase6AO] Audit progress      : {func_idx}/{total_funcs}",
+                flush=True,
+            )
 
     # Also capture non-function/global occurrences for exact absolute addresses.
     global_hits = []
