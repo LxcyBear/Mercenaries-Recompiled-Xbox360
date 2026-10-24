@@ -3431,4 +3431,5 @@ their respective owners. This is an unofficial fan project.
 - **6AH-D — HARDWARE PASS:** native CreateDevice, prior `0x00290895`, new `0x0028E700`, and six D3D-sync checkpoints all passed. The next boundary is an orange guest fault: READ32 `0x80000004` with EAX=`0x80000000`; the first KSEG page remains deliberately fenced.
 - **6AI-A — FORENSIC PASS:** proved `loc_0028E7AE` itself is only the return path, so the fault is in its predecessor window.
 - **6AI-B — PREP REGEX INVALID:** predecessor-window scan hit an over-escaped Python raw regex; no build/XEX occurred.
-- **6AI-C — ACTIVE FORENSIC:** corrected and precompiled both EAX+4 and generic +4 source matchers, then scan the pre-E7AE window without touching KSEG semantics.
+- **6AI-C — FORENSIC PASS:** the pre-E7AE window contains no literal EAX+4 access; `loc_0028E7AE` is only POP/RET, while the root's first relevant internal-device read is `GUEST_READ32(esi + 0x1C20)`.
+- **6AI-D — ACTIVE BUILD:** restore the retail XDK current-device side effect by publishing successful guest device `0x00299380` to internal global `0x00299378` as well as public CreateDevice output `0x007AD604`. Readback and root-local `this/+0x1C20` proof are required; KSEG/MMIO/VRAM fences remain unchanged.
