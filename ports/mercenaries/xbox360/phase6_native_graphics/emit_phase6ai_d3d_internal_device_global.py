@@ -174,15 +174,32 @@ def patch_createdevice_publish(main_text: str) -> str:
 def instrument_root_input(main_text: str, base) -> str:
     signature = "static void sub_0028E700(void)"
     masked = base.mask_noncode(main_text)
-    pos = masked.find(signature)
-    if pos < 0:
-        raise SystemExit("[Phase6AI] exact sub_0028E700 body missing")
-    if masked.find(signature, pos + 1) >= 0:
-        raise SystemExit("[Phase6AI] multiple sub_0028E700 definitions found")
 
-    brace = masked.find("{", pos, pos + len(signature) + 8)
-    if brace < 0:
-        raise SystemExit("[Phase6AI] sub_0028E700 opening brace missing")
+    definitions = []
+    cursor = 0
+    while True:
+        pos = masked.find(signature, cursor)
+        if pos < 0:
+            break
+
+        after = pos + len(signature)
+        probe = after
+        while probe < len(masked) and masked[probe].isspace():
+            probe += 1
+
+        if probe < len(masked) and masked[probe] == "{":
+            definitions.append((pos, probe))
+
+        cursor = after
+
+    if not definitions:
+        raise SystemExit("[Phase6AI] exact sub_0028E700 body missing")
+    if len(definitions) != 1:
+        raise SystemExit(
+            f"[Phase6AI] expected one sub_0028E700 definition, found {len(definitions)}"
+        )
+
+    pos, brace = definitions[0]
     end = base.closing_brace(masked, brace)
 
     body = main_text[pos:end]
