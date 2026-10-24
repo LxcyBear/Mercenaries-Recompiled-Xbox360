@@ -668,3 +668,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   Phase-3 analysis/generated-tree gate before 6AG emission. It then requires
   0x00290895 to exist as an exact generated sub_00290895 body before the D3D
   neighborhood closure or VS2017 build can proceed.
+
+
+- **Phase 6AG-B prep - PARTIAL PASS / no build:** the protected hardware seed
+  successfully regenerated Phase-3 so 0x00290895 is now an exact generated
+  sub_00290895 (range 0x00290895-0x0029089B). The D3D neighborhood resolved to
+  one new root member plus three already-inherited local seeds. Emission then
+  stopped because the 6AG result-gate patch matched the 6AF CreateDevice
+  condition with fixed whitespace even though the generated multiline gate had
+  different indentation. No VS build or XEX was produced.
+- **Phase 6AG-C active:** result-gate edits are now token/regex based and
+  indentation-tolerant. Optional AV gates may already be absent; the mandatory
+  6AF CreateDevice token is located regardless of leading whitespace, and the
+  6AG root requirement is inserted with the same indentation. The successful
+  0x00290895 Phase-3 split is retained, so regeneration should be skipped on
+  the next prep run.
