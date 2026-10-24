@@ -85,13 +85,14 @@ def patch_pgraph_wait_function(text: str, label: str) -> str:
     body = m.group(1)
     pat = re.compile(r"GUEST_READ32\(([^()\n]*0x400700[^()\n]*)\)", re.I)
     hits = list(pat.finditer(body))
-    if len(hits) != 1:
+    if len(hits) != 2:
+        details = " | ".join(m.group(0) for m in hits) if hits else "<none>"
         raise SystemExit(
-            f"[Phase6BF] expected exactly one 0x400700 READ32 in sub_0029528C "
-            f"for {label}, found {len(hits)}"
+            f"[Phase6BF] expected exactly two 0x400700 READ32 sites in sub_0029528C "
+            f"for {label}, found {len(hits)}: {details}"
         )
 
-    body = pat.sub(r"phase6bf_pgraph_idle700_read32(\1)", body, count=1)
+    body = pat.sub(r"phase6bf_pgraph_idle700_read32(\1)", body)
     patched = text[:m.start()] + body + text[m.end():]
 
     if "phase6bf_pgraph_idle700_read32" not in body:
@@ -186,7 +187,7 @@ def main() -> int:
             "source_note": "XDK idle-status read at 0x700",
         },
         "bridge_value": "0x00000000",
-        "scope": "sub_0029528C exact 0xFD400700 READ32 while post-create init is active",
+        "scope": "both sub_0029528C +0x400700 READ32 source sites; runtime helper returns zero only for exact 0xFD400700 while post-create init is active",
         "all_other_mmio_fenced": True,
         "mmio_global_fence_changed": False,
         "vram_fence_changed": False,
@@ -202,7 +203,7 @@ def main() -> int:
 
     print("[Phase6BF] 6BE hardware: PFIFO idle wait completed")
     print("[Phase6BF] next boundary: READ32 FD400700 at sub_0029528C")
-    print("[Phase6BF] bridge PGRAPH offset 0x700 with backend-equivalent idle value 0")
+    print("[Phase6BF] patch both sub_0029528C +0x400700 source sites; runtime bridge answers exact FD400700 only")
     print("[Phase6BF] all other NV2A/MMIO/VRAM accesses remain fenced")
     print("[Phase6BF] allocator and 8M budget unchanged")
     print("[Phase6BF] EMIT RESULT: PASS")
