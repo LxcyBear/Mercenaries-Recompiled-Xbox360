@@ -844,3 +844,17 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   explicit EAX+4 reads or EAX=0x80000000 assignments. This is PC-only and
   intentionally builds no XEX until the post-D3D caller instruction producing
   the orange read is identified.
+
+- **Phase 6AK-A forensic - PASS / deferred caller disproven:** exact cached
+  `sub_0023A3CE` contains zero mentions/direct calls to `sub_0028E700`,
+  zero explicit EAX+4 reads, and zero EAX=`0x80000000` assignments. Its body
+  does contain ECX-relative accesses including `GUEST_READ32(ecx + 4)`, proving
+  the old deferred boundary caller is only the last traced function and is not
+  precise enough to identify the orange faulting instruction.
+- **Phase 6AL-A active - exact READ32 site probe:** wrap every translated
+  `GUEST_READ32` call site with a diagnostic shim that records translated
+  function VA, generated site id, address, and live registers. If the checked
+  guest-memory helper latches a fault, escape immediately from that exact site
+  instead of waiting for a later Phase4C budget tick. Guest memory routing,
+  KSEG fencing, D3D state, NV2A/MMIO/VRAM behavior, and read semantics remain
+  unchanged.
