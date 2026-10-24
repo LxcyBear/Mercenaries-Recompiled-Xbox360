@@ -765,3 +765,21 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   retains the maintained diagnostic-only \`recomp_d3d_sync_checkpoint\` support,
   requires its hardware call counter in the authoritative 6AH result, and
   publishes \`Mercenaries-PPC-Port-P6AH-D.xex\`.
+
+
+- **Phase 6AH-D hardware - PASS / orange next boundary:** native Xenos
+  CreateDevice PASSed again; exact prior root 0x00290895 entered; new retail
+  D3D root 0x0028E700 entered twice; maintained D3D-sync checkpoint executed
+  six times with last phase=3; authoritative \`PHASE 6AH D3D SATURATION RESULT\`
+  reported PASS. Execution then stopped at a new guest-memory boundary:
+  READ32 0x80000004 with EAX=0x80000000, ESP=saved_ESP=0x008BF974,
+  caller=0x0023A3CE. This is an orange guest fault, not an NV2A purple hit.
+  The first KSEG page 0x80000000-0x80000FFF is deliberately fenced, so do not
+  globally map 0x80000004 to physical RAM.
+- **Phase 6AI-A active - E7AE forensic preflight:** inspect the exact cached
+  6AH-D translated \`sub_0028E700\` body on the user's machine and extract the
+  \`loc_0028E7AE\` block plus memory expressions. Hardware checkpoint evidence
+  places the fault after sync phase 3 and before phase 4, so this local source
+  block is the narrow target. 6AI-A intentionally does not invoke VS2017 or
+  build an XEX; it refuses to change KSEG/memory semantics until the exact
+  faulting expression and register provenance are visible.
