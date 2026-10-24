@@ -119,7 +119,7 @@ foreach ($f in @($main,$monolithic,$env,$manifest,$shardDir)) {
 
 $m = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($m.phase -ne "6AF" -or
-    $m.build_tag -ne "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-A") {
+    $m.build_tag -ne "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B") {
     throw "Phase 6AF manifest identity mismatch"
 }
 
@@ -149,9 +149,11 @@ if ($policyMatch.Groups[1].Value.Length -gt 240) {
 }
 
 foreach ($marker in @(
-    "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-A",
+    "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B",
     "static void sub_0028CAA0(void)",
     "PASS: Phase 6AF native D3D CreateDevice handoff",
+    "static int phase6af_native_xenos_ready(void)",
+    "return s_phase6bXenosReady && s_phase6bXenosDevice != NULL;",
     "s_phase6afCreateDeviceBridgeCount != 0u &&",
     "P6AF D3D DEVICE:",
     "P6AF AV FAMILY:",
@@ -175,6 +177,11 @@ if ($createDeviceDefs.Count -ne 1) {
     throw "Phase 6AF expected exactly one sub_0028CAA0 definition, found $($createDeviceDefs.Count)"
 }
 
+$xenosReadyDefs = [regex]::Matches($monolithicText, 'static int phase6af_native_xenos_ready\(void\)\s*\{')
+if ($xenosReadyDefs.Count -ne 1) {
+    throw "Phase 6AF expected exactly one native-Xenos readiness helper definition, found $($xenosReadyDefs.Count)"
+}
+
 $shards = @(Get-ChildItem -LiteralPath $shardDir -Filter "*.inl" -File)
 if ($shards.Count -lt 1) {
     throw "Phase 6AF translated shard output is empty"
@@ -190,7 +197,7 @@ Write-Host ("[Phase6AF] Generated shards    : {0}" -f $shards.Count)
 Write-Host "[Phase6AF] CreateDevice bridge : exact sub_0028CAA0 -> native-Xenos logical handoff"
 Write-Host "[Phase6AF] Guest device        : 00299380"
 Write-Host "[Phase6AF] Renderer recovery   : expected to avoid terminal 8007000E if handoff is accepted"
-Write-Host "[Phase6AF] Expected tag        : P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-A"
+Write-Host "[Phase6AF] Expected tag        : P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B"
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -200,22 +207,22 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-A"
+        ExpectedBuildTag = "P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B"
         ExpectedEnvCookie = "phase6af_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
         Platform = $Platform
         CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6af-vs2017-clean.log")
         BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6af-vs2017-build.log")
-        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AF.xex")
+        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AF-B.xex")
     }
 
     & $paths.build @buildArgs
 
     Write-Host ""
     Write-Host "[Phase6AF] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AF] Hardware tag to verify: P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-A"
-    Write-Host ("[Phase6AF] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AF.xex"))
+    Write-Host "[Phase6AF] Hardware tag to verify: P6AF-NATIVE-D3D-CREATEDEVICE-HANDOFF-20261023-B"
+    Write-Host ("[Phase6AF] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AF-B.xex"))
 }
 else {
     Write-Host "[Phase6AF] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
