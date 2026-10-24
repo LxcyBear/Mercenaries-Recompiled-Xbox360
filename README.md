@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 24, 2026 · **Current focus:** Phase 6 — native Xbox 360 graphics (Xenos). The native Xenos device/backbuffer/present path is hardware-proven. Phase 6BD restored the retail D3D child NV2A base (`0xFD000000`) and produced the first genuine guest NV2A MMIO touch at `0xFD003214`; the diagnostic display turned **purple** exactly at that hardware-facing boundary. Phase 6BE then bridged only the proven PFIFO idle/quiescence reads, escaped the prior wait loop, and advanced to a new faulting PGRAPH read at `0xFD400700`. Phase 6BF is prepared to bridge only that backend-equivalent PGRAPH idle-status read while leaving all other MMIO/VRAM accesses fenced. No Mercenaries-rendered frame has appeared yet.
+> **Last roadmap review:** October 24, 2026 · **Current focus:** Phase 6 — native Xbox 360 graphics (Xenos). Phase 6BD produced the first genuine guest NV2A MMIO touch and the reserved **purple** diagnostic. Phase 6BE crossed the PFIFO idle/quiescence wait. Phase 6BF is now hardware-proven: the exact PGRAPH idle-status read at `0xFD400700` was bridged twice, translated D3D performed a second 1,228,800-byte contiguous graphics allocation at `0x024FC000`, and execution advanced into PFB tiled-memory setup. The current hard boundary is WRITE32 `0xFD100254`, identified as tile #1 LIMIT with value `0x02627FFF`, exactly the inclusive end of that allocation. Phase 6BG is prepared to shadow only documented PFB tile base/limit/pitch state while leaving all other MMIO/VRAM fenced. No Mercenaries-rendered frame has appeared yet.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -57,7 +57,7 @@ Each phase has independently checkable checkpoints below.
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
 | **5 — Subsystem bring-up under native game execution** | **COMPLETE — repeatability 3/3 PASS + exit reconnaissance READY/PASS** | Stable translated/runtime path, classified endpoint, subsystem inventory, first-touch baseline, risk map and ordered Phase-6 handoff |
-| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — native Xenos presentation proven; first genuine guest NV2A MMIO touch proven (purple); PFIFO idle wait crossed; current frontier READ32 `0xFD400700` in PGRAPH** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
+| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — native Xenos presentation proven; first genuine NV2A MMIO touch proven (purple); PFIFO + PGRAPH idle gates crossed; current frontier WRITE32 `0xFD100254` in PFB tile setup** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
 | 7 — Audio, movies, input and streaming integration | Not started | Functional startup media/menu audio/input with stable timing and storage streaming |
 | 8 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -80,7 +80,7 @@ ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
 Phase 6BD proved the missing retail child-context relationship: `D3DState 0x00299380 + 0x1C28 = 0x0029AFA8`, and the retail constructor helper `sub_00291F31` initializes that child object's first dword to the NV2A BAR0 base `0xFD000000`. Restoring only that proven field caused the first real guest GPU access, READ8 `0xFD003214`, and the hardware diagnostic turned **purple**. Phase 6BE then supplied only the existing-backend PFIFO idle semantics for `FD003214`, `FD002400`, and `FD003220`; the translated wait completed and execution advanced to READ32 `0xFD400700` at translated function `0x0029528C`.
 
-The immediate blocker is therefore no longer a null D3D child context or an opaque spin. It is the next explicit NV2A/PGRAPH register read. Phase 6BF is prepared to return the backend-equivalent zero value for exactly `FD400700` while preserving the hard fence for every other NV2A/MMIO/VRAM address.
+The immediate blocker is therefore no longer a null D3D child context, PFIFO spin, or PGRAPH idle poll. Phase 6BF crossed `FD400700` twice and exposed a real PFB tiled-memory programming write: WRITE32 `0xFD100254 = 0x02627FFF`. That address is tile #1 LIMIT, and the value exactly matches the inclusive end of the newly allocated `0x024FC000..0x02627FFF` graphics range. Phase 6BG is prepared to preserve the documented PFB tile base/limit/pitch fields as shadowed state inside the exact retail tile-setup path, while every unrelated NV2A/MMIO/VRAM address remains hard-fenced.
 ### Current Phase-6 hardware map
 
 - **6W/6X:** reached and crossed retail graphics-pool root `0x0020F9C0`.
@@ -133,11 +133,9 @@ The immediate blocker is therefore no longer a null D3D child context or an opaq
   `FD003214 -> 0x10`, `FD002400 -> 0x10`, and `FD003220 -> 0`
   (including the zero clear). The PFIFO wait completed and the next hard
   boundary became READ32 `0xFD400700` at `sub_0029528C`.
-- **6BF — PREPARED / hardware test pending:** bridge only the exact
-  `FD400700` PGRAPH idle-status read with backend-equivalent value zero.
-  All other NV2A/MMIO/VRAM accesses remain fenced.
+- **6BF — hardware PASS:** the exact PGRAPH `FD400700` idle-status read returned backend-equivalent zero twice. Retail D3D then allocated another 1,228,800-byte contiguous block at `0x024FC000` and advanced to WRITE32 `0xFD100254` with `EDX=0x02627FFF`. The final VA ring reached `0x00292618`.\n- **6BG — PREPARED / hardware test pending:** bridge only the documented PFB tile base/limit/pitch dwords used by `sub_00292586` as shadowed register state, including readback; all unrelated MMIO/VRAM remains fenced.
 
-The immediate hardware goal is Phase 6BF: cross the hardware-proven PGRAPH read at `0xFD400700` without widening the MMIO/VRAM fence, then capture the next genuine GPU operation. From this point forward, each bridge must be justified by either the maintained NV2A backend or direct retail/oracle evidence. The next major visual milestone is the first **Mercenaries-generated pixel/frame**; purple is now reserved and hardware-proven as the "real NV2A boundary reached" diagnostic.
+The immediate hardware goal is Phase 6BG: preserve the retail PFB tile descriptor programmed by `sub_00292586`, beginning with tile #1 LIMIT `FD100254=02627FFF` and the immediately adjacent pitch write expected at `FD100258` (`0xA00` observed in ECX), then capture the next unsupported GPU operation. The next major visual milestone remains the first **Mercenaries-generated pixel/frame**; purple remains the hardware-proven "real NV2A boundary reached" diagnostic.
 
 ### Immediate next tests
 
@@ -628,8 +626,7 @@ The immediate hardware goal is Phase 6BF: cross the hardware-proven PGRAPH read 
 - **Phase 6BE hardware PASS:** the exact PFIFO idle loop was bridged using the
   maintained NV2A backend's semantics. The wait exited and the next boundary
   advanced to READ32 `0xFD400700` at `sub_0029528C`.
-- **Phase 6BF:** prepared to bridge exactly that PGRAPH idle-status read with
-  value zero; no broader MMIO emulation or fence relaxation is allowed.
+- **Phase 6BF hardware PASS:** `FD400700` was bridged twice with value zero; translated execution continued through `0x002952C8 -> 0x00292618`, performed a second 1.2 MiB graphics allocation, and reached WRITE32 `FD100254`.\n- **Phase 6BG:** prepared to shadow only documented PFB tile base/limit/pitch fields in the exact `sub_00292586` tile-setup path; no global MMIO emulation or fence relaxation is allowed.
 - No game-rendered frame is claimed yet. The next major milestone is first
   Mercenaries-generated pixels.
 
