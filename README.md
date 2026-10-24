@@ -3432,4 +3432,5 @@ their respective owners. This is an unofficial fan project.
 - **6AI-A — FORENSIC PASS:** proved `loc_0028E7AE` itself is only the return path, so the fault is in its predecessor window.
 - **6AI-B — PREP REGEX INVALID:** predecessor-window scan hit an over-escaped Python raw regex; no build/XEX occurred.
 - **6AI-C — FORENSIC PASS:** the pre-E7AE window contains no literal EAX+4 access; `loc_0028E7AE` is only POP/RET, while the root's first relevant internal-device read is `GUEST_READ32(esi + 0x1C20)`.
-- **6AI-D — ACTIVE BUILD:** restore the retail XDK current-device side effect by publishing successful guest device `0x00299380` to internal global `0x00299378` as well as public CreateDevice output `0x007AD604`. Readback and root-local `this/+0x1C20` proof are required; KSEG/MMIO/VRAM fences remain unchanged.
+- **6AI-D — HARDWARE PASS:** internal current-device publication is proven: root `this=0x00299380`, internal global `0x00299378=0x00299380`, and `this+0x1C20=0x0029AFA0`. Orange READ32 `0x80000004` still occurs, so the publication fix is correct but not the fault source.
+- **6AJ-A — ACTIVE PROBE:** add a diagnostic-only source-step latch around `sub_0028E700` and report the active step from the guest-fault handler; no guest/D3D/KSEG/MMIO semantics change.
