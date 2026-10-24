@@ -46,6 +46,22 @@ static uint32_t s_phase6bjPfbZcompOffsetShadow = 0u;
 """
     text = replace_once(text, state_old, state_new, "PGRAPH shadow state anchor")
 
+    proto_anchor = "static void phase6bh_pgraph_scoped_write32(uint32_t address, uint32_t value)\n"
+    prototypes = r'''static bool phase6bj_pfb_zcomp_address(
+    uint32_t address,
+    uint32_t *tile_index,
+    bool *is_offset);
+static void phase6bj_pfb_zcomp_write32(uint32_t address, uint32_t value);
+static uint32_t phase6bj_pfb_zcomp_read32(uint32_t address);
+
+'''
+    text = replace_once(
+        text,
+        proto_anchor,
+        prototypes + proto_anchor,
+        "Phase 6BH PGRAPH wrapper declaration anchor",
+    )
+
     helper_anchor = "static void phase4c_budget_tick(DWORD va)\n"
     helper = r'''static bool phase6bj_pfb_zcomp_address(
     uint32_t address,
