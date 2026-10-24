@@ -945,3 +945,21 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   on every path function. The goal is to separate required guest D3D object
   initialization from original Xbox/NV2A hardware work before restoring any
   post-CreateDevice semantics.
+
+- **Phase 6AQ-A forensic - PASS / direct initializer edge proven:** bounded call
+  graph reaches the sole +0x1A10 writer in one edge:
+  sub_0028FF80 -> sub_0028F9E0. Immediately before the call, 0028FF80 loads
+  its first argument (the original CreateDevice presentation-parameters
+  pointer), pushes it, sets ECX to the guest device, and directly invokes
+  sub_0028F9E0. The parent 0028FF80 also contains original-Xbox absolute
+  writes to 0x80000000, including a DEADBEEF marker, so restoring it wholesale
+  is rejected.
+- **Phase 6AR-A active - selective retail post-Create state repair:** keep the
+  proven native-Xenos CreateDevice and 0x00299378 internal-device publication,
+  then invoke only sub_0028F9E0 with the exact retail ABI
+  (ECX=0x00299380, arg1=live CreateDevice pp). Validate guest stack balance,
+  nonnegative HRESULT, nonzero +0x1A10 count and nonzero +0x1A14 first entry
+  before allowing translated D3D to continue. Emitter preflights all nine
+  immediate helper callees and refuses the build if any contains a literal
+  absolute guest write at >=0x80000000. Parent 0028FF80 remains bypassed and
+  all KSEG/NV2A/MMIO/VRAM fences remain hard.
