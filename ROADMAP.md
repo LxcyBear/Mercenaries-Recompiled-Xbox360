@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO idle wait crossed; current PGRAPH frontier `0xFD400700` |
+| 6 — Native Xenos graphics | **In progress** | Native Xenos presentation proven; first genuine guest NV2A MMIO touch proven; PFIFO and PGRAPH idle gates crossed; current PFB tile frontier WRITE32 `0xFD100254` |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -49,7 +49,7 @@ The graphics path has moved from speculative initialization debugging into the r
   - `FD003220 -> 0x00` — DMA pusher idle/state clear
   - zero clear of `FD003220` accepted
 - After the PFIFO wait completed, translated execution advanced through `002922BE -> 002922D9 -> 0029259D -> 00292610 -> 0029528C`.
-- The current hard graphics boundary is **READ32 `0xFD400700`**, a PGRAPH-side idle/status access.
+- **Phase 6BF — hardware PASS:** `FD400700` was bridged twice with backend-equivalent zero. Retail D3D then allocated 1,228,800 bytes at `0x024FC000` and advanced to WRITE32 `0xFD100254`.\n- `FD100254` is PFB tile #1 LIMIT. The written value `0x02627FFF` exactly equals `0x024FC000 + 1,228,800 - 1`. The adjacent tile pitch source value observed in ECX is `0x00000A00`.
 
 ### Current next step — Phase 6BF
 
