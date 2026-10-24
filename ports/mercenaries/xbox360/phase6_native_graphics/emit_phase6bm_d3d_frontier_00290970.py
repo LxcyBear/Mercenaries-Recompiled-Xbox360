@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Phase 6BM: cross the clean post-6BL DIRECT_FRONTIER at 0x00290970.
+"""Phase 6BM: cross the clean post-6BL D3D DIRECT_FRONTIER 0x00290970.
 
-6BL hardware proved:
-  * the bounded closure rooted at 0x0028B180 entered successfully;
-  * all inherited PFIFO/PFB/ZCOMP/PGRAPH semantics remained coherent;
-  * retail D3D root 0x00290895, internal D3D device and sync summaries stayed PASS;
-  * execution advanced to a clean DIRECT_FRONTIER target 0x00290970 with fault=0.
-
-This phase preserves every 6BL graphics semantic bridge and hard fence, then
-packs a bounded support-clean translated closure rooted at exact generated
-function start 0x00290970.
+6BL hardware proved that the bounded 0x0028B180 closure entered, all inherited
+GPU bridge semantics stayed coherent, and execution advanced to exact generated
+function start 0x00290970 with fault=0. This phase adds a bounded depth-4,
+cap-256 support-clean closure rooted at 0x00290970. It does not widen PFIFO,
+PFB, PGRAPH, MMIO, VRAM or allocator behavior.
 """
 from __future__ import annotations
 
@@ -18,13 +14,12 @@ import importlib.util
 import json
 from pathlib import Path
 
-BASE_TAG = "P6BL-D3D-FRONTIER-00290970-20261024-A"
+BASE_TAG = "P6BL-D3D-FRONTIER-0028B180-20261024-A"
 BUILD_TAG = "P6BM-D3D-FRONTIER-00290970-20261024-A"
 ROOT = 0x00290970
 ROOT_DEPTH = 4
 ROOT_CAP = 256
-SHARD_TARGET_CHARS = 750000
-COOKIE_OLD = "phase6bm_env_build_cookie"
+COOKIE_OLD = "phase6bl_env_build_cookie"
 COOKIE_NEW = "phase6bm_env_build_cookie"
 
 
@@ -44,48 +39,10 @@ def replace_unique(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def replace_policy_line(text: str, policy: str) -> str:
-    marker = 'trace("Policy:'
-    start = text.find(marker)
-    if start < 0:
-        raise SystemExit("[Phase6BM] runtime Policy trace missing")
-    if text.find(marker, start + 1) >= 0:
-        raise SystemExit("[Phase6BM] multiple runtime Policy traces found")
-    line_start = text.rfind("\n", 0, start) + 1
-    line_end = text.find("\n", start)
-    if line_end < 0:
-        line_end = len(text)
-    indent = text[line_start:start]
-    return text[:line_start] + indent + 'trace("' + policy + '");' + text[line_end:]
-
-
-def validate_exact(root: int, by_va: dict, generated: dict) -> None:
-    if root not in by_va:
-        hit = [
-            r for r in by_va.values()
-            if int(r["start"]) < root < int(r["end"])
-        ]
-        if hit:
-            row = sorted(hit, key=lambda x: int(x["start"]))[-1]
-            raise SystemExit(
-                f"[Phase6BM] target 0x{root:08X} is not an exact function start; "
-                f"containing function is 0x{int(row['start']):08X}-"
-                f"0x{int(row['end']):08X} {row['name']}. Refusing interior entry."
-            )
-        raise SystemExit(
-            f"[Phase6BM] target 0x{root:08X} is absent from function inventory"
-        )
-    if root not in generated:
-        raise SystemExit(
-            f"[Phase6BM] target 0x{root:08X} is exact function "
-            f"{by_va[root]['name']} but has no generated translated body"
-        )
-
-
 def install_state(main_text: str) -> str:
-    marker = "static DWORD s_phase6bmRootEntries = 0u;\n"
+    marker = "static DWORD s_phase6blRootEntries = 0u;\n"
     if marker not in main_text:
-        raise SystemExit("[Phase6BM] inherited Phase 6BL root-state anchor missing")
+        raise SystemExit("[Phase6BM] inherited 6BL root-state anchor missing")
     return main_text.replace(
         marker,
         marker + "static DWORD s_phase6bmRootEntries = 0u;\n",
@@ -112,7 +69,7 @@ def insert_summary(main_text: str) -> str:
         raise SystemExit("[Phase6BM] inherited 6BL frontier summary marker missing")
     stmt = main_text.rfind("sprintf(", 0, pos)
     if stmt < 0 or pos - stmt > 5000:
-        raise SystemExit("[Phase6BM] could not locate summary insertion point")
+        raise SystemExit("[Phase6BM] could not locate inherited summary block")
     line_start = main_text.rfind("\n", 0, stmt) + 1
     indent = main_text[line_start:stmt]
     block = (
@@ -125,94 +82,11 @@ def insert_summary(main_text: str) -> str:
     return main_text[:line_start] + block + main_text[line_start:]
 
 
-def write_sharded_main(out_dir: Path, main_text: str, base) -> dict:
-    off_marker = '#pragma optimize("", off)\n'
-    on_marker = '\n#pragma optimize("", on)'
-    off_pos = main_text.find(off_marker)
-    if off_pos < 0:
-        raise SystemExit("[Phase6BM] optimize-off marker missing")
-    body_start = off_pos + len(off_marker)
-    on_pos = main_text.find(on_marker, body_start)
-    if on_pos < 0:
-        raise SystemExit("[Phase6BM] optimize-on marker missing")
-
-    body = main_text[body_start:on_pos]
-    masked = base.mask_noncode(body)
-    matches = list(base.FUNC_RE.finditer(masked))
-    if not matches:
-        raise SystemExit("[Phase6BM] translated body contains no functions")
-
-    ends = []
-    for match in matches:
-        brace = masked.find("{", match.start(), match.end())
-        if brace < 0:
-            raise SystemExit("[Phase6BM] translated function opening brace missing")
-        ends.append(base.closing_brace(masked, brace))
-
-    cuts = []
-    chunk_start = 0
-    last_end = 0
-    for end in ends:
-        last_end = end
-        if end - chunk_start >= SHARD_TARGET_CHARS:
-            cuts.append(end)
-            chunk_start = end
-    if last_end < len(body):
-        last_end = len(body)
-    if not cuts or cuts[-1] != last_end:
-        cuts.append(last_end)
-
-    shard_dir = out_dir / "translated_shards"
-    shard_dir.mkdir(parents=True, exist_ok=True)
-    for stale in shard_dir.glob("*.inl"):
-        stale.unlink()
-
-    shards = []
-    start = 0
-    for index, end in enumerate(cuts):
-        if end <= start:
-            continue
-        name = f"phase6bm_{index:03d}.inl"
-        payload = body[start:end]
-        (shard_dir / name).write_text(payload, encoding="utf-8")
-        shards.append({
-            "name": name,
-            "chars": len(payload),
-            "lines": payload.count("\n") + 1,
-        })
-        start = end
-
-    if start != len(body):
-        raise SystemExit("[Phase6BM] shard writer did not consume translated body")
-
-    include_block = "".join(
-        f'#include "translated_shards/{row["name"]}"\n' for row in shards
-    )
-    wrapper = main_text[:body_start] + include_block + main_text[on_pos:]
-    (out_dir / "main_monolithic.cpp").write_text(main_text, encoding="utf-8")
-    (out_dir / "main.cpp").write_text(wrapper, encoding="utf-8")
-
-    reconstructed = "".join(
-        (shard_dir / row["name"]).read_text(encoding="utf-8")
-        for row in shards
-    )
-    if reconstructed != body:
-        raise SystemExit("[Phase6BM] shard reconstruction identity mismatch")
-
-    return {
-        "build_main": "main.cpp",
-        "monolithic_cache": "main_monolithic.cpp",
-        "shard_directory": "translated_shards",
-        "shard_prefix": "phase6bm_",
-        "shard_count": len(shards),
-        "shards": shards,
-    }
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-dir", type=Path, required=True)
     ap.add_argument("--base-emitter", type=Path, required=True)
+    ap.add_argument("--phase6bl-emitter", type=Path, required=True)
     ap.add_argument("--base-phase5bb-emitter", type=Path, required=True)
     ap.add_argument("--base-phase5bc-emitter", type=Path, required=True)
     ap.add_argument("--generated-root", type=Path, required=True)
@@ -221,22 +95,23 @@ def main() -> int:
     args = ap.parse_args()
 
     base = load(args.base_emitter, "phase6bm_base")
+    p6bl = load(args.phase6bl_emitter, "phase6bm_p6bl")
     p5bb = load(args.base_phase5bb_emitter, "phase6bm_p5bb")
     p5bc = load(args.base_phase5bc_emitter, "phase6bm_p5bc")
 
     base_main = args.base_dir / "main_monolithic.cpp"
     base_env = args.base_dir / "phase5_env.cpp"
-    base_manifest = args.base_dir / "phase6bm-manifest.json"
+    base_manifest = args.base_dir / "phase6bl-manifest.json"
     for path in (base_main, base_env, base_manifest):
         if not path.exists():
-            raise SystemExit(f"[Phase6BM] cached Phase 6BK input missing: {path}")
+            raise SystemExit(f"[Phase6BM] cached Phase 6BL input missing: {path}")
 
     main_text = base_main.read_text(encoding="utf-8")
     env_text = base_env.read_text(encoding="utf-8")
     manifest = json.loads(base_manifest.read_text(encoding="utf-8"))
 
     if manifest.get("phase") != "6BL" or manifest.get("build_tag") != BASE_TAG:
-        raise SystemExit("[Phase6BM] cached Phase 6BK identity mismatch")
+        raise SystemExit("[Phase6BM] cached Phase 6BL identity mismatch")
 
     required = (
         BASE_TAG,
@@ -250,11 +125,11 @@ def main() -> int:
     )
     for marker in required:
         if marker not in main_text:
-            raise SystemExit(f"[Phase6BM] inherited 6BK marker missing: {marker}")
+            raise SystemExit(f"[Phase6BM] inherited 6BL marker missing: {marker}")
 
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated_root, by_name)
-    validate_exact(ROOT, by_va, generated)
+    p6bl.validate_exact(ROOT, by_va, generated)
 
     root_row = by_va[ROOT]
     root_name = generated[ROOT]["name"]
@@ -288,7 +163,6 @@ def main() -> int:
 
     new_members = list(candidate_new)
     expanded = old | set(new_members)
-
     main_text = install_state(main_text)
 
     p5bc.SWEEP_ROOT = ROOT
@@ -311,7 +185,7 @@ def main() -> int:
         "Policy: Phase 6BM D3D frontier 00290970 depth-4 cap-256 closure; "
         "preserve all 6BL GPU semantics and hard fences"
     )
-    main_text = replace_policy_line(main_text, policy)
+    main_text = p6bl.replace_policy_line(main_text, policy)
 
     main_text = replace_unique(main_text, BASE_TAG, BUILD_TAG, "build tag")
     main_text = main_text.replace(COOKIE_OLD, COOKIE_NEW)
@@ -319,14 +193,14 @@ def main() -> int:
 
     main_text = (
         main_text
-        .replace("PHASE 6BK", "PHASE 6BL")
-        .replace("Phase 6BK", "Phase 6BM")
-        .replace('"P6BK ', '"P6BL ')
+        .replace("PHASE 6BL", "PHASE 6BM")
+        .replace("Phase 6BL", "Phase 6BM")
+        .replace('"P6BL ', '"P6BM ')
     )
     env_text = (
         env_text
-        .replace("PHASE 6BK", "PHASE 6BL")
-        .replace("Phase 6BK", "Phase 6BM")
+        .replace("PHASE 6BL", "PHASE 6BM")
+        .replace("Phase 6BL", "Phase 6BM")
     )
 
     must = (
@@ -347,19 +221,19 @@ def main() -> int:
             raise SystemExit(f"[Phase6BM] generated source lost marker: {marker}")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    layout = write_sharded_main(args.out_dir, main_text, base)
+    layout = p6bl.write_sharded_main(args.out_dir, main_text, base)
     (args.out_dir / "phase5_env.cpp").write_text(env_text, encoding="utf-8")
 
     manifest.update({
-        "phase": "6BL",
+        "phase": "6BM",
         "build_tag": BUILD_TAG,
         "pack_members": len(expanded),
         "members": [f"0x{x:08X}" for x in sorted(expanded)],
     })
-    manifest["phase6bm_d3d_frontier_0028b180"] = {
+    manifest["phase6bm_d3d_frontier_00290970"] = {
         "source_phase": "6BL",
-        "phase6bk_hardware": {
-            "later_pfifo_zero_clear_pass": True,
+        "phase6bl_hardware": {
+            "root_0028b180_entries": 1,
             "prior_d3d_root_00290895_result": "PASS",
             "internal_d3d_device_result": "PASS",
             "d3d_sync_checkpoint_calls": 9,
@@ -369,9 +243,9 @@ def main() -> int:
                 "kind": "DIRECT_FRONTIER",
                 "target": "0x00290970",
                 "observed_caller_trace": "0x0023A3CE",
-                "esp": "0x008BF908",
+                "esp": "0x008BF8F0",
                 "fault": 0,
-                "ticks": 671223,
+                "ticks": 671232,
             },
         },
         "root": f"0x{ROOT:08X}",
@@ -389,7 +263,7 @@ def main() -> int:
         "new_direct_frontier_targets": [
             f"0x{x:08X}" for x in sorted(frontiers)
         ],
-        "all_phase6bk_gpu_bridges_inherited": True,
+        "all_phase6bl_gpu_bridges_inherited": True,
         "pfifo_scope_changed": False,
         "pfb_scope_changed": False,
         "pgraph_scope_changed": False,
@@ -411,8 +285,7 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    print("[Phase6BM] 6BL hardware: old NV2A choke point fully crossed")
-    print("[Phase6BM] 6BL hardware: D3D root/internal-device/sync summaries PASS")
+    print("[Phase6BM] 6BL hardware: translated D3D frontier 0028B180 entered")
     print("[Phase6BM] next boundary DIRECT_FRONTIER 00290970 fault=0")
     print(
         f"[Phase6BM] D3D FRONTIER PACK: root=0x{ROOT:08X} "
