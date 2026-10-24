@@ -40,8 +40,12 @@ if($LASTEXITCODE-ne0){throw "Phase 6BF emitter syntax check failed"}
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
 
-& $python $emitter "--base-dir" $base "--out-dir" $out
-if($LASTEXITCODE-ne0){throw "Phase 6BF emission failed"}
+& $python $emitter "--base-dir" $base "--out-dir" $out 2>&1 | Tee-Object -Variable phase6bfEmitOutput
+if($LASTEXITCODE-ne0){
+  Write-Host "[Phase6BF] EMITTER OUTPUT:"
+  $phase6bfEmitOutput | ForEach-Object { Write-Host $_ }
+  throw "Phase 6BF emission failed; see emitter output above"
+}
 
 $main=Join-Path $out "main.cpp"
 $mono=Join-Path $out "main_monolithic.cpp"
