@@ -72,6 +72,12 @@ $r=Get-Content $manifest -Raw|ConvertFrom-Json
 if($r.phase-ne"6BO"-or$r.build_tag-ne"P6BO-POST-XGRPH-FRONTIER-00209810-20261024-A"){throw "Phase 6BO manifest identity mismatch"}
 $a=$r.phase6bo_post_xgrph_frontier_00209810
 if($a.root-ne"0x00209810"-or[int]$a.packed_new_members-lt1-or$a.phase6bn_hardware.next_boundary.fault-ne0){throw "Phase 6BO root/hardware-proof gate failed"}
+if($a.maintained_support.recomp_pbl_file_checkpoint.kind-ne"non-mutating diagnostic checkpoint" -or
+   $a.maintained_support.recomp_pbl_file_checkpoint.guest_memory_mutation-ne$false -or
+   $a.maintained_support.recomp_pbl_file_checkpoint.host_io-ne$false -or
+   $a.maintained_support.recomp_pbl_file_checkpoint.register_mutation-ne$false){
+  throw "Phase 6BO PBL checkpoint support gate failed"
+}
 if($a.retail_section.name-ne".text"-or$a.retail_section.target_inside-ne$true){throw "Phase 6BO .text section gate failed"}
 if($a.all_phase6bn_gpu_bridges_inherited-ne$true-or$a.nv2a_mmio_vram_policy_changed-ne$false){throw "Phase 6BO GPU inheritance/fence gate failed"}
 
@@ -80,6 +86,8 @@ foreach($marker in @(
   "case 0x00209810u:",
   "PASS: Phase 6BO entered translated post-XGRPH frontier 00209810",
   "P6BO POST-XGRPH FRONTIER 00209810:",
+  "P6BO PBL CHECKPOINT:",
+  "recomp_pbl_file_checkpoint",
   "phase6bo_env_build_cookie",
   "phase6be_pfifo_idle_write32(address, value)",
   "phase6bj_pfb_zcomp_write32",
@@ -88,6 +96,7 @@ foreach($marker in @(
   "#define PHASE4C_EXEC_BUDGET 8000000u"
 )){if(-not$text.Contains($marker)){throw "Phase 6BO source gate missing: $marker"}}
 
+Write-Host "[Phase6BO] PBL CHECKPOINT SUPPORT: PASS non-mutating observer only"
 Write-Host "[Phase6BO] READY root=$($a.root) name=$($a.root_name) packed=$($a.packed_new_members) pruned=$($a.pruned_members)"
 
 if(-not$SkipSolutionBuild){
