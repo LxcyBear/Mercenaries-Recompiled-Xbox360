@@ -914,3 +914,19 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   addresses), every direct caller of sub_0028BC60, and focused source windows.
   Do not synthesize a stack depth yet; identify the exact initialization path
   bypassed by the CreateDevice handoff first.
+
+- **Phase 6AO-A forensic - PASS / exact count writer isolated:** the exact-XBE
+  scan found 90 +0x1Axx references but only five stack-field writes. Four are
+  unrelated +0x1A14 array operations controlled by +0x1B14 in sub_000DBE00/
+  000DBE40/000DBE90/000DBEE0. The sole D3D +0x1A10 count writer is
+  sub_0028F9E0: it loads a stack/local value, increments it, and stores the
+  result to device+0x1A10, then builds/iterates entries beginning at +0x1A14.
+  No ordinary translated direct caller of sub_0028BC60 exists in the current
+  packed source, reinforcing an indirect D3D dispatch path.
+- **Phase 6AP-A active - recover retail D3D initializer provenance:** PC-only
+  audit of the full sub_0028F9E0 body/call surface, every current textual or
+  literal reference to 0x0028F9E0, and every cached Phase-6 sub_0028CAA0 body.
+  Group distinct CreateDevice bodies and identify pre-6AF retail-like versions
+  versus the later native bridge, highlighting any original path that reaches
+  0028F9E0. Do not synthesize +0x1A10/+0x1A14 state until this provenance is
+  recovered.
