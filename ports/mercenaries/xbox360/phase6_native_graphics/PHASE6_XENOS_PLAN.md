@@ -826,3 +826,21 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   reports the active step and three probe values. This is diagnostic-only and
   leaves guest memory, KSEG, D3D, NV2A/MMIO/VRAM, ABI, and sync semantics
   unchanged.
+
+
+- **Phase 6AJ-A hardware - diagnostic PASS / orange persists:** the source-step
+  probe ran on hardware without changing guest semantics. Both 0x0028E700
+  entries still saw this=0x00299380, internal global 0x00299380, and
+  this+0x1C20=0x0029AFA0. The orange boundary remains READ32
+  0x80000004, but the active source latch was step 10, the
+  loc_0028E7AE return path. The boundary still reports caller
+  0x0023A3CE with the caller ESP restored. Because the probe latch persists
+  after the callee returns, step 10 is evidence that the D3D root reached its
+  return path before the later boundary, not proof that the POP/RET itself
+  generated the fault.
+- **Phase 6AK-A active - caller 0x0023A3CE forensic:** inspect the exact cached
+  6AJ-A translated sub_0023A3CE body and print the neighborhood around every
+  sub_0028E700 mention/direct call. Flag all guest-memory operations plus
+  explicit EAX+4 reads or EAX=0x80000000 assignments. This is PC-only and
+  intentionally builds no XEX until the post-D3D caller instruction producing
+  the orange read is identified.
