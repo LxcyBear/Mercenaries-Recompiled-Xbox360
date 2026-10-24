@@ -172,7 +172,7 @@ Write-Host ("[Phase6AL] Generated shards          : {0}" -f $shards.Count)
 Write-Host "[Phase6AL] Guest memory semantics    : UNCHANGED"
 Write-Host "[Phase6AL] Boundary timing           : IMMEDIATE ON FIRST LATCHED READ32 FAULT"
 Write-Host "[Phase6AL] Expected tag              : P6AL-READ32-SITE-PROBE-20261023-A"
-Write-Host "[Phase6AL] Hardware money line       : P6AL READ32 FAULT SITE: func=... site=... address=..."
+Write-Host "[Phase6AL] Hardware money line       : P6AL READ32 FAULT SITE: func=... line=... address=..."
 Write-Host ("[Phase6AL] Site map                  : {0}" -f $siteMap)
 
 if (-not $SkipSolutionBuild) {
