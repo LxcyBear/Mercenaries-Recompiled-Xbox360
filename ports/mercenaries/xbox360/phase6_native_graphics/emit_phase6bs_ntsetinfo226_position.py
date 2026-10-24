@@ -57,20 +57,27 @@ def patch_icall_dispatch(text: str) -> str:
     if "_phase4c_target == 0x800000E2u" in macro:
         raise SystemExit("[Phase6BS] ordinal 226 is already dispatched by RECOMP_ICALL_SAFE")
 
-    # Hook at the head of the existing dispatch chain rather than depending
-    # on the macro's trailing fallback shape. The first branch has remained
-    # stable since Phase 5N and later phases only append/extend continuations.
-    first_branch = "if (_phase4c_target == 0x800000FFu && !s_phase4cThreadEntered) { \\"
+    # Build macro-continuation text without fragile trailing-backslash
+    # literals. Later phases may extend the dispatch chain, but the first
+    # thread-entry branch is the stable head of that chain.
+    bs = chr(92)
+    first_branch = (
+        "if (_phase4c_target == 0x800000FFu && !s_phase4cThreadEntered) { " + bs
+    )
     first_pos = macro.find(first_branch)
     if first_pos < 0:
         raise SystemExit("[Phase6BS] first RECOMP_ICALL_SAFE kernel branch not found")
 
     replacement = (
-        "if (_phase4c_target == 0x800000E2u) { \\\n"
-        "        phase6bs_nt_set_information_file((uint32_t)(saved_esp)); \\\n"
-        "    } else if (_phase4c_target == 0x800000FFu && !s_phase4cThreadEntered) { \\\"
+        "if (_phase4c_target == 0x800000E2u) { " + bs + "\n"
+        "        phase6bs_nt_set_information_file((uint32_t)(saved_esp)); " + bs + "\n"
+        "    } else if (_phase4c_target == 0x800000FFu && !s_phase4cThreadEntered) { " + bs
     )
-    patched_macro = macro[:first_pos] + replacement + macro[first_pos + len(first_branch):]
+    patched_macro = (
+        macro[:first_pos]
+        + replacement
+        + macro[first_pos + len(first_branch):]
+    )
     if patched_macro.count("_phase4c_target == 0x800000E2u") != 1:
         raise SystemExit("[Phase6BS] ordinal-226 dispatch insertion did not produce exactly one branch")
 
