@@ -88,7 +88,7 @@ foreach ($path in @($txt,$json)) {
 }
 
 $r = Get-Content -LiteralPath $json -Raw | ConvertFrom-Json
-if ($r.phase -ne "6AI-B" -or
+if ($r.phase -ne "6AI-C" -or
     $r.root -ne "0x0028E700" -or
     $r.label -ne "0x0028E7AE" -or
     $r.hardware.guest -ne "0x80000004" -or
