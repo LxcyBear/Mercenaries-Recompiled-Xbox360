@@ -708,3 +708,19 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   The independent \`PHASE 6AG D3D NEIGHBORHOOD RESULT\` reported PASS.
   The inherited old cosine-harvest line still prints FAIL and is now explicitly
   non-authoritative for Phase 6AG. No NV2A MMIO/VRAM touch has occurred yet.
+
+
+- **Phase 6AH active - D3D saturation from 0x0028E700:** consume the
+  Phase 6AG-D hardware PASS and promote fault-free retail D3D frontier
+  0x0028E700 as a protected manual seed. Prep auto-regenerates the isolated
+  Phase-3 function inventory/generated tree if that target is not yet an exact
+  generated entry. The emitter packs a depth-8/cap-512 support-clean closure
+  rooted at 0x0028E700, then performs one additional D3D-only saturation round:
+  up to six newly exposed direct frontiers may be pre-armed in the same build
+  only when they are exact generated entries inside the retail D3D section
+  (0x00288640-0x0029B874). Each gets a shallow depth-2/cap-64 closure with a
+  total second-round cap of 192 new members. Ambiguous/interior entries,
+  non-D3D targets, unresolved-support members, NV2A MMIO/VRAM, platform, ABI
+  and guest faults remain fenced. 6AH emits its own authoritative result
+  requiring the 0x0028E700 root, prior 0x00290895 root, and native CreateDevice
+  handoff; the inherited cosine-harvest result is relabeled non-authoritative.
