@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | Native Xenos/NV2A setup path proven; D3D/XGRPH closures crossed; 6BR entered `0x00209A70`, PBL calls=3; current blocker is canonical ordinal-226 `NtSetInformationFile` at `0x800000E2`, `fault=0` |
+| 6 — Native Xenos graphics | **In progress** | D3D/XGRPH path and retail asset I/O are alive; 6BS fully consumed `xesrb.tga`, re-entered XGRPH and reached PBL calls=4; current blocker is canonical ordinal-99 `KeDelayExecutionThread` at `0x80000063`, `fault=0` |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -61,16 +61,17 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BP — hardware PASS / PBL phase-1 progress:** the `0023A3CE` `RtlInitAnsiString` frame repair succeeded; `d:\\xesrb.tga` and `d:\\` opened successfully; PBL checkpoint phase 1 fired; next boundary is ordinal-218 `NtQueryVolumeInformationFile` with 28-byte delta vs canonical 24 and `fault=0`.
 - **Phase 6BQ — hardware PASS / PBL phase-2 progress:** the `0023A3CE` ordinal-218 `NtQueryVolumeInformationFile` 28→24-byte repair passed after canonical class-3 validation. The native volume query completed; two class-34 `NtQueryInformationFile` queries on `game:\\xesrb.tga` succeeded; the maintained PBL checkpoint reached `calls=2 phase1=1 phase2=1`; and execution advanced to clean `DIRECT_FRONTIER 0x00209A70` with `fault=0`.
 - **Phase 6BR — hardware PASS / post-PBL title progress:** exact generated root `00209A70` entered once and execution continued through `00209A7C/85/8C` into the `00229Fxx` title path. The PBL observer advanced to `calls=3`, retaining live file handle `0x48000001`. The next boundary is `ICALL_SAFE target=0x800000E2` (ordinal 226 `NtSetInformationFile`) with a canonical 24-byte frame and `fault=0`.
+- **Phase 6BS — hardware PASS / complete `xesrb.tga` consumption:** ordinal-226 `NtSetInformationFile` class-14 seeks succeeded three times. The game then read 786,432 bytes and the final 44 bytes from `game:\\xesrb.tga`, exactly matching its 786,476-byte EOF, proving complete retail asset-file consumption. Execution re-entered XGRPH, PBL advanced to `calls=4`, and the next boundary is `ICALL_SAFE target=0x80000063` (ordinal 99 `KeDelayExecutionThread`) with canonical 16-byte frame and `fault=0`.
 
-### Current next step — Phase 6BS
+### Current next step — Phase 6BT
 
-Phase 6BR is hardware-proven. Exact generated root `00209A70` entered and executed through its local body into the `00229Fxx` title path. The maintained PBL observer advanced to `calls=3`, with the latest value equal to the live `xesrb.tga` tagged handle `0x48000001`.
+Phase 6BS is hardware-proven. Ordinal-226 `NtSetInformationFile` accepted the live class-14/8-byte file-position frames three times, then retail code consumed `game:\xesrb.tga` completely: 786,432 bytes from offset 0 plus the final 44 bytes at offset `0x000C0000`, exactly matching the file's 786,476-byte EOF. Execution re-entered XGRPH and the maintained PBL observer advanced to `calls=4`.
 
-The new boundary is `ICALL_SAFE caller=0023A3CE target=800000E2 esp=008BF878 saved_esp=008BF890`, `fault=0`. Token `0x800000E2` is ordinal 226 `NtSetInformationFile`; the 24-byte observed frame exactly matches the canonical return slot plus five arguments. Phase 6BS enables only `XboxFilePositionInformation` (class 14, length 8) through the already-proven tagged-handle table and absolute `SetFilePointer` helper. Negative positions, all other information classes, malformed pointers and noncanonical frames remain fenced. Both caller-local ABI repairs, GPU/MMIO semantics, allocator geometry and the 8M budget are inherited unchanged.
+The new boundary is `ICALL_SAFE caller=0023A3CE target=80000063 esp=008BF8FC saved_esp=008BF90C`, `fault=0`. Ordinal 99 is `KeDelayExecutionThread`; the 16-byte observed frame exactly matches return slot + WaitMode + Alertable + Interval*. Phase 6BT reuses the hardware-proven Phase-4B negative-100ns-to-millisecond conversion with `Sleep`/yield behavior. Only negative relative and zero delays are accepted; positive absolute delays, malformed values and delays over 10 seconds remain fenced. All 6BS file, ABI, GPU/MMIO, allocator and 8M-budget invariants remain unchanged.
 
 ## Next major graphics milestones
 
-1. Cross ordinal 226 `NtSetInformationFile` for the observed canonical frame; accept only class-14/8-byte file-position semantics and capture the next title/I/O frontier.
+1. Cross ordinal 99 `KeDelayExecutionThread` for the observed canonical 16-byte frame using the proven relative-delay path, then capture the next title/audio/graphics frontier.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
