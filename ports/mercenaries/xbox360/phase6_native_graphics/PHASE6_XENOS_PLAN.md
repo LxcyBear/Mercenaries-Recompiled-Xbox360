@@ -898,3 +898,19 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   macros are already valid. Preserve the same probe fields and hard fences.
   Publish a distinct P6AN-B XEX and use the end-of-run
   `P6AN D3D STACK SUMMARY` as the authoritative hardware evidence.
+
+- **Phase 6AN-B hardware - diagnostic PASS / zero-depth underflow proven:**
+  native Xenos CreateDevice, retail roots 0x00290895/0x0028E700, and prior D3D
+  proofs remain healthy. The orange boundary is still READ32 0x80000004. The
+  focused stack summary captured +0x1A10 count=0, zero +0x1A14/+0x1A18/+0x1A1C
+  entries, one sentinel hit, loop count 1645, and sentinel EDX=0xFFFFF993.
+  Because sub_0028BC60 decrements the count before its backward-copy loop,
+  count=0 underflows and walks backward through the device object until it
+  encounters 0x80000000 at device+0x5C; the KSEG address is therefore an
+  accidental dereference caused by missing/invalid D3D stack initialization.
+- **Phase 6AO-A active - exact D3D stack writer audit:** PC-only scan of the
+  cached exact-XBE translated source for every +0x1A04..+0x1A1C reference,
+  every write to +0x1A10/+0x1A14/+0x1A18/+0x1A1C (including absolute device
+  addresses), every direct caller of sub_0028BC60, and focused source windows.
+  Do not synthesize a stack depth yet; identify the exact initialization path
+  bypassed by the CreateDevice handoff first.
