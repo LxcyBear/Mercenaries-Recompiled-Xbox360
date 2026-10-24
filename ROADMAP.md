@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | 6BW passed guest `KeRaiseIrqlToDpcLevel` (`0→2`); the immediate frontier is READ32 `0x8000018D` inside the intentionally fenced low-KSEG page; 6BX origin probe is prepared |
+| 6 — Native Xenos graphics | **In progress** | 6BX proved the faulting `0x8000018D` comes from thunk slot `0x002DBDBC`, identified by Phase-4A as ordinal 357 `IdexChannelObject`; 6BY DATA relocation is prepared |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -66,16 +66,17 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BU — hardware diagnostic PASS / file-object identity proven:** ordinal-246 `ObReferenceObjectByHandle` exposed `handle=48000001`, `native_resolved=1`, `path=game:\\xesrb.tga`, `object_type=80000047`, `ReturnedObject*=008BF928`; ordinal 71 `0x80000047` is `IoFileObjectType`. The stage intentionally synthesized no guest object pointer and stopped cleanly at the same fault-free boundary.
 - **Phase 6BV — hardware PASS / FILE_OBJECT dereference hypothesis disproven:** the exact proven `IoFileObjectType` + tagged-file-handle call returned diagnostic sentinel `0x04000000` successfully. Retail did not access that unmapped pointer before the next boundary; instead execution advanced cleanly to `ICALL_SAFE target=0x80000081`, ordinal 129 `KeRaiseIrqlToDpcLevel@0`, with canonical 4-byte frame and `fault=0`. No `FILE_OBJECT` shim is justified yet.
 - **Phase 6BW — hardware PASS / guest IRQL continuation:** ordinal-129 `KeRaiseIrqlToDpcLevel@0` received the canonical 4-byte return-slot-only frame and advanced maintained guest IRQL from `0` to `DISPATCH_LEVEL=2` exactly once without changing real Xenon processor IRQL. The very next checked operation is READ32 `0x8000018D`, producing `GUEST_FAULT` at retail path `0022AC56 -> 0022AC78 -> 0022AC89 -> 0022AC8F`. The exact 111-import audit contains no ordinal `0x18D/397`; because the address lies inside the deliberately fenced `0x80000000..0x80000FFF` low-KSEG ambiguity page, the fence remains intact pending origin proof.
+- **Phase 6BX — hardware PASS / low-KSEG false lead closed:** all four origin probes fired. At `0022AC8F`, EDX was still `00406298` before the translated instruction `edx = GUEST_READ32(0x2DBDBC)`; the immediate boundary then showed `EDX=8000018D` and READ32 `8000018D`. Phase-4A identifies slot 55 / `002DBDBC` as ordinal 357 `IdexChannelObject`, a DATA export. Therefore the fault is a missing pointer-valued data-import relocation, not a reason to relax the low-KSEG fence.
 
-### Current next step — Phase 6BX
+### Current next step — Phase 6BY
 
-Phase 6BW is hardware-proven. The live ordinal-129 `KeRaiseIrqlToDpcLevel@0` frame was canonical and the guest-only IRQL model transitioned `0 -> 2` successfully. Immediately afterward, translated execution attempted a 32-bit read at `0x8000018D` from caller `0x0023A3CE`; the final retail VA ring ends `0022AC56 -> 0022AC78 -> 0022AC89 -> 0022AC8F`.
+Phase 6BX is hardware-proven. The instrumented retail path fired at `0022AC56 -> 0022AC78 -> 0022AC89 -> 0022AC8F`. At the last probe, EDX was still `0x00406298`; the translated body then loads `GUEST_READ32(0x002DBDBC)`, after which the fault boundary records `EDX=0x8000018D` and the next `GUEST_READ32(EDX)` faults. This pins the origin to thunk slot `0x002DBDBC`.
 
-The address is deliberately not being classified as a kernel ordinal. The Phase-4A audit covers the exact 111 imports for this retail XBE and contains ordinal 129 at thunk `0x002DBDC0`, but no ordinal `397 / 0x18D`. At the same time, `0x8000018D` sits inside the existing `0x80000000..0x80000FFF` synthetic fence that protects the ambiguous low KSEG0 page. Phase 6BX therefore changes no guest semantics and does not relax that fence. It logs EAX/ECX/EDX/EBX/ESI/EDI/ESP at the four hardware-proven retail VAs so the exact instruction path that forms `0x8000018D` can be identified before any routing change. All 6BW FILE_OBJECT-sentinel, IRQL, file, delay, ABI, GPU/MMIO, allocator and 8M-budget invariants remain unchanged.
+The exact Phase-4A audit identifies that slot as import slot 55, ordinal 357 `IdexChannelObject`, kind DATA. The maintained kernel model defines `IdexChannelObject` as a pointer-valued export, so Phase 6BY represents the same shape in guest kernel-data: thunk `0x002DBDBC -> 0x0087E0A0` (exported PVOID slot), `[0x0087E0A0] -> 0x0087E0A4` (tiny identity object), and `[0x0087E0A4] = 0x49444558` (`'IDEX'`). The generic startup DATA-thunk map gains ordinal 357 and validates the exact raw retail token before execution. The low-KSEG ambiguity fence, guest IRQL model, FILE_OBJECT sentinel, file/delay/GPU semantics, allocator geometry and 8M execution budget remain unchanged.
 
 ## Next major graphics milestones
 
-1. Run Phase 6BX and classify how retail forms `0x8000018D` across `0022AC56/78/89/8F`; keep the low-KSEG ambiguity fence intact until the origin is hardware-proven.
+1. Run Phase 6BY and verify ordinal-357 `IdexChannelObject` relocates to `002DBDBC -> 0087E0A0 -> 0087E0A4`, then capture the next retail/kernel frontier.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
