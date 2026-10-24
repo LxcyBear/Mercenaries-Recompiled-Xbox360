@@ -116,6 +116,13 @@ def main() -> int:
         for i, line in enumerate(wide_lines)
     ) + "\n"
 
+    # Compile the forensic patterns up front. This is intentionally a
+    # preflight assertion: malformed regex must fail here before report logic.
+    eax_plus4_pattern = re.compile(
+        r"(?:GUEST_READ32|MEM32)\s*\(\s*eax\s*\+\s*(?:4|0x4)\s*\)"
+    )
+    offset4_pattern = re.compile(r"\+\s*(?:4|0x4)\s*\)")
+
     mem32 = []
     for i, line in enumerate(wide_lines, start=wide_first + 1):
         if "GUEST_READ32" in line or "MEM32" in line:
@@ -123,14 +130,11 @@ def main() -> int:
 
     eax_plus4 = [
         row for row in mem32
-        if re.search(
-            r"(?:GUEST_READ32|MEM32)\\s*\\(\\s*eax\\s*\\+\\s*(?:4|0x4)\\s*\\)",
-            row["source"],
-        )
+        if eax_plus4_pattern.search(row["source"])
     ]
     offset4_reads = [
         row for row in mem32
-        if re.search(r"\\+\\s*(?:4|0x4)\\s*\\)", row["source"])
+        if offset4_pattern.search(row["source"])
     ]
 
     if eax_plus4:
@@ -165,7 +169,7 @@ def main() -> int:
     report_json.write_text(
         json.dumps(
             {
-                "phase": "6AI-B",
+                "phase": "6AI-C",
                 "baseline": BASE_TAG,
                 "root": "0x0028E700",
                 "label": "0x0028E7AE",
