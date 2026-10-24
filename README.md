@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; the retail 22.5 MiB graphics-pool claim now succeeds at `0x02880000`, the generalized ordinal-166 allocation wrapper is hardware-proven, and Phase 6AD crossed `AvGetSavedDataAddress` to the exact ordinal-2 `AvSendTVEncoderOption@16` frontier. Phase 6AE-B is hardware-proven: it crossed ordinal 2 `AvSendTVEncoderOption@16` and exposed the next clean frontier as a terminal retail renderer `CreateDevice` recovery failure (`0x8007000E`, `fault=0`). The first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
+> **Last roadmap review:** October 23, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Native Xenos device/backbuffer/present is proven on real hardware; the retail 22.5 MiB graphics-pool claim now succeeds at `0x02880000`, the generalized ordinal-166 allocation wrapper is hardware-proven, and Phase 6AD crossed `AvGetSavedDataAddress` to the exact ordinal-2 `AvSendTVEncoderOption@16` frontier. Phase 6AE-B is hardware-proven: it crossed ordinal 2 `AvSendTVEncoderOption@16` and exposed a terminal retail renderer `CreateDevice` recovery failure (`0x8007000E`, `fault=0`). Phase 6AF is active and bridges the exact retail `sub_0028CAA0` device-creation contract to the already-live native Xenos device. The first genuine guest NV2A MMIO/VRAM touch and game-rendered frame are still pending.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -114,11 +114,17 @@ clean XAPI return 0.
   as a non-query logical encoder write/no-op. Ordinal 3 was not reached. Native
   Xenos remained alive, then the translated renderer stopped cleanly at
   `RENDERER_FATAL` stage 3 with HRESULT `0x8007000E` (`fault=0`).
+- **6AF — ACTIVE:** replace only retail `sub_0028CAA0` with a strict native-Xenos
+  CreateDevice handoff. Validate the upstream-proven 28-byte/six-argument
+  640x480 retail contract, publish guest device identity `0x00299380`, return
+  S_OK, and continue the packed translated D3D path until the next genuine
+  graphics/platform boundary.
 
-The immediate hardware goal is now to diagnose and bridge the retail renderer
-CreateDevice/recovery path that returns terminal HRESULT `0x8007000E` after the
-successful ordinal-2 AV call, while keeping native Xenos as the physical display
-owner and preserving the first genuine guest NV2A/MMIO/VRAM hard stop. No DATAxbox asset open or Mercenaries-rendered
+The immediate hardware goal is now to prove the Phase 6AF native-Xenos
+CreateDevice handoff on real hardware, cross the former terminal
+`0x8007000E` boundary, and let the translated D3D path advance as far as one
+bounded run safely permits. The first genuine guest NV2A/MMIO/VRAM touch
+remains the preferred next hard stop. No DATAxbox asset open or Mercenaries-rendered
 frame has been observed yet.
 
 ### Immediate next tests
