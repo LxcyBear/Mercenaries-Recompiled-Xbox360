@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | D3D/XGRPH path and retail asset I/O are alive; 6BS fully consumed `xesrb.tga`, re-entered XGRPH and reached PBL calls=4; current blocker is canonical ordinal-99 `KeDelayExecutionThread` at `0x80000063`, `fault=0` |
+| 6 — Native Xenos graphics | **In progress** | Retail asset I/O is alive; 6BT completed the observed 200 ms `KeDelayExecutionThread`; current blocker is canonical ordinal-246 `ObReferenceObjectByHandle` at `0x800000F6`, `fault=0` |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -62,16 +62,17 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BQ — hardware PASS / PBL phase-2 progress:** the `0023A3CE` ordinal-218 `NtQueryVolumeInformationFile` 28→24-byte repair passed after canonical class-3 validation. The native volume query completed; two class-34 `NtQueryInformationFile` queries on `game:\\xesrb.tga` succeeded; the maintained PBL checkpoint reached `calls=2 phase1=1 phase2=1`; and execution advanced to clean `DIRECT_FRONTIER 0x00209A70` with `fault=0`.
 - **Phase 6BR — hardware PASS / post-PBL title progress:** exact generated root `00209A70` entered once and execution continued through `00209A7C/85/8C` into the `00229Fxx` title path. The PBL observer advanced to `calls=3`, retaining live file handle `0x48000001`. The next boundary is `ICALL_SAFE target=0x800000E2` (ordinal 226 `NtSetInformationFile`) with a canonical 24-byte frame and `fault=0`.
 - **Phase 6BS — hardware PASS / complete `xesrb.tga` consumption:** ordinal-226 `NtSetInformationFile` class-14 seeks succeeded three times. The game then read 786,432 bytes and the final 44 bytes from `game:\\xesrb.tga`, exactly matching its 786,476-byte EOF, proving complete retail asset-file consumption. Execution re-entered XGRPH, PBL advanced to `calls=4`, and the next boundary is `ICALL_SAFE target=0x80000063` (ordinal 99 `KeDelayExecutionThread`) with canonical 16-byte frame and `fault=0`.
+- **Phase 6BT — hardware PASS / relative wait continuation:** the live ordinal-99 `KeDelayExecutionThread` frame was canonical (`wait_mode=1`, `alertable=0`) with interval `FFFFFFFFFFE17B80`; the existing Phase-4B conversion executed it as a 200 ms relative wait successfully. The next clean boundary is `ICALL_SAFE target=0x800000F6` (ordinal 246 `ObReferenceObjectByHandle`) with canonical 16-byte frame and `fault=0`.
 
-### Current next step — Phase 6BT
+### Current next step — Phase 6BU
 
-Phase 6BS is hardware-proven. Ordinal-226 `NtSetInformationFile` accepted the live class-14/8-byte file-position frames three times, then retail code consumed `game:\xesrb.tga` completely: 786,432 bytes from offset 0 plus the final 44 bytes at offset `0x000C0000`, exactly matching the file's 786,476-byte EOF. Execution re-entered XGRPH and the maintained PBL observer advanced to `calls=4`.
+Phase 6BT is hardware-proven. The live ordinal-99 `KeDelayExecutionThread` call used a canonical 16-byte frame with `wait_mode=1`, `alertable=0` and relative interval `0xFFFFFFFFFFE17B80`; the Phase-4B-derived delay bridge converted that interval to 200 ms and returned successfully.
 
-The new boundary is `ICALL_SAFE caller=0023A3CE target=80000063 esp=008BF8FC saved_esp=008BF90C`, `fault=0`. Ordinal 99 is `KeDelayExecutionThread`; the 16-byte observed frame exactly matches return slot + WaitMode + Alertable + Interval*. Phase 6BT reuses the hardware-proven Phase-4B negative-100ns-to-millisecond conversion with `Sleep`/yield behavior. Only negative relative and zero delays are accepted; positive absolute delays, malformed values and delays over 10 seconds remain fenced. All 6BS file, ABI, GPU/MMIO, allocator and 8M-budget invariants remain unchanged.
+Execution then advanced to `ICALL_SAFE caller=0023A3CE target=800000F6 esp=008BF8EC saved_esp=008BF8FC`, `fault=0`. Ordinal 246 is `ObReferenceObjectByHandle(HANDLE, ObjectType*, Object**)`; the observed frame size is canonical, but the live three arguments and required guest object representation are not yet proven. Phase 6BU is intentionally probe-only: it logs Handle, ObjectType and ReturnedObject*, classifies the handle through the existing tagged native-handle table, and synthesizes no object pointer. All 6BT file, delay, ABI, GPU/MMIO, allocator and 8M-budget invariants remain unchanged.
 
 ## Next major graphics milestones
 
-1. Cross ordinal 99 `KeDelayExecutionThread` for the observed canonical 16-byte frame using the proven relative-delay path, then capture the next title/audio/graphics frontier.
+1. Probe ordinal 246 `ObReferenceObjectByHandle` live arguments without synthesizing an object pointer; use the hardware frame to decide whether a simple handle→guest-object mapping is sufficient.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
