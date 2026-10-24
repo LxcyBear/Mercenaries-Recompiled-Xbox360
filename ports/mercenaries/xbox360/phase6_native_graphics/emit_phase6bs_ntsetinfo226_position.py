@@ -61,7 +61,7 @@ def patch_icall_dispatch(text: str) -> str:
     # Later phases accumulated many maintained kernel continuations here.
     # Avoid matching the entire historical macro body. Insert immediately
     # before the final fallback else that escapes unknown ICALL_SAFE targets.
-    fallback = "} else { \\\"
+    fallback = "} else { \\"
     fallback_pos = macro.rfind(fallback)
     if fallback_pos < 0:
         raise SystemExit("[Phase6BS] final RECOMP_ICALL_SAFE fallback else not found")
