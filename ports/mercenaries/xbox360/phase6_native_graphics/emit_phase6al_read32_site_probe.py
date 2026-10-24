@@ -115,8 +115,6 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
         func_source = body[match.start():func_end]
         func_masked = masked[match.start():func_end]
         read_count = len(READ32_RE.findall(func_masked))
-        if read_count == 0:
-            continue
 
         trace_match = TRACE_RE.search(func_masked)
         if trace_match:
@@ -180,6 +178,8 @@ def instrument_translated_read32(main_text: str, base) -> tuple[str, list[dict]]
         {
             "instrumented_read32_sites": total_reads,
             "instrumented_functions": len(insertions),
+            "literal_read32_sites": total_reads,
+            "macro_scope": "all translated GUEST_READ32 expansions",
             "site_identity": "translated function VA + compiler __LINE__",
         },
     )
