@@ -85,6 +85,25 @@ static DWORD s_phase6atTailClaimLastAlignment = 0u;
     return main_text.replace(marker, state + marker, 1)
 
 
+def install_debug_address_helper(main_text: str) -> str:
+    marker = "static void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)\\n"
+    if marker not in main_text:
+        raise SystemExit("[Phase6AT] ordinal-166 handler marker missing for debugger helper")
+
+    helper = r'''template <typename T>
+static DWORD phase6at_debug_address(T value)
+{
+    DWORD address = 0u;
+    if (sizeof(value) != sizeof(address))
+        return 0u;
+    memcpy(&address, &value, sizeof(address));
+    return address;
+}
+
+'''
+    return main_text.replace(marker, helper + marker, 1)
+
+
 def install_tail_claim_helper(main_text: str) -> str:
     marker = "static void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)\n"
     if marker not in main_text:
@@ -398,39 +417,39 @@ def install_debugger_banner(main_text: str) -> str:
         f'{indent}sprintf(\n'
         f'{indent}    line,\n'
         f'{indent}    "P6AT X360DBG PPC1: sub_0028F9E0=%08X tail_claim=%08X mm166=%08X graphics_claim=%08X",\n'
-        f'{indent}    (unsigned int)&sub_0028F9E0,\n'
-        f'{indent}    (unsigned int)&phase6at_claim_post_create_tail,\n'
-        f'{indent}    (unsigned int)&phase5bb_mm_allocate_contiguous_ex,\n'
-        f'{indent}    (unsigned int)&phase6z_claim_retail_graphics_pool);\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&sub_0028F9E0),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&phase6at_claim_post_create_tail),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&phase5bb_mm_allocate_contiguous_ex),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&phase6z_claim_retail_graphics_pool));\n'
         f'{indent}trace(line);\n'
         f'{indent}sprintf(\n'
         f'{indent}    line,\n'
-        f'{indent}    "P6AT X360DBG GUESTREG: eax=%08X ebx=%08X ecx=%08X edx=%08X esi=%08X edi=%08X ebp=%08X esp=%08X",\n'
-        f'{indent}    (unsigned int)&g_eax,\n'
-        f'{indent}    (unsigned int)&g_ebx,\n'
-        f'{indent}    (unsigned int)&g_ecx,\n'
-        f'{indent}    (unsigned int)&g_edx,\n'
-        f'{indent}    (unsigned int)&g_esi,\n'
-        f'{indent}    (unsigned int)&g_edi,\n'
-        f'{indent}    (unsigned int)&g_ebp,\n'
-        f'{indent}    (unsigned int)&g_esp);\n'
+        f'{indent}    "P6AT X360DBG GUESTREG: eax=%08X ebx=%08X ecx=%08X edx=%08X esi=%08X edi=%08X seh_ebp=%08X esp=%08X",\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&g_eax),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&g_ebx),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&g_ecx),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&g_edx),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&g_esi),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&g_edi),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&g_seh_ebp),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&g_esp));\n'
         f'{indent}trace(line);\n'
         f'{indent}sprintf(\n'
         f'{indent}    line,\n'
         f'{indent}    "P6AT X360DBG MEMORY1: g_ram=%08X page_next_var=%08X heap=%08X reservations=%08X page_state=%08X",\n'
-        f'{indent}    (unsigned int)g_ram,\n'
-        f'{indent}    (unsigned int)&s_phase4cVmPageNext,\n'
-        f'{indent}    (unsigned int)&s_phase4cHeap[0],\n'
-        f'{indent}    (unsigned int)&s_phase4cVmReservations[0],\n'
-        f'{indent}    (unsigned int)&s_phase4cVmPageState[0]);\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(g_ram),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&s_phase4cVmPageNext),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&s_phase4cHeap[0]),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&s_phase4cVmReservations[0]),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&s_phase4cVmPageState[0]));\n'
         f'{indent}trace(line);\n'
         f'{indent}sprintf(\n'
         f'{indent}    line,\n'
         f'{indent}    "P6AT X360DBG MEMORY2: guest_device=%08X guest_device_host=%08X xenos_slot=%08X xenos_value=%08X",\n'
         f'{indent}    (unsigned int)s_phase6afGuestDevice,\n'
-        f'{indent}    ((unsigned int)g_ram + (unsigned int)s_phase6afGuestDevice),\n'
-        f'{indent}    (unsigned int)&s_phase6bXenosDevice,\n'
-        f'{indent}    (unsigned int)s_phase6bXenosDevice);\n'
+        f'{indent}    ((unsigned int)phase6at_debug_address(g_ram) + (unsigned int)s_phase6afGuestDevice),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(&s_phase6bXenosDevice),\n'
+        f'{indent}    (unsigned int)phase6at_debug_address(s_phase6bXenosDevice));\n'
         f'{indent}trace(line);\n'
     )
     return main_text[:line_start] + block + main_text[line_start:]
@@ -565,6 +584,7 @@ def main() -> int:
             raise SystemExit(f"[Phase6AT] inherited marker missing: {marker}")
 
     main_text = install_state(main_text)
+    main_text = install_debug_address_helper(main_text)
     main_text = install_tail_claim_helper(main_text)
     main_text = patch_mm166(main_text)
     main_text = patch_init_active(main_text)
@@ -600,6 +620,7 @@ def main() -> int:
     must = (
         BUILD_TAG,
         COOKIE_NEW,
+        "phase6at_debug_address(",
         "phase6at_claim_post_create_tail(",
         "s_phase6atPostCreateInitActive = 1u;",
         "post_init_tail_claim=%u",
@@ -653,7 +674,7 @@ def main() -> int:
             ],
             "guest_register_globals": [
                 "g_eax", "g_ebx", "g_ecx", "g_edx",
-                "g_esi", "g_edi", "g_ebp", "g_esp",
+                "g_esi", "g_edi", "g_seh_ebp", "g_esp",
             ],
             "memory_roots": [
                 "g_ram",
