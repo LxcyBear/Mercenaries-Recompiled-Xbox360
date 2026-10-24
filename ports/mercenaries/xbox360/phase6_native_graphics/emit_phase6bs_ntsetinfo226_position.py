@@ -57,29 +57,20 @@ def patch_icall_dispatch(text: str) -> str:
     if "_phase4c_target == 0x800000E2u" in macro:
         raise SystemExit("[Phase6BS] ordinal 226 is already dispatched by RECOMP_ICALL_SAFE")
 
-    # Locate the actual unknown-kernel escape first, then walk backward to
-    # the `else` that owns it. This avoids confusing nested/later else blocks
-    # added by later Phase-5/6 continuations with the ICALL_SAFE fallback.
-    escape_token = "PHASE4C_BOUNDARY_ICALL_SAFE"
-    escape_pos = macro.rfind(escape_token)
-    if escape_pos < 0:
-        raise SystemExit("[Phase6BS] ICALL_SAFE escape token missing from RECOMP_ICALL_SAFE")
+    # Hook at the head of the existing dispatch chain rather than depending
+    # on the macro's trailing fallback shape. The first branch has remained
+    # stable since Phase 5N and later phases only append/extend continuations.
+    first_branch = "if (_phase4c_target == 0x800000FFu && !s_phase4cThreadEntered) { \\"
+    first_pos = macro.find(first_branch)
+    if first_pos < 0:
+        raise SystemExit("[Phase6BS] first RECOMP_ICALL_SAFE kernel branch not found")
 
-    fallback = "} else { \\"
-    fallback_pos = macro.rfind(fallback, 0, escape_pos)
-    if fallback_pos < 0:
-        raise SystemExit("[Phase6BS] owning else for ICALL_SAFE escape not found")
-
-    span = macro[fallback_pos:escape_pos + len(escape_token)]
-    if "phase4c_escape" not in span:
-        raise SystemExit("[Phase6BS] owning else does not contain phase4c_escape")
-
-    branch = (
-        "} else if (_phase4c_target == 0x800000E2u) { \\\n"
+    replacement = (
+        "if (_phase4c_target == 0x800000E2u) { \\\n"
         "        phase6bs_nt_set_information_file((uint32_t)(saved_esp)); \\\n"
-        "    "
+        "    } else if (_phase4c_target == 0x800000FFu && !s_phase4cThreadEntered) { \\\"
     )
-    patched_macro = macro[:fallback_pos] + branch + macro[fallback_pos:]
+    patched_macro = macro[:first_pos] + replacement + macro[first_pos + len(first_branch):]
     if patched_macro.count("_phase4c_target == 0x800000E2u") != 1:
         raise SystemExit("[Phase6BS] ordinal-226 dispatch insertion did not produce exactly one branch")
 
