@@ -724,3 +724,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   and guest faults remain fenced. 6AH emits its own authoritative result
   requiring the 0x0028E700 root, prior 0x00290895 root, and native CreateDevice
   handoff; the inherited cosine-harvest result is relabeled non-authoritative.
+
+
+- **Phase 6AH-A prep - INVALID / no build:** emission stopped before VS2017.
+  The final PowerShell wrapper line alone did not preserve the underlying emitter
+  reason in the user's pasted excerpt, so no runtime conclusion is attached.
+- **Phase 6AH-B active:** the mandatory 0x0028E700 support-clean root remains
+  authoritative. The extra D3D saturation round is now explicitly
+  opportunistic: if every optional saturation candidate is support-unsafe,
+  6AH falls back to the already-clean root-only pack rather than aborting the
+  stage. Prep also embeds the best available emitter failure text directly in
+  the final thrown error so any remaining mandatory-root failure is visible
+  even from a short console excerpt.
