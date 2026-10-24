@@ -109,7 +109,7 @@ foreach ($path in @($main,$mono,$env,$manifest,$shardDir)) {
 
 $r = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($r.phase -ne "6AN" -or
-    $r.build_tag -ne "P6AN-D3D-STATE-STACK-PROBE-20261023-A") {
+    $r.build_tag -ne "P6AN-D3D-STATE-STACK-PROBE-20261023-B") {
     throw "Phase 6AN manifest identity mismatch"
 }
 
@@ -124,9 +124,7 @@ if (-not [bool]$an.probe_only -or
 $monoText = Get-Content -LiteralPath $mono -Raw
 $envText = Get-Content -LiteralPath $env -Raw
 foreach ($marker in @(
-    "P6AN-D3D-STATE-STACK-PROBE-20261023-A",
-    "P6AN D3D STACK ENTRY:",
-    "P6AN D3D STACK SENTINEL:",
+    "P6AN-D3D-STATE-STACK-PROBE-20261023-B",
     "P6AN D3D STACK SUMMARY:",
     "phase6an_env_build_cookie"
 )) {
@@ -152,9 +150,8 @@ Write-Host ""
 Write-Host "[Phase6AN] READY"
 Write-Host ("[Phase6AN] Generated shards      : {0}" -f $shards.Count)
 Write-Host "[Phase6AN] Guest semantics       : UNCHANGED"
-Write-Host "[Phase6AN] Expected tag          : P6AN-D3D-STATE-STACK-PROBE-20261023-A"
-Write-Host "[Phase6AN] Hardware money line 1 : P6AN D3D STACK ENTRY: ..."
-Write-Host "[Phase6AN] Hardware money line 2 : P6AN D3D STACK SENTINEL: ..."
+Write-Host "[Phase6AN] Expected tag          : P6AN-D3D-STATE-STACK-PROBE-20261023-B"
+Write-Host "[Phase6AN] Hardware money line   : P6AN D3D STACK SUMMARY: ..."
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -164,22 +161,22 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AN-D3D-STATE-STACK-PROBE-20261023-A"
+        ExpectedBuildTag = "P6AN-D3D-STATE-STACK-PROBE-20261023-B"
         ExpectedEnvCookie = "phase6an_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
         Platform = $Platform
         CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6an-vs2017-clean.log")
         BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6an-vs2017-build.log")
-        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AN-A.xex")
+        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AN-B.xex")
     }
 
     & $builder @buildArgs
 
     Write-Host ""
     Write-Host "[Phase6AN] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AN] Hardware tag to verify: P6AN-D3D-STATE-STACK-PROBE-20261023-A"
-    Write-Host ("[Phase6AN] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AN-A.xex"))
+    Write-Host "[Phase6AN] Hardware tag to verify: P6AN-D3D-STATE-STACK-PROBE-20261023-B"
+    Write-Host ("[Phase6AN] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AN-B.xex"))
 }
 else {
     Write-Host "[Phase6AN] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
