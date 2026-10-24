@@ -207,7 +207,7 @@ foreach ($f in @($main,$monolithic,$env,$manifest,$shardDir)) {
 
 $m = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($m.phase -ne "6AG" -or
-    $m.build_tag -ne "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B") {
+    $m.build_tag -ne "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-C") {
     throw "Phase 6AG manifest identity mismatch"
 }
 
@@ -236,7 +236,7 @@ if ($policyMatch.Groups[1].Value.Length -gt 240) {
 }
 
 foreach ($marker in @(
-    "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B",
+    "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-C",
     "case 0x00290895u:",
     "s_phase6agRootEntered = 1;",
     "PASS: Phase 6AG retail D3D root 00290895 entered",
@@ -288,7 +288,7 @@ Write-Host ("[Phase6AG] Packed new D3D members : {0}" -f [int]$ag.packed_new_mem
 Write-Host ("[Phase6AG] Pruned unsafe members   : {0}" -f [int]$ag.pruned_members)
 Write-Host "[Phase6AG] Native CreateDevice     : inherited unchanged"
 Write-Host "[Phase6AG] D3D root                : 00290895 exact/generated/support-clean"
-Write-Host "[Phase6AG] Expected tag            : P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
+Write-Host "[Phase6AG] Expected tag            : P6AG-D3D-NEIGHBORHOOD-00290895-20261023-C"
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
@@ -298,22 +298,22 @@ if (-not $SkipSolutionBuild) {
         GeneratedMain = $main
         GeneratedEnv = $env
         GeneratedShardDir = $shardDir
-        ExpectedBuildTag = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
+        ExpectedBuildTag = "P6AG-D3D-NEIGHBORHOOD-00290895-20261023-C"
         ExpectedEnvCookie = "phase6ag_env_build_cookie"
         SolutionRoot = $SolutionRoot
         Configuration = $Configuration
         Platform = $Platform
         CleanLog = (Join-Path $root "build\phase6_native_graphics\phase6ag-vs2017-clean.log")
         BuildLog = (Join-Path $root "build\phase6_native_graphics\phase6ag-vs2017-build.log")
-        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AG-B.xex")
+        PublishedXex = (Join-Path $out "Mercenaries-PPC-Port-P6AG-C.xex")
     }
 
     & $paths.build @buildArgs
 
     Write-Host ""
     Write-Host "[Phase6AG] PREP + SOURCE SYNC + RELEASE BUILD: PASS"
-    Write-Host "[Phase6AG] Hardware tag to verify: P6AG-D3D-NEIGHBORHOOD-00290895-20261023-B"
-    Write-Host ("[Phase6AG] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AG-B.xex"))
+    Write-Host "[Phase6AG] Hardware tag to verify: P6AG-D3D-NEIGHBORHOOD-00290895-20261023-C"
+    Write-Host ("[Phase6AG] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6AG-C.xex"))
 }
 else {
     Write-Host "[Phase6AG] AUTO-BUILD skipped because -SkipSolutionBuild was supplied."
