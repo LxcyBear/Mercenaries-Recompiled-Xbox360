@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 BASE_TAG = "P6BW-KERAISEIRQL129-20261024-A"
@@ -43,6 +44,37 @@ def replace_unique(text: str, old: str, new: str, label: str) -> str:
     if count != 1:
         raise SystemExit(f"[Phase6BX] expected one {label}, found {count}")
     return text.replace(old, new, 1)
+
+
+
+def snapshot_guest_read32_router(text: str, base) -> str:
+    """Return the exact checked READ32 helper body for invariance proof.
+
+    Later Phase-6 sources no longer retain the original Phase-2E
+    MERC_SYNTH_FENCE_* macro names, so checking those names is stale.  What
+    matters here is that 6BX does not alter the live guest-read router that
+    produced the hardware READ32 0x8000018D fault.
+    """
+    masked = base.mask_noncode(text)
+    pattern = re.compile(
+        r"static[^\n;{]*\brecomp_guest_read32\s*"
+        r"\([^;{}]*\)\s*\{",
+        re.MULTILINE,
+    )
+    matches = list(pattern.finditer(masked))
+    if len(matches) != 1:
+        raise SystemExit(
+            f"[Phase6BX] expected one recomp_guest_read32 definition, found {len(matches)}"
+        )
+
+    match = matches[0]
+    brace = masked.find("{", match.start(), match.end())
+    if brace < 0:
+        raise SystemExit("[Phase6BX] recomp_guest_read32 opening brace missing")
+    end = base.closing_brace(masked, brace)
+    start = match.start()
+    return text[start:end]
+
 
 
 def find_function(text: str, base, name: str) -> tuple[str, int, int]:
@@ -238,11 +270,17 @@ def main() -> int:
         "PASS: Phase 6BW KeRaiseIrqlToDpcLevel guest continuation",
         "PHASE6BV_FILE_OBJECT_SENTINEL 0x04000000u",
         "#define PHASE4C_EXEC_BUDGET 8000000u",
-        "MERC_SYNTH_FENCE_BASE",
-        "MERC_SYNTH_FENCE_END",
+        "recomp_guest_read32",
+        "PHASE4C_BOUNDARY_GUEST_FAULT",
     ):
         if marker not in main_text:
             raise SystemExit(f"[Phase6BX] inherited 6BW marker missing: {marker}")
+
+    # Snapshot the exact checked READ32 router before any 6BX edits.  This is
+    # the authoritative invariance check for the low-KSEG ambiguity fence;
+    # later generated sources intentionally do not retain the old Phase-2E
+    # MERC_SYNTH_FENCE_* macro names.
+    guest_read32_router_before = snapshot_guest_read32_router(main_text, base)
 
     # Static generated-source proof for the exact retail function that owns the
     # hardware path. This is diagnostic evidence only; the body is not edited.
@@ -288,13 +326,19 @@ def main() -> int:
         COOKIE_NEW,
         "P6BX LOWKSEG ORIGIN: va=%08X",
         "P6BX LOWKSEG ORIGIN: hits=%u",
-        "MERC_SYNTH_FENCE_BASE",
-        "MERC_SYNTH_FENCE_END",
+        "recomp_guest_read32",
+        "PHASE4C_BOUNDARY_GUEST_FAULT",
         "PHASE6BV_FILE_OBJECT_SENTINEL 0x04000000u",
         "#define PHASE4C_EXEC_BUDGET 8000000u",
     ):
         if marker not in main_text:
             raise SystemExit(f"[Phase6BX] generated source lost marker: {marker}")
+
+    guest_read32_router_after = snapshot_guest_read32_router(main_text, base)
+    if guest_read32_router_after != guest_read32_router_before:
+        raise SystemExit(
+            "[Phase6BX] checked guest READ32 router changed; refusing to emit"
+        )
 
     layout = p6bl.write_sharded_main(args.out_dir, main_text, base)
     (args.out_dir / "phase5_env.cpp").write_text(env_text, encoding="utf-8")
@@ -324,6 +368,7 @@ def main() -> int:
             "phase4a_exact_import_ordinal_397_present": False,
             "do_not_route_as_kernel_export": True,
             "low_kseg_alias_not_relaxed": True,
+            "guest_read32_router_byte_identical": True,
         },
         "probe": {
             "non_mutating": True,
@@ -347,7 +392,7 @@ def main() -> int:
     print("[Phase6BX] immediate next access: READ32 guest=8000018D fault=1")
     print("[Phase6BX] 8000018D lies inside the intentionally fenced low-KSEG page")
     print("[Phase6BX] Phase-4A exact retail import set contains no ordinal 397 / 0x18D")
-    print("[Phase6BX] low-KSEG fence remains unchanged")
+    print("[Phase6BX] checked guest READ32 router byte-identical; low-KSEG fence unchanged")
     print("[Phase6BX] probe VAs: 0022AC56 0022AC78 0022AC89 0022AC8F")
     print(f"[Phase6BX] SOURCE FORENSIC: {args.out_dir / forensic['report']}")
     for row in forensic["interesting_lines"]:
