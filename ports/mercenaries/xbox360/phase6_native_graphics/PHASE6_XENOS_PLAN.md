@@ -753,3 +753,15 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   proof. 6AH's authoritative PASS now additionally requires that checkpoint
   to execute at least once. Unknown helpers remain fenced; no global support
   whitelist was added.
+
+
+- **Phase 6AH-C prep - PARSER INVALID / no build:** the PowerShell prep file
+  was corrupted by a truncated failure-reporting filter plus a duplicated tail.
+  The parser failed before Phase-6AH emission/build; no XEX or hardware evidence
+  exists for 6AH-C.
+- **Phase 6AH-D active:** rebuild the prep script from the intact prefix, one
+  clean failure-reporting block, and one clean post-emission/build tail. The
+  repaired script has one build tail, balanced structural delimiters/quotes,
+  retains the maintained diagnostic-only \`recomp_d3d_sync_checkpoint\` support,
+  requires its hardware call counter in the authoritative 6AH result, and
+  publishes \`Mercenaries-PPC-Port-P6AH-D.xex\`.
