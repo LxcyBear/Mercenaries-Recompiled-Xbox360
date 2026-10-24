@@ -43,24 +43,43 @@ def replace_unique(text: str, old: str, new: str, label: str) -> str:
 
 
 def patch_icall_dispatch(text: str) -> str:
-    anchor = r'''} else { \
-        phase4c_escape( \
-            PHASE4C_BOUNDARY_ICALL_SAFE, \
-            _phase4c_target, \
-            (DWORD)(saved_esp)); \
-    } \
-} while (0)'''
-    replacement = r'''} else if (_phase4c_target == 0x800000E2u) { \
-        phase6bs_nt_set_information_file((uint32_t)(saved_esp)); \
-    } else { \
-        phase4c_escape( \
-            PHASE4C_BOUNDARY_ICALL_SAFE, \
-            _phase4c_target, \
-            (DWORD)(saved_esp)); \
-    } \
-} while (0)'''
-    return replace_unique(text, anchor, replacement, "RECOMP_ICALL_SAFE fallback")
+    macro_start = text.find("#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do {")
+    if macro_start < 0:
+        raise SystemExit("[Phase6BS] RECOMP_ICALL_SAFE macro start missing")
 
+    next_macro = text.find("#define RECOMP_ITAIL", macro_start)
+    if next_macro < 0:
+        raise SystemExit("[Phase6BS] RECOMP_ITAIL anchor missing after RECOMP_ICALL_SAFE")
+
+    macro = text[macro_start:next_macro]
+    if "PHASE4C_BOUNDARY_ICALL_SAFE" not in macro or "_phase4c_target" not in macro:
+        raise SystemExit("[Phase6BS] RECOMP_ICALL_SAFE macro shape is not the expected kernel-dispatch form")
+
+    if "_phase4c_target == 0x800000E2u" in macro:
+        raise SystemExit("[Phase6BS] ordinal 226 is already dispatched by RECOMP_ICALL_SAFE")
+
+    # Later phases accumulated many maintained kernel continuations here.
+    # Avoid matching the entire historical macro body. Insert immediately
+    # before the final fallback else that escapes unknown ICALL_SAFE targets.
+    fallback = "} else { \\\"
+    fallback_pos = macro.rfind(fallback)
+    if fallback_pos < 0:
+        raise SystemExit("[Phase6BS] final RECOMP_ICALL_SAFE fallback else not found")
+
+    fallback_tail = macro[fallback_pos:]
+    if "PHASE4C_BOUNDARY_ICALL_SAFE" not in fallback_tail:
+        raise SystemExit("[Phase6BS] final RECOMP_ICALL_SAFE else is not the ICALL_SAFE escape")
+
+    branch = (
+        "} else if (_phase4c_target == 0x800000E2u) { \\\n"
+        "        phase6bs_nt_set_information_file((uint32_t)(saved_esp)); \\\n"
+        "    "
+    )
+    patched_macro = macro[:fallback_pos] + branch + macro[fallback_pos:]
+    if patched_macro.count("_phase4c_target == 0x800000E2u") != 1:
+        raise SystemExit("[Phase6BS] ordinal-226 dispatch insertion did not produce exactly one branch")
+
+    return text[:macro_start] + patched_macro + text[next_macro:]
 
 def install_ntsetinfo_support(text: str) -> str:
     # Insert immediately before the translated-pack lookup definition. This
