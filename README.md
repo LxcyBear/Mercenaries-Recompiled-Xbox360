@@ -3427,4 +3427,5 @@ their respective owners. This is an unofficial fan project.
 
 - **6AH-A — PREP INVALID:** emission stopped before VS2017; no XEX/hardware conclusion.
 - **6AH-B — PREP SUPPORT BLOCKER:** exact root `0x0028E700` was valid, but support-clean emission found one unresolved helper: `recomp_d3d_sync_checkpoint`. Upstream confirms it is diagnostic-only and normally returns immediately when D3D-sync tracing is disabled; no XEX was built.
-- **6AH-C — ACTIVE:** maintain that diagnostic checkpoint explicitly as a guest/device no-op with host-only proof counters, require at least one checkpoint call in the 6AH result, and keep every other unknown helper fenced. The optional D3D saturation fallback remains bounded.
+- **6AH-C — PREP PARSER INVALID:** PowerShell was corrupted by a truncated failure-reporting block and duplicated tail; no emission/build/XEX occurred.
+- **6AH-D — ACTIVE:** repaired prep script, retained the explicit diagnostic-only D3D-sync checkpoint support/proof counter, and preserved the bounded optional saturation policy.
