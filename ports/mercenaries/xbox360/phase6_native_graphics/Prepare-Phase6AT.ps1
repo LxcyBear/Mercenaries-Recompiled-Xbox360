@@ -136,6 +136,10 @@ foreach ($marker in @(
     "post_init_tail_claim=%u",
     "P6AT D3D TAIL CLAIM:",
     "P6AT POST-CREATE D3D INIT:",
+    "P6AT X360DBG PPC1:",
+    "P6AT X360DBG GUESTREG:",
+    "P6AT X360DBG MEMORY1:",
+    "P6AT X360DBG MEMORY2:",
     "phase6at_env_build_cookie"
 )) {
     if (-not $monoText.Contains($marker)) {
@@ -165,7 +169,11 @@ Write-Host "[Phase6AT] Tail fallback scope   : active sub_0028F9E0 only"
 Write-Host "[Phase6AT] Heap safety           : free-tail only / no live overlap"
 Write-Host "[Phase6AT] Expected tag          : P6AT-D3D-DUAL-FRONTIER-CONTINUE-20261024-B"
 Write-Host "[Phase6AT] Hardware money line 1 : PASS: Phase 6AT post-create tail claim ..."
-Write-Host "[Phase6AT] Hardware money line 2 : P6AT POST-CREATE D3D INIT: ..."\nWrite-Host "[Phase6AT] Debugger line 1       : P6AT X360DBG PPC1: ..."\nWrite-Host "[Phase6AT] Debugger line 2       : P6AT X360DBG GUESTREG: ..."\nWrite-Host "[Phase6AT] Debugger line 3       : P6AT X360DBG MEMORY1: ..."\nWrite-Host "[Phase6AT] Debugger line 4       : P6AT X360DBG MEMORY2: ..."
+Write-Host "[Phase6AT] Hardware money line 2 : P6AT POST-CREATE D3D INIT: ..."
+Write-Host "[Phase6AT] Debugger line 1       : P6AT X360DBG PPC1: ..."
+Write-Host "[Phase6AT] Debugger line 2       : P6AT X360DBG GUESTREG: ..."
+Write-Host "[Phase6AT] Debugger line 3       : P6AT X360DBG MEMORY1: ..."
+Write-Host "[Phase6AT] Debugger line 4       : P6AT X360DBG MEMORY2: ..."
 
 if (-not $SkipSolutionBuild) {
     Write-Host ""
