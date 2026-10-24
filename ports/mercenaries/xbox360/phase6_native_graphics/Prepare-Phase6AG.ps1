@@ -216,7 +216,8 @@ if (-not [bool]$ag.phase6af_hardware_pass -or
     $ag.root -ne "0x00290895" -or
     $ag.frontier_caller -ne "0x0023A3CE" -or
     [int]$ag.phase6af_hardware.next_boundary.fault -ne 0 -or
-    -not [bool]$ag.stale_av_result_gate_removed -or
+    -not [bool]$ag.independent_phase_result_gate -or
+    -not [bool]$ag.inherited_av_result_gate_left_untouched -or
     -not [bool]$ag.native_createdevice_handoff_inherited_unchanged -or
     [int]$ag.packed_new_members -lt 1 -or
     $ag.source_layout.shard_prefix -ne "phase6ag_") {
@@ -241,7 +242,8 @@ foreach ($marker in @(
     "s_phase6agRootEntered = 1;",
     "PASS: Phase 6AG retail D3D root 00290895 entered",
     "PASS: Phase 6AG native D3D CreateDevice handoff",
-    "s_phase6agRootEntered &&",
+    "PHASE 6AG D3D NEIGHBORHOOD RESULT: %s",
+    "s_phase6agRootEntered && s_phase6afCreateDeviceBridgeCount != 0u",
     "P6AG XENOS: PASS Direct3D_CreateDevice",
     "P6AG FIRST GRAPHICS TOUCH: NV2A MMIO boundary reached",
     "P6AG FIRST GRAPHICS TOUCH: NV2A VRAM aperture boundary reached",
@@ -252,10 +254,6 @@ foreach ($marker in @(
     }
 }
 
-if ($monolithicText.Contains("s_phase6aeAvEncoderCount != 0u &&") -or
-    $monolithicText.Contains("s_phase6adAvGetCount != 0u &&")) {
-    throw "Phase 6AG stale optional AV PASS gate remains"
-}
 if ($monolithicText -match "phase6af_env_build_cookie" -or
     $envText -match "phase6af_env_build_cookie") {
     throw "Phase 6AG stale Phase 6AF cookie remains"
