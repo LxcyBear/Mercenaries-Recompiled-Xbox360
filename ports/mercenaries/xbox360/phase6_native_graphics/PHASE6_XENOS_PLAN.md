@@ -608,3 +608,18 @@ purple GPU-boundary event has yet been confirmed by xbWatson.
   \`RENDERER_FATAL\` boundary with fault=0. Phase harness result PASS, XAPI
   return 0. The next frontier is therefore the retail CreateDevice/recovery
   path rather than the AV bridge.
+
+
+- **Phase 6AF active - native D3D CreateDevice handoff:** use the 6AE-B
+  hardware proof plus upstream Mercenaries-Recompiled's own renderer recovery
+  regression contract to replace only retail \`sub_0028CAA0\` with a bounded
+  native-Xenos handoff. The bridge validates the exact six-argument / 28-byte
+  retail frame and 640x480 presentation contract, allows the retail AA/non-AA
+  multisample field to vary, writes the upstream-proven successful guest device
+  identity \`0x00299380\` through the title's device-out pointer, returns S_OK,
+  and resumes the already-packed translated D3D path. The real physical device
+  remains the live Xbox 360 Xenos \`D3DDevice\`; no original-Xbox NV2A register
+  writes are fabricated. Genuine NV2A MMIO/VRAM, platform, ABI and guest faults
+  remain hard stops. This stage is intended to cross the terminal
+  \`0x8007000E\` renderer-creation frontier and expose multiple subsequent D3D
+  boundaries in one hardware run when safely possible.
