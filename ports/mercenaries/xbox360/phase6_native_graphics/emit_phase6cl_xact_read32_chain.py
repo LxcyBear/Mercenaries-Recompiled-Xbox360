@@ -86,16 +86,20 @@ def matching_brace(text: str, open_pos: int) -> int:
 
 def wrap_read32(text: str) -> str:
     signature = "uint32_t recomp_guest_read32(uint32_t address)"
-    if text.count(signature) != 1:
+    definition_re = re.compile(
+        r"(?m)^uint32_t\\s+recomp_guest_read32\\(uint32_t address\\)\\s*\\{"
+    )
+    matches = list(definition_re.finditer(text))
+    if len(matches) != 1:
         raise SystemExit(
-            f"[Phase6CL] expected one recomp_guest_read32 signature, "
-            f"found {text.count(signature)}"
+            f"[Phase6CL] expected one recomp_guest_read32 definition, "
+            f"found {len(matches)}"
         )
 
-    start = text.find(signature)
-    open_pos = text.find("{", start)
+    start = matches[0].start()
+    open_pos = text.find("{", matches[0].start(), matches[0].end() + 1)
     if open_pos < 0:
-        raise SystemExit("[Phase6CL] recomp_guest_read32 opening brace missing")
+        raise SystemExit("[Phase6CL] recomp_guest_read32 definition brace missing")
     close_pos = matching_brace(text, open_pos)
     original = text[start:close_pos + 1]
 
@@ -304,10 +308,15 @@ def main() -> int:
         if marker not in main_text:
             raise SystemExit(f"[Phase6CL] inherited marker missing: {marker}")
 
+    prior_block = block_window(main_text, 0x002832BB)
     block = block_window(main_text, ARM_VA)
-    if len(block) < 20:
-        raise SystemExit("[Phase6CL] 002832CA block extraction is unexpectedly short")
+    if len(prior_block) < 20 or len(block) < 20:
+        raise SystemExit("[Phase6CL] XACT block extraction is unexpectedly short")
 
+    print("[Phase6CL] 002832BB SOURCE BLOCK BEGIN")
+    for line in prior_block.splitlines():
+        print(f"[Phase6CL] | {line}")
+    print("[Phase6CL] 002832BB SOURCE BLOCK END")
     print("[Phase6CL] 002832CA SOURCE BLOCK BEGIN")
     for line in block.splitlines():
         print(f"[Phase6CL] | {line}")
@@ -345,7 +354,11 @@ def main() -> int:
     layout = p6bl.write_sharded_main(args.out_dir, main_text, base)
     (args.out_dir / "phase5_env.cpp").write_text(env_text, encoding="utf-8")
     source_report = args.out_dir / "phase6cl-002832ca-source.txt"
-    source_report.write_text(block + "\n", encoding="utf-8")
+    source_report.write_text(
+        "===== loc_002832BB =====\n" + prior_block +
+        "\n===== loc_002832CA =====\n" + block + "\n",
+        encoding="utf-8",
+    )
 
     manifest["phase"] = "6CL"
     manifest["build_tag"] = BUILD_TAG
