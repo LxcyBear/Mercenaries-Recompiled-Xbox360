@@ -76,10 +76,14 @@ def patch_icall_dispatch(text: str) -> str:
 
 
 def install_support(text: str) -> str:
-    anchor = "static uint32_t s_phase6caKfLowerIrqlCallCount = 0u;"
+    # Insert after the complete inherited 6BV/6CA support block. 6CB reads
+    # s_phase6bvObRefContinuationCount and PHASE6BV_FILE_OBJECT_SENTINEL, so
+    # placing this helper before those declarations breaks VS2017 C++ name
+    # lookup even though emission-time marker checks still pass.
+    anchor = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
     if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6CB] expected one 6CA KfLowerIrql state anchor, found {text.count(anchor)}"
+            f"[Phase6CB] expected one post-ObRef support anchor, found {text.count(anchor)}"
         )
 
     support = r'''static uint32_t s_phase6cbObfDereferenceCallCount = 0u;
@@ -169,7 +173,22 @@ static void phase6cb_obf_dereference_object(uint32_t savedEsp)
 }
 
 '''
-    return text.replace(anchor, support + anchor, 1)
+    text = text.replace(anchor, support + anchor, 1)
+
+    # Compile-order proof: every inherited symbol referenced by the new helper
+    # must be declared before the helper definition in the emitted C++.
+    helper_pos = text.find("static void phase6cb_obf_dereference_object")
+    obref_pos = text.find("static uint32_t s_phase6bvObRefContinuationCount")
+    sentinel_pos = text.find("#define PHASE6BV_FILE_OBJECT_SENTINEL 0x04000000u")
+    lookup_pos = text.find(anchor)
+    if min(helper_pos, obref_pos, sentinel_pos, lookup_pos) < 0:
+        raise SystemExit("[Phase6CB] compile-order proof marker missing")
+    if not (obref_pos < helper_pos and sentinel_pos < helper_pos < lookup_pos):
+        raise SystemExit(
+            "[Phase6CB] compile-order proof failed: 6BV sentinel state must precede 6CB helper"
+        )
+
+    return text
 
 
 def insert_arm_trace(text: str) -> str:
