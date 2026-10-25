@@ -67,6 +67,12 @@ Write-Host "[Phase6CN] Existing 6CM repair and every hard fence stay armed"
 & $python -m py_compile $emitter
 if($LASTEXITCODE-ne0){throw "Phase 6CN emitter syntax check failed"}
 
+$emitterText=Get-Content $emitter -Raw
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CN-R3"')){
+  throw "Phase 6CN stale emitter detected; expected revision 6CN-R3"
+}
+Write-Host "[Phase6CN] Emitter revision       : 6CN-R3"
+
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
 
