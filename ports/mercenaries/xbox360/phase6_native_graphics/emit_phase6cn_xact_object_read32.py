@@ -92,7 +92,7 @@ def matching_brace(text: str, open_pos: int) -> int:
 
 def install_state_and_current_va(text: str) -> str:
     state_re = re.compile(
-        r"(?m)^(static DWORD s_phase6awVaRingCount = 0u;\\s*)$"
+        r"(?m)^(static DWORD s_phase6awVaRingCount = 0u;\s*)$"
     )
     state_matches = list(state_re.finditer(text))
     if len(state_matches) != 1:
@@ -254,14 +254,14 @@ uint32_t recomp_guest_read32(uint32_t address)
 
 
 def arm_probe(text: str) -> str:
-    marker = f"loc_{ARM_VA:08X}: ;\\n"
+    marker = f"loc_{ARM_VA:08X}: ;\n"
     if text.count(marker) != 1:
         raise SystemExit(
             f"[Phase6CN] expected one arm label {marker.strip()}, found {text.count(marker)}"
         )
 
     start = text.find(marker) + len(marker)
-    original_tick = "    PHASE4C_BUDGET_TICK(0x002832CAu);\\n"
+    original_tick = "    PHASE4C_BUDGET_TICK(0x002832CAu);\n"
     tick_pos = text.find(original_tick, start)
     if tick_pos < 0 or tick_pos - start > 9000:
         raise SystemExit(
@@ -416,7 +416,7 @@ def main() -> int:
     ]
     source_blocks_found = 0
     for va in ring_vas:
-        marker = f"loc_{va:08X}: ;\\n"
+        marker = f"loc_{va:08X}: ;\n"
         if marker not in main_text:
             print(f"[Phase6CN] SOURCE BLOCK {va:08X}: no exact loc label (runtime VA only)")
             continue
