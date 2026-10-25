@@ -27,7 +27,7 @@ BASE_TAG = "P6CQ-ITAIL-SATURATION64M-0010D1A0-20261025-A"
 BUILD_TAG = "P6CR-XACT-TO-DISPLAY-00280141-20261025-A"
 COOKIE_OLD = "phase6cq_env_build_cookie"
 COOKIE_NEW = "phase6cr_env_build_cookie"
-EMITTER_REVISION = "6CR-R2"
+EMITTER_REVISION = "6CR-R3"
 
 ROOT = 0x00280141
 CALLER = 0x0023A3CE
@@ -564,7 +564,8 @@ def main() -> int:
         f"pruned={len(pruned)} packed_new={len(new_members)} "
         f"total={len(total_pack)} new_source_bytes={total_source}"
     )
-    print("[Phase6CR] ROOT AUDIO POLICY: retail 00280141 semantics restored; PC enhancement hooks deferred")\n    print("[Phase6CR] PRESENT PROXIMITY telemetry armed")
+    print("[Phase6CR] ROOT AUDIO POLICY: retail 00280141 semantics restored; PC enhancement hooks deferred")
+    print("[Phase6CR] PRESENT PROXIMITY telemetry armed")
     print("[Phase6CR] 64M execution budget preserved")
     print("[Phase6CR] packed ITAIL + ordinal-24 kernel tail preserved")
     print("[Phase6CR] 6CP XACT continuity/sentinel repairs preserved")
