@@ -55,34 +55,66 @@ def block_window(text: str, va: int) -> str:
     return text[start:end]
 
 
-OLD_READ32 = """uint32_t recomp_guest_read32(uint32_t address)
-{
-    BYTE* p = guest_ptr((DWORD)address, 4u);
+def matching_brace(text: str, open_pos: int) -> int:
+    depth = 0
+    in_string = False
+    quote = ""
+    escape = False
+    i = open_pos
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\\\":
+                escape = True
+            elif ch == quote:
+                in_string = False
+        else:
+            if ch in ('"', "'"):
+                in_string = True
+                quote = ch
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return i
+        i += 1
+    raise SystemExit("[Phase6CL] unterminated recomp_guest_read32 body")
 
-    if (!p)
-    {
-        s_accessFault = 1;
-        return 0u;
-    }
 
-    return ((uint32_t)p[0]) |
-           ((uint32_t)p[1] << 8) |
-           ((uint32_t)p[2] << 16) |
-           ((uint32_t)p[3] << 24);
-}
-"""
+def wrap_read32(text: str) -> str:
+    signature = "uint32_t recomp_guest_read32(uint32_t address)"
+    if text.count(signature) != 1:
+        raise SystemExit(
+            f"[Phase6CL] expected one recomp_guest_read32 signature, "
+            f"found {text.count(signature)}"
+        )
 
-NEW_READ32 = r"""static void trace(const char* line);
+    start = text.find(signature)
+    open_pos = text.find("{", start)
+    if open_pos < 0:
+        raise SystemExit("[Phase6CL] recomp_guest_read32 opening brace missing")
+    close_pos = matching_brace(text, open_pos)
+    original = text[start:close_pos + 1]
 
+    renamed = original.replace(
+        signature,
+        "static uint32_t phase6cl_inherited_guest_read32(uint32_t address)",
+        1,
+    )
+
+    wrapper = r"""
 static DWORD s_phase6clReadTraceActive = 0u;
 static DWORD s_phase6clReadTraceSeq = 0u;
 static DWORD s_phase6clReadTraceLastAddr = 0u;
 static DWORD s_phase6clReadTraceLastValue = 0u;
 static DWORD s_phase6clReadTraceFaultAddr = 0u;
+static void trace(const char* line);
 
 uint32_t recomp_guest_read32(uint32_t address)
 {
-    BYTE* p;
     uint32_t value;
     DWORD seq = 0u;
 
@@ -110,19 +142,21 @@ uint32_t recomp_guest_read32(uint32_t address)
         }
     }
 
-    p = guest_ptr((DWORD)address, 4u);
+    value = phase6cl_inherited_guest_read32(address);
 
-    if (!p)
+    if (s_phase6clReadTraceActive)
     {
-        if (s_phase6clReadTraceActive)
+        char line[640];
+
+        if (s_accessFault)
         {
-            char line[480];
             s_phase6clReadTraceFaultAddr = address;
             sprintf(
                 line,
-                "P6CL READ32 INVALID seq=%u addr=%08X eax=%08X ecx=%08X edx=%08X esi=%08X edi=%08X",
+                "P6CL READ32 INVALID seq=%u addr=%08X returned=%08X eax=%08X ecx=%08X edx=%08X esi=%08X edi=%08X",
                 (unsigned int)seq,
                 (unsigned int)address,
+                (unsigned int)value,
                 (unsigned int)g_eax,
                 (unsigned int)g_ecx,
                 (unsigned int)g_edx,
@@ -130,37 +164,26 @@ uint32_t recomp_guest_read32(uint32_t address)
                 (unsigned int)g_edi);
             trace(line);
         }
-
-        s_accessFault = 1;
-        return 0u;
-    }
-
-    value = ((uint32_t)p[0]) |
-            ((uint32_t)p[1] << 8) |
-            ((uint32_t)p[2] << 16) |
-            ((uint32_t)p[3] << 24);
-
-    if (s_phase6clReadTraceActive)
-    {
-        char line[640];
-        s_phase6clReadTraceLastValue = value;
-
-        if (seq <= 32u)
+        else
         {
-            sprintf(
-                line,
-                "P6CL READ32 POST seq=%u addr=%08X value=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X",
-                (unsigned int)seq,
-                (unsigned int)address,
-                (unsigned int)value,
-                (unsigned int)g_eax,
-                (unsigned int)g_ecx,
-                (unsigned int)g_edx,
-                (unsigned int)g_ebx,
-                (unsigned int)g_esi,
-                (unsigned int)g_edi,
-                (unsigned int)g_esp);
-            trace(line);
+            s_phase6clReadTraceLastValue = value;
+            if (seq <= 32u)
+            {
+                sprintf(
+                    line,
+                    "P6CL READ32 POST seq=%u addr=%08X value=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X",
+                    (unsigned int)seq,
+                    (unsigned int)address,
+                    (unsigned int)value,
+                    (unsigned int)g_eax,
+                    (unsigned int)g_ecx,
+                    (unsigned int)g_edx,
+                    (unsigned int)g_ebx,
+                    (unsigned int)g_esi,
+                    (unsigned int)g_edi,
+                    (unsigned int)g_esp);
+                trace(line);
+            }
         }
     }
 
@@ -168,6 +191,7 @@ uint32_t recomp_guest_read32(uint32_t address)
 }
 """
 
+    return text[:start] + renamed + "\n\n" + wrapper + text[close_pos + 1:]
 
 def arm_probe(text: str) -> str:
     marker = f"loc_{ARM_VA:08X}: ;\n"
@@ -289,12 +313,7 @@ def main() -> int:
         print(f"[Phase6CL] | {line}")
     print("[Phase6CL] 002832CA SOURCE BLOCK END")
 
-    main_text = replace_once(
-        main_text,
-        OLD_READ32,
-        NEW_READ32,
-        "recomp_guest_read32 implementation",
-    )
+    main_text = wrap_read32(main_text)
     main_text = arm_probe(main_text)
     main_text = insert_summary(main_text)
 
