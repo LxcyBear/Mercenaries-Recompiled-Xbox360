@@ -77,10 +77,10 @@ Write-Host "[Phase6CR] Watchdog: preserve 64,000,000 translated blocks"
 if($LASTEXITCODE-ne0){throw "Phase 6CR emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CR-R1"')){
-  throw "Phase 6CR stale emitter detected; expected revision 6CR-R1"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CR-R2"')){
+  throw "Phase 6CR stale emitter detected; expected revision 6CR-R2"
 }
-Write-Host "[Phase6CR] Emitter revision       : 6CR-R1"
+Write-Host "[Phase6CR] Emitter revision       : 6CR-R2"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -141,7 +141,8 @@ if($k.phase6cq_hardware.boundary_kind-ne"DIRECT_FRONTIER"-or
    $k.graphics_bridge_semantics_changed-ne$false-or
    $k.null_page_semantics_changed-ne$false-or
    $k.seh_terminator_semantics_changed-ne$false-or
-   $k.hard_fences_changed-ne$false){
+   $k.hard_fences_changed-ne$false-or
+   $k.root_audio_policy.retail_semantics_restored-ne$true){
   throw "Phase 6CR manifest gate failed"
 }
 if([int]$k.packed_new_members-lt1){
@@ -175,7 +176,7 @@ Write-Host ("[Phase6CR] Pruned unsafe members  : {0}" -f [int]$k.pruned_members)
 Write-Host ("[Phase6CR] Packed new members     : {0}" -f [int]$k.packed_new_members)
 Write-Host ("[Phase6CR] Expanded pack members  : {0}" -f [int]$k.expanded_pack_members)
 Write-Host ("[Phase6CR] Generated shards       : {0}" -f $shardCount)
-Write-Host "[Phase6CR] Present proximity      : ARMED"
+Write-Host "[Phase6CR] Root audio policy       : retail semantics; PC enhancement hooks deferred"\nWrite-Host "[Phase6CR] Present proximity      : ARMED"
 Write-Host "[Phase6CR] 64M watchdog          : preserved"
 Write-Host "[Phase6CR] 6CP/6CQ repairs       : preserved"
 
