@@ -61,8 +61,8 @@ Write-Host "[Phase6CC] DIRECT FRONTIER 001F9D70"
 Write-Host "[Phase6CC] 6CB hardware: sentinel deref PASS, outstanding=0, NtClose PASS"
 Write-Host "[Phase6CC] Boundary: DIRECT_FRONTIER 0023A3CE -> 001F9D70"
 Write-Host "[Phase6CC] Frame: esp=saved=008BF988 fault=0 ticks=956060 trace=180293"
-Write-Host "[Phase6CC] Policy: exact generated start + bounded depth-4/cap-256 support-clean closure"
-Write-Host "[Phase6CC] Unknown root support hard-stops; no guessed shim"
+Write-Host "[Phase6CC] Policy: intentional manual-function root; use maintained source-matched PblMath trig family"
+Write-Host "[Phase6CC] Manual family: 001F9D70/001F9DA0/001F9DE0; translated membership unchanged"
 
 & $python -m py_compile $emitter
 if($LASTEXITCODE-ne0){throw "Phase 6CC emitter syntax check failed"}
@@ -118,16 +118,28 @@ if($a.phase6cb_hardware.next_boundary_kind-ne"DIRECT_FRONTIER"-or
    $a.phase6cb_hardware.fault-ne0-or
    $a.root-ne"0x001F9D70"-or
    $a.frontier_caller-ne"0x0023A3CE"-or
-   $a.packed_new_members-lt1-or
+   $a.root_is_declared_manual_function-ne$true-or
+   $a.generated_body_expected-ne$false-or
+   $a.translated_membership_changed-ne$false-or
+   $a.manual_source_basis-ne"ports/mercenaries/src/recomp_manual.c"-or
    $a.execution_budget-ne8000000){
-  throw "Phase 6CC hardware/root manifest gate failed"
+  throw "Phase 6CC hardware/manual-root manifest gate failed"
+}
+$manualFamily=@($a.manual_family)
+if($manualFamily.Count-ne3-or
+   $manualFamily[0]-ne"0x001F9D70"-or
+   $manualFamily[1]-ne"0x001F9DA0"-or
+   $manualFamily[2]-ne"0x001F9DE0"){
+  throw "Phase 6CC manual PblMath family gate failed"
 }
 
 $text=Get-Content $mono -Raw
 foreach($marker in @(
-  "case 0x001F9D70u:",
-  "PASS: Phase 6CC entered translated direct frontier 001F9D70",
-  "P6CC DIRECT FRONTIER 001F9D70:",
+  "case 0x001F9D70u: return phase6cc_pbl_sin_001f9d70;",
+  "case 0x001F9DA0u: return phase6cc_pbl_cos_001f9da0;",
+  "case 0x001F9DE0u: return phase6cc_pbl_sincos_001f9de0;",
+  "PASS: Phase 6CC entered manual PblMath sin 001F9D70",
+  "P6CC MANUAL PBL TRIG:",
   "P6CC OBFDEREF250:",
   "phase6cc_env_build_cookie",
   "#define PHASE4C_EXEC_BUDGET 8000000u"
@@ -136,11 +148,11 @@ foreach($marker in @(
 }
 
 Write-Host "[Phase6CC] READY"
-Write-Host ("[Phase6CC] Root name             : {0}" -f [string]$a.root_name)
-Write-Host ("[Phase6CC] Candidate new members : {0}" -f [int]$a.candidate_new_members)
-Write-Host ("[Phase6CC] Pruned unsafe members : {0}" -f [int]$a.pruned_members)
-Write-Host ("[Phase6CC] Packed new members    : {0}" -f [int]$a.packed_new_members)
-Write-Host ("[Phase6CC] Total pack members    : {0}" -f [int]$a.expanded_pack_members)
+Write-Host ("[Phase6CC] Root name              : {0}" -f [string]$a.root_name)
+Write-Host "[Phase6CC] Root ownership         : maintained manual PblMath implementation"
+Write-Host "[Phase6CC] Manual trig family     : 001F9D70 / 001F9DA0 / 001F9DE0"
+Write-Host "[Phase6CC] Translated membership  : unchanged"
+Write-Host "[Phase6CC] Native trig backend     : source-matched 8192-step quantized sinf"
 
 if(-not$SkipSolutionBuild){
   $buildArgs=@{
