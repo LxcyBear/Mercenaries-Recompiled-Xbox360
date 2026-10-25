@@ -121,28 +121,27 @@ static DWORD s_phase6cdOtherTickCount = 0u;
     if dump_pos < 0:
         raise SystemExit("[Phase6CD] inherited VA-ring dump helper missing")
 
-    macro_anchor = """#define PHASE4C_BUDGET_TICK(va) \
-    do { phase4c_budget_tick((DWORD)(va)); } while (0)
-"""
+    macro_anchor = (
+        "#define PHASE4C_BUDGET_TICK(va) \\\n"
+        "    do { phase4c_budget_tick((DWORD)(va)); } while (0)\n"
+    )
     macro_pos = text.find(macro_anchor, dump_pos)
     if macro_pos < 0:
         raise SystemExit("[Phase6CD] budget macro anchor missing")
 
     profile_helper = r'''static void phase6cd_dump_hot_profile(void)
 {
-    char line[512];
+    char line[448];
     sprintf(
         line,
-        "P6CD HOT PROFILE: total=%u hot_001E=%u hot_001F29=%u exact_00208F40=%u exact_00194150=%u exact_0023A3CE=%u other=%u direct=%u icall=%u",
+        "P6CD HOT PROFILE: total=%u hot_001E=%u hot_001F29=%u exact_00208F40=%u exact_00194150=%u exact_0023A3CE=%u other=%u",
         (unsigned int)s_phase4cBlockTicks,
         (unsigned int)s_phase6cdHot1EFCount,
         (unsigned int)s_phase6cdHot1F29Count,
         (unsigned int)s_phase6cdHot208F40Count,
         (unsigned int)s_phase6cdHot194150Count,
         (unsigned int)s_phase6cdHot23A3CECount,
-        (unsigned int)s_phase6cdOtherTickCount,
-        (unsigned int)s_phase5bcPackedDirectDispatchCount,
-        (unsigned int)s_phase5bcPackedIcallDispatchCount);
+        (unsigned int)s_phase6cdOtherTickCount);
     trace(line);
 }
 
