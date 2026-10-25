@@ -251,14 +251,18 @@ def arm_probe(text: str) -> str:
             f"[Phase6CN] expected one arm label {marker.strip()}, found {text.count(marker)}"
         )
 
-    # Insert after the inherited 6CM restore block, not before it, so the first
-    # traced read observes the corrected ESI value.
+    # Insert after the entire inherited 6CM if/else-if restore chain, not
+    # between the successful branch and its else-if.
     start = text.find(marker) + len(marker)
-    pass_marker = 'trace(phase6cmLine);\n    }\n'
-    pass_pos = text.find(pass_marker, start)
-    if pass_pos < 0 or pass_pos - start > 6000:
-        raise SystemExit("[Phase6CN] could not locate inherited 6CM restore block")
-    insert_pos = pass_pos + len(pass_marker)
+    tail_marker = (
+        '            (unsigned int)s_phase6cmRestoreChecks);\n'
+        '        trace(phase6cmLine);\n'
+        '    }\n'
+    )
+    tail_pos = text.find(tail_marker, start)
+    if tail_pos < 0 or tail_pos - start > 7000:
+        raise SystemExit("[Phase6CN] could not locate end of inherited 6CM restore chain")
+    insert_pos = tail_pos + len(tail_marker)
 
     code = r'''
     s_phase6cnReadTraceActive = 1u;
