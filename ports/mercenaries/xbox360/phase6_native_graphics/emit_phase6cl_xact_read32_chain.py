@@ -66,7 +66,7 @@ def matching_brace(text: str, open_pos: int) -> int:
         if in_string:
             if escape:
                 escape = False
-            elif ch == "\\\\":
+            elif ch == "\\":
                 escape = True
             elif ch == quote:
                 in_string = False
