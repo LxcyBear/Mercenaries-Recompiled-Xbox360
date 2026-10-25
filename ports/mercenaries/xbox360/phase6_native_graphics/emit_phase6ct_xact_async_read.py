@@ -31,7 +31,7 @@ BASE_TAG = "P6CS-PIXEL-CHASE-0027E780-20261025-A"
 BUILD_TAG = "P6CT-XACT-ASYNC-READ-20261025-A"
 COOKIE_OLD = "phase6cs_env_build_cookie"
 COOKIE_NEW = "phase6ct_env_build_cookie"
-EMITTER_REVISION = "6CT-R1"
+EMITTER_REVISION = "6CT-R2"
 
 STATUS_SUCCESS = 0x00000000
 STATUS_PENDING = 0x00000103
@@ -454,10 +454,12 @@ def insert_summary(text: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-dir", type=Path, required=True)
+    ap.add_argument("--base-emitter", type=Path, required=True)
     ap.add_argument("--phase6bl-emitter", type=Path, required=True)
     ap.add_argument("--out-dir", type=Path, required=True)
     args = ap.parse_args()
 
+    base = load(args.base_emitter, "phase6ct_base")
     p6bl = load(args.phase6bl_emitter, "phase6ct_p6bl")
 
     main_path = args.base_dir / "main_monolithic.cpp"
