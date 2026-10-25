@@ -118,15 +118,11 @@ if($a.phase6ce_hardware.boundary_kind-ne"ICALL_SAFE"-or
 
 $ordNames=@{}
 $a.armed_ordinals.psobject.Properties|ForEach-Object{$ordNames[$_.Name]=[string]$_.Value}
-foreach($pair in @(
-  @("14","ExAllocatePool"),
-  @("15","ExAllocatePoolWithTag"),
-  @("17","ExFreePool"),
-  @("23","ExQueryPoolBlockSize")
-)){
-  if(-not$ordNames.ContainsKey($pair[0])-or$ordNames[$pair[0]]-ne$pair[1]){
-    throw ("Phase 6CF ordinal family gate failed for "+$pair[0])
-  }
+if($ordNames["14"]-ne"ExAllocatePool"-or
+   $ordNames["15"]-ne"ExAllocatePoolWithTag"-or
+   $ordNames["17"]-ne"ExFreePool"-or
+   $ordNames["23"]-ne"ExQueryPoolBlockSize"){
+  throw "Phase 6CF ordinal family gate failed"
 }
 
 $text=Get-Content $mono -Raw
