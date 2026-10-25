@@ -67,10 +67,10 @@ Write-Host "[Phase6CP] Goal: move directly to the next real frontier in the same
 if($LASTEXITCODE-ne0){throw "Phase 6CP emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CP-R1"')){
-  throw "Phase 6CP stale emitter detected; expected revision 6CP-R1"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CP-R2"')){
+  throw "Phase 6CP stale emitter detected; expected revision 6CP-R2"
 }
-Write-Host "[Phase6CP] Emitter revision       : 6CP-R1"
+Write-Host "[Phase6CP] Emitter revision       : 6CP-R2"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -143,6 +143,7 @@ foreach($marker in @(
   "P6CP XACT FIELD8:",
   "PASS: Phase 6CP restored XACT ESI at 002832CA",
   "phase6cp_inherited_guest_write32",
+  "s_phase6cpCurrentVa = va;",
   "#define PHASE4C_EXEC_BUDGET 32000000u"
 )){
   if(-not$text.Contains($marker)){throw "Phase 6CP source gate missing: $marker"}
