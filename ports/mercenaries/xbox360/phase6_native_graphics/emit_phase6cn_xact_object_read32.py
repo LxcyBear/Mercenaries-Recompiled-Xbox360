@@ -30,7 +30,7 @@ COOKIE_NEW = "phase6cn_env_build_cookie"
 ARM_VA = 0x002832CA
 TRACE_START = 0x00282B00
 TRACE_END = 0x00283400
-EMITTER_REVISION = "6CN-R3"
+EMITTER_REVISION = "6CN-R4"
 
 
 def load(path: Path, name: str):
@@ -450,10 +450,19 @@ def main() -> int:
             raise SystemExit(f"[Phase6CN] generated source lost marker: {marker}")
 
     state_pos = main_text.find("static DWORD s_phase6cnCurrentVa = 0u;")
-    wrapper_pos = main_text.find("uint32_t recomp_guest_read32(uint32_t address)")
+    wrapper_defs = list(
+        re.finditer(
+            r"(?m)^uint32_t\\s+recomp_guest_read32\\(uint32_t address\\)\\s*\\{",
+            main_text,
+        )
+    )
     tick_pos = main_text.find("static void phase4c_budget_tick(DWORD va)")
-    if min(state_pos, wrapper_pos, tick_pos) < 0:
-        raise SystemExit("[Phase6CN] compile-order proof marker missing")
+    if state_pos < 0 or tick_pos < 0 or len(wrapper_defs) != 1:
+        raise SystemExit(
+            f"[Phase6CN] compile-order proof marker mismatch "
+            f"(state={state_pos} wrapper_defs={len(wrapper_defs)} tick={tick_pos})"
+        )
+    wrapper_pos = wrapper_defs[0].start()
     if not (state_pos < wrapper_pos and state_pos < tick_pos):
         raise SystemExit(
             "[Phase6CN] trace state must be declared before READ32 wrapper and budget tick"
