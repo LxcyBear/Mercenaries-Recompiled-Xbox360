@@ -31,7 +31,7 @@ BASE_TAG = "P6CS-PIXEL-CHASE-0027E780-20261025-A"
 BUILD_TAG = "P6CT-XACT-ASYNC-READ-20261025-A"
 COOKIE_OLD = "phase6cs_env_build_cookie"
 COOKIE_NEW = "phase6ct_env_build_cookie"
-EMITTER_REVISION = "6CT-R3"
+EMITTER_REVISION = "6CT-R4"
 
 STATUS_SUCCESS = 0x00000000
 STATUS_PENDING = 0x00000103
@@ -159,15 +159,22 @@ def patch_close_metadata(text: str) -> str:
     signature = "static HANDLE phase5c_take_native_handle(uint32_t token)"
     start, end = function_span(text, signature)
     body = text[start:end]
-    anchor = """    index = token & 0x00FFFFFFu;
-    s_phase5bHandles[index] = NULL;
-    return handle;"""
-    replacement = """    index = token & 0x00FFFFFFu;
-    s_phase5bHandles[index] = NULL;
-    s_phase6ctHandleCreateOptions[index] = 0u;
-    return handle;"""
-    if body.count(anchor) != 1:
-        raise SystemExit("[Phase6CT] phase5c_take_native_handle body changed")
+
+    # Later inherited phases may add bookkeeping between the tagged-handle
+    # removal and the return.  The only semantic point 6CT depends on is the
+    # exact slot-clear itself, so attach our metadata clear directly to that
+    # statement instead of matching the surrounding function body.
+    anchor = "    s_phase5bHandles[index] = NULL;\n"
+    replacement = (
+        "    s_phase5bHandles[index] = NULL;\n"
+        "    s_phase6ctHandleCreateOptions[index] = 0u;\n"
+    )
+    count = body.count(anchor)
+    if count != 1:
+        raise SystemExit(
+            f"[Phase6CT] expected one tagged-handle slot clear in "
+            f"phase5c_take_native_handle, found {count}"
+        )
     body = body.replace(anchor, replacement, 1)
     return text[:start] + body + text[end:]
 
