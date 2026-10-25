@@ -29,7 +29,7 @@ BASE_TAG = "P6CU-POST-ASYNC-GETLASTERROR-0022B150-20261025-A"
 BUILD_TAG = "P6CV-SHADOW-RAM-F0000000-20261025-A"
 COOKIE_OLD = "phase6cu_env_build_cookie"
 COOKIE_NEW = "phase6cv_env_build_cookie"
-EMITTER_REVISION = "6CV-R2"
+EMITTER_REVISION = "6CV-R3"
 
 SHADOW_BASE = 0xF0000000
 SHADOW_END = 0xF4000000
@@ -47,12 +47,36 @@ def load(path: Path, name: str):
 
 
 def function_span(text: str, signature: str) -> tuple[int, int]:
-    start = text.find(signature)
+    """
+    Find an actual function definition, not a forward declaration.
+
+    Several guest-memory accessors have prototypes earlier in the support
+    block. The old finder took the first textual signature and then the next
+    unrelated opening brace, which made later accessors appear to have already
+    inherited 6CV instrumentation.
+    """
+    search_from = 0
+    start = -1
+    brace = -1
+
+    while True:
+        candidate = text.find(signature, search_from)
+        if candidate < 0:
+            break
+
+        cursor = candidate + len(signature)
+        while cursor < len(text) and text[cursor].isspace():
+            cursor += 1
+
+        if cursor < len(text) and text[cursor] == "{":
+            start = candidate
+            brace = cursor
+            break
+
+        search_from = candidate + len(signature)
+
     if start < 0:
-        raise SystemExit(f"[Phase6CV] function missing: {signature}")
-    brace = text.find("{", start)
-    if brace < 0:
-        raise SystemExit(f"[Phase6CV] function brace missing: {signature}")
+        raise SystemExit(f"[Phase6CV] function definition missing: {signature}")
 
     depth = 0
     for i in range(brace, len(text)):
@@ -250,7 +274,7 @@ def instrument_accesses(text: str) -> str:
         ("void recomp_guest_write32(uint32_t address, uint32_t value)", 4, True),
         ("void recomp_guest_write64(uint32_t address, uint64_t value)", 8, True),
         ("static void recomp_guest_read128(uint32_t address, uint32_t words[4])", 16, False),
-        ("static void recomp_guest_write128(", 16, True),
+        ("static void recomp_guest_write128(\n    uint32_t address,\n    const uint32_t words[4])", 16, True),
     )
     for signature, width, is_write in funcs:
         text = instrument_access(text, signature, width, is_write)
