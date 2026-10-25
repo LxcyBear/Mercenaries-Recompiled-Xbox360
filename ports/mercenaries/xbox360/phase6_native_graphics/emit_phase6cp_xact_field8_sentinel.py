@@ -30,7 +30,7 @@ BASE_TAG = "P6CO-XACT-LOOP-BRANCH-AUDIT-20261025-A"
 BUILD_TAG = "P6CP-XACT-FIELD8-SENTINEL-20261025-A"
 COOKIE_OLD = "phase6co_env_build_cookie"
 COOKIE_NEW = "phase6cp_env_build_cookie"
-EMITTER_REVISION = "6CP-R1"
+EMITTER_REVISION = "6CP-R2"
 
 ROOT_VA = 0x002832E0
 EXIT_VA = 0x00283334
@@ -76,24 +76,15 @@ def matching_brace(text: str, open_pos: int) -> int:
 
 
 def install_state(text: str) -> str:
+    # State used by the WRITE32 wrapper must be declared before the inherited
+    # guest write helper definition. Keep this gate to prove the 6CO state
+    # layout is still present, but install the 6CP state in wrap_write32().
     anchor = "static DWORD s_phase6coLoopProbeLastPrevValue = 0u;\n"
     if text.count(anchor) != 1:
         raise SystemExit(
             f"[Phase6CP] expected one 6CO state anchor, found {text.count(anchor)}"
         )
-    state = """static DWORD s_phase6cpField8WriteCalls = 0u;
-static DWORD s_phase6cpField8FfffffffWrites = 0u;
-static DWORD s_phase6cpField8LastWriterVa = 0u;
-static DWORD s_phase6cpField8LastValue = 0u;
-static DWORD s_phase6cpField8LastRoot = 0u;
-static DWORD s_phase6cpSentinelChecks = 0u;
-static DWORD s_phase6cpSentinelExits = 0u;
-static DWORD s_phase6cpSentinelLastRoot = 0u;
-static DWORD s_phase6cpSentinelLastField8 = 0u;
-static DWORD s_phase6cpSentinelLastTable = 0u;
-
-"""
-    return text.replace(anchor, anchor + state, 1)
+    return text
 
 
 def wrap_write32(text: str) -> str:
@@ -119,10 +110,25 @@ def wrap_write32(text: str) -> str:
         1,
     )
 
+    early_state = r"""
+static DWORD s_phase6cpCurrentVa = 0u;
+static DWORD s_phase6cpField8WriteCalls = 0u;
+static DWORD s_phase6cpField8FfffffffWrites = 0u;
+static DWORD s_phase6cpField8LastWriterVa = 0u;
+static DWORD s_phase6cpField8LastValue = 0u;
+static DWORD s_phase6cpField8LastRoot = 0u;
+static DWORD s_phase6cpSentinelChecks = 0u;
+static DWORD s_phase6cpSentinelExits = 0u;
+static DWORD s_phase6cpSentinelLastRoot = 0u;
+static DWORD s_phase6cpSentinelLastField8 = 0u;
+static DWORD s_phase6cpSentinelLastTable = 0u;
+
+"""
+
     wrapper = r"""
-void recomp_guest_write32(uint32_t address, uint32_t value)
+__P6CP_WRITE32_PREFIX__recomp_guest_write32(uint32_t address, uint32_t value)
 {
-    uint32_t root = s_phase6ceXactLastEax;
+    uint32_t root = 0x01B5C320u;
 
     if (root != 0u &&
         root <= 0x03FFFFF4u &&
@@ -130,7 +136,7 @@ void recomp_guest_write32(uint32_t address, uint32_t value)
     {
         char line[760];
         ++s_phase6cpField8WriteCalls;
-        s_phase6cpField8LastWriterVa = s_phase6cnCurrentVa;
+        s_phase6cpField8LastWriterVa = s_phase6cpCurrentVa;
         s_phase6cpField8LastValue = value;
         s_phase6cpField8LastRoot = root;
 
@@ -145,7 +151,7 @@ void recomp_guest_write32(uint32_t address, uint32_t value)
                 line,
                 "P6CP XACT FIELD8 WRITE call=%u va=%08X root=%08X addr=%08X value=%08X ffffffff_writes=%u eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X",
                 (unsigned int)s_phase6cpField8WriteCalls,
-                (unsigned int)s_phase6cnCurrentVa,
+                (unsigned int)s_phase6cpCurrentVa,
                 (unsigned int)root,
                 (unsigned int)address,
                 (unsigned int)value,
@@ -164,7 +170,28 @@ void recomp_guest_write32(uint32_t address, uint32_t value)
     phase6cp_inherited_guest_write32(address, value);
 }
 """
-    return text[:m.start()] + renamed + "\n\n" + wrapper + text[close_pos + 1:]
+    wrapper = wrapper.replace("__P6CP_WRITE32_PREFIX__", m.group("prefix"), 1)
+    return (
+        text[:m.start()]
+        + early_state
+        + renamed
+        + "\n\n"
+        + wrapper
+        + text[close_pos + 1:]
+    )
+
+
+def install_current_va_stamp(text: str) -> str:
+    anchor = "    s_phase6cnCurrentVa = va;\n"
+    if text.count(anchor) != 1:
+        raise SystemExit(
+            f"[Phase6CP] expected one inherited 6CN VA stamp, found {text.count(anchor)}"
+        )
+    return text.replace(
+        anchor,
+        anchor + "    s_phase6cpCurrentVa = va;\n",
+        1,
+    )
 
 
 def install_sentinel_exit(text: str) -> str:
@@ -331,6 +358,7 @@ def main() -> int:
 
     main_text = install_state(main_text)
     main_text = wrap_write32(main_text)
+    main_text = install_current_va_stamp(main_text)
     main_text = install_sentinel_exit(main_text)
     main_text = insert_summary(main_text)
     main_text = patch_policy(main_text)
@@ -408,6 +436,8 @@ def main() -> int:
     )
 
     print(f"[Phase6CP] emitter revision: {EMITTER_REVISION}")
+    print("[Phase6CP] writer state declared before guest WRITE32 helper")
+    print("[Phase6CP] writer VA uses independent budget-tick stamp")
     print("[Phase6CP] global XACT root+8 WRITE32 provenance armed")
     print("[Phase6CP] exact FFFFFFFF sentinel no-walk exit armed at 002832E0")
     print("[Phase6CP] 6CM ESI continuity repair preserved")
