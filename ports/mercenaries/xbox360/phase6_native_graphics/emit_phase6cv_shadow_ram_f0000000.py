@@ -29,7 +29,7 @@ BASE_TAG = "P6CU-POST-ASYNC-GETLASTERROR-0022B150-20261025-A"
 BUILD_TAG = "P6CV-SHADOW-RAM-F0000000-20261025-A"
 COOKIE_OLD = "phase6cu_env_build_cookie"
 COOKIE_NEW = "phase6cv_env_build_cookie"
-EMITTER_REVISION = "6CV-R1"
+EMITTER_REVISION = "6CV-R2"
 
 SHADOW_BASE = 0xF0000000
 SHADOW_END = 0xF4000000
@@ -181,14 +181,26 @@ static void phase6cv_shadow_note(
 
     if (count <= 32u || (count & 0xFFFu) == 0u)
     {
-        sprintf(
-            line,
-            "P6CV SHADOW RAM %s addr=%08X physical=%08X width=%u count=%u",
-            isWrite ? "WRITE" : "READ",
-            (unsigned int)address,
-            (unsigned int)physical,
-            (unsigned int)width,
-            (unsigned int)count);
+        if (isWrite)
+        {
+            sprintf(
+                line,
+                "P6CV SHADOW RAM WRITE addr=%08X physical=%08X width=%u count=%u",
+                (unsigned int)address,
+                (unsigned int)physical,
+                (unsigned int)width,
+                (unsigned int)count);
+        }
+        else
+        {
+            sprintf(
+                line,
+                "P6CV SHADOW RAM READ addr=%08X physical=%08X width=%u count=%u",
+                (unsigned int)address,
+                (unsigned int)physical,
+                (unsigned int)width,
+                (unsigned int)count);
+        }
         trace(line);
     }
 }
