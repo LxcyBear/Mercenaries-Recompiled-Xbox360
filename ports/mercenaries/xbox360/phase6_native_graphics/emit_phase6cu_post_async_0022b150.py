@@ -31,7 +31,7 @@ BASE_TAG = "P6CT-XACT-ASYNC-READ-20261025-A"
 BUILD_TAG = "P6CU-POST-ASYNC-GETLASTERROR-0022B150-20261025-A"
 COOKIE_OLD = "phase6ct_env_build_cookie"
 COOKIE_NEW = "phase6cu_env_build_cookie"
-EMITTER_REVISION = "6CU-R4"
+EMITTER_REVISION = "6CU-R5"
 
 TARGET = 0x0022B150
 CALLER = 0x0023A3CE
@@ -70,18 +70,21 @@ def function_span(text: str, signature: str) -> tuple[int, int]:
 
 
 def install_state(text: str) -> str:
-    anchor = "static uint32_t s_phase6ctAsyncReadCalls;\n"
+    # The maintained GetLastError helper lives in the early support block,
+    # before the later Phase-6CT async-read telemetry declarations.  Place
+    # 6CU's counters immediately before that helper so XDK sees them before
+    # the instrumentation's first use.
+    anchor = "static void sub_0022B150(void)\n"
     if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6CU] expected one 6CT async-state anchor, "
+            f"[Phase6CU] expected one maintained GetLastError definition anchor, "
             f"found {text.count(anchor)}"
         )
     state = (
-        anchor
-        + "static uint32_t s_phase6cuGetLastErrorCalls;\n"
-        + "static uint32_t s_phase6cuGetLastErrorLastValue;\n"
+        "static uint32_t s_phase6cuGetLastErrorCalls;\n"
+        "static uint32_t s_phase6cuGetLastErrorLastValue;\n\n"
     )
-    return text.replace(anchor, state, 1)
+    return text.replace(anchor, state + anchor, 1)
 
 
 def instrument_get_last_error(text: str) -> str:
