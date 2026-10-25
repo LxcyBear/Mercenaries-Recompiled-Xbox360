@@ -87,7 +87,7 @@ def matching_brace(text: str, open_pos: int) -> int:
 def wrap_read32(text: str) -> str:
     signature = "uint32_t recomp_guest_read32(uint32_t address)"
     definition_re = re.compile(
-        r"(?m)^uint32_t\\s+recomp_guest_read32\\(uint32_t address\\)\\s*\\{"
+        r"(?m)^uint32_t\s+recomp_guest_read32\(uint32_t address\)\s*\{"
     )
     matches = list(definition_re.finditer(text))
     if len(matches) != 1:
