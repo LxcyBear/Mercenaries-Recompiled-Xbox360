@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
-"""Phase 6CC: promote the hardware-proven DIRECT_FRONTIER 0x001F9D70.
+"""Phase 6CC: route hardware-proven manual PblMath trig frontier 0x001F9D70.
 
-6CB hardware proved the synthetic FILE_OBJECT lifecycle is balanced:
-  ObReferenceObjectByHandle -> 0x04000000 sentinel
-  KeRaiseIrqlToDpcLevel 0 -> 2
-  KfLowerIrql 2 -> 0
-  ObfDereferenceObject sentinel release -> outstanding 0
-  NtClose(handle=0x48000001) -> success
+6CB hardware balanced the synthetic FILE_OBJECT lifetime and then reached:
+  DIRECT_FRONTIER caller=0x0023A3CE target=0x001F9D70
+  esp=saved_esp=0x008BF988 ticks=956060 trace=180293 fault=0
 
-Execution then advanced fault-free to a normal translated direct frontier:
-  caller 0x0023A3CE -> target 0x001F9D70
-  esp=saved_esp=0x008BF988
-  ticks=956060 trace=180293 fault=0
-
-6CC does not emulate this target. It validates 0x001F9D70 as an exact
-generated function start and packs a bounded support-clean generated closure.
-Unknown support remains a hard stop.
+The retail function is intentionally marked --manual-function by Recompile.ps1,
+so absence from runtime/gen is expected. The maintained PC/manual port already
+contains reviewed source-matched replacements for the PblMath 8192-entry sine
+family at 0x001F9D70/0x001F9DA0/0x001F9DE0. 6CC ports that exact family into
+this Xbox 360 harness rather than inventing a translated body.
 """
 from __future__ import annotations
 
@@ -31,8 +25,7 @@ COOKIE_NEW = "phase6cc_env_build_cookie"
 
 ROOT = 0x001F9D70
 CALLER = 0x0023A3CE
-ROOT_DEPTH = 4
-ROOT_CAP = 256
+MANUAL_FAMILY = (0x001F9D70, 0x001F9DA0, 0x001F9DE0)
 
 
 def load(path: Path, name: str):
@@ -51,72 +44,166 @@ def replace_unique(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def validate_exact(root: int, by_va: dict, generated: dict) -> None:
-    if root not in by_va:
+def validate_inventory(address: int, by_va: dict) -> None:
+    row = by_va.get(address)
+    if row is None:
         containing = [
-            row for row in by_va.values()
-            if int(row["start"]) < root < int(row["end"])
+            r for r in by_va.values()
+            if int(r["start"]) < address < int(r["end"])
         ]
         if containing:
-            row = sorted(containing, key=lambda item: int(item["start"]))[-1]
+            owner = sorted(containing, key=lambda x: int(x["start"]))[-1]
             raise SystemExit(
-                f"[Phase6CC] target 0x{root:08X} is not an exact function start; "
-                f"containing function is 0x{int(row['start']):08X}-"
-                f"0x{int(row['end']):08X} {row['name']}. "
-                "Refusing to redirect an interior entry to a prologue."
+                f"[Phase6CC] 0x{address:08X} is not an exact function start; "
+                f"owner=0x{int(owner['start']):08X}-0x{int(owner['end']):08X} "
+                f"{owner['name']}"
             )
         raise SystemExit(
-            f"[Phase6CC] target 0x{root:08X} is absent from function inventory"
+            f"[Phase6CC] manual address 0x{address:08X} absent from inventory"
         )
-    if root not in generated:
+
+
+def install_manual_trig_family(text: str) -> str:
+    anchor = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6CC] target 0x{root:08X} is exact function "
-            f"{by_va[root]['name']} but has no generated translated body"
+            f"[Phase6CC] expected one pack lookup anchor, found {text.count(anchor)}"
         )
 
+    support = r'''#include <math.h>
+#include <string.h>
 
-def install_state(text: str) -> str:
-    marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
-    if text.count(marker) != 1:
-        raise SystemExit(
-            f"[Phase6CC] expected one lookup anchor, found {text.count(marker)}"
-        )
-    state = """static uint32_t s_phase6ccRootEnterCount = 0u;
-static uint32_t s_phase6ccRootLastEax = 0u;
-static uint32_t s_phase6ccRootLastEcx = 0u;
-static uint32_t s_phase6ccRootLastEdx = 0u;
-static uint32_t s_phase6ccRootLastEsp = 0u;
+/*
+ * Phase 6CC reviewed manual PblMath trig family.
+ * Source semantics mirror ports/mercenaries/src/recomp_manual.c.
+ * Retail normally fills an 8192-entry writable sine table from a C++ global
+ * constructor. The maintained port deliberately computes the same quantized
+ * samples natively so an absent constructor cannot poison geometry/gameplay.
+ */
+static uint32_t s_phase6ccPblSinCalls = 0u;
+static uint32_t s_phase6ccPblCosCalls = 0u;
+static uint32_t s_phase6ccPblSinCosCalls = 0u;
+static uint32_t s_phase6ccPblLastEsp = 0u;
+static uint32_t s_phase6ccPblLastAngleBits = 0u;
 
-"""
-    return text.replace(marker, state + marker, 1)
+static float phase6cc_guest_f32(uint32_t address)
+{
+    uint32_t bits = GUEST_READ32(address);
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
 
+static void phase6cc_guest_store_f32(uint32_t address, float value)
+{
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    GUEST_WRITE32(address, bits);
+}
 
-def instrument_root(rendered: str, name: str) -> str:
-    name_pos = rendered.find(name)
-    brace_pos = rendered.find("{", name_pos)
-    if name_pos < 0 or brace_pos < 0:
-        raise SystemExit("[Phase6CC] could not instrument root 0x001F9D70")
+static int32_t phase6cc_pbl_trig_index(float angle)
+{
+    const float table_scale = 8192.0f / 6.28318530717958647692f;
+    return (int32_t)(0.5f + angle * table_scale);
+}
 
-    probe = r'''
-    ++s_phase6ccRootEnterCount;
-    s_phase6ccRootLastEax = g_eax;
-    s_phase6ccRootLastEcx = g_ecx;
-    s_phase6ccRootLastEdx = g_edx;
-    s_phase6ccRootLastEsp = g_esp;
-    if (s_phase6ccRootEnterCount == 1u)
+static float phase6cc_pbl_sine_sample(int32_t index)
+{
+    const float table_step = 6.28318530717958647692f / 8192.0f;
+    return sinf((float)(index & 0x1FFF) * table_step);
+}
+
+static void phase6cc_fp_return(float value)
+{
+    g_fp_stack[--g_fp_top & 7u] = (double)value;
+    g_esp += 4u;
+}
+
+static void phase6cc_pbl_sin_001f9d70(void)
+{
+    const uint32_t entryEsp = g_esp;
+    const uint32_t angleBits = GUEST_READ32(entryEsp + 4u);
+    float angle;
+    char line[320];
+
+    memcpy(&angle, &angleBits, sizeof(angle));
+    ++s_phase6ccPblSinCalls;
+    s_phase6ccPblLastEsp = entryEsp;
+    s_phase6ccPblLastAngleBits = angleBits;
+
+    if (s_phase6ccPblSinCalls == 1u)
     {
-        char phase6ccLine[320];
         sprintf(
-            phase6ccLine,
-            "PASS: Phase 6CC entered translated direct frontier 001F9D70 eax=%08X ecx=%08X edx=%08X esp=%08X",
-            (unsigned int)g_eax,
-            (unsigned int)g_ecx,
-            (unsigned int)g_edx,
-            (unsigned int)g_esp);
-        trace(phase6ccLine);
+            line,
+            "PASS: Phase 6CC entered manual PblMath sin 001F9D70 esp=%08X angle_bits=%08X",
+            (unsigned int)entryEsp,
+            (unsigned int)angleBits);
+        trace(line);
     }
+
+    phase6cc_fp_return(
+        phase6cc_pbl_sine_sample(phase6cc_pbl_trig_index(angle)));
+}
+
+static void phase6cc_pbl_cos_001f9da0(void)
+{
+    const float angle = phase6cc_guest_f32(g_esp + 4u);
+    const int32_t index = phase6cc_pbl_trig_index(angle);
+    ++s_phase6ccPblCosCalls;
+    phase6cc_fp_return(-phase6cc_pbl_sine_sample(index - 0x800));
+}
+
+static void phase6cc_pbl_sincos_001f9de0(void)
+{
+    const uint32_t sineAddress = GUEST_READ32(g_esp + 4u);
+    const uint32_t cosineAddress = GUEST_READ32(g_esp + 8u);
+    const float angle = phase6cc_guest_f32(g_esp + 12u);
+    const int32_t index = phase6cc_pbl_trig_index(angle);
+
+    ++s_phase6ccPblSinCosCalls;
+    phase6cc_guest_store_f32(
+        sineAddress,
+        phase6cc_pbl_sine_sample(index));
+    phase6cc_guest_store_f32(
+        cosineAddress,
+        -phase6cc_pbl_sine_sample(index - 0x800));
+    g_esp += 4u;
+}
+
 '''
-    return rendered[:brace_pos + 1] + probe + rendered[brace_pos + 1:]
+    text = text.replace(anchor, support + anchor, 1)
+
+    lookup_start = text.find(anchor)
+    lookup_end = text.find("\n}\n", lookup_start)
+    if lookup_start < 0 or lookup_end < 0:
+        raise SystemExit("[Phase6CC] could not isolate pack lookup")
+    lookup = text[lookup_start:lookup_end + 3]
+
+    if "case 0x001F9D70u:" in lookup:
+        raise SystemExit("[Phase6CC] manual PblMath root already present in lookup")
+
+    switch_anchor = "    switch (xbox_va) {\n"
+    if switch_anchor not in lookup:
+        raise SystemExit("[Phase6CC] pack lookup switch marker changed")
+
+    cases = (
+        "    case 0x001F9D70u: return phase6cc_pbl_sin_001f9d70;\n"
+        "    case 0x001F9DA0u: return phase6cc_pbl_cos_001f9da0;\n"
+        "    case 0x001F9DE0u: return phase6cc_pbl_sincos_001f9de0;\n"
+    )
+    patched = lookup.replace(switch_anchor, switch_anchor + cases, 1)
+    text = text[:lookup_start] + patched + text[lookup_end + 3:]
+
+    for marker in (
+        "phase6cc_pbl_sin_001f9d70",
+        "case 0x001F9D70u: return phase6cc_pbl_sin_001f9d70;",
+        "case 0x001F9DA0u: return phase6cc_pbl_cos_001f9da0;",
+        "case 0x001F9DE0u: return phase6cc_pbl_sincos_001f9de0;",
+    ):
+        if marker not in text:
+            raise SystemExit(f"[Phase6CC] manual trig installation lost marker: {marker}")
+
+    return text
 
 
 def insert_summary(text: str) -> str:
@@ -132,12 +219,12 @@ def insert_summary(text: str) -> str:
     block = (
         f'{indent}sprintf(\n'
         f'{indent}    line,\n'
-        f'{indent}    "P6CC DIRECT FRONTIER 001F9D70: entries=%u eax=%08X ecx=%08X edx=%08X esp=%08X",\n'
-        f'{indent}    (unsigned int)s_phase6ccRootEnterCount,\n'
-        f'{indent}    (unsigned int)s_phase6ccRootLastEax,\n'
-        f'{indent}    (unsigned int)s_phase6ccRootLastEcx,\n'
-        f'{indent}    (unsigned int)s_phase6ccRootLastEdx,\n'
-        f'{indent}    (unsigned int)s_phase6ccRootLastEsp);\n'
+        f'{indent}    "P6CC MANUAL PBL TRIG: sin=%u cos=%u sincos=%u last_esp=%08X angle_bits=%08X",\n'
+        f'{indent}    (unsigned int)s_phase6ccPblSinCalls,\n'
+        f'{indent}    (unsigned int)s_phase6ccPblCosCalls,\n'
+        f'{indent}    (unsigned int)s_phase6ccPblSinCosCalls,\n'
+        f'{indent}    (unsigned int)s_phase6ccPblLastEsp,\n'
+        f'{indent}    (unsigned int)s_phase6ccPblLastAngleBits);\n'
         f'{indent}trace(line);\n'
     )
     return text[:line_start] + block + text[line_start:]
@@ -147,8 +234,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-dir", type=Path, required=True)
     ap.add_argument("--base-emitter", type=Path, required=True)
-    ap.add_argument("--phase5bb-emitter", type=Path, required=True)
-    ap.add_argument("--phase5bc-emitter", type=Path, required=True)
+    ap.add_argument("--phase5bb-emitter", type=Path, required=False)
+    ap.add_argument("--phase5bc-emitter", type=Path, required=False)
     ap.add_argument("--phase6bl-emitter", type=Path, required=True)
     ap.add_argument("--generated-root", type=Path, required=True)
     ap.add_argument("--functions", type=Path, required=True)
@@ -156,8 +243,6 @@ def main() -> int:
     args = ap.parse_args()
 
     base = load(args.base_emitter, "phase6cc_base")
-    p5bb = load(args.phase5bb_emitter, "phase6cc_p5bb")
-    p5bc = load(args.phase5bc_emitter, "phase6cc_p5bc")
     p6bl = load(args.phase6bl_emitter, "phase6cc_p6bl")
 
     main_path = args.base_dir / "main_monolithic.cpp"
@@ -174,15 +259,6 @@ def main() -> int:
 
     if manifest.get("phase") != "6CB" or manifest.get("build_tag") != BASE_TAG:
         raise SystemExit("[Phase6CC] cached Phase 6CB identity mismatch")
-
-    obfderef = manifest.get("phase6cb_obf_dereference_object", {})
-    if (
-        obfderef.get("phase6ca_hardware", {}).get("next_boundary_target")
-        != "0x800000FA"
-        or obfderef.get("continuation", {}).get("expected_object")
-        != "0x04000000"
-    ):
-        raise SystemExit("[Phase6CC] inherited 6CB sentinel-release identity mismatch")
 
     members = list(manifest.get("members", []))
     pack_count = int(manifest.get("pack_members", 0))
@@ -204,58 +280,22 @@ def main() -> int:
 
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated_root, by_name)
-    validate_exact(ROOT, by_va, generated)
-    validate_exact(CALLER, by_va, generated)
 
-    # Preserve previously accepted native CRT math calls during support audit.
-    base.STANDARD_CALLS.add("cos")
-    base.STANDARD_CALLS.add("sin")
+    for address in MANUAL_FAMILY:
+        validate_inventory(address, by_va)
 
-    old = {int(x, 0) for x in members}
-    if ROOT in old:
+    if ROOT in generated:
         raise SystemExit(
-            "[Phase6CC] root 0x001F9D70 is already in inherited pack; "
-            "dispatch bookkeeping must be inspected instead of repacking it"
+            "[Phase6CC] 0x001F9D70 unexpectedly has a generated body; "
+            "manual-function policy changed, review before routing both"
         )
 
-    closure = set(
-        p5bb.bounded_promoted_members(
-            base, ROOT, generated, ROOT_DEPTH, ROOT_CAP
-        )
-    )
-    closure.add(ROOT)
-    candidate_new = sorted(va for va in closure if va not in old)
-    if ROOT not in candidate_new:
-        raise SystemExit("[Phase6CC] closure construction lost mandatory root")
-
-    new_members = list(candidate_new)
-    expanded = old | set(new_members)
-
-    main_text = install_state(main_text)
-
-    p5bc.SWEEP_ROOT = ROOT
-    p5bc.instrument_root_entry = instrument_root
-    main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
-        main_text,
-        base,
-        p5bb,
-        generated,
-        new_members,
-        expanded,
-    )
-
-    if ROOT not in new_members:
-        names = pruned.get(ROOT, [])
-        joined = ", ".join(str(x) for x in names) if names else "<unknown>"
-        raise SystemExit(
-            f"[Phase6CC] support-clean pruning removed mandatory root "
-            f"0x{ROOT:08X}; unresolved support={joined}"
-        )
-
+    main_text = install_manual_trig_family(main_text)
     main_text = insert_summary(main_text)
+
     main_text = p6bl.replace_policy_line(
         main_text,
-        "Policy: Phase 6CC promote hardware-proven DIRECT_FRONTIER 0023A3CE -> 001F9D70 as exact generated game code with bounded depth-4/cap-256 support-clean closure; preserve 6CB balanced FILE_OBJECT release, graphics/file/fence/allocator semantics and 8M execution budget",
+        "Policy: Phase 6CC route hardware-proven DIRECT_FRONTIER 0023A3CE -> 001F9D70 through the maintained source-matched manual PblMath 8192-entry trig family (001F9D70/001F9DA0/001F9DE0); preserve 6CB balanced FILE_OBJECT release, all graphics/file/fence/allocator semantics and 8M budget",
     )
     main_text = replace_unique(main_text, BASE_TAG, BUILD_TAG, "build tag")
     main_text = main_text.replace(COOKIE_OLD, COOKIE_NEW)
@@ -274,9 +314,11 @@ def main() -> int:
     for marker in (
         BUILD_TAG,
         COOKIE_NEW,
-        "case 0x001F9D70u:",
-        "PASS: Phase 6CC entered translated direct frontier 001F9D70",
-        "P6CC DIRECT FRONTIER 001F9D70:",
+        "case 0x001F9D70u: return phase6cc_pbl_sin_001f9d70;",
+        "case 0x001F9DA0u: return phase6cc_pbl_cos_001f9da0;",
+        "case 0x001F9DE0u: return phase6cc_pbl_sincos_001f9de0;",
+        "PASS: Phase 6CC entered manual PblMath sin 001F9D70",
+        "P6CC MANUAL PBL TRIG:",
         "P6CC OBFDEREF250:",
         "#define PHASE4C_EXEC_BUDGET 8000000u",
     ):
@@ -301,8 +343,8 @@ def main() -> int:
         {
             "phase": "6CC",
             "build_tag": BUILD_TAG,
-            "pack_members": len(expanded),
-            "members": [f"0x{x:08X}" for x in sorted(expanded)],
+            "pack_members": pack_count,
+            "members": members,
         }
     )
     manifest["phase6cc_direct_frontier"] = {
@@ -327,56 +369,38 @@ def main() -> int:
             "trace": 180293,
             "xapi_return": 0,
         },
-        "root": f"0x{ROOT:08X}",
-        "root_name": generated[ROOT]["name"],
-        "frontier_caller": f"0x{CALLER:08X}",
-        "root_closure_depth": ROOT_DEPTH,
-        "root_closure_cap": ROOT_CAP,
-        "candidate_new_members": len(candidate_new),
-        "packed_new_members": len(new_members),
-        "pruned_members": len(pruned),
-        "expanded_pack_members": len(expanded),
-        "new_direct_frontier_targets": [
-            f"0x{x:08X}" for x in sorted(frontiers)
+        "root": "0x001F9D70",
+        "root_name": by_va[ROOT]["name"],
+        "frontier_caller": "0x0023A3CE",
+        "root_is_declared_manual_function": True,
+        "generated_body_expected": False,
+        "manual_source_basis": "ports/mercenaries/src/recomp_manual.c",
+        "manual_family": [
+            "0x001F9D70",
+            "0x001F9DA0",
+            "0x001F9DE0",
         ],
-        "translated_membership_changed": True,
+        "manual_semantics": (
+            "source-matched PblMath 8192-entry quantized sine/cosine family; "
+            "native sinf replaces writable retail table constructor dependency"
+        ),
+        "translated_membership_changed": False,
         "phase5_env_semantics_changed": False,
         "nv2a_mmio_vram_policy_changed": False,
         "allocator_changed": False,
         "execution_budget": 8000000,
         "source_layout": layout,
-        "runtime_policy": (
-            "exact generated root/closure only; support-clean pruning authoritative; "
-            "unknown helper/NV2A/platform/ABI/guest-fault boundaries remain hard stops"
-        ),
     }
-    manifest["phase6cc_pruned_members"] = [
-        {
-            "address": f"0x{va:08X}",
-            "name": generated[va]["name"],
-            "unresolved_support": names,
-        }
-        for va, names in sorted(pruned.items())
-    ]
 
     (args.out_dir / "phase6cc-manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n",
         encoding="utf-8",
     )
 
-    print(
-        f"[Phase6CC] DIRECT FRONTIER PACK: root=0x{ROOT:08X} "
-        f"name={generated[ROOT]['name']} candidates={len(candidate_new)} "
-        f"pruned={len(pruned)} packed_new={len(new_members)} "
-        f"total_pack={len(expanded)}"
-    )
-    print(
-        f"[Phase6CC] NEW DIRECT FRONTIERS: "
-        + (
-            ", ".join(f"0x{x:08X}" for x in sorted(frontiers))
-            if frontiers else "<none in packed closure>"
-        )
-    )
+    print("[Phase6CC] 001F9D70 is an intentional --manual-function; no generated body expected")
+    print("[Phase6CC] installed maintained PblMath trig family: 001F9D70/001F9DA0/001F9DE0")
+    print("[Phase6CC] semantics: source-matched 8192-step quantized sine/cosine via native sinf")
+    print("[Phase6CC] translated pack membership unchanged")
     print("[Phase6CC] 6CB hardware provenance: fault=0 ticks=956060 trace=180293")
     print("[Phase6CC] execution budget: inherited 8000000 ticks")
     print("[Phase6CC] EMIT RESULT: PASS")
