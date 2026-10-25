@@ -76,10 +76,10 @@ Write-Host "[Phase6CQ] Watchdog: 64,000,000 translated blocks"
 if($LASTEXITCODE-ne0){throw "Phase 6CQ emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CQ-R1"')){
-  throw "Phase 6CQ stale emitter detected; expected revision 6CQ-R1"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CQ-R2"')){
+  throw "Phase 6CQ stale emitter detected; expected revision 6CQ-R2"
 }
-Write-Host "[Phase6CQ] Emitter revision       : 6CQ-R1"
+Write-Host "[Phase6CQ] Emitter revision       : 6CQ-R2"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -176,6 +176,9 @@ Write-Host ("[Phase6CQ] Remaining text before  : {0}" -f [int]$k.remaining_gener
 Write-Host ("[Phase6CQ] Candidate new members  : {0}" -f [int]$k.candidate_new_members)
 Write-Host ("[Phase6CQ] Pruned unsafe members  : {0}" -f [int]$k.pruned_members)
 Write-Host ("[Phase6CQ] Packed new members     : {0}" -f [int]$k.packed_new_members)
+if([bool]$k.all_remaining_candidates_support_fenced){
+  Write-Host "[Phase6CQ] Remaining candidates   : all support-fenced; inherited pack will run"
+}
 Write-Host ("[Phase6CQ] Expanded pack members  : {0}" -f [int]$k.expanded_members)
 Write-Host ("[Phase6CQ] Generated shards       : {0}" -f $shardCount)
 Write-Host "[Phase6CQ] ITAIL auto-dispatch    : exact packed targets only"
