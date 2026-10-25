@@ -31,7 +31,7 @@ BASE_TAG = "P6CS-PIXEL-CHASE-0027E780-20261025-A"
 BUILD_TAG = "P6CT-XACT-ASYNC-READ-20261025-A"
 COOKIE_OLD = "phase6cs_env_build_cookie"
 COOKIE_NEW = "phase6ct_env_build_cookie"
-EMITTER_REVISION = "6CT-R4"
+EMITTER_REVISION = "6CT-R5"
 
 STATUS_SUCCESS = 0x00000000
 STATUS_PENDING = 0x00000103
@@ -176,6 +176,135 @@ def patch_close_metadata(text: str) -> str:
             f"phase5c_take_native_handle, found {count}"
         )
     body = body.replace(anchor, replacement, 1)
+    return text[:start] + body + text[end:]
+
+
+
+def patch_async_read_semantics(text: str) -> str:
+    """Extend inherited NtReadFile without replacing its storage semantics."""
+    signature = "static void phase5h_nt_read_file(uint32_t savedEsp)"
+    start, end = function_span(text, signature)
+    body = text[start:end]
+
+    # 6CS inherits the virtual Partition0/cache-device path that must remain
+    # intact. Refuse emission if that specialization is not present.
+    for marker in (
+        "partition0Config",
+        "phase5b_read_handle_path(handleToken)",
+        "GUEST_WRITE32(ioStatusVa + 0u, status);",
+        "GUEST_WRITE32(ioStatusVa + 4u, bytesRead);",
+    ):
+        if marker not in body:
+            raise SystemExit(
+                f"[Phase6CT] inherited NtReadFile specialization missing: {marker}"
+            )
+
+    decl = "    uint32_t status = 0u;\n"
+    decl_replacement = (
+        "    uint32_t status = 0u;\n"
+        "    uint32_t handleOptions = 0u;\n"
+        "    uint32_t returnStatus = 0u;\n"
+        "    int synchronousHandle = 1;\n"
+    )
+    if body.count(decl) != 1:
+        raise SystemExit(
+            f"[Phase6CT] expected one NtReadFile status declaration, "
+            f"found {body.count(decl)}"
+        )
+    body = body.replace(decl, decl_replacement, 1)
+
+    old_fence = (
+        "    if (eventToken != 0u || apcRoutine != 0u || apcContext != 0u)\n"
+    )
+    new_fence = "    if (eventToken != 0u || apcRoutine != 0u)\n"
+    if body.count(old_fence) != 1:
+        raise SystemExit(
+            f"[Phase6CT] expected one inherited async-read fence, "
+            f"found {body.count(old_fence)}"
+        )
+    body = body.replace(old_fence, new_fence, 1)
+    body = body.replace(
+        'trace("STORAGE IO UNSUPPORTED: asynchronous NtReadFile event/APC form");',
+        'trace("STORAGE IO UNSUPPORTED: NtReadFile Event/APC callback form");',
+        1,
+    )
+
+    native_anchor = (
+        "    nativeHandle = phase5c_read_native_handle(handleToken);\n"
+    )
+    native_replacement = (
+        "    handleOptions = phase6ct_read_handle_options(handleToken);\n"
+        "    synchronousHandle =\n"
+        "        (handleOptions & (0x00000010u | 0x00000020u)) != 0u;\n"
+        "    nativeHandle = phase5c_read_native_handle(handleToken);\n"
+    )
+    if body.count(native_anchor) != 1:
+        raise SystemExit(
+            f"[Phase6CT] expected one NtReadFile native-handle lookup, "
+            f"found {body.count(native_anchor)}"
+        )
+    body = body.replace(native_anchor, native_replacement, 1)
+
+    return_anchor = "    g_eax = status;\n    g_esp = savedEsp;\n"
+    return_replacement = r'''    returnStatus = status;
+    if (!synchronousHandle && status == 0u)
+    {
+        /*
+         * Preserve the inherited immediate host completion and final IOSB,
+         * but report STATUS_PENDING for files opened without synchronous I/O.
+         * Event/APC callback delivery remains fenced above.
+         */
+        returnStatus = 0x00000103u; /* STATUS_PENDING */
+        ++s_phase6ctAsyncReadCalls;
+        ++s_phase6ctAsyncReadSuccesses;
+        ++s_phase6ctAsyncPendingReturns;
+        s_phase6ctAsyncLastHandle = handleToken;
+        s_phase6ctAsyncLastOptions = handleOptions;
+        s_phase6ctAsyncLastContext = apcContext;
+        s_phase6ctAsyncLastIoStatus = status;
+        s_phase6ctAsyncLastBytes = bytesRead;
+        s_phase6ctAsyncLastReturn = returnStatus;
+
+        sprintf(
+            line,
+            "PASS: Phase 6CT XACT async NtReadFile immediate completion handle=%08X options=%08X context=%08X iosb=%08X completion=%08X bytes=%u return=%08X calls=%u new_esp=%08X",
+            (unsigned int)handleToken,
+            (unsigned int)handleOptions,
+            (unsigned int)apcContext,
+            (unsigned int)ioStatusVa,
+            (unsigned int)status,
+            (unsigned int)bytesRead,
+            (unsigned int)returnStatus,
+            (unsigned int)s_phase6ctAsyncReadCalls,
+            (unsigned int)savedEsp);
+        trace(line);
+    }
+
+    g_eax = returnStatus;
+    g_esp = savedEsp;
+'''
+    if body.count(return_anchor) != 1:
+        raise SystemExit(
+            f"[Phase6CT] expected one NtReadFile return assignment, "
+            f"found {body.count(return_anchor)}"
+        )
+    body = body.replace(return_anchor, return_replacement, 1)
+
+    # Strong preservation gates: 6CT must still contain the inherited virtual
+    # Partition0 path after the async extension is applied.
+    for marker in (
+        "partition0Config",
+        "phase5b_read_handle_path(handleToken)",
+        "GUEST_WRITE32(ioStatusVa + 0u, status);",
+        "GUEST_WRITE32(ioStatusVa + 4u, bytesRead);",
+        "0x00000103u; /* STATUS_PENDING */",
+        "PASS: Phase 6CT XACT async NtReadFile immediate completion",
+    ):
+        if marker not in body:
+            raise SystemExit(
+                f"[Phase6CT] patched NtReadFile lost required marker: {marker}"
+            )
+
     return text[:start] + body + text[end:]
 
 
@@ -516,11 +645,7 @@ def main() -> int:
         "static void phase5b_nt_open_file(uint32_t savedEsp)",
     )
     text = patch_close_metadata(text)
-    text = replace_function(
-        text,
-        "static void phase5h_nt_read_file(uint32_t savedEsp)",
-        async_read_handler(),
-    )
+    text = patch_async_read_semantics(text)
     text = insert_summary(text)
 
     text = replace_once(text, BASE_TAG, BUILD_TAG, "build tag")
@@ -545,6 +670,8 @@ def main() -> int:
         "s_phase6ctHandleCreateOptions",
         "phase6ct_record_handle_options(token, options);",
         "0x00000103u; /* STATUS_PENDING */",
+        "partition0Config",
+        "phase5b_read_handle_path(handleToken)",
         "case 0x0027E780u:",
         "P6CT PIXEL CHASE:",
         "P6CT PRESENT PROXIMITY:",
@@ -627,6 +754,7 @@ def main() -> int:
         "+ STATUS_PENDING for async handles"
     )
     print("[Phase6CT] Event/APC callback forms remain hard-fenced")
+    print("[Phase6CT] inherited Partition0/cache NtReadFile semantics preserved")
     print("[Phase6CT] 6CS translated pack/XACT/graphics semantics preserved")
     print("[Phase6CT] 64M watchdog preserved")
     print("[Phase6CT] EMIT RESULT: PASS")
