@@ -27,7 +27,7 @@ BASE_TAG = "P6CQ-ITAIL-SATURATION64M-0010D1A0-20261025-A"
 BUILD_TAG = "P6CR-XACT-TO-DISPLAY-00280141-20261025-A"
 COOKIE_OLD = "phase6cq_env_build_cookie"
 COOKIE_NEW = "phase6cr_env_build_cookie"
-EMITTER_REVISION = "6CR-R1"
+EMITTER_REVISION = "6CR-R2"
 
 ROOT = 0x00280141
 CALLER = 0x0023A3CE
@@ -110,7 +110,51 @@ static uint32_t s_phase6crFrontierLastEdx = 0u;
     return text.replace(anchor, anchor + state, 1)
 
 
+def normalize_root_to_retail(rendered: str) -> str:
+    """Remove two optional PC enhancement hooks from the live Xbox retail root.
+
+    The retail 0x00280141 body predates both generated patches:
+      * Main-menu shell_stream category rewrite.
+      * PS2 authored sound-bank replacement.
+
+    Neither hook is required by retail Xbox startup, while the latter pulls in
+    the desktop resource/options/upgrade stack. Phase 6CR therefore restores
+    this one translated function to the retail path instead of inventing
+    partial helper semantics on Xbox 360.
+    """
+    menu_hook = (
+        "    { void recomp_fix_menu_music_bank(uint32_t, uint32_t);\n"
+        "      recomp_fix_menu_music_bank(GUEST_READ32(esp + 4), GUEST_READ32(esp + 8)); }\n"
+    )
+    ps2_hook = (
+        "    GUEST_WRITE32(esp + 4, "
+        "recomp_ps2_sound_bank(GUEST_READ32(esp + 4), esp + 8));\n"
+    )
+
+    if rendered.count(menu_hook) != 1:
+        raise SystemExit(
+            f"[Phase6CR] expected one localized menu-music enhancement hook, "
+            f"found {rendered.count(menu_hook)}"
+        )
+    if rendered.count(ps2_hook) != 1:
+        raise SystemExit(
+            f"[Phase6CR] expected one localized PS2 sound-bank enhancement hook, "
+            f"found {rendered.count(ps2_hook)}"
+        )
+
+    rendered = rendered.replace(menu_hook, "", 1)
+    rendered = rendered.replace(ps2_hook, "", 1)
+
+    if "recomp_fix_menu_music_bank" in rendered or "recomp_ps2_sound_bank" in rendered:
+        raise SystemExit(
+            "[Phase6CR] optional audio enhancement helper remains in retail-normalized root"
+        )
+    return rendered
+
+
 def instrument_root(rendered: str, name: str) -> str:
+    rendered = normalize_root_to_retail(rendered)
+
     name_pos = rendered.find(name)
     brace_pos = rendered.find("{", name_pos)
     if name_pos < 0 or brace_pos < 0:
@@ -388,6 +432,16 @@ def main() -> int:
         if marker not in main_text:
             raise SystemExit(f"[Phase6CR] generated source lost marker: {marker}")
 
+    root_case_pos = main_text.find("case 0x00280141u:")
+    root_body_pos = main_text.find("static void " + generated[ROOT]["name"] + "(void)")
+    if root_case_pos < 0 or root_body_pos < 0:
+        raise SystemExit("[Phase6CR] retail-normalized root was not packed")
+    root_tail = main_text[root_body_pos:root_body_pos + 12000]
+    if "recomp_fix_menu_music_bank" in root_tail or "recomp_ps2_sound_bank" in root_tail:
+        raise SystemExit(
+            "[Phase6CR] packed 00280141 still contains deferred PC audio enhancement hooks"
+        )
+
     # The proximity summary relies only on long-lived, already-proven state.
     for marker in (
         "s_phase6bXenosReady",
@@ -448,6 +502,18 @@ def main() -> int:
         "new_direct_frontier_targets": [
             f"0x{x:08X}" for x in sorted(frontiers)
         ],
+        "root_audio_policy": {
+            "retail_semantics_restored": True,
+            "deferred_generated_hooks": [
+                "recomp_fix_menu_music_bank",
+                "recomp_ps2_sound_bank",
+            ],
+            "reason": (
+                "these are post-recomp PC enhancement hooks, not retail Xbox "
+                "startup requirements; avoid importing desktop PS2-resource/options "
+                "stack or inventing partial helper behavior during Phase 6"
+            ),
+        },
         "presentation_proximity": {
             "native_xenos_state": "s_phase6bXenosReady",
             "d3d_device_calls": "s_phase6afCreateDeviceBridgeCount",
@@ -498,7 +564,7 @@ def main() -> int:
         f"pruned={len(pruned)} packed_new={len(new_members)} "
         f"total={len(total_pack)} new_source_bytes={total_source}"
     )
-    print("[Phase6CR] PRESENT PROXIMITY telemetry armed")
+    print("[Phase6CR] ROOT AUDIO POLICY: retail 00280141 semantics restored; PC enhancement hooks deferred")\n    print("[Phase6CR] PRESENT PROXIMITY telemetry armed")
     print("[Phase6CR] 64M execution budget preserved")
     print("[Phase6CR] packed ITAIL + ordinal-24 kernel tail preserved")
     print("[Phase6CR] 6CP XACT continuity/sentinel repairs preserved")
