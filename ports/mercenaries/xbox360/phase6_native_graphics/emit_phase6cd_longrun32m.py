@@ -258,29 +258,29 @@ def main() -> int:
         shutil.rmtree(shard_dir)
     shutil.copytree(args.base_dir / "translated_shards", shard_dir)
 
-    main_text = patch_main(
+    # 6CD changes harness/support code only. The translated body shards are
+    # therefore inherited byte-for-byte from 6CC; patch both the build-facing
+    # wrapper and monolithic cache so the next phase sees the same semantics.
+    wrapper_text = patch_main(
+        (args.base_dir / "main.cpp").read_text(encoding="utf-8")
+    )
+    mono_text = patch_main(
         (args.base_dir / "main_monolithic.cpp").read_text(encoding="utf-8")
     )
     env_text = patch_env(
         (args.base_dir / "phase5_env.cpp").read_text(encoding="utf-8")
     )
 
-    # Reuse the existing sharding helper instead of regex-editing shard files.
-    # Import lazily from the known Phase-6CC-adjacent helper.
-    import importlib.util
-    helper_path = (
-        Path(__file__).resolve().parent / "emit_phase6bl_d3d_frontier_0028b180.py"
-    )
-    spec = importlib.util.spec_from_file_location("phase6cd_sharder", helper_path)
-    if spec is None or spec.loader is None:
-        raise SystemExit("[Phase6CD] could not load sharding helper")
-    helper = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(helper)
-
-    # write_sharded_main recreates translated_shards, so remove copied cache.
-    shutil.rmtree(shard_dir)
-    layout = helper.write_sharded_main(args.out_dir, main_text, helper)
+    (args.out_dir / "main.cpp").write_text(wrapper_text, encoding="utf-8")
+    (args.out_dir / "main_monolithic.cpp").write_text(mono_text, encoding="utf-8")
     (args.out_dir / "phase5_env.cpp").write_text(env_text, encoding="utf-8")
+
+    inherited_layout = manifest.get("phase6cc_direct_frontier", {}).get(
+        "source_layout", {}
+    )
+    layout = dict(inherited_layout) if isinstance(inherited_layout, dict) else {}
+    layout["translated_shards_reused_byte_for_byte"] = True
+    layout["shard_count"] = len(list(shard_dir.glob("*.inl")))
 
     manifest.update(
         {
