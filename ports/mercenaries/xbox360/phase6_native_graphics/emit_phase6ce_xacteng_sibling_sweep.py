@@ -86,10 +86,14 @@ def validate_root(root: int, by_va: dict, generated: dict) -> None:
 
 
 def install_state(text: str) -> str:
-    anchor = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    # These counters are consumed by phase6cd_dump_hot_profile(), which is
+    # defined before the pack lookup. Put the declarations alongside the
+    # inherited VA-ring profiler state so every later helper and translated
+    # body sees them.
+    anchor = "static DWORD s_phase6awVaRingCount = 0u;\n"
     if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6CE] expected one pack lookup anchor, found {text.count(anchor)}"
+            f"[Phase6CE] expected one VA-ring state anchor, found {text.count(anchor)}"
         )
     state = """static uint32_t s_phase6ceXactRootEntries = 0u;
 static uint32_t s_phase6ceXactLastEsp = 0u;
@@ -98,7 +102,7 @@ static uint32_t s_phase6ceXactLastEcx = 0u;
 static uint32_t s_phase6ceXactLastEdx = 0u;
 
 """
-    return text.replace(anchor, state + anchor, 1)
+    return text.replace(anchor, anchor + state, 1)
 
 
 def instrument_root(rendered: str, name: str) -> str:
@@ -297,6 +301,19 @@ def main() -> int:
         env_text.replace("PHASE 6CD", "PHASE 6CE")
         .replace("Phase 6CD", "Phase 6CE")
     )
+
+    declaration_pos = main_text.find("static uint32_t s_phase6ceXactRootEntries = 0u;")
+    summary_helper_pos = main_text.find("static void phase6cd_dump_hot_profile(void)")
+    lookup_pos = main_text.find("static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)")
+    if (
+        declaration_pos < 0
+        or summary_helper_pos < 0
+        or lookup_pos < 0
+        or not (declaration_pos < summary_helper_pos < lookup_pos)
+    ):
+        raise SystemExit(
+            "[Phase6CE] XACT state declarations are not visible before summary/lookup helpers"
+        )
 
     required = (
         BUILD_TAG,
