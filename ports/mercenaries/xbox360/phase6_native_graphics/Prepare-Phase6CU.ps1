@@ -71,10 +71,10 @@ Write-Host "[Phase6CU] Watchdog: preserve 64,000,000 translated blocks"
 if($LASTEXITCODE-ne0){throw "Phase 6CU emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CU-R4"')){
-  throw "Phase 6CU stale emitter detected; expected revision 6CU-R4"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CU-R5"')){
+  throw "Phase 6CU stale emitter detected; expected revision 6CU-R5"
 }
-Write-Host "[Phase6CU] Emitter revision       : 6CU-R4"
+Write-Host "[Phase6CU] Emitter revision       : 6CU-R5"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -158,6 +158,11 @@ foreach($marker in @(
 }
 if(([regex]::Matches($text,[regex]::Escape("case 0x0022B150u: return sub_0022B150;"))).Count-ne1){
   throw "Phase 6CU GetLastError lookup dispatch count mismatch"
+}
+$statePos=$text.IndexOf("static uint32_t s_phase6cuGetLastErrorCalls;")
+$getLastErrorPos=$text.IndexOf("static void sub_0022B150(void)")
+if($statePos-lt0-or$getLastErrorPos-lt0-or$statePos-ge$getLastErrorPos){
+  throw "Phase 6CU GetLastError telemetry declarations must precede helper definition"
 }
 
 $shardCount=@(Get-ChildItem -LiteralPath $shards -Filter "*.inl" -File).Count
