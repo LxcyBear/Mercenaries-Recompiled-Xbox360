@@ -556,7 +556,7 @@ def main() -> int:
         raise SystemExit("[Phase6CT] Event/APC hard fence count mismatch")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    layout = p6bl.write_sharded_main(args.out_dir, text, None)
+    layout = p6bl.write_sharded_main(args.out_dir, text, base)
     (args.out_dir / "phase5_env.cpp").write_text(env, encoding="utf-8")
 
     manifest.update({
