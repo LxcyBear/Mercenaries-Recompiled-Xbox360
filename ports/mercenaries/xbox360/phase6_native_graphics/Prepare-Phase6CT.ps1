@@ -67,10 +67,10 @@ Write-Host "[Phase6CT] 64M watchdog and 6CS translated pack preserved"
 if($LASTEXITCODE-ne0){throw "Phase 6CT emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CT-R4"')){
-  throw "Phase 6CT stale emitter detected; expected revision 6CT-R4"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CT-R5"')){
+  throw "Phase 6CT stale emitter detected; expected revision 6CT-R5"
 }
-Write-Host "[Phase6CT] Emitter revision       : 6CT-R4"
+Write-Host "[Phase6CT] Emitter revision       : 6CT-R5"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -142,6 +142,8 @@ foreach($marker in @(
   "s_phase6ctHandleCreateOptions",
   "phase6ct_record_handle_options(token, options);",
   "0x00000103u; /* STATUS_PENDING */",
+  "partition0Config",
+  "phase5b_read_handle_path(handleToken)",
   "STORAGE IO UNSUPPORTED: NtReadFile Event/APC callback form",
   "case 0x0027E780u:",
   "P6CT PIXEL CHASE:",
@@ -164,6 +166,7 @@ Write-Host "[Phase6CT] Handle create options  : tracked"
 Write-Host "[Phase6CT] Guest async return     : STATUS_PENDING"
 Write-Host "[Phase6CT] Final IOSB             : completion status + bytes"
 Write-Host "[Phase6CT] Event/APC callbacks    : still hard-fenced"
+Write-Host "[Phase6CT] Partition0 read path  : preserved"
 Write-Host ("[Phase6CT] Generated shards       : {0}" -f $shardCount)
 Write-Host "[Phase6CT] Pixel/display telemetry: preserved"
 Write-Host "[Phase6CT] 64M watchdog          : preserved"
