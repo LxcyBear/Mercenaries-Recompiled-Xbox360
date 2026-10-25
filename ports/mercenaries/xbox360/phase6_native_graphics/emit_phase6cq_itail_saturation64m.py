@@ -156,26 +156,25 @@ static void phase6cq_dispatch_packed_itail(
             )
 
         start_pos = matches[0].start()
-        pos = matches[0].end()
 
         # A function-like macro continues while each physical source line ends
         # in a backslash. Consume the complete definition, including the final
         # non-continuation line, without assuming its body/indentation.
         line_start = start_pos
-        line_end = source.find("\\n", line_start)
+        line_end = source.find("\n", line_start)
         if line_end < 0:
             line_end = len(source)
 
         while True:
             line = source[line_start:line_end]
-            if not line.rstrip().endswith("\\\\"):
+            if not line.rstrip().endswith("\\"):
                 block_end = line_end
                 if block_end < len(source):
                     block_end += 1
                 break
 
             line_start = line_end + 1
-            line_end = source.find("\\n", line_start)
+        line_end = source.find("\n", line_start)
             if line_end < 0:
                 line_end = len(source)
 
