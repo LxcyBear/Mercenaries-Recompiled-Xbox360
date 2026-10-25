@@ -36,10 +36,14 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 
 def install_state(text: str) -> str:
-    anchor = "static uint32_t s_phase6bwGuestIrql = 0u;\n"
+    # 6CF deliberately moved its summary counters into the early profiler
+    # state area so they are visible to every inherited summary helper. Put
+    # the new 6CG diagnostic counters there as well. The semantic guest IRQL
+    # state remains s_phase6bwGuestIrql and is not duplicated or relocated.
+    anchor = "static uint32_t s_phase6cfExPoolLastQuerySize = 0u;\n"
     if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6CG] expected one guest-IRQL state anchor, found {text.count(anchor)}"
+            f"[Phase6CG] expected one early 6CF state anchor, found {text.count(anchor)}"
         )
 
     state = """static uint32_t s_phase6cgKfRaiseIrqlCallCount = 0u;
@@ -154,18 +158,19 @@ def install_support(text: str) -> str:
     text = text.replace(anchor, support + anchor, 1)
 
     state_pos = text.find("static uint32_t s_phase6cgKfRaiseIrqlCallCount = 0u;")
+    guest_irql_pos = text.find("static uint32_t s_phase6bwGuestIrql = 0u;")
     helper_pos = text.find("static void phase6cg_kf_raise_irql(uint32_t savedEsp)")
-    summary_helper_pos = text.find("static void phase6cd_dump_hot_profile(void)")
     lookup_pos = text.find(anchor)
-    if min(state_pos, helper_pos, summary_helper_pos, lookup_pos) < 0:
+    if min(state_pos, guest_irql_pos, helper_pos, lookup_pos) < 0:
         raise SystemExit("[Phase6CG] compile-order proof marker missing")
 
+    # The helper must see both the early diagnostic counters and the inherited
+    # semantic guest-IRQL state. It only needs to precede the lookup/dispatch
+    # region where it is referenced.
     if not (
-        state_pos < summary_helper_pos < helper_pos < lookup_pos
-        or state_pos < helper_pos < summary_helper_pos < lookup_pos
+        state_pos < helper_pos < lookup_pos
+        and guest_irql_pos < helper_pos
     ):
-        # State must be visible globally before both helper users. The exact
-        # relative ordering of the two functions is inherited and irrelevant.
         raise SystemExit("[Phase6CG] compile-order proof failed")
 
     return text
@@ -307,9 +312,17 @@ def patch_main(text: str) -> str:
 
     state_pos = text.find("static uint32_t s_phase6cgKfRaiseIrqlCallCount = 0u;")
     summary_pos = text.find("P6CG KFRAISEIRQL160:")
-    if state_pos < 0 or summary_pos < 0 or state_pos > summary_pos:
+    guest_irql_pos = text.find("static uint32_t s_phase6bwGuestIrql = 0u;")
+    helper_pos = text.find("static void phase6cg_kf_raise_irql(uint32_t savedEsp)")
+    if (
+        state_pos < 0 or summary_pos < 0 or
+        guest_irql_pos < 0 or helper_pos < 0 or
+        state_pos > summary_pos or
+        state_pos > helper_pos or
+        guest_irql_pos > helper_pos
+    ):
         raise SystemExit(
-            "[Phase6CG] KfRaiseIrql state declarations are not visible before summary"
+            "[Phase6CG] declaration-order gate failed for summary/runtime state"
         )
 
     if COOKIE_OLD in text:
