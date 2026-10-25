@@ -27,7 +27,7 @@ BASE_TAG = "P6CP-XACT-FIELD8-SENTINEL-20261025-A"
 BUILD_TAG = "P6CQ-ITAIL-SATURATION64M-0010D1A0-20261025-A"
 COOKIE_OLD = "phase6cp_env_build_cookie"
 COOKIE_NEW = "phase6cq_env_build_cookie"
-EMITTER_REVISION = "6CQ-R3"
+EMITTER_REVISION = "6CQ-R4"
 
 OBSERVED_TARGET = 0x0010D1A0
 CALLER = 0x0023A3CE
@@ -147,7 +147,7 @@ static void phase6cq_dispatch_packed_itail(
         # Match the live preprocessor definition structurally instead of
         # depending on the original Phase4C byte-for-byte spelling.
         pattern = re.compile(
-            rf"(?m)^#define[ \\t]+{re.escape(macro_name)}\\([^\\n]*\\)[^\\n]*"
+            rf"(?m)^#define[ \t]+{re.escape(macro_name)}\("
         )
         matches = list(pattern.finditer(source))
         if len(matches) != 1:
