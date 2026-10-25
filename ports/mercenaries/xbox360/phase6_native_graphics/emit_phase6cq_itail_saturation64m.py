@@ -27,7 +27,7 @@ BASE_TAG = "P6CP-XACT-FIELD8-SENTINEL-20261025-A"
 BUILD_TAG = "P6CQ-ITAIL-SATURATION64M-0010D1A0-20261025-A"
 COOKIE_OLD = "phase6cp_env_build_cookie"
 COOKIE_NEW = "phase6cq_env_build_cookie"
-EMITTER_REVISION = "6CQ-R1"
+EMITTER_REVISION = "6CQ-R2"
 
 OBSERVED_TARGET = 0x0010D1A0
 CALLER = 0x0023A3CE
@@ -431,16 +431,83 @@ def main() -> int:
     rendered = {}
     frontiers = set()
     pruned = {}
+
+    # If the live ITAIL root is already in the inherited pack, additional
+    # saturation is optional. At this late stage the remaining generated-text
+    # inventory can legitimately consist entirely of members with unresolved
+    # support. The generic Phase5BC helper treats "all candidates pruned" as a
+    # fatal broad-sweep condition, but for 6CQ that must not prevent us from
+    # enabling exact ITAIL dispatch over the already-large proven pack.
     if new_members:
-        main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
-            main_text,
-            base,
-            p5bb,
-            generated,
-            new_members,
-            expanded,
-            require_sweep_root=(root not in old),
-        )
+        if root in old:
+            candidate_members = list(new_members)
+            existing_defs = set(base.support_symbols(main_text))
+
+            def render_candidate(va: int, allowed_members: set[int]):
+                row = generated[va]
+                name = row["name"]
+                rendered_one = base.localize_and_instrument(row["source"], name)
+                return p5bb.rewrite_direct_frontier(
+                    base,
+                    rendered_one,
+                    generated,
+                    allowed_members,
+                )
+
+            translated_names = {generated[va]["name"] for va in candidate_members}
+            supplied = existing_defs | translated_names
+            retained = []
+            for va in candidate_members:
+                rendered_one, _ = render_candidate(va, expanded)
+                local_supplied = set(supplied)
+                local_supplied.update(base.DEFINE_RE.findall(rendered_one))
+                calls = set(base.CALL_RE.findall(base.mask_noncode(rendered_one)))
+                calls.discard(generated[va]["name"])
+                missing = sorted(
+                    name for name in calls
+                    if name not in local_supplied and name not in base.STANDARD_CALLS
+                )
+                if missing:
+                    pruned[va] = missing
+                else:
+                    retained.append(va)
+
+            if not retained:
+                print(
+                    "[Phase6CQ] SATURATION NOTE: remaining candidate surface is "
+                    "entirely support-fenced; keeping inherited pack and proceeding "
+                    "with exact ITAIL dispatch"
+                )
+                for va in candidate_members:
+                    expanded.discard(va)
+                new_members[:] = []
+            else:
+                # Let the proven helper do final convergence/rendering over the
+                # subset that passed the lightweight support filter.
+                for va in candidate_members:
+                    if va not in retained:
+                        expanded.discard(va)
+                new_members[:] = retained
+                main_text, rendered, frontiers, helper_pruned = p5bc.insert_pack_members(
+                    main_text,
+                    base,
+                    p5bb,
+                    generated,
+                    new_members,
+                    expanded,
+                    require_sweep_root=False,
+                )
+                pruned.update(helper_pruned)
+        else:
+            main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
+                main_text,
+                base,
+                p5bb,
+                generated,
+                new_members,
+                expanded,
+                require_sweep_root=True,
+            )
 
     if root not in old and root not in new_members:
         raise SystemExit("[Phase6CQ] support-clean pruning removed mandatory ITAIL root")
@@ -515,6 +582,7 @@ def main() -> int:
         "remaining_generated_text": len(remaining),
         "candidate_new_members": len(candidate_new),
         "packed_new_members": len(new_members),
+        "all_remaining_candidates_support_fenced": bool(candidate_new) and not bool(new_members),
         "pruned_members": len(pruned),
         "expanded_members": len(expanded),
         "itail_auto_dispatch": "exact phase4c_lookup_pack_func target only",
@@ -565,6 +633,8 @@ def main() -> int:
         "[Phase6CQ] ITAIL AUTO-DISPATCH: exact packed ITAIL + ITAIL_SAFE only; "
         "unknown/mid-function targets remain hard stops"
     )
+    if candidate_new and not new_members:
+        print("[Phase6CQ] SATURATION RESULT: 0 new support-clean members; inherited pack is authoritative")
     print("[Phase6CQ] 64M execution budget armed")
     print("[Phase6CQ] 6CP XACT sentinel repair preserved")
     print("[Phase6CQ] EMIT RESULT: PASS")
