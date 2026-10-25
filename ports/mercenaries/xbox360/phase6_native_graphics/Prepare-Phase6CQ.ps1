@@ -76,10 +76,10 @@ Write-Host "[Phase6CQ] Watchdog: 64,000,000 translated blocks"
 if($LASTEXITCODE-ne0){throw "Phase 6CQ emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CQ-R2"')){
-  throw "Phase 6CQ stale emitter detected; expected revision 6CQ-R2"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CQ-R4"')){
+  throw "Phase 6CQ stale emitter detected; expected revision 6CQ-R4"
 }
-Write-Host "[Phase6CQ] Emitter revision       : 6CQ-R2"
+Write-Host "[Phase6CQ] Emitter revision       : 6CQ-R4"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
