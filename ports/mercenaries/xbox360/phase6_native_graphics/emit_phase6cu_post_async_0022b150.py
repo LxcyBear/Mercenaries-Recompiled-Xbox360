@@ -31,7 +31,7 @@ BASE_TAG = "P6CT-XACT-ASYNC-READ-20261025-A"
 BUILD_TAG = "P6CU-POST-ASYNC-GETLASTERROR-0022B150-20261025-A"
 COOKIE_OLD = "phase6ct_env_build_cookie"
 COOKIE_NEW = "phase6cu_env_build_cookie"
-EMITTER_REVISION = "6CU-R1"
+EMITTER_REVISION = "6CU-R2"
 
 TARGET = 0x0022B150
 CALLER = 0x0023A3CE
@@ -122,7 +122,7 @@ def instrument_get_last_error(text: str) -> str:
 
 
 def expose_support_target(text: str) -> str:
-    signature = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)"
+    signature = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\\n{"
     start, end = function_span(text, signature)
     body = text[start:end]
 
