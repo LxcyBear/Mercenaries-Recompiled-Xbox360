@@ -210,6 +210,9 @@ static void phase6cq_dispatch_packed_itail(
     else
         ++s_phase6cqPackedItailDispatches;
 
+    if (target == 0x0010D1A0u)
+        s_phase6cqRootEntered = 1;
+
     s_phase6cqPackedItailLastTarget = target;
     s_phase6cqPackedItailLastCaller = phase4c_current_caller();
     s_phase6cqPackedItailLastSavedEsp = savedEsp;
