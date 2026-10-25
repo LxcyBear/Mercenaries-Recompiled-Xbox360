@@ -392,12 +392,16 @@ def insert_summary(text: str) -> str:
 
 
 def patch_main(text: str) -> str:
+    # main.cpp is the sharded build wrapper, so the root-entry trace literal
+    # itself lives inside translated_shards and is intentionally absent here.
+    # Validate the root's packed lookup plus its inherited state/summary
+    # instead; main_monolithic.cpp still receives the same structural proof.
     for marker in (
         BASE_TAG,
         COOKIE_OLD,
         "#define PHASE4C_EXEC_BUDGET 32000000u",
         "case 0x0027DB5Cu:",
-        "PASS: Phase 6CE entered XACTENG frontier 0027DB5C",
+        "static uint32_t s_phase6ceXactRootEntries = 0u;",
         "P6CE XACTENG ROOT:",
         "P6CE MANUAL PBL TRIG:",
     ):
