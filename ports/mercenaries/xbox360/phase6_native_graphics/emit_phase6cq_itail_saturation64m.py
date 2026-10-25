@@ -27,7 +27,7 @@ BASE_TAG = "P6CP-XACT-FIELD8-SENTINEL-20261025-A"
 BUILD_TAG = "P6CQ-ITAIL-SATURATION64M-0010D1A0-20261025-A"
 COOKIE_OLD = "phase6cp_env_build_cookie"
 COOKIE_NEW = "phase6cq_env_build_cookie"
-EMITTER_REVISION = "6CQ-R6"
+EMITTER_REVISION = "6CQ-R7"
 
 OBSERVED_TARGET = 0x0010D1A0
 CALLER = 0x0023A3CE
@@ -181,35 +181,67 @@ static void phase6cq_dispatch_packed_itail(
     ) -> str:
         start_pos, end_pos, block = macro_block(source, macro_name)
 
-        # Preserve every inherited special case (notably ordinal-24
-        # ExQueryNonVolatileSetting in RECOMP_ITAIL). Only replace the final
-        # boundary escape inside the macro. The dispatcher itself performs the
-        # same escape when the target is not in the exact translated pack.
-        escape_re = re.compile(
-            rf"phase4c_escape\(\s*"
-            rf"{re.escape(boundary_name)}\s*,\s*"
-            rf"(?P<target>[^,]+?)\s*,\s*"
-            rf"(?P<saved>[^\)]+?)\s*\);",
-            re.S,
-        )
-        escapes = list(escape_re.finditer(block))
-        if len(escapes) != 1:
+        # Preserve the inherited macro byte-for-byte except for its FINAL
+        # phase4c_escape(...) fallback. Find that call structurally with
+        # balanced parentheses so casts/nested expressions cannot confuse us.
+        call_token = "phase4c_escape("
+        call_start = block.rfind(call_token)
+        if call_start < 0:
             raise SystemExit(
-                f"[Phase6CQ] expected one final {boundary_name} escape inside "
-                f"{macro_name}, found {len(escapes)}"
+                f"[Phase6CQ] {macro_name} has no phase4c_escape fallback"
             )
 
-        m = escapes[0]
-        target_expr = m.group("target").strip()
-        saved_expr = m.group("saved").strip()
+        open_pos = call_start + len("phase4c_escape")
+        depth = 0
+        close_pos = -1
+        for i in range(open_pos, len(block)):
+            ch = block[i]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    close_pos = i
+                    break
+
+        if close_pos < 0:
+            raise SystemExit(
+                f"[Phase6CQ] {macro_name} final phase4c_escape is unterminated"
+            )
+
+        semi_pos = close_pos + 1
+        while semi_pos < len(block) and block[semi_pos].isspace():
+            semi_pos += 1
+        if semi_pos >= len(block) or block[semi_pos] != ";":
+            raise SystemExit(
+                f"[Phase6CQ] {macro_name} final phase4c_escape lacks semicolon"
+            )
+
+        call_text = block[call_start:semi_pos + 1]
+        if boundary_name not in call_text:
+            raise SystemExit(
+                f"[Phase6CQ] {macro_name} final escape is not {boundary_name}"
+            )
+
+        if macro_name == "RECOMP_ITAIL":
+            target_expr = "(uint32_t)(xbox_va)"
+            saved_expr = "(uint32_t)g_esp"
+        else:
+            target_expr = "(uint32_t)(xbox_va)"
+            saved_expr = "(uint32_t)(saved_esp)"
+
         replacement = (
             "phase6cq_dispatch_packed_itail( \\\n"
-            f"            (uint32_t)({target_expr}), \\\n"
-            f"            (uint32_t)({saved_expr}), \\\n"
+            f"            {target_expr}, \\\n"
+            f"            {saved_expr}, \\\n"
             f"            {safe_flag}u); \\\n"
             "        return;"
         )
-        patched = block[:m.start()] + replacement + block[m.end():]
+        patched = (
+            block[:call_start]
+            + replacement
+            + block[semi_pos + 1:]
+        )
         return source[:start_pos] + patched + source[end_pos:]
 
     text = augment_fallback(
