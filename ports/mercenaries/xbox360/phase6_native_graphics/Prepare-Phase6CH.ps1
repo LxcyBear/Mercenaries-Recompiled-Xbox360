@@ -126,6 +126,8 @@ if($a.phase6cg_hardware.boundary_kind-ne"GUEST_FAULT"-or
    $a.model.actual_audio_processing-ne$false-or
    $a.model.apu_irq_delivery-ne$false-or
    $a.scope.xbox_section-ne"DSOUND"-or
+   $a.scope.section_start-ne"0x0029CB80"-or
+   $a.scope.section_end-ne"0x002BB274"-or
    $a.scope.fault_va-ne"0x002A7254"-or
    $a.scope.patched_function_count-lt1-or
    $a.scope.site_counts.read8-lt1-or
