@@ -27,7 +27,7 @@ BASE_TAG = "P6CP-XACT-FIELD8-SENTINEL-20261025-A"
 BUILD_TAG = "P6CQ-ITAIL-SATURATION64M-0010D1A0-20261025-A"
 COOKIE_OLD = "phase6cp_env_build_cookie"
 COOKIE_NEW = "phase6cq_env_build_cookie"
-EMITTER_REVISION = "6CQ-R2"
+EMITTER_REVISION = "6CQ-R3"
 
 OBSERVED_TARGET = 0x0010D1A0
 CALLER = 0x0023A3CE
@@ -133,48 +133,74 @@ def patch_itail_dispatch(text: str) -> str:
             f"[Phase6CQ] expected one recomp_func_t typedef, found {text.count(typedef_anchor)}"
         )
 
-    decls = r'''
+    decls = r"""
 static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va);
 static void phase6cq_dispatch_packed_itail(
     uint32_t target,
     uint32_t savedEsp,
     uint32_t isSafe);
-'''
+"""
     text = text.replace(typedef_anchor, typedef_anchor + decls, 1)
 
-    old = r'''#define RECOMP_ITAIL(xbox_va) do { \
-    phase4c_escape( \
-        PHASE4C_BOUNDARY_ITAIL, \
-        (DWORD)(xbox_va), \
-        g_esp); \
-} while (0)
+    def replace_macro(source: str, macro_name: str, new_block: str) -> str:
+        # Earlier phases have legitimately reformatted/wrapped these macros.
+        # Match the live preprocessor definition structurally instead of
+        # depending on the original Phase4C byte-for-byte spelling.
+        pattern = re.compile(
+            rf"(?m)^#define[ \\t]+{re.escape(macro_name)}\\([^\\n]*\\)[^\\n]*"
+        )
+        matches = list(pattern.finditer(source))
+        if len(matches) != 1:
+            raise SystemExit(
+                f"[Phase6CQ] expected one {macro_name} definition, found {len(matches)}"
+            )
 
-#define RECOMP_ITAIL_SAFE(xbox_va, saved_esp) do { \
-    phase4c_escape( \
-        PHASE4C_BOUNDARY_ITAIL_SAFE, \
-        (DWORD)(xbox_va), \
-        (DWORD)(saved_esp)); \
-} while (0)'''
+        start_pos = matches[0].start()
+        pos = matches[0].end()
 
-    new = r'''#define RECOMP_ITAIL(xbox_va) do { \
+        # A function-like macro continues while each physical source line ends
+        # in a backslash. Consume the complete definition, including the final
+        # non-continuation line, without assuming its body/indentation.
+        line_start = start_pos
+        line_end = source.find("\\n", line_start)
+        if line_end < 0:
+            line_end = len(source)
+
+        while True:
+            line = source[line_start:line_end]
+            if not line.rstrip().endswith("\\\\"):
+                block_end = line_end
+                if block_end < len(source):
+                    block_end += 1
+                break
+
+            line_start = line_end + 1
+            line_end = source.find("\\n", line_start)
+            if line_end < 0:
+                line_end = len(source)
+
+        return source[:start_pos] + new_block + source[block_end:]
+
+    itail_new = r"""#define RECOMP_ITAIL(xbox_va) do { \
     phase6cq_dispatch_packed_itail( \
         (uint32_t)(xbox_va), \
         (uint32_t)g_esp, \
         0u); \
     return; \
 } while (0)
+"""
 
-#define RECOMP_ITAIL_SAFE(xbox_va, saved_esp) do { \
+    itail_safe_new = r"""#define RECOMP_ITAIL_SAFE(xbox_va, saved_esp) do { \
     phase6cq_dispatch_packed_itail( \
         (uint32_t)(xbox_va), \
         (uint32_t)(saved_esp), \
         1u); \
     return; \
-} while (0)'''
+} while (0)
+"""
 
-    if old not in text:
-        raise SystemExit("[Phase6CQ] inherited ITAIL macro block changed")
-    text = text.replace(old, new, 1)
+    text = replace_macro(text, "RECOMP_ITAIL", itail_new)
+    text = replace_macro(text, "RECOMP_ITAIL_SAFE", itail_safe_new)
 
     lookup_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
     lookup_pos = text.find(lookup_marker)
@@ -188,7 +214,7 @@ static void phase6cq_dispatch_packed_itail(
     if insert_pos < 0:
         raise SystemExit("[Phase6CQ] translated optimize-off marker missing")
 
-    helper = r'''
+    helper = r"""
 static void phase6cq_dispatch_packed_itail(
     uint32_t target,
     uint32_t savedEsp,
@@ -241,9 +267,8 @@ static void phase6cq_dispatch_packed_itail(
     fn();
 }
 
-'''
+"""
     return text[:insert_pos] + helper + text[insert_pos:]
-
 
 def patch_budget(text: str) -> str:
     old = "#define PHASE4C_EXEC_BUDGET 32000000u"
