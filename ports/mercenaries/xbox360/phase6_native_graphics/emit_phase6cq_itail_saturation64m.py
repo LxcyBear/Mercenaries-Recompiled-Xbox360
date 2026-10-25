@@ -27,7 +27,7 @@ BASE_TAG = "P6CP-XACT-FIELD8-SENTINEL-20261025-A"
 BUILD_TAG = "P6CQ-ITAIL-SATURATION64M-0010D1A0-20261025-A"
 COOKIE_OLD = "phase6cp_env_build_cookie"
 COOKIE_NEW = "phase6cq_env_build_cookie"
-EMITTER_REVISION = "6CQ-R5"
+EMITTER_REVISION = "6CQ-R6"
 
 OBSERVED_TARGET = 0x0010D1A0
 CALLER = 0x0023A3CE
@@ -142,10 +142,7 @@ static void phase6cq_dispatch_packed_itail(
 """
     text = text.replace(typedef_anchor, typedef_anchor + decls, 1)
 
-    def replace_macro(source: str, macro_name: str, new_block: str) -> str:
-        # Earlier phases have legitimately reformatted/wrapped these macros.
-        # Match the live preprocessor definition structurally instead of
-        # depending on the original Phase4C byte-for-byte spelling.
+    def macro_block(source: str, macro_name: str) -> tuple[int, int, str]:
         pattern = re.compile(
             rf"(?m)^#define[ \t]+{re.escape(macro_name)}\("
         )
@@ -156,10 +153,6 @@ static void phase6cq_dispatch_packed_itail(
             )
 
         start_pos = matches[0].start()
-
-        # A function-like macro continues while each physical source line ends
-        # in a backslash. Consume the complete definition, including the final
-        # non-continuation line, without assuming its body/indentation.
         line_start = start_pos
         line_end = source.find("\n", line_start)
         if line_end < 0:
@@ -178,36 +171,83 @@ static void phase6cq_dispatch_packed_itail(
             if line_end < 0:
                 line_end = len(source)
 
-        return source[:start_pos] + new_block + source[block_end:]
+        return start_pos, block_end, source[start_pos:block_end]
 
-    itail_new = r"""#define RECOMP_ITAIL(xbox_va) do { \
-    phase6cq_dispatch_packed_itail( \
-        (uint32_t)(xbox_va), \
-        (uint32_t)g_esp, \
-        0u); \
-    return; \
-} while (0)
-"""
+    def augment_fallback(
+        source: str,
+        macro_name: str,
+        boundary_name: str,
+        safe_flag: int,
+    ) -> str:
+        start_pos, end_pos, block = macro_block(source, macro_name)
 
-    itail_safe_new = r"""#define RECOMP_ITAIL_SAFE(xbox_va, saved_esp) do { \
-    phase6cq_dispatch_packed_itail( \
-        (uint32_t)(xbox_va), \
-        (uint32_t)(saved_esp), \
-        1u); \
-    return; \
-} while (0)
-"""
+        # Preserve every inherited special case (notably ordinal-24
+        # ExQueryNonVolatileSetting in RECOMP_ITAIL). Only replace the final
+        # boundary escape inside the macro. The dispatcher itself performs the
+        # same escape when the target is not in the exact translated pack.
+        escape_re = re.compile(
+            rf"phase4c_escape\(\s*"
+            rf"{re.escape(boundary_name)}\s*,\s*"
+            rf"(?P<target>[^,]+?)\s*,\s*"
+            rf"(?P<saved>[^\)]+?)\s*\);",
+            re.S,
+        )
+        escapes = list(escape_re.finditer(block))
+        if len(escapes) != 1:
+            raise SystemExit(
+                f"[Phase6CQ] expected one final {boundary_name} escape inside "
+                f"{macro_name}, found {len(escapes)}"
+            )
 
-    text = replace_macro(text, "RECOMP_ITAIL", itail_new)
-    text = replace_macro(text, "RECOMP_ITAIL_SAFE", itail_safe_new)
+        m = escapes[0]
+        target_expr = m.group("target").strip()
+        saved_expr = m.group("saved").strip()
+        replacement = (
+            "phase6cq_dispatch_packed_itail( \\\n"
+            f"            (uint32_t)({target_expr}), \\\n"
+            f"            (uint32_t)({saved_expr}), \\\n"
+            f"            {safe_flag}u); \\\n"
+            "        return;"
+        )
+        patched = block[:m.start()] + replacement + block[m.end():]
+        return source[:start_pos] + patched + source[end_pos:]
+
+    text = augment_fallback(
+        text,
+        "RECOMP_ITAIL",
+        "PHASE4C_BOUNDARY_ITAIL",
+        0,
+    )
+    text = augment_fallback(
+        text,
+        "RECOMP_ITAIL_SAFE",
+        "PHASE4C_BOUNDARY_ITAIL_SAFE",
+        1,
+    )
+
+    # Strong preservation gates: 6CQ must not erase the inherited kernel-tail
+    # continuation that made startup reach the late XACT/graphics path.
+    _, _, live_itail = macro_block(text, "RECOMP_ITAIL")
+    if "0x80000018u" not in live_itail:
+        raise SystemExit(
+            "[Phase6CQ] inherited ordinal-24 ITAIL continuation was lost"
+        )
+    if "phase4c_ex_query_nonvolatile_setting" not in live_itail:
+        raise SystemExit(
+            "[Phase6CQ] inherited ExQueryNonVolatileSetting ITAIL handler was lost"
+        )
+    if "phase6cq_dispatch_packed_itail" not in live_itail:
+        raise SystemExit("[Phase6CQ] packed ITAIL fallback was not installed")
+
+    _, _, live_itail_safe = macro_block(text, "RECOMP_ITAIL_SAFE")
+    if "phase6cq_dispatch_packed_itail" not in live_itail_safe:
+        raise SystemExit("[Phase6CQ] packed ITAIL_SAFE fallback was not installed")
 
     lookup_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
     lookup_pos = text.find(lookup_marker)
     if lookup_pos < 0:
         raise SystemExit("[Phase6CQ] pack lookup definition missing")
 
-    # Install helper immediately before the translated optimize-off block. The
-    # lookup has a forward declaration above, so source order remains valid.
     optimize_off = '#pragma optimize("", off)\n'
     insert_pos = text.find(optimize_off)
     if insert_pos < 0:
