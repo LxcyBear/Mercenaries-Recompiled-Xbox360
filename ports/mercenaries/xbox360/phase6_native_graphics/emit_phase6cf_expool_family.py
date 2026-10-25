@@ -39,14 +39,17 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def install_support(text: str) -> str:
-    anchor = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+def install_state(text: str) -> str:
+    # The final summary is emitted inside an inherited helper that appears
+    # before phase4c_lookup_pack_func(), so the counters must be declared with
+    # the existing 6CE profiler/XACT state rather than inside the later pool
+    # helper block.
+    anchor = "static uint32_t s_phase6ceXactLastEdx = 0u;\n"
     if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6CF] expected one pack lookup anchor, found {text.count(anchor)}"
+            f"[Phase6CF] expected one 6CE XACT state anchor, found {text.count(anchor)}"
         )
-
-    support = r'''static uint32_t s_phase6cfExPoolAllocCalls = 0u;
+    state = """static uint32_t s_phase6cfExPoolAllocCalls = 0u;
 static uint32_t s_phase6cfExPoolTaggedCalls = 0u;
 static uint32_t s_phase6cfExPoolFreeCalls = 0u;
 static uint32_t s_phase6cfExPoolQueryCalls = 0u;
@@ -55,7 +58,18 @@ static uint32_t s_phase6cfExPoolLastTag = 0u;
 static uint32_t s_phase6cfExPoolLastAddress = 0u;
 static uint32_t s_phase6cfExPoolLastQuerySize = 0u;
 
-static void phase6cf_validate_pool_frame(
+"""
+    return text.replace(anchor, anchor + state, 1)
+
+
+def install_support(text: str) -> str:
+    anchor = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    if text.count(anchor) != 1:
+        raise SystemExit(
+            f"[Phase6CF] expected one pack lookup anchor, found {text.count(anchor)}"
+        )
+
+    support = r'''static void phase6cf_validate_pool_frame(
     uint32_t target,
     uint32_t savedEsp,
     uint32_t expectedDelta,
@@ -288,21 +302,26 @@ static void phase6cf_ex_query_pool_block_size(uint32_t savedEsp)
     heap_allocate_pos = text.find("static uint32_t phase4c_heap_allocate(")
     heap_free_pos = text.find("static uint32_t phase4c_heap_free(")
     heap_state_pos = text.find("static Phase4CHeapBlock s_phase4cHeap[")
+    counter_pos = text.find("static uint32_t s_phase6cfExPoolAllocCalls = 0u;")
+    summary_helper_pos = text.find("static void phase6cd_dump_hot_profile(void)")
     lookup_pos = text.find(anchor)
     if min(
         helper_pos,
         heap_allocate_pos,
         heap_free_pos,
         heap_state_pos,
+        counter_pos,
+        summary_helper_pos,
         lookup_pos,
     ) < 0:
         raise SystemExit("[Phase6CF] compile-order proof marker missing")
     if not (
         heap_state_pos < heap_allocate_pos < helper_pos < lookup_pos
         and heap_free_pos < helper_pos
+        and counter_pos < summary_helper_pos < lookup_pos
     ):
         raise SystemExit(
-            "[Phase6CF] compile-order proof failed for guest pool helpers"
+            "[Phase6CF] compile-order proof failed for pool state/helpers"
         )
 
     return text
@@ -408,6 +427,7 @@ def patch_main(text: str) -> str:
         if marker not in text:
             raise SystemExit(f"[Phase6CF] inherited 6CE marker missing: {marker}")
 
+    text = install_state(text)
     text = install_support(text)
     text = patch_icall_dispatch(text)
     text = insert_arm_trace(text)
@@ -436,6 +456,13 @@ def patch_main(text: str) -> str:
         .replace("Phase 6CE", "Phase 6CF")
         .replace('"P6CE ', '"P6CF ')
     )
+
+    counter_pos = text.find("static uint32_t s_phase6cfExPoolAllocCalls = 0u;")
+    summary_pos = text.find("P6CF EXPOOL:")
+    if counter_pos < 0 or summary_pos < 0 or counter_pos > summary_pos:
+        raise SystemExit(
+            "[Phase6CF] pool counter declarations are not visible before final summary"
+        )
 
     required = (
         BUILD_TAG,
