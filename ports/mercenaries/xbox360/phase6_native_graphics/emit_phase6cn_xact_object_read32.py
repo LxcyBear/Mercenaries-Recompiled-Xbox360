@@ -91,31 +91,7 @@ def matching_brace(text: str, open_pos: int) -> int:
     raise SystemExit("[Phase6CN] unterminated recomp_guest_read32 body")
 
 
-def install_state_and_current_va(text: str) -> str:
-    state_re = re.compile(
-        r"(?m)^(static DWORD s_phase6awVaRingCount = 0u;\s*)$"
-    )
-    state_matches = list(state_re.finditer(text))
-    if len(state_matches) != 1:
-        raise SystemExit(
-            f"[Phase6CN] expected one VA-ring state declaration, found {len(state_matches)}"
-        )
-
-    state = """static DWORD s_phase6cnCurrentVa = 0u;
-static DWORD s_phase6cnReadTraceActive = 0u;
-static DWORD s_phase6cnReadTraceVisits = 0u;
-static DWORD s_phase6cnReadTraceSeq = 0u;
-static DWORD s_phase6cnReadTraceWindowReads = 0u;
-static DWORD s_phase6cnReadTraceLastVa = 0u;
-static DWORD s_phase6cnReadTraceLastAddr = 0u;
-static DWORD s_phase6cnReadTraceLastValue = 0u;
-static DWORD s_phase6cnReadTraceFaultVa = 0u;
-static DWORD s_phase6cnReadTraceFaultAddr = 0u;
-
-"""
-    m = state_matches[0]
-    text = text[:m.end()] + "\n" + state + text[m.end():]
-
+def install_current_va_stamp(text: str) -> str:
     tick_signature = "static void phase4c_budget_tick(DWORD va)"
     tick_start = text.find(tick_signature)
     if tick_start < 0:
@@ -159,6 +135,17 @@ def wrap_read32(text: str) -> str:
     )
 
     wrapper = r"""
+static DWORD s_phase6cnCurrentVa = 0u;
+static DWORD s_phase6cnReadTraceActive = 0u;
+static DWORD s_phase6cnReadTraceVisits = 0u;
+static DWORD s_phase6cnReadTraceSeq = 0u;
+static DWORD s_phase6cnReadTraceWindowReads = 0u;
+static DWORD s_phase6cnReadTraceLastVa = 0u;
+static DWORD s_phase6cnReadTraceLastAddr = 0u;
+static DWORD s_phase6cnReadTraceLastValue = 0u;
+static DWORD s_phase6cnReadTraceFaultVa = 0u;
+static DWORD s_phase6cnReadTraceFaultAddr = 0u;
+
 uint32_t recomp_guest_read32(uint32_t address)
 {
     uint32_t value;
@@ -432,7 +419,7 @@ def main() -> int:
         "runtime-ring VAs had exact loc labels"
     )
 
-    main_text = install_state_and_current_va(main_text)
+    main_text = install_current_va_stamp(main_text)
     main_text = wrap_read32(main_text)
     main_text = arm_probe(main_text)
     main_text = insert_summary(main_text)
@@ -461,6 +448,16 @@ def main() -> int:
     ):
         if marker not in main_text:
             raise SystemExit(f"[Phase6CN] generated source lost marker: {marker}")
+
+    state_pos = main_text.find("static DWORD s_phase6cnCurrentVa = 0u;")
+    wrapper_pos = main_text.find("uint32_t recomp_guest_read32(uint32_t address)")
+    tick_pos = main_text.find("static void phase4c_budget_tick(DWORD va)")
+    if min(state_pos, wrapper_pos, tick_pos) < 0:
+        raise SystemExit("[Phase6CN] compile-order proof marker missing")
+    if not (state_pos < wrapper_pos and state_pos < tick_pos):
+        raise SystemExit(
+            "[Phase6CN] trace state must be declared before READ32 wrapper and budget tick"
+        )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     layout = p6bl.write_sharded_main(args.out_dir, main_text, base)
