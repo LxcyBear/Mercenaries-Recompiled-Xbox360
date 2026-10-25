@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 6CT: XACT asynchronous stream-read continuation.
+r"""Phase 6CT: XACT asynchronous stream-read continuation.
 
 6CS hardware crossed 0x0027E780 and reached the first real XACT wave-bank
 stream read:
@@ -31,7 +31,7 @@ BASE_TAG = "P6CS-PIXEL-CHASE-0027E780-20261025-A"
 BUILD_TAG = "P6CT-XACT-ASYNC-READ-20261025-A"
 COOKIE_OLD = "phase6cs_env_build_cookie"
 COOKIE_NEW = "phase6ct_env_build_cookie"
-EMITTER_REVISION = "6CT-R2"
+EMITTER_REVISION = "6CT-R3"
 
 STATUS_SUCCESS = 0x00000000
 STATUS_PENDING = 0x00000103
@@ -84,10 +84,11 @@ def replace_function(text: str, signature: str, replacement: str) -> str:
 
 
 def install_handle_metadata(text: str) -> str:
-    anchor = (
-        "#define PHASE5B_HANDLE_CAP 64u\n"
-        "static HANDLE s_phase5bHandles[PHASE5B_HANDLE_CAP];\n"
-    )
+    # The current 6CS baseline keeps PHASE5B_HANDLE_CAP and the handle
+    # table declaration separated by inherited support state.  The declaration
+    # itself is already a required unique marker, so anchor directly on it
+    # instead of assuming adjacency to the #define.
+    anchor = "static HANDLE s_phase5bHandles[PHASE5B_HANDLE_CAP];\n"
     addition = r'''#define PHASE5B_HANDLE_CAP 64u
 static HANDLE s_phase5bHandles[PHASE5B_HANDLE_CAP];
 static uint32_t s_phase6ctHandleCreateOptions[PHASE5B_HANDLE_CAP];
