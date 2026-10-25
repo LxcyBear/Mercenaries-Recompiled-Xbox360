@@ -27,7 +27,7 @@ BASE_TAG = "P6CP-XACT-FIELD8-SENTINEL-20261025-A"
 BUILD_TAG = "P6CQ-ITAIL-SATURATION64M-0010D1A0-20261025-A"
 COOKIE_OLD = "phase6cp_env_build_cookie"
 COOKIE_NEW = "phase6cq_env_build_cookie"
-EMITTER_REVISION = "6CQ-R4"
+EMITTER_REVISION = "6CQ-R5"
 
 OBSERVED_TARGET = 0x0010D1A0
 CALLER = 0x0023A3CE
@@ -174,7 +174,7 @@ static void phase6cq_dispatch_packed_itail(
                 break
 
             line_start = line_end + 1
-        line_end = source.find("\n", line_start)
+            line_end = source.find("\n", line_start)
             if line_end < 0:
                 line_end = len(source)
 
