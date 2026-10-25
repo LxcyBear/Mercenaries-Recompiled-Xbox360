@@ -91,10 +91,13 @@ def matching_brace(text: str, open_pos: int) -> int:
 
 
 def install_state_and_current_va(text: str) -> str:
-    state_anchor = "static DWORD s_phase6awVaRingCount = 0u;\n"
-    if text.count(state_anchor) != 1:
+    state_re = re.compile(
+        r"(?m)^(static DWORD s_phase6awVaRingCount = 0u;\\s*)$"
+    )
+    state_matches = list(state_re.finditer(text))
+    if len(state_matches) != 1:
         raise SystemExit(
-            f"[Phase6CN] expected one VA-ring state anchor, found {text.count(state_anchor)}"
+            f"[Phase6CN] expected one VA-ring state declaration, found {len(state_matches)}"
         )
 
     state = """static DWORD s_phase6cnCurrentVa = 0u;
@@ -109,20 +112,26 @@ static DWORD s_phase6cnReadTraceFaultVa = 0u;
 static DWORD s_phase6cnReadTraceFaultAddr = 0u;
 
 """
-    text = text.replace(state_anchor, state_anchor + state, 1)
+    m = state_matches[0]
+    text = text[:m.end()] + "\n" + state + text[m.end():]
 
-    tick_anchor = "    ++s_phase4cBlockTicks;\n\n    s_phase6awVaRing[s_phase6awVaRingPos] = va;"
-    if text.count(tick_anchor) != 1:
+    tick_signature = "static void phase4c_budget_tick(DWORD va)"
+    tick_start = text.find(tick_signature)
+    if tick_start < 0:
+        raise SystemExit("[Phase6CN] phase4c_budget_tick definition missing")
+    tick_open = text.find("{", tick_start)
+    tick_close = matching_brace(text, tick_open)
+    tick_body = text[tick_open:tick_close + 1]
+
+    increment = "++s_phase4cBlockTicks;"
+    if tick_body.count(increment) != 1:
         raise SystemExit(
-            f"[Phase6CN] expected one budget-tick VA-ring anchor, found {text.count(tick_anchor)}"
+            f"[Phase6CN] expected one budget increment in phase4c_budget_tick, "
+            f"found {tick_body.count(increment)}"
         )
-    tick_new = (
-        "    ++s_phase4cBlockTicks;\n"
-        "    s_phase6cnCurrentVa = va;\n\n"
-        "    s_phase6awVaRing[s_phase6awVaRingPos] = va;"
-    )
-    return text.replace(tick_anchor, tick_new, 1)
-
+    stamped = increment + "\n    s_phase6cnCurrentVa = va;"
+    tick_body = tick_body.replace(increment, stamped, 1)
+    return text[:tick_open] + tick_body + text[tick_close + 1:]
 
 def wrap_read32(text: str) -> str:
     signature = "uint32_t recomp_guest_read32(uint32_t address)"
@@ -245,27 +254,30 @@ uint32_t recomp_guest_read32(uint32_t address)
 
 
 def arm_probe(text: str) -> str:
-    marker = f"loc_{ARM_VA:08X}: ;\n"
+    marker = f"loc_{ARM_VA:08X}: ;\\n"
     if text.count(marker) != 1:
         raise SystemExit(
             f"[Phase6CN] expected one arm label {marker.strip()}, found {text.count(marker)}"
         )
 
-    # Insert after the entire inherited 6CM if/else-if restore chain, not
-    # between the successful branch and its else-if.
     start = text.find(marker) + len(marker)
-    tail_marker = (
-        '            (unsigned int)s_phase6cmRestoreChecks);\n'
-        '        trace(phase6cmLine);\n'
-        '    }\n'
-    )
-    tail_pos = text.find(tail_marker, start)
-    if tail_pos < 0 or tail_pos - start > 7000:
-        raise SystemExit("[Phase6CN] could not locate end of inherited 6CM restore chain")
-    insert_pos = tail_pos + len(tail_marker)
+    original_tick = "    PHASE4C_BUDGET_TICK(0x002832CAu);\\n"
+    tick_pos = text.find(original_tick, start)
+    if tick_pos < 0 or tick_pos - start > 9000:
+        raise SystemExit(
+            "[Phase6CN] original 002832CA budget tick not found after inherited 6CM repair"
+        )
 
-    code = r'''
-    s_phase6cnReadTraceActive = 1u;
+    inherited_region = text[start:tick_pos]
+    if (
+        "PASS: Phase 6CM restored XACT ESI at 002832CA" not in inherited_region
+        or "P6CM XACT ESI RESTORE SKIP" not in inherited_region
+    ):
+        raise SystemExit(
+            "[Phase6CN] inherited 6CM restore chain missing before 002832CA budget tick"
+        )
+
+    code = r'''    s_phase6cnReadTraceActive = 1u;
     ++s_phase6cnReadTraceVisits;
     s_phase6cnReadTraceSeq = 0u;
     {
@@ -285,8 +297,7 @@ def arm_probe(text: str) -> str:
         trace(phase6cnArmLine);
     }
 '''
-    return text[:insert_pos] + code + text[insert_pos:]
-
+    return text[:tick_pos] + code + text[tick_pos:]
 
 def insert_summary(text: str) -> str:
     marker = "P6CM XACT ESI:"
@@ -403,12 +414,22 @@ def main() -> int:
         0x002832F2, 0x00283301, 0x00283308, 0x00283317, 0x0028331C,
         0x00283325,
     ]
+    source_blocks_found = 0
     for va in ring_vas:
+        marker = f"loc_{va:08X}: ;\\n"
+        if marker not in main_text:
+            print(f"[Phase6CN] SOURCE BLOCK {va:08X}: no exact loc label (runtime VA only)")
+            continue
         block = block_window(main_text, va)
+        source_blocks_found += 1
         print(f"[Phase6CN] SOURCE BLOCK {va:08X} BEGIN")
         for line in block.splitlines():
             print(f"[Phase6CN] | {line}")
         print(f"[Phase6CN] SOURCE BLOCK {va:08X} END")
+    print(
+        f"[Phase6CN] source diagnostics: {source_blocks_found}/{len(ring_vas)} "
+        "runtime-ring VAs had exact loc labels"
+    )
 
     main_text = install_state_and_current_va(main_text)
     main_text = wrap_read32(main_text)
