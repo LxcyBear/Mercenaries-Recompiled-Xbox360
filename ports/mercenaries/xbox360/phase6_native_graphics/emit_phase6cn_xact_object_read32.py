@@ -30,6 +30,7 @@ COOKIE_NEW = "phase6cn_env_build_cookie"
 ARM_VA = 0x002832CA
 TRACE_START = 0x00282B00
 TRACE_END = 0x00283400
+EMITTER_REVISION = "6CN-R3"
 
 
 def load(path: Path, name: str):
@@ -506,6 +507,7 @@ def main() -> int:
         encoding="utf-8",
     )
 
+    print(f"[Phase6CN] emitter revision: {EMITTER_REVISION}")
     print("[Phase6CN] 6CM ESI continuity repair preserved")
     print("[Phase6CN] current translated VA stamped from phase4c_budget_tick")
     print("[Phase6CN] READ32 trace window: 00282B00-002833FF")
