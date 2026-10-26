@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R32"
+EMITTER_REVISION = "6DQ-R33"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -261,6 +261,9 @@ static uint32_t s_phase6dqFpGuardLastState = 0u;
 static uint32_t s_phase6dqA41eeLastSite = 0u;
 static uint32_t s_phase6dqA41eeLastOwner = 0u;
 static uint32_t s_phase6dqA41eeSiteWrites = 0u;
+static uint32_t s_phase6dqA4622LastSite = 0u;
+static uint32_t s_phase6dqA4622LastOwner = 0u;
+static uint32_t s_phase6dqA4622SiteWrites = 0u;
 
 '''
     text = text[:start] + state + text[start:]
@@ -381,7 +384,7 @@ static void phase6dq_note_hard_stop(
 
     sprintf(
         line,
-        "P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X esp=%08X ticks=%u a41ee_site=%u a41ee_owner=%08X a41ee_writes=%u",
+        "P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X esp=%08X ticks=%u a41ee_site=%u a41ee_owner=%08X a41ee_writes=%u a4622_site=%u a4622_owner=%08X a4622_writes=%u",
         (unsigned int)kind,
         (unsigned int)caller,
         (unsigned int)target,
@@ -389,7 +392,10 @@ static void phase6dq_note_hard_stop(
         (unsigned int)s_phase4cBlockTicks,
         (unsigned int)s_phase6dqA41eeLastSite,
         (unsigned int)s_phase6dqA41eeLastOwner,
-        (unsigned int)s_phase6dqA41eeSiteWrites);
+        (unsigned int)s_phase6dqA41eeSiteWrites,
+        (unsigned int)s_phase6dqA4622LastSite,
+        (unsigned int)s_phase6dqA4622LastOwner,
+        (unsigned int)s_phase6dqA4622SiteWrites);
     trace(line);
 
     sprintf(
@@ -825,14 +831,17 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY D dsound_poison_sites=%u dsound_noops=%u object=%08X arg=%08X a41ee_site=%u a41ee_owner=%08X a41ee_writes=%u",
+        "P6DQ ROCKET JOURNAL SUMMARY D poison_sites=%u noops=%u object=%08X arg=%08X a41ee=%u/%08X/%u a4622=%u/%08X/%u",
         (unsigned int)s_phase6dqDsoundPoisonSiteCount,
         (unsigned int)s_phase6dqDsoundPoisonNoopCount,
         (unsigned int)s_phase6dqDsoundPoisonLastObject,
         (unsigned int)s_phase6dqDsoundPoisonLastArg,
         (unsigned int)s_phase6dqA41eeLastSite,
         (unsigned int)s_phase6dqA41eeLastOwner,
-        (unsigned int)s_phase6dqA41eeSiteWrites);
+        (unsigned int)s_phase6dqA41eeSiteWrites,
+        (unsigned int)s_phase6dqA4622LastSite,
+        (unsigned int)s_phase6dqA4622LastOwner,
+        (unsigned int)s_phase6dqA4622SiteWrites);
     trace(line);
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
@@ -1373,6 +1382,58 @@ def instrument_a41ee_site_tags(text: str, base) -> tuple[str, list[dict]]:
     return text, sites
 
 
+def instrument_a4622_site_tags(text: str, base) -> tuple[str, list[dict]]:
+    """
+    Minimal R33 upstream provenance: before each direct sub_002A4622 call,
+    write only a site ID and owner VA to globals. No stack reads, no trace,
+    no ring, no pack reordering, no guest fault-policy changes.
+    """
+    masked = base.mask_noncode(text)
+    call_re = re.compile(
+        r"(?P<indent>[ \t]*)PUSH32\(\s*esp\s*,\s*0\s*\)\s*;\s*"
+        r"sub_002A4622\(\)\s*;\s*/\*\s*call\s+0x002A4622\s*\*/"
+    )
+    patches = []
+    sites = []
+    site_id = 0
+
+    for match in base.FUNC_RE.finditer(masked):
+        name = match.group(1)
+        vm = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
+        if not vm:
+            continue
+        owner = int(vm.group(1), 16)
+        open_index = masked.find("{", match.start(), match.end())
+        if open_index < 0:
+            continue
+        end = base.closing_brace(masked, open_index)
+        body = text[open_index:end]
+
+        for call in call_re.finditer(body):
+            site_id += 1
+            absolute = open_index + call.start()
+            indent = call.group("indent")
+            tag = (
+                f"{indent}s_phase6dqA4622LastSite = {site_id}u;\n"
+                f"{indent}s_phase6dqA4622LastOwner = 0x{owner:08X}u;\n"
+                f"{indent}++s_phase6dqA4622SiteWrites;\n"
+            )
+            patches.append((absolute, tag))
+            sites.append({
+                "site_id": site_id,
+                "owner_va": f"0x{owner:08X}",
+                "owner_name": name,
+            })
+
+    for position, tag in reversed(patches):
+        text = text[:position] + tag + text[position:]
+
+    if not sites:
+        raise SystemExit("[Phase6DQ] R33 found no packed direct A4622 callsites")
+
+    return text, sites
+
+
 def route_all_dsound_accesses(text: str, base) -> tuple[str, dict[str, int]]:
     """Route raw guest accesses in every translated DSOUND sub_* through APU wrappers."""
     masked = base.mask_noncode(text)
@@ -1676,6 +1737,7 @@ def main() -> int:
     main_text = patch_vp_accesses(main_text)
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
     main_text, a41ee_site_tags = instrument_a41ee_site_tags(main_text, base)
+    main_text, a4622_site_tags = instrument_a4622_site_tags(main_text, base)
     main_text = insert_final_dump(main_text)
     main_text = update_vp_summary(main_text)
 
@@ -1752,6 +1814,8 @@ def main() -> int:
         "P6DQ DSOUND POISON NOOP:",
         "a41ee_site=%u a41ee_owner=%08X a41ee_writes=%u",
         "s_phase6dqA41eeLastSite = ",
+        "s_phase6dqA4622LastSite = ",
+        "a4622_site=%u a4622_owner=%08X a4622_writes=%u",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
@@ -1891,10 +1955,12 @@ def main() -> int:
             "audio_fidelity_claimed": False,
         },
         "dsound_apu_routing": dsound_route_counts,
-        "r31_a41ee_provenance": {
+        "r33_minimal_provenance": {
             "stable_pack_order": "exact_R25",
-            "site_count": len(a41ee_site_tags),
-            "sites": a41ee_site_tags,
+            "a41ee_site_count": len(a41ee_site_tags),
+            "a41ee_sites": a41ee_site_tags,
+            "a4622_site_count": len(a4622_site_tags),
+            "a4622_sites": a4622_site_tags,
             "callsite_stack_reads": False,
             "callsite_traces": False,
             "ring_buffer": False,
@@ -1958,9 +2024,10 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print(f"[Phase6DQ] R32 minimal A41EE site tags: {len(a41ee_site_tags)} packed direct callers")
-    print("[Phase6DQ] R32 pack/runtime: EXACT R25 order + two-global provenance")
-    print("[Phase6DQ] R32 debugger safety: startup policy restored; giant journal summary split")
+    print(f"[Phase6DQ] R33 A41EE site tags: {len(a41ee_site_tags)}")
+    print(f"[Phase6DQ] R33 A4622 upstream site tags: {len(a4622_site_tags)}")
+    print("[Phase6DQ] R33 pack/runtime: EXACT R25 order + minimal upstream provenance")
+    print("[Phase6DQ] R33 debugger safety: bounded runtime DebugStrings retained")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
