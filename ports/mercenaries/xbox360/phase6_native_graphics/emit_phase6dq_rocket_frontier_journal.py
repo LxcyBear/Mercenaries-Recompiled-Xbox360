@@ -46,7 +46,11 @@ SECTIONS = (
     ("D3D", 0x00288640, 0x0029B874, 0x0028E700),
     ("XGRPH", 0x0029B880, 0x0029CB7C, 0x0029C8BE),
     ("DSOUND", 0x0029CB80, 0x002BB274, 0x002A6713),
+    ("TEXT_HOT", 0x00011000, 0x0025561C, 0x00209810),
     ("XACTENG", 0x0027D5C0, 0x00288630, 0x0027DB5C),
+    ("WMADEC", 0x002BB280, 0x002D4300, 0x002BB280),
+    ("XPP", 0x002D4300, 0x002DBCC8, 0x002D4300),
+    ("XMV", 0x00255620, 0x0027D5B4, 0x00255620),
 )
 
 
@@ -975,7 +979,10 @@ def main() -> int:
             "new_direct_frontier_targets": [
                 f"0x{x:08X}" for x in sorted(frontiers)
             ],
-            "priority": ["D3D", "XGRPH", "DSOUND", "XACTENG"],
+            "priority": [
+                "D3D", "XGRPH", "DSOUND", "TEXT_HOT",
+                "XACTENG", "WMADEC", "XPP", "XMV"
+            ],
         },
         "runtime_journal": {
             "dispatch_unique_capacity": 96,
