@@ -15,10 +15,10 @@ hardware showed that this caller can walk closely-spaced DSOUND siblings, so
 hardware run per address.
 
 Safety policy:
-  * 0x002A6713 must be an exact generated function start;
+  * 0x002A6713 must be an exact function start owned by maintained manual support;
   * interior entries are never redirected to a containing prologue;
   * unresolved support is pruned by the existing Phase-5BC support scanner;
-  * the mandatory root may not be pruned;
+  * the maintained manual root is never replaced by a fabricated generated body;
   * the 6CV shadow-RAM alias, scoped FD/FE MMIO bridges, XACT async semantics,
     Partition0 behavior, D3D/XGRPH state and 64M watchdog are unchanged.
 """
@@ -33,7 +33,7 @@ BASE_TAG = "P6CV-SHADOW-RAM-F0000000-20261025-A"
 BUILD_TAG = "P6CW-DSOUND-SWEEP-002A6713-20261026-A"
 COOKIE_OLD = "phase6cv_env_build_cookie"
 COOKIE_NEW = "phase6cw_env_build_cookie"
-EMITTER_REVISION = "6CW-R3"
+EMITTER_REVISION = "6CW-R4"
 
 ROOT = 0x002A6713
 CALLER = 0x0023A3CE
@@ -467,7 +467,9 @@ def main() -> int:
         "remaining_generated_dsound_members": len(remaining),
         "forward_remaining_members": len(forward),
         "prefrontier_remaining_members": len(prefrontier),
-        "selected_candidate_members": len(candidate_new),\n        "manual_root_dispatch": True,\n        "manual_root_source": "ports/mercenaries/src/recomp_manual.c",
+        "selected_candidate_members": len(candidate_new),
+        "manual_root_dispatch": True,
+        "manual_root_source": "ports/mercenaries/src/recomp_manual.c",
         "truncated_candidate_members": truncated,
         "packed_new_members": len(new_members),
         "pruned_members": len(pruned),
