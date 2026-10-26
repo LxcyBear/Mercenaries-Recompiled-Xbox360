@@ -21,6 +21,8 @@ param(
     [string]$CleanLog = "",
     [string]$BuildLog = "",
     [string]$PublishedXex = "",
+    [string]$ShadowBuildRoot = "C:\\Merc360Build\\Mercenaries-PPC-Port",
+    [switch]$DisableShadowBuild,
     [switch]$SkipClean
 )
 
