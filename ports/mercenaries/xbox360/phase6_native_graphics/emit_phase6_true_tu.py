@@ -38,6 +38,10 @@ SUB_DECL_RE = re.compile(r"(?m)^(\s*)static\s+void\s+(sub_[0-9A-Fa-f]{8})\(void\
 SUB_CALL_RE = re.compile(r"\b(sub_[0-9A-Fa-f]{8})\s*\(")
 ID_RE = re.compile(r"\b[A-Za-z_]\w*\b")
 
+# EBP is intentionally a per-translated-function local frame register.  It is
+# seeded from shared g_seh_ebp at function entry and must never be externalized.
+LOCAL_TRANSLATED_ARCH_REGS = {"ebp"}
+
 
 def mask_noncode(text: str) -> str:
     out = list(text)
@@ -315,10 +319,15 @@ def collect_runtime_globals(prefix: str, body: str, preprocessor: str) -> tuple[
     tokens = set(ID_RE.findall(body + "\n" + preprocessor))
     names = sorted(
         n for n in tokens
-        if n in {"eax","ecx","edx","ebx","esi","edi","ebp","esp",
-                 "g_eax","g_ecx","g_edx","g_ebx","g_esi","g_edi","g_ebp","g_esp",
-                 "g_eflags","g_seh_ebp","g_ram"}
-        or n.startswith("g_xmm") or n.startswith("g_mm")
+        if (
+            n not in LOCAL_TRANSLATED_ARCH_REGS
+            and (
+                n in {"eax","ecx","edx","ebx","esi","edi","esp",
+                      "g_eax","g_ecx","g_edx","g_ebx","g_esi","g_edi","g_ebp","g_esp",
+                      "g_eflags","g_seh_ebp","g_ram"}
+                or n.startswith("g_xmm") or n.startswith("g_mm")
+            )
+        )
     )
     found = []
     missing = []
@@ -377,6 +386,29 @@ def parse_translated_functions(body: str) -> list[dict]:
     return rows
 
 
+def validate_local_architecture_registers(funcs: list[dict]) -> None:
+    """Prove registers modeled as per-function locals remain local in every TU."""
+    ebp_decl = re.compile(r"(?m)^\s*uint32_t\s+ebp\s*;\s*$")
+    ebp_token = re.compile(r"\bebp\b")
+    users = 0
+    for row in funcs:
+        src = row["source"]
+        if not ebp_token.search(src):
+            continue
+        users += 1
+        if len(ebp_decl.findall(src)) != 1:
+            raise SystemExit(
+                f"[Phase6TU] {row['name']} uses local ebp but does not have exactly "
+                "one 'uint32_t ebp;' declaration"
+            )
+        if "ebp = g_seh_ebp;" not in src:
+            raise SystemExit(
+                f"[Phase6TU] {row['name']} local ebp is not initialized from g_seh_ebp"
+            )
+    if users == 0:
+        raise SystemExit("[Phase6TU] expected translated local-ebp users, found none")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", type=Path, required=True)
@@ -400,6 +432,7 @@ def main() -> int:
     body = text[body_start:on]
     suffix = text[on:]
     funcs = parse_translated_functions(body)
+    validate_local_architecture_registers(funcs)
 
     runtime_prefix, helper_prototypes = externalize_prefix_functions(prefix)
     preprocessor = extract_preprocessor(prefix)
@@ -515,6 +548,7 @@ def main() -> int:
         "translated_functions": len(funcs),
         "runtime_helpers_externalized": len(helper_prototypes),
         "runtime_globals_externalized": len(globals_found),
+        "local_architecture_registers": sorted(LOCAL_TRANSLATED_ARCH_REGS),
         "stable_assignment": "multiplicative guest-VA hash",
         "content_stable_writes": True,
         "changed_files": sorted(changed),
@@ -531,6 +565,7 @@ def main() -> int:
     print(f"[Phase6TU] shard_functions_min={min(counts)} max={max(counts)}")
     print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
+    print("[Phase6TU] local_architecture_registers=" + ",".join(sorted(LOCAL_TRANSLATED_ARCH_REGS)))
     print(f"[Phase6TU] changed_files={len(changed)} unchanged_files={len(unchanged)} stale_removed={len(stale_removed)}")
     print(f"[Phase6TU] out={out_dir}")
     return 0
