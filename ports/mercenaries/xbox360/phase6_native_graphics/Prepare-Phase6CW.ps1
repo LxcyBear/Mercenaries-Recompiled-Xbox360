@@ -81,10 +81,10 @@ Write-Host "[Phase6CW] Watchdog: preserve 64,000,000 translated blocks"
 if($LASTEXITCODE-ne0){throw "Phase 6CW emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CW-R3"')){
-  throw "Phase 6CW stale emitter detected; expected revision 6CW-R3"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CW-R4"')){
+  throw "Phase 6CW stale emitter detected; expected revision 6CW-R4"
 }
-Write-Host "[Phase6CW] Emitter revision       : 6CW-R3"
+Write-Host "[Phase6CW] Emitter revision       : 6CW-R4"
 
 $recompileText=Get-Content $recompile -Raw
 $manualText=Get-Content $manualSource -Raw
