@@ -31,7 +31,7 @@ BASE_TAG = "P6CZ-PREFAULT-CCCCCCD0-PROVENANCE-20261026-A"
 BUILD_TAG = "P6DA-DSOUND-ARG-LINEAGE-00041D88-20261026-A"
 COOKIE_OLD = "phase6cz_env_build_cookie"
 COOKIE_NEW = "phase6da_env_build_cookie"
-EMITTER_REVISION = "6DA-R3"
+EMITTER_REVISION = "6DA-R4"
 
 TARGETS = (
     ("0029F992", 0x0029F992),
@@ -118,7 +118,7 @@ def patch_entries(text: str) -> str:
         # main_monolithic.cpp contains forward declarations before translated
         # bodies.  Anchor on the actual function definition, not the prototype.
         definition_re = re.compile(
-            rf"(?m)^void\s+sub_{name}\(void\)\s*\{{"
+            rf"(?m)^\s*(?:static\s+)?void\s+sub_{name}\(void\)\s*\{{"
         )
         matches = list(definition_re.finditer(text))
         if len(matches) != 1:
