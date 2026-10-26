@@ -565,6 +565,82 @@ def instrument_a41ee_callsites(text: str, base) -> tuple[str, list[dict]]:
 
     return text, site_map
 
+def instrument_graphics_consumers(text: str, base) -> tuple[str, dict]:
+    """Wrap guest-memory accesses in D3D/XGRPH + static-anchor owners only."""
+    masked = base.mask_noncode(text)
+    patches = []
+    functions = 0
+    counts = {
+        "read8": 0, "read16": 0, "read32": 0, "read64": 0,
+        "write8": 0, "write16": 0, "write32": 0, "write64": 0,
+    }
+
+    replacements = (
+        ("GUEST_READ8(", "phase6dr_graphics_read8(0x{va:08X}u, ", "read8"),
+        ("GUEST_READ16(", "phase6dr_graphics_read16(0x{va:08X}u, ", "read16"),
+        ("GUEST_READ32(", "phase6dr_graphics_read32(0x{va:08X}u, ", "read32"),
+        ("GUEST_READ64(", "phase6dr_graphics_read64(0x{va:08X}u, ", "read64"),
+        ("GUEST_WRITE8(", "phase6dr_graphics_write8(0x{va:08X}u, ", "write8"),
+        ("GUEST_WRITE16(", "phase6dr_graphics_write16(0x{va:08X}u, ", "write16"),
+        ("GUEST_WRITE32(", "phase6dr_graphics_write32(0x{va:08X}u, ", "write32"),
+        ("GUEST_WRITE64(", "phase6dr_graphics_write64(0x{va:08X}u, ", "write64"),
+    )
+
+    for match in base.FUNC_RE.finditer(masked):
+        name = match.group(1)
+        vm = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
+        if not vm:
+            continue
+        va = int(vm.group(1), 16)
+        open_pos = masked.find("{", match.start(), match.end())
+        if open_pos < 0:
+            continue
+        end = base.closing_brace(masked, open_pos)
+        body = text[open_pos:end]
+        body_lower = body.lower()
+
+        in_graphics_region = (
+            D3D_START <= va < D3D_END or
+            XGRPH_START <= va < XGRPH_END
+        )
+        has_anchor = any(
+            (f"0x{anchor:x}" in body_lower) or
+            (f"0x{anchor:08x}" in body_lower)
+            for anchor in GRAPHICS_STATIC_ANCHORS
+        )
+        if not in_graphics_region and not has_anchor:
+            continue
+
+        replaced = body
+        local_count = 0
+        for old, new_template, key in replacements:
+            n = replaced.count(old)
+            if n:
+                replaced = replaced.replace(old, new_template.format(va=va))
+                counts[key] += n
+                local_count += n
+
+        if local_count:
+            functions += 1
+            patches.append((open_pos, end, replaced))
+
+    for start, end, replacement in reversed(patches):
+        text = text[:start] + replacement + text[end:]
+
+    return text, {
+        "instrumented_functions": functions,
+        "access_replacements": counts,
+        "surface_base": f"0x{GRAPHICS_SURFACE_BASE:08X}",
+        "surface_end": f"0x{GRAPHICS_SURFACE_END:08X}",
+        "surface_bytes": GRAPHICS_SURFACE_END - GRAPHICS_SURFACE_BASE,
+        "device_base": f"0x{GRAPHICS_DEVICE_BASE:08X}",
+        "device_end": f"0x{GRAPHICS_DEVICE_END:08X}",
+        "fault_semantics_changed": False,
+        "unknown_reads_zero_filled": False,
+        "unknown_mmio_accepted": False,
+    }
+
+
 def select_candidates(
     generated: dict,
     old: set[int],
@@ -2344,6 +2420,9 @@ def main() -> int:
         if detail:
             row["arg1_expression"] = detail["arg1_expression"]
             row["arg1_kind"] = detail["arg1_kind"]
+    main_text, graphics_consumer_probe = instrument_graphics_consumers(
+        main_text, base
+    )
     main_text = insert_final_dump(main_text)
     main_text = update_vp_summary(main_text)
 
@@ -2554,6 +2633,7 @@ def main() -> int:
             "runtime_a41ee_callsite_probe": True,
             "runtime_a41ee_site_map": a41ee_site_map,
             "runtime_fault_policy_changed": False,
+            "graphics_consumer_probe": graphics_consumer_probe,
         },
         "vp_diagnostic_continue": {
             "aligned_write32_continue": True,
