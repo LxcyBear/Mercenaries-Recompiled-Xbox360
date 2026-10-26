@@ -73,7 +73,7 @@ Write-Host "[Phase6DQ]          ROCKET FRONTIER JOURNAL"
 Write-Host "[Phase6DQ] ================================================"
 Write-Host "[Phase6DQ] Hardware seed: 6DP crossed VP FREE FE820010 -> 00000080"
 Write-Host "[Phase6DQ] Next proven boundary: WRITE32 FE8202A4 at tick 26,712,259"
-Write-Host "[Phase6DQ] Historical early CCCCCCD0 path: ELIMINATED; R16 deep DSOUND recurrence: CLASSIFIED + R17 QUARANTINED"
+Write-Host "[Phase6DQ] Historical early CCCCCCD0 path: ELIMINATED; R16 deep DSOUND recurrence: EXACT 002A41F7 CALLSITE GUARDED"
 Write-Host "[Phase6DQ] XACT root teardown/global-zero regression: ABSENT"
 Write-Host "[Phase6DQ] Static pack cap: 4096 new support-clean functions"
 Write-Host "[Phase6DQ] Priority: D3D -> XGRPH -> DSOUND -> TEXT_HOT -> XACTENG -> WMADEC/XPP/XMV"
@@ -92,10 +92,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R22"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R22"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R23"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R23"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R22"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R23"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -144,7 +144,7 @@ if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"){
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R22"-or
+if($q.emitter_revision-ne"6DQ-R23"-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -167,9 +167,10 @@ if($q.emitter_revision-ne"6DQ-R22"-or
    $q.dsound_poison_slot_bridge.ordinary_guest_faults_bypassed-ne$false-or
    $q.dsound_poison_slot_bridge.emitter_source_shape_guard-ne$true-or
    $q.dsound_poison_slot_bridge.definition_not_forward_declaration_guard-ne$true-or
-   $q.dsound_poison_slot_bridge.function_local_unique_dispatch_pair_guard-ne$true-or
+   $q.dsound_poison_slot_bridge.exact_label_guard-ne"0x002A41F7"-or
+   $q.dsound_poison_slot_bridge.inline_icall_target_shape_proven-ne$true-or
+   $q.dsound_poison_slot_bridge.local_short_circuit_before_slot_read-ne$true-or
    $q.dsound_poison_slot_bridge.guarded_dereference_postcheck-ne$true-or
-   $q.dsound_poison_slot_bridge.accepts_inherited_apu_routed_accessor-ne$true-or
    $q.kernel_timing_bridge.hardware_seed_microseconds-ne20-or
    $q.kernel_timing_bridge.hardware_seed_calls-ne1000-or
    $q.execution_budget-ne64000000-or
