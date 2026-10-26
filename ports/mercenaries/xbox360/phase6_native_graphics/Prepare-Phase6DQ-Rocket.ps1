@@ -87,12 +87,13 @@ Write-Host "[Phase6DQ] Kernel FP guard pair 142/139: KeSave/KeRestoreFloatingPoi
 Write-Host "[Phase6DQ] DSOUND poison dispatch 002A41F7: EXACT SLOT QUARANTINE ARMED (CCCCCCCC -> journaled DS_OK no-op)"
 Write-Host "[Phase6DQ] Non-VP MMIO/NV2A unknowns: HARD FENCE"
 Write-Host "[Phase6DQ] Dispatch logging: first unique + aggregate, progress every 65536"
-Write-Host "[Phase6DQ] R41 STABLE-PACK: exact hardware-proven R25 pack order retained"
-Write-Host "[Phase6DQ] R41 AC97 CODEC READY: R39 hardware-proven codec semantics retained"
-Write-Host "[Phase6DQ] R41 AUDIO IRQ SETUP: R40 hardware-proven ordinals 44/109/98 retained"
-Write-Host "[Phase6DQ] R41 AC97 OUTPUT BUSMASTER: PCM/SPDIF descriptor + control register blocks"
-Write-Host "[Phase6DQ] R41 XACT PROBE: inherited exact 0027DC5B failure stages"
-Write-Host "[Phase6DQ] R41 DEBUGGER SAFETY: bounded final dump only"
+Write-Host "[Phase6DQ] R43 STABLE-PACK: exact hardware-proven R25 pack order retained"
+Write-Host "[Phase6DQ] R43 AC97 CODEC READY: R39 hardware-proven codec semantics retained"
+Write-Host "[Phase6DQ] R43 AUDIO IRQ SETUP: R40 hardware-proven ordinals 44/109/98 retained"
+Write-Host "[Phase6DQ] R43 AC97 OUTPUT BUSMASTER: R41 hardware-proven PCM BDBAR retained"
+Write-Host "[Phase6DQ] R43 TABLE PROVENANCE: 002BA9C0/4 mutation watch + candidate channel writes"
+Write-Host "[Phase6DQ] R43 SAFETY: no DEA85111 bypass; guest fault policy unchanged"
+Write-Host "[Phase6DQ] R43 DEBUGGER SAFETY: bounded final dump only"
 Write-Host "[Phase6DQ] Build mode: $(if($FullClean){'FULL CLEAN'}else{'INCREMENTAL (clean skipped)'})"
 Write-Host ("[Phase6DQ] Build root: {0}" -f $(if($DisableFastLocalBuild){$SolutionRoot}else{$FastBuildRoot}))
 Write-Host ("[Phase6DQ] Fast local shadow: {0}" -f $(if($DisableFastLocalBuild){"DISABLED"}else{"ENABLED (persistent intermediates, OneDrive avoided)"}))
@@ -104,10 +105,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R41"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R41"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R43"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R43"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R41"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R43"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -156,7 +157,7 @@ if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"){
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R41"-or
+if($q.emitter_revision-ne"6DQ-R43"-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -268,7 +269,7 @@ Write-Host "[Phase6DQ] Detailed bounded runtime journals: ARMED"
 Write-Host "[Phase6DQ] DSOUND CCCCCCCC poison-slot quarantine: ARMED at exact site 002A41F7"
 Write-Host "[Phase6DQ] Pixel/present instrumentation: INHERITED"
 Write-Host "[Phase6DQ] C4146 generated-code suppression: INHERITED"
-Write-Host "[Phase6DQ] R41 SOURCE: R40 audio IRQ proof + AC97 PCM/SPDIF output busmaster state"
+Write-Host "[Phase6DQ] R43 SOURCE: R41 AC97 busmaster proof + exact channel-table corruption provenance"
 
 if(-not$SkipSolutionBuild){
   $buildArgs=@{
@@ -298,5 +299,5 @@ if(-not$SkipSolutionBuild){
 
   Write-Host "[Phase6DQ] BUILD PASS"
   Write-Host ("[Phase6DQ] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6DQ-ROCKET-A.xex"))
-  Write-Host "[Phase6DQ] R41 AC97 output-busmaster build complete. Fast local shadow/incremental build is the default."
+  Write-Host "[Phase6DQ] R43 AC97 table-provenance build complete. Fast local shadow/incremental build is the default."
 }
