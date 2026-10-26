@@ -695,6 +695,39 @@ static uint32_t s_phase6dqA41eeLastSite = 0u;
 static uint32_t s_phase6dqA41eeLastOwner = 0u;
 static uint32_t s_phase6dqA41eeLastArg1 = 0u;
 
+#define PHASE6DR_GRAPHICS_RING_CAP 64u
+#define PHASE6DR_SURFACE_BASE 0x024FC000u
+#define PHASE6DR_SURFACE_END  0x02628000u
+#define PHASE6DR_DEVICE_BASE  0x00299380u
+#define PHASE6DR_DEVICE_END   0x0029B000u
+
+typedef struct Phase6DRGraphicsEvent
+{
+    uint32_t kind;
+    uint32_t owner;
+    uint32_t address;
+    uint32_t value;
+    uint32_t width;
+    uint32_t isWrite;
+    uint32_t hits;
+} Phase6DRGraphicsEvent;
+
+static Phase6DRGraphicsEvent s_phase6drGraphicsRing[PHASE6DR_GRAPHICS_RING_CAP];
+static uint32_t s_phase6drGraphicsRingCount = 0u;
+static uint32_t s_phase6drSurfaceTouchReads = 0u;
+static uint32_t s_phase6drSurfaceTouchWrites = 0u;
+static uint32_t s_phase6drSurfacePointerReads = 0u;
+static uint32_t s_phase6drSurfacePointerWrites = 0u;
+static uint32_t s_phase6drDeviceTouchReads = 0u;
+static uint32_t s_phase6drDeviceTouchWrites = 0u;
+static uint32_t s_phase6drDevicePointerReads = 0u;
+static uint32_t s_phase6drDevicePointerWrites = 0u;
+static uint32_t s_phase6drGraphicsRelevantHits = 0u;
+static uint32_t s_phase6drGraphicsLastKind = 0u;
+static uint32_t s_phase6drGraphicsLastOwner = 0u;
+static uint32_t s_phase6drGraphicsLastAddress = 0u;
+static uint32_t s_phase6drGraphicsLastValue = 0u;
+
 '''
     text = text[:start] + state + text[start:]
     # Current-caller function shifted by inserted state; find it again.
@@ -718,6 +751,206 @@ static const char* phase6dq_vp_method_name(uint32_t offset)
     if (offset >= 0x00000600u && offset <= 0x00000808u &&
         (offset & 3u) == 0u) return "NV1BA0_PIO_BUFFER_OR_SSL";
     return "VP_UNNAMED_OR_UNMODELED";
+}
+
+static void phase6dr_record_graphics_event(
+    uint32_t kind,
+    uint32_t owner,
+    uint32_t address,
+    uint32_t value,
+    uint32_t width,
+    uint32_t isWrite)
+{
+    uint32_t i;
+    uint32_t keyAddress = address;
+    char line[420];
+
+    if (kind == 1u)
+        keyAddress = (address - PHASE6DR_SURFACE_BASE) >> 12;
+    else if (kind == 3u)
+        keyAddress = address - PHASE6DR_DEVICE_BASE;
+
+    ++s_phase6drGraphicsRelevantHits;
+    s_phase6drGraphicsLastKind = kind;
+    s_phase6drGraphicsLastOwner = owner;
+    s_phase6drGraphicsLastAddress = address;
+    s_phase6drGraphicsLastValue = value;
+
+    for (i = 0u; i < s_phase6drGraphicsRingCount; ++i)
+    {
+        Phase6DRGraphicsEvent* row = &s_phase6drGraphicsRing[i];
+        uint32_t rowKey = row->address;
+        if (row->kind == 1u)
+            rowKey = (row->address - PHASE6DR_SURFACE_BASE) >> 12;
+        else if (row->kind == 3u)
+            rowKey = row->address - PHASE6DR_DEVICE_BASE;
+
+        if (row->kind == kind &&
+            row->owner == owner &&
+            rowKey == keyAddress &&
+            row->isWrite == isWrite)
+        {
+            ++row->hits;
+            row->address = address;
+            row->value = value;
+            row->width = width;
+            return;
+        }
+    }
+
+    if (s_phase6drGraphicsRingCount < PHASE6DR_GRAPHICS_RING_CAP)
+    {
+        Phase6DRGraphicsEvent* row =
+            &s_phase6drGraphicsRing[s_phase6drGraphicsRingCount++];
+        row->kind = kind;
+        row->owner = owner;
+        row->address = address;
+        row->value = value;
+        row->width = width;
+        row->isWrite = isWrite;
+        row->hits = 1u;
+
+        if (s_phase6drGraphicsRingCount <= 24u)
+        {
+            sprintf(
+                line,
+                "P6DR GRAPHICS CONSUMER: kind=%u owner=%08X address=%08X value=%08X width=%u write=%u unique=%u",
+                (unsigned int)kind,
+                (unsigned int)owner,
+                (unsigned int)address,
+                (unsigned int)value,
+                (unsigned int)width,
+                (unsigned int)isWrite,
+                (unsigned int)s_phase6drGraphicsRingCount);
+            trace(line);
+        }
+    }
+}
+
+static void phase6dr_note_graphics_access(
+    uint32_t owner,
+    uint32_t address,
+    uint32_t width,
+    uint32_t isWrite,
+    uint32_t value)
+{
+    uint32_t pointerValue = value & ~3u;
+    uint32_t addressEnd = address + (width ? width - 1u : 0u);
+    uint32_t surfaceTouch =
+        address < PHASE6DR_SURFACE_END &&
+        addressEnd >= PHASE6DR_SURFACE_BASE;
+    uint32_t deviceTouch =
+        address < PHASE6DR_DEVICE_END &&
+        addressEnd >= PHASE6DR_DEVICE_BASE;
+    uint32_t surfacePointer =
+        pointerValue >= PHASE6DR_SURFACE_BASE &&
+        pointerValue < PHASE6DR_SURFACE_END;
+    uint32_t devicePointer =
+        pointerValue >= PHASE6DR_DEVICE_BASE &&
+        pointerValue < PHASE6DR_DEVICE_END;
+
+    if (surfaceTouch)
+    {
+        if (isWrite) ++s_phase6drSurfaceTouchWrites;
+        else ++s_phase6drSurfaceTouchReads;
+        phase6dr_record_graphics_event(
+            1u, owner, address, value, width, isWrite);
+    }
+    if (surfacePointer)
+    {
+        if (isWrite) ++s_phase6drSurfacePointerWrites;
+        else ++s_phase6drSurfacePointerReads;
+        phase6dr_record_graphics_event(
+            2u, owner, address, value, width, isWrite);
+    }
+    if (deviceTouch)
+    {
+        if (isWrite) ++s_phase6drDeviceTouchWrites;
+        else ++s_phase6drDeviceTouchReads;
+        phase6dr_record_graphics_event(
+            3u, owner, address, value, width, isWrite);
+    }
+    if (devicePointer)
+    {
+        if (isWrite) ++s_phase6drDevicePointerWrites;
+        else ++s_phase6drDevicePointerReads;
+        phase6dr_record_graphics_event(
+            4u, owner, address, value, width, isWrite);
+    }
+}
+
+static uint8_t phase6dr_graphics_read8(uint32_t owner, uint32_t address)
+{
+    uint8_t value = GUEST_READ8(address);
+    if (!s_accessFault)
+        phase6dr_note_graphics_access(owner, address, 1u, 0u, (uint32_t)value);
+    return value;
+}
+
+static uint16_t phase6dr_graphics_read16(uint32_t owner, uint32_t address)
+{
+    uint16_t value = GUEST_READ16(address);
+    if (!s_accessFault)
+        phase6dr_note_graphics_access(owner, address, 2u, 0u, (uint32_t)value);
+    return value;
+}
+
+static uint32_t phase6dr_graphics_read32(uint32_t owner, uint32_t address)
+{
+    uint32_t value = GUEST_READ32(address);
+    if (!s_accessFault)
+        phase6dr_note_graphics_access(owner, address, 4u, 0u, value);
+    return value;
+}
+
+static uint64_t phase6dr_graphics_read64(uint32_t owner, uint32_t address)
+{
+    uint64_t value = GUEST_READ64(address);
+    if (!s_accessFault)
+    {
+        phase6dr_note_graphics_access(
+            owner, address, 8u, 0u, (uint32_t)value);
+        phase6dr_note_graphics_access(
+            owner, address + 4u, 4u, 0u, (uint32_t)(value >> 32));
+    }
+    return value;
+}
+
+static void phase6dr_graphics_write8(
+    uint32_t owner, uint32_t address, uint8_t value)
+{
+    GUEST_WRITE8(address, value);
+    if (!s_accessFault)
+        phase6dr_note_graphics_access(owner, address, 1u, 1u, (uint32_t)value);
+}
+
+static void phase6dr_graphics_write16(
+    uint32_t owner, uint32_t address, uint16_t value)
+{
+    GUEST_WRITE16(address, value);
+    if (!s_accessFault)
+        phase6dr_note_graphics_access(owner, address, 2u, 1u, (uint32_t)value);
+}
+
+static void phase6dr_graphics_write32(
+    uint32_t owner, uint32_t address, uint32_t value)
+{
+    GUEST_WRITE32(address, value);
+    if (!s_accessFault)
+        phase6dr_note_graphics_access(owner, address, 4u, 1u, value);
+}
+
+static void phase6dr_graphics_write64(
+    uint32_t owner, uint32_t address, uint64_t value)
+{
+    GUEST_WRITE64(address, value);
+    if (!s_accessFault)
+    {
+        phase6dr_note_graphics_access(
+            owner, address, 8u, 1u, (uint32_t)value);
+        phase6dr_note_graphics_access(
+            owner, address + 4u, 4u, 1u, (uint32_t)(value >> 32));
+    }
 }
 
 static void phase6dq_note_a41ee_callsite(
