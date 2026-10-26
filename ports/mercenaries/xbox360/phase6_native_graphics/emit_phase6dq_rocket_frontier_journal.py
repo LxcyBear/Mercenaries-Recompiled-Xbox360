@@ -27,6 +27,8 @@ hardware-proven DSOUND poison-dispatch site 002A41F7 is quarantined without
 widening ordinary guest-memory fault handling. R26 adds predictive static
 frontier clearing: direct DSOUND producer callsites, literal DSOUND kernel
 targets, and real AvSetDisplayMode intent callers are audited before VS builds.
+R27 rejects raw constant false positives, backward-slices A41EE arg1 producers,
+and adds a bounded runtime callsite ring without suppressing guest faults.
 """
 
 from __future__ import annotations
@@ -43,7 +45,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R26"
+EMITTER_REVISION = "6DQ-R27"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -176,20 +178,53 @@ def translated_function_defs(text: str, base) -> list[dict]:
     return rows
 
 
+def _literal_icall_occurrences(source: str) -> list[dict]:
+    """Return only literal 0x800000XX values used inside an ICALL_SAFE statement."""
+    rows = []
+    for match in re.finditer(r"0x800000([0-9A-Fa-f]{2})u?", source):
+        literal_pos = match.start()
+        previous_semi = source.rfind(";", 0, literal_pos)
+        statement_start = previous_semi + 1
+        prefix = source[statement_start:literal_pos]
+        if "ICALL_SAFE" not in prefix:
+            continue
+
+        statement_end = source.find(";", match.end())
+        if statement_end < 0:
+            continue
+        statement = source[statement_start:statement_end + 1]
+        if "ICALL_SAFE" not in statement:
+            continue
+
+        target = 0x80000000 | int(match.group(1), 16)
+        rows.append({
+            "target": target,
+            "statement": " ".join(statement.split()),
+            "offset": literal_pos,
+        })
+    return rows
+
+
 def predictive_seed_vas(generated: dict) -> list[int]:
-    """Find source-backed audio/display callers worth packing before broad sweep."""
+    """
+    Prioritize real call-path owners only.
+
+    Raw occurrences of 0x80000003 are NOT seeds: R26 proved several are plain
+    status masks/object fields. Display seeding requires a literal ordinal 3
+    inside an ICALL_SAFE statement.
+    """
     seeds = []
     for va, row in generated.items():
         source = row["source"]
-        if (
-            "sub_002A41EE();" in source
-            or "call 0x002A41EE" in source
-            or "0x80000003" in source
+        if "sub_002A41EE();" in source:
+            seeds.append(va)
+            continue
+        if any(
+            call["target"] == PREDICTIVE_DISPLAY_ORDINAL
+            for call in _literal_icall_occurrences(source)
         ):
             seeds.append(va)
 
-    # Keep established subsystem roots nearby even if already packed; caller
-    # closure expansion below will simply skip old members.
     seeds.extend((0x002A6713, 0x0029C8BE, 0x0028E700))
     return list(dict.fromkeys(seeds))
 
@@ -225,9 +260,6 @@ def build_predictive_candidates(
                 PREDICTIVE_CLOSURE_CAP_PER_SEED,
             )
         except BaseException:
-            # Predictive prioritization may never weaken emission safety.
-            # If a seed cannot form a closure, the normal support-clean sweep
-            # still handles it or fences it later.
             closure = []
         for va in closure:
             add(va)
@@ -235,79 +267,116 @@ def build_predictive_candidates(
     return selected
 
 
+def _previous_arg1_push(body: str, call_offset: int) -> tuple[str, str]:
+    """
+    Recover the already-pushed A41EE arg1 expression immediately before the
+    synthetic return-slot PUSH32(esp, 0). This is static provenance only.
+    """
+    prefix = body[:call_offset]
+    lines = prefix.splitlines()
+    for line in reversed(lines[-32:]):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("loc_"):
+            if stripped.startswith("loc_"):
+                break
+            continue
+        match = re.search(r"PUSH32\(\s*esp\s*,\s*(.+)\s*\)\s*;", stripped)
+        if match:
+            expr = match.group(1).strip()
+            kind = "register_or_expression"
+            if "read32(esp" in expr.lower():
+                kind = "stack_relative"
+            elif "read32(ebp" in expr.lower():
+                kind = "frame_relative"
+            elif re.fullmatch(r"(?:e?ax|e?bx|e?cx|e?dx|esi|edi|ebp)", expr, re.I):
+                kind = "register"
+            elif re.search(r"read32\(\s*0x[0-9A-Fa-f]+", expr):
+                kind = "global_read"
+            elif re.fullmatch(r"0x[0-9A-Fa-f]+|\d+", expr):
+                kind = "literal"
+            return expr, kind
+    return "<not-found>", "unknown"
+
+
+def _last_register_assignments(body: str, call_offset: int) -> dict:
+    lines = body[:call_offset].splitlines()
+    result = {}
+    for reg in ("eax", "ebx", "ecx", "edx", "esi", "edi"):
+        pat = re.compile(rf"^\s*{reg}\s*=\s*(.+);\s*$", re.I)
+        for line in reversed(lines[-80:]):
+            m = pat.match(line)
+            if m:
+                result[reg] = m.group(1).strip()
+                break
+    return result
+
+
 def predictive_static_audit(text: str, base) -> dict:
     """
-    Static, pre-build frontier audit.
+    R27 static pre-build provenance audit.
 
-    It does not fabricate values or change runtime semantics. It maps:
-      * every direct caller of sub_002A41EE and its local source context;
-      * literal Xbox-kernel targets referenced by DSOUND translated bodies;
-      * translated callers that reference AvSetDisplayMode ordinal 3.
+    Only syntactic call shapes are labeled calls. Plain constants are retained
+    as noise counts and never drive predictive pack priority.
     """
     defs = translated_function_defs(text, base)
     audio_sites = []
-    kernel_owners = {}
-    display_sites = []
+    kernel_calls = []
+    display_calls = []
+    raw_kernel_constants = 0
+    raw_display_constants = 0
 
     direct_re = re.compile(
+        r"PUSH32\(\s*esp\s*,\s*0\s*\)\s*;\s*"
         r"sub_002A41EE\(\)\s*;\s*/\*\s*call\s+0x002A41EE\s*\*/"
     )
-    kernel_re = re.compile(r"0x800000([0-9A-Fa-f]{2})u?")
 
+    site_id = 0
     for row in defs:
         if not row["va"]:
             continue
         body = text[row["open"]:row["end"]]
 
-        for m in direct_re.finditer(body):
-            absolute = row["open"] + m.start()
-            line_no = text.count("\n", row["start"], absolute) + 1
+        raw_kernel_constants += len(
+            re.findall(r"0x800000[0-9A-Fa-f]{2}u?", body)
+        )
+        raw_display_constants += body.count("0x80000003")
+
+        for match in direct_re.finditer(body):
+            site_id += 1
+            arg1_expr, arg1_kind = _previous_arg1_push(body, match.start())
+            rel_line = body[:match.start()].count("\n")
             body_lines = body.splitlines()
-            # Approximate line within body from the direct-call offset.
-            rel_line = body[:m.start()].count("\n")
-            lo = max(0, rel_line - 12)
-            hi = min(len(body_lines), rel_line + 9)
+            lo = max(0, rel_line - 18)
+            hi = min(len(body_lines), rel_line + 7)
             audio_sites.append({
+                "site_id": site_id,
                 "owner_va": f"0x{row['va']:08X}",
                 "owner_name": row["name"],
-                "owner_line": line_no,
+                "arg1_expression": arg1_expr,
+                "arg1_kind": arg1_kind,
+                "last_register_assignments": _last_register_assignments(
+                    body, match.start()
+                ),
                 "context": body_lines[lo:hi],
             })
 
         if DSOUND_START <= row["va"] < DSOUND_END:
-            for km in kernel_re.finditer(body):
-                target = 0x80000000 | int(km.group(1), 16)
-                key = f"0x{target:08X}"
-                kernel_owners.setdefault(key, set()).add(
-                    f"0x{row['va']:08X}"
-                )
-
-        if "0x80000003" in body:
-            body_lines = body.splitlines()
-            for idx, line in enumerate(body_lines):
-                if "0x80000003" not in line:
-                    continue
-                lo = max(0, idx - 8)
-                hi = min(len(body_lines), idx + 9)
-                display_sites.append({
+            for call in _literal_icall_occurrences(body):
+                item = {
                     "owner_va": f"0x{row['va']:08X}",
                     "owner_name": row["name"],
-                    "context": body_lines[lo:hi],
-                })
-
-    kernel_rows = []
-    for key in sorted(kernel_owners):
-        target = int(key, 16)
-        kernel_rows.append({
-            "target": key,
-            "ordinal": target & 0xFFFF,
-            "owners": sorted(kernel_owners[key]),
-            "maintained": target in MAINTAINED_KERNEL_TARGETS,
-        })
+                    "target": f"0x{call['target']:08X}",
+                    "ordinal": call["target"] & 0xFFFF,
+                    "maintained": call["target"] in MAINTAINED_KERNEL_TARGETS,
+                    "statement": call["statement"],
+                }
+                kernel_calls.append(item)
+                if call["target"] == PREDICTIVE_DISPLAY_ORDINAL:
+                    display_calls.append(item)
 
     return {
         "enabled": True,
-        "mode": "static_prebuild_predictive_frontier_clearing",
+        "mode": "static_prebuild_predictive_frontier_clearing_r27",
         "r25_hardware_seed": {
             "ticks": 27025727,
             "boundary_kind": "GUEST_FAULT",
@@ -323,11 +392,14 @@ def predictive_static_audit(text: str, base) -> dict:
         "audio_target": "0x002A41EE",
         "audio_direct_call_sites": audio_sites,
         "audio_direct_call_site_count": len(audio_sites),
-        "dsound_kernel_literals": kernel_rows,
-        "dsound_kernel_literal_count": len(kernel_rows),
+        "dsound_kernel_calls": kernel_calls,
+        "dsound_kernel_call_count": len(kernel_calls),
         "display_ordinal": "0x80000003",
-        "display_intent_sites": display_sites,
-        "display_intent_site_count": len(display_sites),
+        "display_kernel_call_sites": display_calls,
+        "display_kernel_call_site_count": len(display_calls),
+        "raw_kernel_constant_occurrences": raw_kernel_constants,
+        "raw_display_ordinal_constant_occurrences": raw_display_constants,
+        "raw_constants_are_not_calls": True,
         "ordinary_guest_faults_bypassed": False,
         "unknown_kernel_calls_auto_succeeded": False,
         "unknown_mmio_auto_accepted": False,
@@ -336,7 +408,7 @@ def predictive_static_audit(text: str, base) -> dict:
 
 
 def print_predictive_audit(audit: dict) -> None:
-    print("[Phase6DQ] ============== PREDICTIVE FRONTIER AUDIT ==============")
+    print("[Phase6DQ] ============ PREDICTIVE PROVENANCE AUDIT R27 ============")
     seed = audit["r25_hardware_seed"]
     print(
         "[Phase6DQ] R25 seed: ticks={ticks} fault={fault_address} "
@@ -348,39 +420,97 @@ def print_predictive_audit(audit: dict) -> None:
         f"[Phase6DQ] AUDIO direct callers of 002A41EE: "
         f"{audit['audio_direct_call_site_count']}"
     )
-    for index, site in enumerate(audit["audio_direct_call_sites"], 1):
+    for site in audit["audio_direct_call_sites"]:
         print(
-            f"[Phase6DQ] AUDIO SITE[{index}] owner={site['owner_va']} "
-            f"name={site['owner_name']} owner_line={site['owner_line']}"
+            f"[Phase6DQ] AUDIO SITE[{site['site_id']}] "
+            f"owner={site['owner_va']} name={site['owner_name']} "
+            f"arg1_kind={site['arg1_kind']} arg1_expr={site['arg1_expression']}"
         )
+        regs = site["last_register_assignments"]
+        if regs:
+            print(
+                "[Phase6DQ]   LAST-REGS "
+                + " ".join(f"{k}={v}" for k, v in regs.items())
+            )
         for line in site["context"]:
             print("[Phase6DQ]   " + line)
 
     print(
-        f"[Phase6DQ] DSOUND literal kernel targets: "
-        f"{audit['dsound_kernel_literal_count']}"
+        f"[Phase6DQ] DSOUND literal ICALL kernel targets: "
+        f"{audit['dsound_kernel_call_count']}"
     )
-    for row in audit["dsound_kernel_literals"]:
+    for call in audit["dsound_kernel_calls"]:
         print(
-            f"[Phase6DQ] KERNEL target={row['target']} ordinal={row['ordinal']} "
-            f"maintained={int(row['maintained'])} owners={','.join(row['owners'])}"
+            f"[Phase6DQ] KERNEL CALL owner={call['owner_va']} "
+            f"target={call['target']} ordinal={call['ordinal']} "
+            f"maintained={int(call['maintained'])} stmt={call['statement']}"
         )
 
     print(
-        f"[Phase6DQ] DISPLAY ordinal-3 intent callers: "
-        f"{audit['display_intent_site_count']}"
+        f"[Phase6DQ] DISPLAY ordinal-3 literal ICALL sites: "
+        f"{audit['display_kernel_call_site_count']}"
     )
-    for index, site in enumerate(audit["display_intent_sites"], 1):
-        print(
-            f"[Phase6DQ] DISPLAY SITE[{index}] owner={site['owner_va']} "
-            f"name={site['owner_name']}"
-        )
-        for line in site["context"]:
-            print("[Phase6DQ]   " + line)
-
+    print(
+        f"[Phase6DQ] RAW CONSTANT NOISE: kernel_like="
+        f"{audit['raw_kernel_constant_occurrences']} "
+        f"ordinal3={audit['raw_display_ordinal_constant_occurrences']} "
+        "(not treated as calls)"
+    )
     print("[Phase6DQ] Predictive policy: unknown kernel/MMIO/read semantics remain HARD FENCES")
     print("[Phase6DQ] =========================================================")
 
+
+def instrument_a41ee_callsites(text: str, base) -> tuple[str, list[dict]]:
+    """Tag every direct A41EE caller without changing the callee or fault policy."""
+    masked = base.mask_noncode(text)
+    direct_re = re.compile(
+        r"(?P<indent>[ \t]*)PUSH32\(\s*esp\s*,\s*0\s*\)\s*;\s*"
+        r"sub_002A41EE\(\)\s*;\s*/\*\s*call\s+0x002A41EE\s*\*/"
+    )
+    patches = []
+    site_map = []
+    site_id = 0
+
+    for match in base.FUNC_RE.finditer(masked):
+        name = match.group(1)
+        vm = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
+        if not vm:
+            continue
+        owner = int(vm.group(1), 16)
+        open_pos = masked.find("{", match.start(), match.end())
+        if open_pos < 0:
+            continue
+        end = base.closing_brace(masked, open_pos)
+        body = text[open_pos:end]
+
+        for call in direct_re.finditer(body):
+            site_id += 1
+            absolute_start = open_pos + call.start()
+            absolute_end = open_pos + call.end()
+            indent = call.group("indent")
+            original = text[absolute_start:absolute_end]
+            probe = (
+                f"{indent}{{\\n"
+                f"{indent}    uint32_t phase6dqA41eeArg1 = GUEST_READ32(esp);\\n"
+                f"{indent}    phase6dq_note_a41ee_callsite("
+                f"{site_id}u, 0x{owner:08X}u, phase6dqA41eeArg1);\\n"
+                f"{indent}}}\\n"
+                + original
+            )
+            patches.append((absolute_start, absolute_end, probe))
+            site_map.append({
+                "site_id": site_id,
+                "owner_va": f"0x{owner:08X}",
+                "owner_name": name,
+            })
+
+    for start, end, replacement in reversed(patches):
+        text = text[:start] + replacement + text[end:]
+
+    if not site_map:
+        raise SystemExit("[Phase6DQ] predictive A41EE callsite instrumentation found no sites")
+
+    return text, site_map
 
 def select_candidates(
     generated: dict,
@@ -496,6 +626,21 @@ static uint32_t s_phase6dqFpSave142Count = 0u;
 static uint32_t s_phase6dqFpRestore139Count = 0u;
 static uint32_t s_phase6dqFpGuardMismatchCount = 0u;
 static uint32_t s_phase6dqFpGuardLastState = 0u;
+#define PHASE6DQ_A41EE_RING_CAP 16u
+typedef struct Phase6DQA41eeCall
+{
+    uint32_t sequence;
+    uint32_t site;
+    uint32_t owner;
+    uint32_t arg1;
+} Phase6DQA41eeCall;
+static Phase6DQA41eeCall s_phase6dqA41eeRing[PHASE6DQ_A41EE_RING_CAP];
+static uint32_t s_phase6dqA41eeSequence = 0u;
+static uint32_t s_phase6dqA41eeRingWrite = 0u;
+static uint32_t s_phase6dqA41eeRingCount = 0u;
+static uint32_t s_phase6dqA41eeLastSite = 0u;
+static uint32_t s_phase6dqA41eeLastOwner = 0u;
+static uint32_t s_phase6dqA41eeLastArg1 = 0u;
 
 '''
     text = text[:start] + state + text[start:]
@@ -520,6 +665,43 @@ static const char* phase6dq_vp_method_name(uint32_t offset)
     if (offset >= 0x00000600u && offset <= 0x00000808u &&
         (offset & 3u) == 0u) return "NV1BA0_PIO_BUFFER_OR_SSL";
     return "VP_UNNAMED_OR_UNMODELED";
+}
+
+static void phase6dq_note_a41ee_callsite(
+    uint32_t site,
+    uint32_t owner,
+    uint32_t arg1)
+{
+    Phase6DQA41eeCall* row;
+    char line[384];
+
+    ++s_phase6dqA41eeSequence;
+    s_phase6dqA41eeLastSite = site;
+    s_phase6dqA41eeLastOwner = owner;
+    s_phase6dqA41eeLastArg1 = arg1;
+
+    row = &s_phase6dqA41eeRing[s_phase6dqA41eeRingWrite];
+    row->sequence = s_phase6dqA41eeSequence;
+    row->site = site;
+    row->owner = owner;
+    row->arg1 = arg1;
+    s_phase6dqA41eeRingWrite =
+        (s_phase6dqA41eeRingWrite + 1u) % PHASE6DQ_A41EE_RING_CAP;
+    if (s_phase6dqA41eeRingCount < PHASE6DQ_A41EE_RING_CAP)
+        ++s_phase6dqA41eeRingCount;
+
+    if (s_phase6dqA41eeSequence <= 16u || arg1 == 0xEC83F0E4u)
+    {
+        sprintf(
+            line,
+            "P6DQ A41EE CALLSITE: seq=%u site=%u owner=%08X arg1=%08X esp=%08X",
+            (unsigned int)s_phase6dqA41eeSequence,
+            (unsigned int)site,
+            (unsigned int)owner,
+            (unsigned int)arg1,
+            (unsigned int)g_esp);
+        trace(line);
+    }
 }
 
 static void phase6dq_note_dispatch(
@@ -1017,7 +1199,7 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u fpsave142_calls=%u fprestore139_calls=%u fpguard_depth=%u fpguard_mismatches=%u fpguard_last_state=%08X dsound_poison_sites=%u dsound_poison_noops=%u dsound_poison_object=%08X dsound_poison_arg=%08X",
+        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u fpsave142_calls=%u fprestore139_calls=%u fpguard_depth=%u fpguard_mismatches=%u fpguard_last_state=%08X dsound_poison_sites=%u dsound_poison_noops=%u dsound_poison_object=%08X dsound_poison_arg=%08X a41ee_seq=%u a41ee_last_site=%u a41ee_last_owner=%08X a41ee_last_arg1=%08X",
         (unsigned int)s_phase6dqDispatchJournalCount,
         (unsigned int)s_phase6dqDispatchJournalOverflow,
         (unsigned int)s_phase6dqHardStopJournalCount,
@@ -1041,8 +1223,29 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqDsoundPoisonSiteCount,
         (unsigned int)s_phase6dqDsoundPoisonNoopCount,
         (unsigned int)s_phase6dqDsoundPoisonLastObject,
-        (unsigned int)s_phase6dqDsoundPoisonLastArg);
+        (unsigned int)s_phase6dqDsoundPoisonLastArg,
+        (unsigned int)s_phase6dqA41eeSequence,
+        (unsigned int)s_phase6dqA41eeLastSite,
+        (unsigned int)s_phase6dqA41eeLastOwner,
+        (unsigned int)s_phase6dqA41eeLastArg1);
     trace(line);
+
+    for (i = 0u; i < s_phase6dqA41eeRingCount; ++i)
+    {
+        uint32_t index =
+            (s_phase6dqA41eeRingWrite + PHASE6DQ_A41EE_RING_CAP -
+             s_phase6dqA41eeRingCount + i) % PHASE6DQ_A41EE_RING_CAP;
+        Phase6DQA41eeCall* row = &s_phase6dqA41eeRing[index];
+        sprintf(
+            line,
+            "P6DQ A41EE RING[%u] seq=%u site=%u owner=%08X arg1=%08X",
+            (unsigned int)i,
+            (unsigned int)row->sequence,
+            (unsigned int)row->site,
+            (unsigned int)row->owner,
+            (unsigned int)row->arg1);
+        trace(line);
+    }
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
     {
@@ -1844,10 +2047,10 @@ def main() -> int:
     main_text = patch_quiet_logging(main_text)
     main_text = patch_vp_accesses(main_text)
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
+    predictive_audit = predictive_static_audit(main_text, base)
+    main_text, a41ee_site_map = instrument_a41ee_callsites(main_text, base)
     main_text = insert_final_dump(main_text)
     main_text = update_vp_summary(main_text)
-
-    predictive_audit = predictive_static_audit(main_text, base)
 
     old_policy_prefix = "Policy: Phase 6DP "
     policy_pos = main_text.find(old_policy_prefix)
@@ -1920,6 +2123,8 @@ def main() -> int:
         "target == 0xF6DCCCD0u",
         "P6DQ DSOUND POISON SLOT:",
         "P6DQ DSOUND POISON NOOP:",
+        "P6DQ A41EE CALLSITE:",
+        "P6DQ A41EE RING[%u]",
         "R26 adds predictive pre-build caller/kernel/display audits",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
@@ -2051,6 +2256,9 @@ def main() -> int:
             "closure_depth": PREDICTIVE_CLOSURE_DEPTH,
             "closure_cap_per_seed": PREDICTIVE_CLOSURE_CAP_PER_SEED,
             "broad_sweep_runs_after_predictive_priority": True,
+            "runtime_a41ee_callsite_probe": True,
+            "runtime_a41ee_site_map": a41ee_site_map,
+            "runtime_fault_policy_changed": False,
         },
         "vp_diagnostic_continue": {
             "aligned_write32_continue": True,
@@ -2129,6 +2337,7 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
+    print("[Phase6DQ] A41EE runtime provenance ring: ARMED (fault semantics unchanged)")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
