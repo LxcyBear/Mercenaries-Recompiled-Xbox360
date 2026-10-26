@@ -2802,20 +2802,28 @@ def instrument_r45_audio_object_provenance(text: str) -> str:
     lookup_window = text[lookup_begin:lookup_end]
 
     object_read = "eax = phase6ch_apu_read32(esi);"
-    object_read_count = lookup_window.count(object_read)
-    table_read_matches = list(
-        re.finditer(
-            r"eax\s*=\s*phase6ch_apu_read32\(\s*eax\s*\*\s*4\s*\+\s*0x2BA9C0\s*\)\s*;",
-            lookup_window,
-        )
+    table_read_re = re.compile(
+        r"eax\s*=\s*phase6ch_apu_read32\(\s*eax\s*\*\s*4\s*\+\s*0x2BA9C0\s*\)\s*;"
     )
+
+    # This block performs the channel lookup twice: once for the command write,
+    # then again for the status-bit poll. R45 containment belongs only on the
+    # first lookup, before phase6dq_note_ac97_channel_write / WRITE8.
+    write_note = "phase6dq_note_ac97_channel_write(0x002A7712u,"
+    write_note_pos = lookup_window.find(write_note)
+    if write_note_pos < 0:
+        raise SystemExit("[Phase6DQ] R45 002A7712 existing R43 channel-write probe missing")
+
+    pre_write = lookup_window[:write_note_pos]
+    object_read_count = pre_write.count(object_read)
+    table_read_matches = list(table_read_re.finditer(pre_write))
     if object_read_count != 1 or len(table_read_matches) != 1:
-        print("[Phase6DQ] R45 002A7712 lookup window:")
-        for source_line in lookup_window.splitlines():
+        print("[Phase6DQ] R45 002A7712 pre-write lookup window:")
+        for source_line in pre_write.splitlines():
             print("[Phase6DQ]   " + source_line)
         raise SystemExit(
-            "[Phase6DQ] R45 expected one object-index read and one 002BA9C0 "
-            f"table read; found object={object_read_count} table={len(table_read_matches)}"
+            "[Phase6DQ] R45 expected exactly one pre-write object/index lookup; "
+            f"found object={object_read_count} table={len(table_read_matches)}"
         )
 
     replacement = (
@@ -2824,7 +2832,8 @@ def instrument_r45_audio_object_provenance(text: str) -> str:
         + "\n    if (phase6dq_r45_bad_audio_object(0x002A7712u, esi, eax)) "
         + "goto loc_002A776D;"
     )
-    lookup_window = lookup_window.replace(object_read, replacement, 1)
+    pre_write = pre_write.replace(object_read, replacement, 1)
+    lookup_window = pre_write + lookup_window[write_note_pos:]
     text = text[:lookup_begin] + lookup_window + text[lookup_end:]
 
     return text
