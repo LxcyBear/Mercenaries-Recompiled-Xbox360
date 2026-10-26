@@ -13,8 +13,8 @@ so that post-call report is unreachable for the faulting read.
 
 6CZ corrects that diagnostic mistake without changing guest semantics:
   * translated wrapper logs BEFORE a read of exactly 0xCCCCCCD0;
-  * maintained/manual/support GUEST_READ32 and direct recomp_guest_read32 calls
-    are wrapped and log BEFORE the same address;
+  * the central recomp_guest_read32 router is wrapped using the proven 6CL
+    rename-and-forward strategy and logs BEFORE the same address;
   * the checked router still handles the fault normally immediately afterward;
   * the final DSOUND VA-ring addresses 0x002A41EE/0x002A41F7 are resolved
     against the local generated-source inventory and printed during emission.
@@ -33,7 +33,7 @@ BASE_TAG = "P6CY-READ32-CCCCCCD0-SITE-20261026-A"
 BUILD_TAG = "P6CZ-PREFAULT-CCCCCCD0-PROVENANCE-20261026-A"
 COOKIE_OLD = "phase6cy_env_build_cookie"
 COOKIE_NEW = "phase6cz_env_build_cookie"
-EMITTER_REVISION = "6CZ-R1"
+EMITTER_REVISION = "6CZ-R2"
 
 FAULT_ADDRESS = 0xCCCCCCD0
 FINAL_VAS = (0x002A41EE, 0x002A41F7)
@@ -128,102 +128,93 @@ def install_state(text: str) -> str:
     state = """static DWORD s_phase6czTranslatedPrefaultReports = 0u;
 static DWORD s_phase6czTranslatedPrefaultFunction = 0u;
 static DWORD s_phase6czTranslatedPrefaultLine = 0u;
-static DWORD s_phase6czSupportPrefaultReports = 0u;
-static DWORD s_phase6czSupportPrefaultLine = 0u;
-static DWORD s_phase6czSupportPrefaultAddress = 0u;
-static const char* s_phase6czSupportPrefaultFunction = "";
+static DWORD s_phase6czRouterPrefaultReports = 0u;
+static DWORD s_phase6czRouterPrefaultAddress = 0u;
+static DWORD s_phase6czRouterPrefaultCaller = 0u;
 
 """
     return text.replace(anchor, anchor + state, 1)
 
 
-def install_support_probe(text: str, base) -> tuple[str, int, int]:
-    macro = "#define GUEST_READ32(addr) recomp_guest_read32((uint32_t)(addr))\n"
-    macro_pos = text.find(macro)
-    if macro_pos < 0:
-        raise SystemExit("[Phase6CZ] canonical GUEST_READ32 macro missing")
-    support_start = macro_pos + len(macro)
+def matching_brace(text: str, open_pos: int) -> int:
+    depth = 0
+    in_string = False
+    quote = ""
+    escape = False
+    i = open_pos
 
-    body_start, _ = translated_bounds(text)
-    pragma_pos = text.rfind('#pragma optimize("", off)\n', 0, body_start)
-    if pragma_pos < 0 or pragma_pos <= support_start:
-        raise SystemExit("[Phase6CZ] support instrumentation range invalid")
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == quote:
+                in_string = False
+        else:
+            if ch in ('"', "'"):
+                in_string = True
+                quote = ch
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return i
+        i += 1
 
-    cy_start, cy_end = function_range(
-        text, "static uint32_t phase6cy_read32_site(", base
+    raise SystemExit("[Phase6CZ] unterminated recomp_guest_read32 body")
+
+
+def install_router_prefault(text: str) -> str:
+    """
+    Wrap the current central READ32 router, preserving every inherited semantic.
+
+    This is deliberately based on the proven Phase-6CL wrapper strategy rather
+    than trying to rewrite support call sites.  The wrapper logs the exact
+    poison address before the inherited router can take its immediate boundary
+    escape.
+    """
+    signature = "uint32_t recomp_guest_read32(uint32_t address)"
+    definition_re = re.compile(
+        r"(?m)^uint32_t\s+recomp_guest_read32\(uint32_t address\)\s*\{"
     )
+    matches = list(definition_re.finditer(text))
+    if len(matches) != 1:
+        raise SystemExit(
+            f"[Phase6CZ] expected one recomp_guest_read32 definition, "
+            f"found {len(matches)}"
+        )
 
-    support = text[support_start:pragma_pos]
-    masked = base.mask_noncode(support)
+    start = matches[0].start()
+    open_pos = text.find("{", matches[0].start(), matches[0].end() + 1)
+    if open_pos < 0:
+        raise SystemExit("[Phase6CZ] recomp_guest_read32 definition brace missing")
+    close_pos = matching_brace(text, open_pos)
+    original = text[start:close_pos + 1]
 
-    patterns = (
-        ("GUEST_READ32(", "phase6cz_support_read32(__FUNCTION__, (DWORD)__LINE__, "),
-        ("recomp_guest_read32(", "phase6cz_support_read32(__FUNCTION__, (DWORD)__LINE__, "),
+    renamed = original.replace(
+        signature,
+        "static uint32_t phase6cz_inherited_guest_read32(uint32_t address)",
+        1,
     )
-    replacements: list[tuple[int, int, str]] = []
-    guest_macro_sites = 0
-    direct_sites = 0
+    if signature in renamed:
+        raise SystemExit("[Phase6CZ] router rename failed")
 
-    for needle, replacement in patterns:
-        cursor = 0
-        while True:
-            rel = masked.find(needle, cursor)
-            if rel < 0:
-                break
-            absolute = support_start + rel
-
-            # Do not wrap the inherited translated-site wrapper's own direct
-            # router call; that path is handled by patch_translated_prefault().
-            if not (cy_start <= absolute < cy_end):
-                replacements.append((rel, rel + len(needle), replacement))
-                if needle.startswith("GUEST_"):
-                    guest_macro_sites += 1
-                else:
-                    direct_sites += 1
-            cursor = rel + len(needle)
-
-    if not replacements:
-        raise SystemExit("[Phase6CZ] found no support-side READ32 calls to instrument")
-
-    # Reject overlapping replacements and apply from the end.
-    replacements.sort()
-    for i in range(1, len(replacements)):
-        if replacements[i][0] < replacements[i - 1][1]:
-            raise SystemExit("[Phase6CZ] overlapping support READ32 replacements")
-
-    for start, end, replacement in reversed(replacements):
-        support = support[:start] + replacement + support[end:]
-
-    prototype = (
-        "static uint32_t phase6cz_support_read32("
-        "const char* functionName, DWORD sourceLine, uint32_t address);\n"
-    )
-    text = text[:support_start] + prototype + support + text[pragma_pos:]
-
-    # Insert the implementation immediately before translated code, after all
-    # support functions that now reference the forward declaration.
-    pragma_pos = text.find('#pragma optimize("", off)\n')
-    if pragma_pos < 0:
-        raise SystemExit("[Phase6CZ] translated pragma missing after support patch")
-
-    helper = r'''
-static uint32_t phase6cz_support_read32(
-    const char* functionName,
-    DWORD sourceLine,
-    uint32_t address)
+    wrapper = r'''
+uint32_t recomp_guest_read32(uint32_t address)
 {
     if (address == 0xCCCCCCD0u)
     {
         char line[512];
-        ++s_phase6czSupportPrefaultReports;
-        s_phase6czSupportPrefaultFunction = functionName;
-        s_phase6czSupportPrefaultLine = sourceLine;
-        s_phase6czSupportPrefaultAddress = address;
+        ++s_phase6czRouterPrefaultReports;
+        s_phase6czRouterPrefaultAddress = address;
+        s_phase6czRouterPrefaultCaller = phase4c_current_caller();
         sprintf(
             line,
-            "P6CZ PREFAULT SUPPORT READ32: func=%s line=%u address=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X reports=%u",
-            functionName ? functionName : "<null>",
-            (unsigned int)sourceLine,
+            "P6CZ PREFAULT ROUTER READ32: caller=%08X address=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X ticks=%u trace=%u reports=%u",
+            (unsigned int)s_phase6czRouterPrefaultCaller,
             (unsigned int)address,
             (unsigned int)eax,
             (unsigned int)ecx,
@@ -232,20 +223,16 @@ static uint32_t phase6cz_support_read32(
             (unsigned int)esi,
             (unsigned int)edi,
             (unsigned int)esp,
-            (unsigned int)s_phase6czSupportPrefaultReports);
+            (unsigned int)s_phase4cBlockTicks,
+            (unsigned int)s_traceCount,
+            (unsigned int)s_phase6czRouterPrefaultReports);
         trace(line);
     }
 
-    /*
-     * Preserve the existing checked router exactly. If the address is invalid,
-     * that router performs the established immediate boundary escape.
-     */
-    return recomp_guest_read32(address);
+    return phase6cz_inherited_guest_read32(address);
 }
-
 '''
-    text = text[:pragma_pos] + helper + text[pragma_pos:]
-    return text, guest_macro_sites, direct_sites
+    return text[:start] + renamed + "\n\n" + wrapper + text[close_pos + 1:]
 
 
 def resolve_final_va_source(
@@ -308,7 +295,7 @@ def resolve_final_va_source(
     return {"rows": rows}
 
 
-def insert_summary(text: str, guest_sites: int, direct_sites: int) -> str:
+def insert_summary(text: str) -> str:
     marker = "P6CY READ32 SITE PROBE:"
     pos = text.find(marker)
     if pos < 0:
@@ -322,14 +309,13 @@ def insert_summary(text: str, guest_sites: int, direct_sites: int) -> str:
     block = (
         f'{indent}sprintf(\n'
         f'{indent}    line,\n'
-        f'{indent}    "P6CZ PREFAULT PROVENANCE: translated_reports=%u translated_func=%08X translated_line=%u support_reports=%u support_func=%s support_line=%u support_address=%08X support_guest_sites={guest_sites} support_direct_sites={direct_sites}",\n'
+        f'{indent}    "P6CZ PREFAULT PROVENANCE: translated_reports=%u translated_func=%08X translated_line=%u router_reports=%u router_caller=%08X router_address=%08X",\n'
         f'{indent}    (unsigned int)s_phase6czTranslatedPrefaultReports,\n'
         f'{indent}    (unsigned int)s_phase6czTranslatedPrefaultFunction,\n'
         f'{indent}    (unsigned int)s_phase6czTranslatedPrefaultLine,\n'
-        f'{indent}    (unsigned int)s_phase6czSupportPrefaultReports,\n'
-        f'{indent}    s_phase6czSupportPrefaultFunction ? s_phase6czSupportPrefaultFunction : "<null>",\n'
-        f'{indent}    (unsigned int)s_phase6czSupportPrefaultLine,\n'
-        f'{indent}    (unsigned int)s_phase6czSupportPrefaultAddress);\n'
+        f'{indent}    (unsigned int)s_phase6czRouterPrefaultReports,\n'
+        f'{indent}    (unsigned int)s_phase6czRouterPrefaultCaller,\n'
+        f'{indent}    (unsigned int)s_phase6czRouterPrefaultAddress);\n'
         f'{indent}trace(line);\n'
     )
     return text[:line_start] + block + text[line_start:]
@@ -418,8 +404,8 @@ def main() -> int:
 
     main_text = install_state(main_text)
     main_text = patch_translated_prefault(main_text)
-    main_text, guest_sites, direct_sites = install_support_probe(main_text, base)
-    main_text = insert_summary(main_text, guest_sites, direct_sites)
+    main_text = install_router_prefault(main_text)
+    main_text = insert_summary(main_text)
     main_text = relabel_main(main_text)
     env_text = relabel_env(env_text)
 
@@ -427,7 +413,7 @@ def main() -> int:
         BUILD_TAG,
         COOKIE_NEW,
         "P6CZ PREFAULT TRANSLATED READ32:",
-        "P6CZ PREFAULT SUPPORT READ32:",
+        "P6CZ PREFAULT ROUTER READ32:",
         "P6CZ PREFAULT PROVENANCE:",
         "PASS: Phase 6CZ ExFreePool ITAIL",
         "PASS: Phase 6CZ manual DSOUND decrypt",
@@ -468,9 +454,8 @@ def main() -> int:
             "log exact CCCCCCD0 provenance before entering checked guest router"
         ),
         "translated_prefault_probe": True,
-        "support_prefault_probe": True,
-        "support_guest_read32_sites": guest_sites,
-        "support_direct_read32_sites": direct_sites,
+        "router_prefault_probe": True,
+        "router_wrapper_strategy": "rename current router and preserve inherited implementation",
         "final_va_source_audit": source_audit,
         "guest_memory_semantics_changed": False,
         "value_fabrication": False,
@@ -490,10 +475,7 @@ def main() -> int:
     )
 
     print(f"[Phase6CZ] emitter revision: {EMITTER_REVISION}")
-    print(
-        f"[Phase6CZ] support READ32 instrumentation: "
-        f"GUEST_READ32={guest_sites} direct_recomp_guest_read32={direct_sites}"
-    )
+    print("[Phase6CZ] central READ32 router wrapped with pre-fault logging")
     print("[Phase6CZ] corrected probe logs BEFORE the checked router can longjmp")
     for row in source_audit["rows"]:
         print(
@@ -505,7 +487,7 @@ def main() -> int:
     print("[Phase6CZ] no value fabrication; CCCCCCD0 remains a hard guest fault")
     print("[Phase6CZ] money line is one of:")
     print("[Phase6CZ]   P6CZ PREFAULT TRANSLATED READ32: func=... line=... address=CCCCCCD0")
-    print("[Phase6CZ]   P6CZ PREFAULT SUPPORT READ32: func=... line=... address=CCCCCCD0")
+    print("[Phase6CZ]   P6CZ PREFAULT ROUTER READ32: caller=... address=CCCCCCD0")
     print("[Phase6CZ] EMIT RESULT: PASS")
     return 0
 
