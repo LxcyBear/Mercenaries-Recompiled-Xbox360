@@ -27,7 +27,9 @@ boundaries, missing translated bodies and unresolved support remain hard stops.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
+import io
 import json
 import re
 from pathlib import Path
@@ -36,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R2"
+EMITTER_REVISION = "6DQ-R3"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -527,18 +529,30 @@ def patch_escape_journal(text: str) -> str:
     sig = "static void phase4c_escape("
     start, end = function_span(text, sig)
     body = text[start:end]
-    old = """    s_phase4cBoundaryCaller = phase4c_current_caller();
-    longjmp(s_phase4cEscape, 1);
-"""
-    new = """    s_phase4cBoundaryCaller = phase4c_current_caller();
-    phase6dq_note_hard_stop(
+
+    if "phase6dq_note_hard_stop(" in body:
+        raise SystemExit("[Phase6DQ] phase4c escape journal hook already installed")
+
+    # Later Phase-6 instrumentation may insert additional statements between
+    # caller capture and longjmp. Anchor only on the stable caller assignment
+    # instead of assuming the original two-line Phase-4C function body.
+    anchor = "    s_phase4cBoundaryCaller = phase4c_current_caller();\n"
+    hook = anchor + """    phase6dq_note_hard_stop(
         kind,
         target,
         s_phase4cBoundaryCaller,
         savedEsp);
-    longjmp(s_phase4cEscape, 1);
 """
-    body = replace_once(body, old, new, "phase4c escape journal hook")
+    body = replace_once(
+        body,
+        anchor,
+        hook,
+        "phase4c escape caller anchor",
+    )
+
+    if "longjmp(s_phase4cEscape, 1);" not in body:
+        raise SystemExit("[Phase6DQ] phase4c escape lost longjmp after journal patch")
+
     return text[:start] + body + text[end:]
 
 
@@ -857,15 +871,28 @@ def main() -> int:
         base.STANDARD_CALLS.add("cos")
         p5bc.SWEEP_ROOT = 0xFFFFFFFF
         p5bc.instrument_root_entry = lambda rendered, name: rendered
-        main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
-            main_text,
-            base,
-            p5bb,
-            generated,
-            new_members,
-            expanded,
-            require_sweep_root=False,
-        )
+
+        # Phase5BC normally prints every pruned function. ROCKET preserves the
+        # complete prune inventory in phase6dq-manifest.json but keeps prep
+        # output compact so useful failures are not buried under hundreds of
+        # expected support-clean fence lines.
+        sweep_output = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(sweep_output):
+                main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
+                    main_text,
+                    base,
+                    p5bb,
+                    generated,
+                    new_members,
+                    expanded,
+                    require_sweep_root=False,
+                )
+        except BaseException:
+            buffered = sweep_output.getvalue()
+            if buffered:
+                print(buffered, end="")
+            raise
     else:
         rendered = {}
         frontiers = set()
