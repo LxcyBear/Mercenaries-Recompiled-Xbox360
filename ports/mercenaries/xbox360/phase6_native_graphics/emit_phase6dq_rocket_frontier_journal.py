@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R4"
+EMITTER_REVISION = "6DQ-R5"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -565,44 +565,47 @@ def patch_escape_journal(text: str) -> str:
 
 
 def patch_dispatch_journal(text: str) -> str:
-    # ICALL packed path.
+    # Hook the actual packed call in each dispatcher. Do not depend on the
+    # surrounding Phase-5/Phase-6 bookkeeping layout, which has evolved.
     sig = "static void phase5bc_dispatch_packed_icall("
     start, end = function_span(text, sig)
     body = text[start:end]
-    anchor = "    s_phase5bcPackedIcallLastSavedEsp = savedEsp;\n"
-    body = replace_once(
-        body,
-        anchor,
-        anchor
-        + """    phase6dq_note_dispatch(
-        1u,
-        target,
-        s_phase5bcPackedIcallLastCaller,
-        savedEsp);
-""",
-        "packed ICALL journal hook",
+    call_pattern = re.compile(r"(?m)^(?P<indent>[ \t]*)fn\s*\(\s*\)\s*;")
+    calls = list(call_pattern.finditer(body))
+    if len(calls) != 1:
+        raise SystemExit(
+            f"[Phase6DQ] expected one packed ICALL fn() call, found {len(calls)}"
+        )
+    m = calls[0]
+    indent = m.group("indent")
+    hook = (
+        f"{indent}phase6dq_note_dispatch(\n"
+        f"{indent}    1u,\n"
+        f"{indent}    target,\n"
+        f"{indent}    phase4c_current_caller(),\n"
+        f"{indent}    savedEsp);\n"
     )
+    body = body[:m.start()] + hook + body[m.start():]
     text = text[:start] + body + text[end:]
 
-    # DIRECT packed path.
     sig = "static void phase4c_direct_frontier(uint32_t target)"
     start, end = function_span(text, sig)
     body = text[start:end]
-    anchor = (
-        "        s_phase5bcPackedDirectLastCaller = phase4c_current_caller();\n"
+    calls = list(call_pattern.finditer(body))
+    if len(calls) != 1:
+        raise SystemExit(
+            f"[Phase6DQ] expected one packed DIRECT fn() call, found {len(calls)}"
+        )
+    m = calls[0]
+    indent = m.group("indent")
+    hook = (
+        f"{indent}phase6dq_note_dispatch(\n"
+        f"{indent}    2u,\n"
+        f"{indent}    target,\n"
+        f"{indent}    phase4c_current_caller(),\n"
+        f"{indent}    g_esp);\n"
     )
-    body = replace_once(
-        body,
-        anchor,
-        anchor
-        + """        phase6dq_note_dispatch(
-            2u,
-            target,
-            s_phase5bcPackedDirectLastCaller,
-            g_esp);
-""",
-        "packed DIRECT journal hook",
-    )
+    body = body[:m.start()] + hook + body[m.start():]
     text = text[:start] + body + text[end:]
     return text
 
