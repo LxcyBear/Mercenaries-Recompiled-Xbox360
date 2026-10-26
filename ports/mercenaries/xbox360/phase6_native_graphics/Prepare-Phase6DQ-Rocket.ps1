@@ -94,6 +94,8 @@ Write-Host "[Phase6DQ] R43 AC97 OUTPUT BUSMASTER: R41 hardware-proven PCM BDBAR 
 Write-Host "[Phase6DQ] R43 TABLE PROVENANCE: 002BA9C0/4 mutation watch + candidate channel writes"
 Write-Host "[Phase6DQ] R43 SAFETY: no DEA85111 bypass; guest fault policy unchanged"
 Write-Host "[Phase6DQ] R43 DEBUGGER SAFETY: bounded final dump only"
+Write-Host "[Phase6DQ] R45 AUDIO OBJECT: five 002A76FE callers + entry/lookup provenance armed"
+Write-Host "[Phase6DQ] R45 CONTAINMENT: exact 00040000/00000400 signature only; no index clamp/table rewrite"
 Write-Host "[Phase6DQ] Build mode: $(if($FullClean){'FULL CLEAN'}else{'INCREMENTAL (clean skipped)'})"
 Write-Host ("[Phase6DQ] Build root: {0}" -f $(if($DisableFastLocalBuild){$SolutionRoot}else{$FastBuildRoot}))
 Write-Host ("[Phase6DQ] Fast local shadow: {0}" -f $(if($DisableFastLocalBuild){"DISABLED"}else{"ENABLED (persistent intermediates, OneDrive avoided)"}))
@@ -105,10 +107,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R43"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R43"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R45"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R45"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R43"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R45"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -152,12 +154,12 @@ foreach($f in @($main,$mono,$env,$manifest,$shards)){
 }
 
 $r=Get-Content $manifest -Raw|ConvertFrom-Json
-if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"){
+if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-R45-AUDIO-PROVENANCE-20261026-A"){
   throw "Phase 6DQ manifest identity mismatch"
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R43"-or
+if($q.emitter_revision-ne"6DQ-R45"-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -208,7 +210,7 @@ if($q.emitter_revision-ne"6DQ-R43"-or
 
 $text=Get-Content $mono -Raw
 foreach($marker in @(
-  "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A",
+  "P6DQ-R45-AUDIO-PROVENANCE-20261026-A",
   "phase6dq_env_build_cookie",
   "P6DQ ROCKET DISPATCH FIRST",
   "P6DQ ROCKET HARD STOP",
@@ -269,14 +271,14 @@ Write-Host "[Phase6DQ] Detailed bounded runtime journals: ARMED"
 Write-Host "[Phase6DQ] DSOUND CCCCCCCC poison-slot quarantine: ARMED at exact site 002A41F7"
 Write-Host "[Phase6DQ] Pixel/present instrumentation: INHERITED"
 Write-Host "[Phase6DQ] C4146 generated-code suppression: INHERITED"
-Write-Host "[Phase6DQ] R43 SOURCE: R41 AC97 busmaster proof + exact channel-table corruption provenance"
+Write-Host "[Phase6DQ] R45 SOURCE: R43 bad-object proof + exact caller/entry/lookup provenance"
 
 if(-not$SkipSolutionBuild){
   $buildArgs=@{
     GeneratedMain=$main
     GeneratedEnv=$env
     GeneratedShardDir=$shards
-    ExpectedBuildTag="P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
+    ExpectedBuildTag="P6DQ-R45-AUDIO-PROVENANCE-20261026-A"
     ExpectedEnvCookie="phase6dq_env_build_cookie"
     SolutionRoot=$SolutionRoot
     Configuration="Release"
@@ -299,5 +301,5 @@ if(-not$SkipSolutionBuild){
 
   Write-Host "[Phase6DQ] BUILD PASS"
   Write-Host ("[Phase6DQ] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6DQ-ROCKET-A.xex"))
-  Write-Host "[Phase6DQ] R43 AC97 table-provenance build complete. Fast local shadow/incremental build is the default."
+  Write-Host "[Phase6DQ] R45 audio-object provenance build complete. Fast local shadow/incremental build is the default."
 }
