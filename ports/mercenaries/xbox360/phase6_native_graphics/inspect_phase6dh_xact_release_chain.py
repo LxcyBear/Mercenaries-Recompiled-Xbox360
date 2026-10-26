@@ -170,9 +170,11 @@ def main() -> int:
         f = by_name.get(target)
         if f is None:
             raise SystemExit(f"[Phase6DH] target missing: {target}")
+        va = f["va"]
+        va_text = f"{va:08X}" if va is not None else "UNKNOWN"
         print(
             f"[Phase6DH] target={target} "
-            f"va={(f'{f['va']:08X}' if f['va'] is not None else 'UNKNOWN')} "
+            f"va={va_text} "
             f"bytes={f['end']-f['start']} lines={len(f['body'].splitlines())}"
         )
         print_body(f"[Phase6DH] {target} BODY BEGIN", f["body"])
