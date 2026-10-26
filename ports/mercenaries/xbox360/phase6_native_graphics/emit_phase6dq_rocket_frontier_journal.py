@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R10"
+EMITTER_REVISION = "6DQ-R11"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -808,39 +808,103 @@ def relabel(text: str) -> str:
 
 def assert_no_newline_in_c_string(text: str) -> None:
     """Reject accidental physical newlines inside ordinary C/C++ string literals."""
-    in_string = False
-    escaped = False
+    i = 0
     line = 1
+    in_string = False
+    in_char = False
+    line_comment = False
+    block_comment = False
+    escaped = False
     string_line = 0
 
-    for ch in text:
-        if ch == "\n":
-            if in_string and not escaped:
-                raise SystemExit(
-                    f"[Phase6DQ] generated C string literal crosses physical newline "
-                    f"(opened line {string_line}, reached line {line})"
-                )
-            line += 1
-            escaped = False
+    while i < len(text):
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < len(text) else ""
+
+        if line_comment:
+            if ch == "\n":
+                line_comment = False
+                line += 1
+            i += 1
+            continue
+
+        if block_comment:
+            if ch == "*" and nxt == "/":
+                block_comment = False
+                i += 2
+                continue
+            if ch == "\n":
+                line += 1
+            i += 1
             continue
 
         if in_string:
+            if ch == "\n":
+                if not escaped:
+                    raise SystemExit(
+                        f"[Phase6DQ] generated C string literal crosses physical newline "
+                        f"(opened line {string_line}, reached line {line})"
+                    )
+                escaped = False
+                line += 1
+                i += 1
+                continue
             if escaped:
                 escaped = False
             elif ch == "\\":
                 escaped = True
             elif ch == '"':
                 in_string = False
-        elif ch == '"':
+            i += 1
+            continue
+
+        if in_char:
+            if ch == "\n":
+                raise SystemExit(
+                    f"[Phase6DQ] generated C character literal crosses physical newline "
+                    f"at line {line}"
+                )
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == "'":
+                in_char = False
+            i += 1
+            continue
+
+        if ch == "/" and nxt == "/":
+            line_comment = True
+            i += 2
+            continue
+        if ch == "/" and nxt == "*":
+            block_comment = True
+            i += 2
+            continue
+        if ch == '"':
             in_string = True
             string_line = line
+            escaped = False
+            i += 1
+            continue
+        if ch == "'":
+            in_char = True
+            escaped = False
+            i += 1
+            continue
+        if ch == "\n":
+            line += 1
+        i += 1
 
     if in_string:
         raise SystemExit(
             f"[Phase6DQ] generated C string literal is unterminated "
             f"(opened line {string_line})"
         )
-
+    if in_char:
+        raise SystemExit("[Phase6DQ] generated C character literal is unterminated")
+    if block_comment:
+        raise SystemExit("[Phase6DQ] generated C block comment is unterminated")
 
 def main() -> int:
     ap = argparse.ArgumentParser()
