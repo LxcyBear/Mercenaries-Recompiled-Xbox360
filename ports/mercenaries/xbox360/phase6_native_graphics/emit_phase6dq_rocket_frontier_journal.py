@@ -22,7 +22,7 @@ This phase does NOT claim complete VP/audio semantics. VP write continuation is
 explicitly diagnostic so audio initialization cannot force one build per method
 while we chase the renderer. Unknown VP reads, meaningful non-VP MMIO, guest faults, ABI boundaries,
 missing translated bodies and unresolved support remain hard stops. Hardware-proven
-kernel timing ordinal 151 is bridged with maintained busy-wait semantics. R16's
+kernel timing ordinal 151 is bridged with maintained busy-wait semantics. R23 also\nbatches the hardware-proven kernel floating-point guard pair 142/139 using opaque\nState-pointer nesting under the serialized runtime. R16's
 hardware-proven DSOUND poison-dispatch site 002A41F7 is quarantined without
 widening ordinary guest-memory fault handling.
 """
@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R23"
+EMITTER_REVISION = "6DQ-R24"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -251,6 +251,13 @@ static uint32_t s_phase6dqDsoundPoisonSiteCount = 0u;
 static uint32_t s_phase6dqDsoundPoisonNoopCount = 0u;
 static uint32_t s_phase6dqDsoundPoisonLastObject = 0u;
 static uint32_t s_phase6dqDsoundPoisonLastArg = 0u;
+#define PHASE6DQ_FP_GUARD_DEPTH_CAP 8u
+static uint32_t s_phase6dqFpGuardStates[PHASE6DQ_FP_GUARD_DEPTH_CAP];
+static uint32_t s_phase6dqFpGuardDepth = 0u;
+static uint32_t s_phase6dqFpSave142Count = 0u;
+static uint32_t s_phase6dqFpRestore139Count = 0u;
+static uint32_t s_phase6dqFpGuardMismatchCount = 0u;
+static uint32_t s_phase6dqFpGuardLastState = 0u;
 
 '''
     text = text[:start] + state + text[start:]
@@ -597,6 +604,86 @@ static void phase6dq_dsound_poison_noop(uint32_t savedEsp)
     trace(line);
 }
 
+static void phase6dq_ke_save_floating_point_state(uint32_t savedEsp)
+{
+    uint32_t state = GUEST_READ32(g_esp + 4u);
+    char line[384];
+
+    ++s_phase6dqFpSave142Count;
+    s_phase6dqFpGuardLastState = state;
+
+    if (state == 0u || s_phase6dqFpGuardDepth >= PHASE6DQ_FP_GUARD_DEPTH_CAP)
+    {
+        ++s_phase6dqFpGuardMismatchCount;
+        phase4c_escape(
+            PHASE4C_BOUNDARY_ICALL_SAFE,
+            0x8000008Eu,
+            savedEsp);
+        return;
+    }
+
+    s_phase6dqFpGuardStates[s_phase6dqFpGuardDepth++] = state;
+
+    /*
+     * Xbox ordinal 142 is NTSTATUS KeSaveFloatingPointState(PVOID State).
+     * The translated runtime is serialized and does not context-switch an
+     * independent kernel FPU owner beneath guest code, so retain the opaque
+     * guest State pointer/nesting contract and return STATUS_SUCCESS without
+     * fabricating an unproven KFLOATING_SAVE byte layout.
+     */
+    eax = 0u;
+    g_esp = savedEsp;
+
+    sprintf(
+        line,
+        "P6DQ KESAVEFP142: calls=%u state=%08X depth=%u result=%08X caller=%08X new_esp=%08X",
+        (unsigned int)s_phase6dqFpSave142Count,
+        (unsigned int)state,
+        (unsigned int)s_phase6dqFpGuardDepth,
+        (unsigned int)eax,
+        (unsigned int)phase4c_current_caller(),
+        (unsigned int)g_esp);
+    trace(line);
+}
+
+static void phase6dq_ke_restore_floating_point_state(uint32_t savedEsp)
+{
+    uint32_t state = GUEST_READ32(g_esp + 4u);
+    char line[384];
+
+    ++s_phase6dqFpRestore139Count;
+    s_phase6dqFpGuardLastState = state;
+
+    if (state == 0u ||
+        s_phase6dqFpGuardDepth == 0u ||
+        s_phase6dqFpGuardStates[s_phase6dqFpGuardDepth - 1u] != state)
+    {
+        ++s_phase6dqFpGuardMismatchCount;
+        phase4c_escape(
+            PHASE4C_BOUNDARY_ICALL_SAFE,
+            0x8000008Bu,
+            savedEsp);
+        return;
+    }
+
+    --s_phase6dqFpGuardDepth;
+    s_phase6dqFpGuardStates[s_phase6dqFpGuardDepth] = 0u;
+
+    eax = 0u;
+    g_esp = savedEsp;
+
+    sprintf(
+        line,
+        "P6DQ KERESTOREFP139: calls=%u state=%08X depth=%u result=%08X caller=%08X new_esp=%08X",
+        (unsigned int)s_phase6dqFpRestore139Count,
+        (unsigned int)state,
+        (unsigned int)s_phase6dqFpGuardDepth,
+        (unsigned int)eax,
+        (unsigned int)phase4c_current_caller(),
+        (unsigned int)g_esp);
+    trace(line);
+}
+
 static void phase6dq_ke_stall_execution_processor(uint32_t savedEsp)
 {
     uint32_t microSeconds = GUEST_READ32(g_esp + 4u);
@@ -692,7 +779,7 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u dsound_poison_sites=%u dsound_poison_noops=%u dsound_poison_object=%08X dsound_poison_arg=%08X",
+        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u fpsave142_calls=%u fprestore139_calls=%u fpguard_depth=%u fpguard_mismatches=%u fpguard_last_state=%08X dsound_poison_sites=%u dsound_poison_noops=%u dsound_poison_object=%08X dsound_poison_arg=%08X",
         (unsigned int)s_phase6dqDispatchJournalCount,
         (unsigned int)s_phase6dqDispatchJournalOverflow,
         (unsigned int)s_phase6dqHardStopJournalCount,
@@ -708,6 +795,11 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqKeStall151LastUs,
         (unsigned __int64)s_phase6dqKeStall151TotalUs,
         (unsigned int)s_phase6dqKeStall151MaxUs,
+        (unsigned int)s_phase6dqFpSave142Count,
+        (unsigned int)s_phase6dqFpRestore139Count,
+        (unsigned int)s_phase6dqFpGuardDepth,
+        (unsigned int)s_phase6dqFpGuardMismatchCount,
+        (unsigned int)s_phase6dqFpGuardLastState,
         (unsigned int)s_phase6dqDsoundPoisonSiteCount,
         (unsigned int)s_phase6dqDsoundPoisonNoopCount,
         (unsigned int)s_phase6dqDsoundPoisonLastObject,
@@ -830,6 +922,18 @@ def patch_dispatch_journal(text: str) -> str:
     stall_hook = r'''    if (target == 0xF6DCCCD0u)
     {
         phase6dq_dsound_poison_noop(savedEsp);
+        return;
+    }
+
+    if (target == 0x8000008Eu)
+    {
+        phase6dq_ke_save_floating_point_state(savedEsp);
+        return;
+    }
+
+    if (target == 0x8000008Bu)
+    {
+        phase6dq_ke_restore_floating_point_state(savedEsp);
         return;
     }
 
@@ -1548,6 +1652,10 @@ def main() -> int:
         "P6DQ ROCKET IOAPIC DEFAULT WRITE width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC SPECIAL HARD %s width=%u addr=%08X",
         "target == 0x80000097u",
+        "target == 0x8000008Eu",
+        "target == 0x8000008Bu",
+        "P6DQ KESAVEFP142: calls=%u state=%08X",
+        "P6DQ KERESTOREFP139: calls=%u state=%08X",
         "P6DQ KESTALL151: calls=%u us=%u",
         "microSeconds > 1000000u",
         "static void sub_002A41EE(void)",
@@ -1642,6 +1750,23 @@ def main() -> int:
             "hardware_seed_total_microseconds": 20000,
             "max_safe_microseconds": 1000000,
             "unreasonable_duration_fenced": True,
+        },
+        "kernel_fp_guard_bridge": {
+            "save_target": "0x8000008E",
+            "save_ordinal": 142,
+            "save_name": "KeSaveFloatingPointState",
+            "restore_target": "0x8000008B",
+            "restore_ordinal": 139,
+            "restore_name": "KeRestoreFloatingPointState",
+            "argument": "PVOID State",
+            "calling_convention": "stdcall",
+            "hardware_seed_ticks": 27025618,
+            "serialized_runtime_no_kernel_fp_context_switch": True,
+            "opaque_guest_state_layout_fabricated": False,
+            "pointer_nesting_guard": True,
+            "max_nesting": 8,
+            "mismatch_hard_fenced": True,
+            "result": "STATUS_SUCCESS",
         },
         "dsound_poison_slot_bridge": {
             "hardware_seed_ticks": 27025451,
