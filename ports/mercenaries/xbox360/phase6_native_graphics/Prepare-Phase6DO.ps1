@@ -62,10 +62,10 @@ Write-Host "[Phase6DO] XACT teardown semantics: UNCHANGED"
 if($LASTEXITCODE-ne0){throw "Phase 6DO emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DO-R2"')){
-  throw "Phase 6DO stale emitter detected; expected revision 6DO-R2"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DO-R3"')){
+  throw "Phase 6DO stale emitter detected; expected revision 6DO-R3"
 }
-Write-Host "[Phase6DO] Emitter revision       : 6DO-R2"
+Write-Host "[Phase6DO] Emitter revision       : 6DO-R3"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
