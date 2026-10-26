@@ -38,10 +38,10 @@ import re
 from pathlib import Path
 
 BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
-BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
+BUILD_TAG = "P6DQ-R45-AUDIO-PROVENANCE-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R43"
+EMITTER_REVISION = "6DQ-R45"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -280,6 +280,14 @@ static uint32_t s_phase6dqAc97ChannelWriteLastIndex = 0u;
 static uint32_t s_phase6dqAc97ChannelWriteLastTableValue = 0u;
 static uint32_t s_phase6dqAc97ChannelWriteLastDestination = 0u;
 static uint32_t s_phase6dqAc97ChannelWriteLastValue = 0u;
+#define PHASE6DQ_R45_AUDIO_LOG_CAP 32u
+#define PHASE6DQ_R45_BAD_LOG_CAP 16u
+static uint32_t s_phase6dqR45AudioObjectCallCount = 0u;
+static uint32_t s_phase6dqR45AudioBadSignatureCount = 0u;
+static uint32_t s_phase6dqR45AudioContainmentCount = 0u;
+static uint32_t s_phase6dqR45AudioLastSite = 0u;
+static uint32_t s_phase6dqR45AudioLastObject = 0u;
+static uint32_t s_phase6dqR45AudioLastIndex = 0u;
 static uint32_t s_phase6dqHalGetVector44Count = 0u;
 static uint32_t s_phase6dqHalGetVector44LastBus = 0u;
 static uint32_t s_phase6dqHalGetVector44LastVector = 0u;
@@ -650,6 +658,99 @@ static void phase6dq_note_ac97_channel_write(
         (unsigned int)edi,
         (unsigned int)g_esp);
     trace(line);
+}
+
+static uint32_t phase6dq_r45_audio_index(
+    uint32_t object,
+    uint32_t* readable)
+{
+    if (readable != 0)
+        *readable = 0u;
+
+    /*
+     * Phase 2 established a 64 MiB guest arena.  Do not turn provenance
+     * logging into a new fault source: only inspect an aligned object whose
+     * first dword is inside that arena.
+     */
+    if ((object & 3u) != 0u || object > 0x03FFFFFCu)
+        return 0xFFFFFFFFu;
+
+    if (readable != 0)
+        *readable = 1u;
+    return GUEST_READ32(object);
+}
+
+static void phase6dq_r45_note_audio_object_call(
+    uint32_t site,
+    uint32_t object)
+{
+    uint32_t readable = 0u;
+    uint32_t index = phase6dq_r45_audio_index(object, &readable);
+    uint32_t bad = object == 0x00040000u && readable != 0u &&
+                   index == 0x00000400u;
+    char line[512];
+
+    ++s_phase6dqR45AudioObjectCallCount;
+    if (bad)
+        ++s_phase6dqR45AudioBadSignatureCount;
+
+    s_phase6dqR45AudioLastSite = site;
+    s_phase6dqR45AudioLastObject = object;
+    s_phase6dqR45AudioLastIndex = index;
+
+    if (s_phase6dqR45AudioObjectCallCount <= PHASE6DQ_R45_AUDIO_LOG_CAP ||
+        (bad && s_phase6dqR45AudioBadSignatureCount <= PHASE6DQ_R45_BAD_LOG_CAP))
+    {
+        sprintf(
+            line,
+            "P6DQ R45 AUDIO OBJECT: call=%u bad=%u bad_count=%u site=%08X object=%08X readable=%u index=%08X caller=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X",
+            (unsigned int)s_phase6dqR45AudioObjectCallCount,
+            (unsigned int)bad,
+            (unsigned int)s_phase6dqR45AudioBadSignatureCount,
+            (unsigned int)site,
+            (unsigned int)object,
+            (unsigned int)readable,
+            (unsigned int)index,
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)eax,
+            (unsigned int)ecx,
+            (unsigned int)edx,
+            (unsigned int)ebx,
+            (unsigned int)esi,
+            (unsigned int)edi,
+            (unsigned int)g_esp);
+        trace(line);
+    }
+}
+
+static int phase6dq_r45_bad_audio_object(
+    uint32_t site,
+    uint32_t object,
+    uint32_t index)
+{
+    char line[448];
+
+    if (object != 0x00040000u || index != 0x00000400u)
+        return 0;
+
+    ++s_phase6dqR45AudioContainmentCount;
+    if (s_phase6dqR45AudioContainmentCount <= PHASE6DQ_R45_BAD_LOG_CAP)
+    {
+        sprintf(
+            line,
+            "P6DQ R45 AUDIO CONTAIN: count=%u site=%08X object=%08X index=%08X table0=%08X table1=%08X caller=%08X esp=%08X",
+            (unsigned int)s_phase6dqR45AudioContainmentCount,
+            (unsigned int)site,
+            (unsigned int)object,
+            (unsigned int)index,
+            (unsigned int)GUEST_READ32(0x002BA9C0u),
+            (unsigned int)GUEST_READ32(0x002BA9C4u),
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)g_esp);
+        trace(line);
+    }
+
+    return 1;
 }
 
 static int phase6dq_ac97_is_output_busmaster(uint32_t address)
@@ -2643,6 +2744,84 @@ def instrument_r43_ac97_channel_writes(text: str) -> str:
     return text
 
 
+
+def instrument_r45_audio_object_provenance(text: str) -> str:
+    """Trace the five proven callers of 002A76FE and contain only R43's exact poison."""
+
+    callsites = (
+        ("loc_002A11BB: ;", "loc_002A11C0: ;", 0x002A11BB),
+        ("loc_002A11C7: ;", "loc_002A11CC: ;", 0x002A11C7),
+        ("loc_002A778D: ;", "loc_002A7794: ;", 0x002A778D),
+        ("loc_002A77E4: ;", "loc_002A77EB: ;", 0x002A77E4),
+        ("loc_002A78A2: ;", "loc_002A78A9: ;", 0x002A78A2),
+    )
+    direct = "PUSH32(esp, 0); sub_002A76FE(); /* call 0x002A76FE */"
+
+    for begin_label, end_label, site in callsites:
+        begin = text.find(begin_label)
+        if begin < 0:
+            raise SystemExit(f"[Phase6DQ] R45 missing callsite label {begin_label}")
+        finish = text.find(end_label, begin + len(begin_label))
+        if finish < 0:
+            raise SystemExit(
+                f"[Phase6DQ] R45 missing successor {end_label} after {begin_label}"
+            )
+        window = text[begin:finish]
+        if window.count(direct) != 1:
+            raise SystemExit(
+                f"[Phase6DQ] R45 expected one 002A76FE call at 0x{site:08X}, "
+                f"found {window.count(direct)}"
+            )
+        tagged = (
+            f"phase6dq_r45_note_audio_object_call(0x{site:08X}u, ecx);\\n    "
+            + direct
+        )
+        window = window.replace(direct, tagged, 1)
+        text = text[:begin] + window + text[finish:]
+
+    entry_begin = text.find("loc_002A76FE: ;")
+    entry_end = text.find("loc_002A7712: ;", entry_begin)
+    if entry_begin < 0 or entry_end < 0:
+        raise SystemExit("[Phase6DQ] R45 002A76FE entry window missing")
+    entry_window = text[entry_begin:entry_end]
+    entry_tick = "PHASE4C_BUDGET_TICK(0x002A76FEu);"
+    if entry_window.count(entry_tick) != 1:
+        raise SystemExit("[Phase6DQ] R45 002A76FE entry tick shape changed")
+    entry_window = entry_window.replace(
+        entry_tick,
+        entry_tick
+        + "\\n    phase6dq_r45_note_audio_object_call(0x002A76FEu, ecx);",
+        1,
+    )
+    text = text[:entry_begin] + entry_window + text[entry_end:]
+
+    lookup_begin = text.find("loc_002A7712: ;")
+    lookup_end = text.find("loc_002A7734: ;", lookup_begin)
+    if lookup_begin < 0 or lookup_end < 0:
+        raise SystemExit("[Phase6DQ] R45 002A7712 lookup window missing")
+    lookup_window = text[lookup_begin:lookup_end]
+    lookup = (
+        "eax = phase6ch_apu_read32(esi);\\n"
+        "    eax = phase6ch_apu_read32(eax * 4 + 0x2BA9C0);"
+    )
+    replacement = (
+        "eax = phase6ch_apu_read32(esi);\\n"
+        "    phase6dq_r45_note_audio_object_call(0x002A7712u, esi);\\n"
+        "    if (phase6dq_r45_bad_audio_object(0x002A7712u, esi, eax)) "
+        "goto loc_002A776D;\\n"
+        "    eax = phase6ch_apu_read32(eax * 4 + 0x2BA9C0);"
+    )
+    if lookup_window.count(lookup) != 1:
+        raise SystemExit(
+            "[Phase6DQ] R45 expected one 002A7712 table lookup shape, "
+            f"found {lookup_window.count(lookup)}"
+        )
+    lookup_window = lookup_window.replace(lookup, replacement, 1)
+    text = text[:lookup_begin] + lookup_window + text[lookup_end:]
+
+    return text
+
+
 def route_all_dsound_accesses(text: str, base) -> tuple[str, dict[str, int]]:
     """Route raw guest accesses in every translated DSOUND sub_* through APU wrappers."""
     masked = base.mask_noncode(text)
@@ -2946,6 +3125,7 @@ def main() -> int:
     main_text = patch_vp_accesses(main_text)
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
     main_text = instrument_r43_ac97_channel_writes(main_text)
+    main_text = instrument_r45_audio_object_provenance(main_text)
     main_text = instrument_xact_init_probe(main_text, base)
     main_text, f78f_read_sites = instrument_f78f_origin_probe(main_text, base)
     main_text = install_f78f_origin_support(main_text, f78f_read_sites)
@@ -3014,6 +3194,16 @@ def main() -> int:
         "P6DQ AC97 TABLE WRITE WATCH: count=%u addr=%08X width=%u value=%08X",
         "P6DQ AC97 CHANNEL WRITE: count=%u site=%08X object=%08X index=%08X",
         "P6DQ AC97 TABLE PROVENANCE: table0=%08X table1=%08X write_watch=%u",
+        "P6DQ R45 AUDIO OBJECT: call=%u bad=%u bad_count=%u site=%08X object=%08X",
+        "P6DQ R45 AUDIO CONTAIN: count=%u site=%08X object=%08X index=%08X",
+        "phase6dq_r45_note_audio_object_call(0x002A11BBu, ecx);",
+        "phase6dq_r45_note_audio_object_call(0x002A11C7u, ecx);",
+        "phase6dq_r45_note_audio_object_call(0x002A778Du, ecx);",
+        "phase6dq_r45_note_audio_object_call(0x002A77E4u, ecx);",
+        "phase6dq_r45_note_audio_object_call(0x002A78A2u, ecx);",
+        "phase6dq_r45_note_audio_object_call(0x002A76FEu, ecx);",
+        "phase6dq_r45_note_audio_object_call(0x002A7712u, esi);",
+        "goto loc_002A776D;",
         "loc_002A74ED: ;",
         "loc_002A7712: ;",
         "loc_002A77FB: ;",
@@ -3229,6 +3419,28 @@ def main() -> int:
             "channel_index_and_table_value_capture": True,
             "invalid_write_bypassed": False,
             "guest_memory_semantics_changed": False,
+        },
+        "r45_bad_audio_object_provenance": {
+            "r43_proof_site": "0x002A7712",
+            "r43_proof_object": "0x00040000",
+            "r43_proof_index": "0x00000400",
+            "r43_proof_table0": "0x00000010",
+            "r43_proof_table1": "0x00000070",
+            "direct_call_sites": [
+                "0x002A11BB",
+                "0x002A11C7",
+                "0x002A778D",
+                "0x002A77E4",
+                "0x002A78A2",
+            ],
+            "target_entry": "0x002A76FE",
+            "lookup_site": "0x002A7712",
+            "exact_bad_signature_contained": True,
+            "containment_epilogue": "0x002A776D",
+            "table_index_clamped": False,
+            "table_rewritten": False,
+            "ordinary_audio_objects_bypassed": False,
+            "diagnostic_only": True,
         },
         "ac97_output_busmaster_bridge": {
             "hardware_proof": "R40",
