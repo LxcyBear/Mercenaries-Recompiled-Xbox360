@@ -24,7 +24,9 @@ while we chase the renderer. Unknown VP reads, meaningful non-VP MMIO, guest fau
 missing translated bodies and unresolved support remain hard stops. Hardware-proven
 kernel timing ordinal 151 is bridged with maintained busy-wait semantics. R23 also\nbatches the hardware-proven kernel floating-point guard pair 142/139 using opaque\nState-pointer nesting under the serialized runtime. R16's
 hardware-proven DSOUND poison-dispatch site 002A41F7 is quarantined without
-widening ordinary guest-memory fault handling.
+widening ordinary guest-memory fault handling. R26 adds predictive static
+frontier clearing: direct DSOUND producer callsites, literal DSOUND kernel
+targets, and real AvSetDisplayMode intent callers are audited before VS builds.
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R25"
+EMITTER_REVISION = "6DQ-R26"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -49,6 +51,15 @@ DSOUND_POISON_VALUE = 0xCCCCCCCC
 DSOUND_POISON_NOOP_TARGET = 0xF6DCCCD0
 DSOUND_START = 0x0029CB80
 DSOUND_END = 0x002BB274
+PREDICTIVE_CLOSURE_DEPTH = 12
+PREDICTIVE_CLOSURE_CAP_PER_SEED = 768
+PREDICTIVE_AUDIO_TARGET = "sub_002A41EE"
+PREDICTIVE_DISPLAY_ORDINAL = 0x80000003
+MAINTAINED_KERNEL_TARGETS = {
+    0x8000008B,  # KeRestoreFloatingPointState
+    0x8000008E,  # KeSaveFloatingPointState
+    0x80000097,  # KeStallExecutionProcessor
+}
 
 SECTIONS = (
     ("D3D", 0x00288640, 0x0029B874, 0x0028E700),
@@ -142,6 +153,233 @@ def function_span(text: str, signature: str) -> tuple[int, int]:
         i += 1
 
     raise SystemExit(f"[Phase6DQ] unterminated function: {signature}")
+
+
+def translated_function_defs(text: str, base) -> list[dict]:
+    masked = base.mask_noncode(text)
+    rows = []
+    for m in base.FUNC_RE.finditer(masked):
+        name = m.group(1)
+        open_pos = masked.find("{", m.start(), m.end())
+        if open_pos < 0:
+            continue
+        end = base.closing_brace(masked, open_pos)
+        vm = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
+        va = int(vm.group(1), 16) if vm else 0
+        rows.append({
+            "name": name,
+            "va": va,
+            "start": m.start(),
+            "open": open_pos,
+            "end": end,
+        })
+    return rows
+
+
+def predictive_seed_vas(generated: dict) -> list[int]:
+    """Find source-backed audio/display callers worth packing before broad sweep."""
+    seeds = []
+    for va, row in generated.items():
+        source = row["source"]
+        if (
+            "sub_002A41EE();" in source
+            or "call 0x002A41EE" in source
+            or "0x80000003" in source
+        ):
+            seeds.append(va)
+
+    # Keep established subsystem roots nearby even if already packed; caller
+    # closure expansion below will simply skip old members.
+    seeds.extend((0x002A6713, 0x0029C8BE, 0x0028E700))
+    return list(dict.fromkeys(seeds))
+
+
+def build_predictive_candidates(
+    seeds: list[int],
+    old: set[int],
+    generated: dict,
+    base,
+    p5bb,
+) -> list[int]:
+    selected = []
+
+    def add(va: int) -> None:
+        if (
+            va in generated
+            and va not in old
+            and va not in selected
+            and len(selected) < CANDIDATE_CAP
+        ):
+            selected.append(va)
+
+    for seed in seeds:
+        add(seed)
+        if seed not in generated:
+            continue
+        try:
+            closure = p5bb.bounded_promoted_members(
+                base,
+                seed,
+                generated,
+                PREDICTIVE_CLOSURE_DEPTH,
+                PREDICTIVE_CLOSURE_CAP_PER_SEED,
+            )
+        except BaseException:
+            # Predictive prioritization may never weaken emission safety.
+            # If a seed cannot form a closure, the normal support-clean sweep
+            # still handles it or fences it later.
+            closure = []
+        for va in closure:
+            add(va)
+
+    return selected
+
+
+def predictive_static_audit(text: str, base) -> dict:
+    """
+    Static, pre-build frontier audit.
+
+    It does not fabricate values or change runtime semantics. It maps:
+      * every direct caller of sub_002A41EE and its local source context;
+      * literal Xbox-kernel targets referenced by DSOUND translated bodies;
+      * translated callers that reference AvSetDisplayMode ordinal 3.
+    """
+    defs = translated_function_defs(text, base)
+    audio_sites = []
+    kernel_owners = {}
+    display_sites = []
+
+    direct_re = re.compile(
+        r"sub_002A41EE\(\)\s*;\s*/\*\s*call\s+0x002A41EE\s*\*/"
+    )
+    kernel_re = re.compile(r"0x800000([0-9A-Fa-f]{2})u?")
+
+    for row in defs:
+        if not row["va"]:
+            continue
+        body = text[row["open"]:row["end"]]
+
+        for m in direct_re.finditer(body):
+            absolute = row["open"] + m.start()
+            line_no = text.count("\n", row["start"], absolute) + 1
+            body_lines = body.splitlines()
+            # Approximate line within body from the direct-call offset.
+            rel_line = body[:m.start()].count("\n")
+            lo = max(0, rel_line - 12)
+            hi = min(len(body_lines), rel_line + 9)
+            audio_sites.append({
+                "owner_va": f"0x{row['va']:08X}",
+                "owner_name": row["name"],
+                "owner_line": line_no,
+                "context": body_lines[lo:hi],
+            })
+
+        if DSOUND_START <= row["va"] < DSOUND_END:
+            for km in kernel_re.finditer(body):
+                target = 0x80000000 | int(km.group(1), 16)
+                key = f"0x{target:08X}"
+                kernel_owners.setdefault(key, set()).add(
+                    f"0x{row['va']:08X}"
+                )
+
+        if "0x80000003" in body:
+            body_lines = body.splitlines()
+            for idx, line in enumerate(body_lines):
+                if "0x80000003" not in line:
+                    continue
+                lo = max(0, idx - 8)
+                hi = min(len(body_lines), idx + 9)
+                display_sites.append({
+                    "owner_va": f"0x{row['va']:08X}",
+                    "owner_name": row["name"],
+                    "context": body_lines[lo:hi],
+                })
+
+    kernel_rows = []
+    for key in sorted(kernel_owners):
+        target = int(key, 16)
+        kernel_rows.append({
+            "target": key,
+            "ordinal": target & 0xFFFF,
+            "owners": sorted(kernel_owners[key]),
+            "maintained": target in MAINTAINED_KERNEL_TARGETS,
+        })
+
+    return {
+        "enabled": True,
+        "mode": "static_prebuild_predictive_frontier_clearing",
+        "r25_hardware_seed": {
+            "ticks": 27025727,
+            "boundary_kind": "GUEST_FAULT",
+            "fault_address": "0xEC83F0E4",
+            "dsound_function": "0x002A41EE",
+            "entry_arg1": "0xEC83F0E4",
+            "hresult_register_ebx": "0x8007000E",
+            "fp_save_calls": 1,
+            "fp_restore_calls": 1,
+            "fp_guard_depth": 0,
+            "fp_guard_mismatches": 0,
+        },
+        "audio_target": "0x002A41EE",
+        "audio_direct_call_sites": audio_sites,
+        "audio_direct_call_site_count": len(audio_sites),
+        "dsound_kernel_literals": kernel_rows,
+        "dsound_kernel_literal_count": len(kernel_rows),
+        "display_ordinal": "0x80000003",
+        "display_intent_sites": display_sites,
+        "display_intent_site_count": len(display_sites),
+        "ordinary_guest_faults_bypassed": False,
+        "unknown_kernel_calls_auto_succeeded": False,
+        "unknown_mmio_auto_accepted": False,
+        "unknown_reads_zero_filled": False,
+    }
+
+
+def print_predictive_audit(audit: dict) -> None:
+    print("[Phase6DQ] ============== PREDICTIVE FRONTIER AUDIT ==============")
+    seed = audit["r25_hardware_seed"]
+    print(
+        "[Phase6DQ] R25 seed: ticks={ticks} fault={fault_address} "
+        "func={dsound_function} arg1={entry_arg1} ebx={hresult_register_ebx}".format(
+            **seed
+        )
+    )
+    print(
+        f"[Phase6DQ] AUDIO direct callers of 002A41EE: "
+        f"{audit['audio_direct_call_site_count']}"
+    )
+    for index, site in enumerate(audit["audio_direct_call_sites"], 1):
+        print(
+            f"[Phase6DQ] AUDIO SITE[{index}] owner={site['owner_va']} "
+            f"name={site['owner_name']} owner_line={site['owner_line']}"
+        )
+        for line in site["context"]:
+            print("[Phase6DQ]   " + line)
+
+    print(
+        f"[Phase6DQ] DSOUND literal kernel targets: "
+        f"{audit['dsound_kernel_literal_count']}"
+    )
+    for row in audit["dsound_kernel_literals"]:
+        print(
+            f"[Phase6DQ] KERNEL target={row['target']} ordinal={row['ordinal']} "
+            f"maintained={int(row['maintained'])} owners={','.join(row['owners'])}"
+        )
+
+    print(
+        f"[Phase6DQ] DISPLAY ordinal-3 intent callers: "
+        f"{audit['display_intent_site_count']}"
+    )
+    for index, site in enumerate(audit["display_intent_sites"], 1):
+        print(
+            f"[Phase6DQ] DISPLAY SITE[{index}] owner={site['owner_va']} "
+            f"name={site['owner_name']}"
+        )
+        for line in site["context"]:
+            print("[Phase6DQ]   " + line)
+
+    print("[Phase6DQ] Predictive policy: unknown kernel/MMIO/read semantics remain HARD FENCES")
+    print("[Phase6DQ] =========================================================")
 
 
 def select_candidates(
@@ -1544,9 +1782,21 @@ def main() -> int:
     old = {int(x, 0) for x in manifest.get("members", [])}
     existing_defs = set(base.support_symbols(main_text))
 
-    candidates, available_counts, selected_counts = select_candidates(
-        generated, old, existing_defs
+    predictive_seeds = predictive_seed_vas(generated)
+    predictive_candidates = build_predictive_candidates(
+        predictive_seeds, old, generated, base, p5bb
     )
+
+    broad_candidates, available_counts, selected_counts = select_candidates(
+        generated,
+        old | set(predictive_candidates),
+        existing_defs,
+    )
+    candidates = list(predictive_candidates)
+    for va in broad_candidates:
+        if va not in candidates and len(candidates) < CANDIDATE_CAP:
+            candidates.append(va)
+
     expanded = old | set(candidates)
     new_members = list(candidates)
 
@@ -1597,6 +1847,8 @@ def main() -> int:
     main_text = insert_final_dump(main_text)
     main_text = update_vp_summary(main_text)
 
+    predictive_audit = predictive_static_audit(main_text, base)
+
     old_policy_prefix = "Policy: Phase 6DP "
     policy_pos = main_text.find(old_policy_prefix)
     if policy_pos < 0:
@@ -1613,7 +1865,9 @@ def main() -> int:
         "functions, journals unique packed dispatches and hard stops, diagnostic-"
         "continues aligned VP WRITE32 commands while unknown VP reads remain hard "
         "fences, preserves 64M/C4146/allocator/XACT/NV2A semantics, and prioritizes "
-        "maximum trustworthy progress toward guest presentation per hardware run"
+        "maximum trustworthy progress toward guest presentation per hardware run; "
+        "R26 adds predictive pre-build caller/kernel/display audits while unknown "
+        "kernel calls, MMIO and reads remain hard fences"
     )
     # Replace only the payload inside the existing C string literal. Preserve
     # the closing quote, parenthesis and semicolon from the inherited trace().
@@ -1666,6 +1920,7 @@ def main() -> int:
         "target == 0xF6DCCCD0u",
         "P6DQ DSOUND POISON SLOT:",
         "P6DQ DSOUND POISON NOOP:",
+        "R26 adds predictive pre-build caller/kernel/display audits",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
@@ -1789,6 +2044,14 @@ def main() -> int:
             "ordinary_guest_faults_bypassed": False,
             "unrelated_poison_values_bypassed": False,
         },
+        "predictive_frontier_clearing": {
+            **predictive_audit,
+            "seed_count": len(predictive_seeds),
+            "predictive_candidate_count": len(predictive_candidates),
+            "closure_depth": PREDICTIVE_CLOSURE_DEPTH,
+            "closure_cap_per_seed": PREDICTIVE_CLOSURE_CAP_PER_SEED,
+            "broad_sweep_runs_after_predictive_priority": True,
+        },
         "vp_diagnostic_continue": {
             "aligned_write32_continue": True,
             "write32_semantics_complete": False,
@@ -1833,6 +2096,10 @@ def main() -> int:
         for va, names in sorted(pruned.items())
     ]
 
+    (args.out_dir / "phase6dq-predictive-audit.json").write_text(
+        json.dumps(predictive_audit, indent=2) + "\n",
+        encoding="utf-8",
+    )
     (args.out_dir / "phase6dq-manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
@@ -1840,6 +2107,7 @@ def main() -> int:
     total_source = sum(len(rendered.get(va, "")) for va in new_members)
     print(f"[Phase6DQ] emitter revision: {EMITTER_REVISION}")
     print("[Phase6DQ] ROCKET PHASE: ENABLED")
+    print_predictive_audit(predictive_audit)
     print(
         f"[Phase6DQ] STATIC PACK: base={len(old)} candidate={len(candidates)} "
         f"pruned={len(pruned)} packed_new={len(new_members)} "
