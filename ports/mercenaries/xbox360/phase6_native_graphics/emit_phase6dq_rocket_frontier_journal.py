@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R22"
+EMITTER_REVISION = "6DQ-R23"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -1095,59 +1095,95 @@ def patch_dsound_poison_slot_dispatch(text: str, base) -> str:
             f"[Phase6DQ] expected exactly one sub_002A41EE definition, found {definition_count}"
         )
 
-    brace = text.find("{", start)
+    masked = base.mask_noncode(text)
+    brace = masked.find("{", start)
     if brace < 0:
         raise SystemExit("[Phase6DQ] sub_002A41EE definition opening brace missing")
-    end = base.closing_brace(base.mask_noncode(text), brace)
+    end = base.closing_brace(masked, brace)
     body = text[start:end]
 
-    # R16 runtime VA ring proved the faulting instruction is 002A41F7 inside
-    # sub_002A41EE. The generated source does not retain a literal per-VA tick
-    # marker, so anchor on the exact instruction pair instead:
-    #   eax = GUEST_READ32(eax + 4);
-    #   ... RECOMP_ICALL_SAFE(eax ...)
-    # Require exactly one such pair inside this exact function or refuse to emit.
-    load_re = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)eax\s*=\s*(?P<accessor>GUEST_READ32|phase6ch_apu_read32)\(\s*eax\s*\+\s*(?:4|0x4|0x04)\s*\)\s*;\s*$"
-    )
-    candidates = []
-    for m in load_re.finditer(body):
-        after = body[m.end(): m.end() + 700]
-        if re.search(r"RECOMP_ICALL_SAFE\s*\(\s*eax\b", after):
-            candidates.append(m)
+    # R22 preflight exposed the exact generated source for the R16 hardware
+    # fault. At loc_002A41F7 the object dispatch pointer is loaded into eax:
+    #
+    #   eax = phase6ch_apu_read32(esi);
+    #   ...
+    #   PUSH32(esp, 0);
+    #   PHASE6DJ_ICALL_SAFE(
+    #       phase6df_function_va,
+    #       phase6ch_apu_read32(eax + 4),
+    #       _icall_esp);
+    #
+    # The CCCCCCD0 fault comes from evaluating that inline target expression
+    # with eax == CCCCCCCC. Guard only this exact label/callsite so the poison
+    # path never evaluates eax+4. Normal objects keep the original slot read.
+    label = "loc_002A41F7: ;"
+    label_pos = body.find(label)
+    if label_pos < 0:
+        raise SystemExit("[Phase6DQ] DSOUND poison label loc_002A41F7 missing")
 
-    if len(candidates) != 1:
-        print(
-            f"[Phase6DQ] sub_002A41EE poison-dispatch candidate count={len(candidates)}"
-        )
-        print("[Phase6DQ] sub_002A41EE source head:")
-        for line in body.splitlines()[:80]:
+    next_label = body.find("loc_002A41FD: ;", label_pos)
+    if next_label < 0:
+        raise SystemExit("[Phase6DQ] DSOUND poison successor label loc_002A41FD missing")
+
+    window = body[label_pos:next_label]
+
+    if window.count("eax = phase6ch_apu_read32(esi);") != 1:
+        print("[Phase6DQ] 002A41F7 source window:")
+        for line in window.splitlines():
             print("[Phase6DQ]   " + line)
         raise SystemExit(
-            "[Phase6DQ] expected exactly one DSOUND eax+4 dispatch pair in sub_002A41EE"
+            "[Phase6DQ] expected exact DSOUND dispatch-base load at 002A41F7"
         )
 
-    m = candidates[0]
-    indent = m.group("indent")
-    accessor = m.group("accessor")
-    replacement = (
-        f"{indent}eax = phase6dq_dsound_poison_dispatch_target(\n"
-        f"{indent}    eax,\n"
-        f"{indent}    ecx,\n"
-        f"{indent}    esi);\n"
-        f"{indent}if (eax != 0xF6DCCCD0u)\n"
-        f"{indent}    eax = {accessor}(eax + 4);"
+    call_re = re.compile(
+        r"(?P<indent>[ \t]*)PUSH32\(\s*esp\s*,\s*0\s*\)\s*;\s*"
+        r"PHASE6DJ_ICALL_SAFE\(\s*phase6df_function_va\s*,\s*"
+        r"phase6ch_apu_read32\(\s*eax\s*\+\s*(?:4|4u|0x4|0x04)\s*\)\s*,\s*"
+        r"_icall_esp\s*\)\s*;"
     )
-    body = body[:m.start()] + replacement + body[m.end():]
+    calls = list(call_re.finditer(window))
+    if len(calls) != 1:
+        print(
+            f"[Phase6DQ] 002A41F7 inline poison ICALL candidate count={len(calls)}"
+        )
+        print("[Phase6DQ] 002A41F7 source window:")
+        for line in window.splitlines():
+            print("[Phase6DQ]   " + line)
+        raise SystemExit(
+            "[Phase6DQ] expected exactly one inline DSOUND eax+4 ICALL at 002A41F7"
+        )
 
-    guarded = (
-        f"{indent}if (eax != 0xF6DCCCD0u)\n"
-        f"{indent}    eax = {accessor}(eax + 4);"
+    m = calls[0]
+    indent = m.group("indent")
+    replacement = (
+        f"{indent}PUSH32(esp, 0);\n"
+        f"{indent}{{\n"
+        f"{indent}    uint32_t phase6dqDsoundBase =\n"
+        f"{indent}        phase6dq_dsound_poison_dispatch_target(eax, esi, ecx);\n"
+        f"{indent}    if (phase6dqDsoundBase == 0xF6DCCCD0u)\n"
+        f"{indent}    {{\n"
+        f"{indent}        phase6dq_dsound_poison_noop(_icall_esp);\n"
+        f"{indent}    }}\n"
+        f"{indent}    else\n"
+        f"{indent}    {{\n"
+        f"{indent}        PHASE6DJ_ICALL_SAFE(\n"
+        f"{indent}            phase6df_function_va,\n"
+        f"{indent}            phase6ch_apu_read32(phase6dqDsoundBase + 4u),\n"
+        f"{indent}            _icall_esp);\n"
+        f"{indent}    }}\n"
+        f"{indent}}}"
     )
-    if body.count("phase6dq_dsound_poison_dispatch_target(") != 1:
-        raise SystemExit("[Phase6DQ] DSOUND poison-site rewrite count mismatch")
-    if body.count(guarded) != 1:
-        raise SystemExit("[Phase6DQ] DSOUND poison guarded dereference count mismatch")
+
+    local_start = label_pos + m.start()
+    local_end = label_pos + m.end()
+    body = body[:local_start] + replacement + body[local_end:]
+
+    if body.count("phase6dq_dsound_poison_dispatch_target(eax, esi, ecx)") != 1:
+        raise SystemExit("[Phase6DQ] DSOUND poison callsite guard count mismatch")
+    if body.count("phase6dq_dsound_poison_noop(_icall_esp);") != 1:
+        raise SystemExit("[Phase6DQ] DSOUND poison local no-op count mismatch")
+    if "phase6ch_apu_read32(eax + 4)" in body[label_pos:next_label + 900]:
+        raise SystemExit("[Phase6DQ] stale unguarded eax+4 DSOUND target remains")
 
     return text[:start] + body + text[end:]
 
@@ -1515,7 +1551,10 @@ def main() -> int:
         "P6DQ KESTALL151: calls=%u us=%u",
         "microSeconds > 1000000u",
         "static void sub_002A41EE(void)",
-        "phase6dq_dsound_poison_dispatch_target(",
+        "loc_002A41F7: ;",
+        "phase6dq_dsound_poison_dispatch_target(eax, esi, ecx)",
+        "phase6dq_dsound_poison_noop(_icall_esp);",
+        "phase6ch_apu_read32(phase6dqDsoundBase + 4u)",
         "target == 0xF6DCCCD0u",
         "P6DQ DSOUND POISON SLOT:",
         "P6DQ DSOUND POISON NOOP:",
@@ -1614,9 +1653,10 @@ def main() -> int:
             "scope": "exact hardware-proven DSOUND dispatch site only",
             "emitter_source_shape_guard": True,
             "definition_not_forward_declaration_guard": True,
-            "function_local_unique_dispatch_pair_guard": True,
+            "exact_label_guard": "0x002A41F7",
+            "inline_icall_target_shape_proven": True,
+            "local_short_circuit_before_slot_read": True,
             "guarded_dereference_postcheck": True,
-            "accepts_inherited_apu_routed_accessor": True,
             "whitespace_tolerant_icall_guard": True,
             "result": "DS_OK",
             "saved_esp_restored": True,
