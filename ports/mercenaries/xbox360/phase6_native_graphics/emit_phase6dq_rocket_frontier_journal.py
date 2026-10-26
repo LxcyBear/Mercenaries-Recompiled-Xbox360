@@ -22,7 +22,7 @@ This phase does NOT claim complete VP/audio semantics. VP write continuation is
 explicitly diagnostic so audio initialization cannot force one build per method
 while we chase the renderer. Unknown VP reads, meaningful non-VP MMIO, guest faults, ABI boundaries,
 missing translated bodies and unresolved support remain hard stops. Hardware-proven
-kernel timing ordinal 151 is bridged with maintained busy-wait semantics.
+kernel timing ordinal 151 is bridged with maintained busy-wait semantics. R16's\nhardware-proven DSOUND poison-dispatch site 002A41F7 is quarantined without\nwidening ordinary guest-memory fault handling.
 """
 
 from __future__ import annotations
@@ -39,9 +39,12 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R16"
+EMITTER_REVISION = "6DQ-R17"
 
 CANDIDATE_CAP = 4096
+DSOUND_POISON_SITE = 0x002A41F7
+DSOUND_POISON_VALUE = 0xCCCCCCCC
+DSOUND_POISON_NOOP_TARGET = 0xF6DCCCD0
 DSOUND_START = 0x0029CB80
 DSOUND_END = 0x002BB274
 
@@ -242,6 +245,10 @@ static uint32_t s_phase6dqKeStall151Count = 0u;
 static uint64_t s_phase6dqKeStall151TotalUs = 0ui64;
 static uint32_t s_phase6dqKeStall151LastUs = 0u;
 static uint32_t s_phase6dqKeStall151MaxUs = 0u;
+static uint32_t s_phase6dqDsoundPoisonSiteCount = 0u;
+static uint32_t s_phase6dqDsoundPoisonNoopCount = 0u;
+static uint32_t s_phase6dqDsoundPoisonLastObject = 0u;
+static uint32_t s_phase6dqDsoundPoisonLastArg = 0u;
 
 '''
     text = text[:start] + state + text[start:]
@@ -533,6 +540,61 @@ static void phase6dq_note_ioapic_special_fence(
     trace(line);
 }
 
+static uint32_t phase6dq_dsound_poison_dispatch_target(
+    uint32_t candidate,
+    uint32_t objectValue,
+    uint32_t argumentValue)
+{
+    char line[384];
+
+    if (candidate != 0xCCCCCCCCu)
+        return candidate;
+
+    ++s_phase6dqDsoundPoisonSiteCount;
+    s_phase6dqDsoundPoisonLastObject = objectValue;
+    s_phase6dqDsoundPoisonLastArg = argumentValue;
+
+    sprintf(
+        line,
+        "P6DQ DSOUND POISON SLOT: site=002A41F7 candidate=%08X object=%08X arg=%08X esp=%08X hits=%u synthetic=%08X",
+        (unsigned int)candidate,
+        (unsigned int)objectValue,
+        (unsigned int)argumentValue,
+        (unsigned int)g_esp,
+        (unsigned int)s_phase6dqDsoundPoisonSiteCount,
+        (unsigned int)0xF6DCCCD0u);
+    trace(line);
+
+    return 0xF6DCCCD0u;
+}
+
+static void phase6dq_dsound_poison_noop(uint32_t savedEsp)
+{
+    char line[320];
+
+    ++s_phase6dqDsoundPoisonNoopCount;
+
+    /*
+     * R16 hardware proved an unconstructed/poisoned DSOUND dispatch slot at
+     * 002A41F7: candidate vtable/dispatch pointer CCCCCCCC followed by slot +4.
+     * Treat only this exact translated dispatch site as an absent DSOUND slot.
+     * Return DS_OK (0) and restore the already-computed safe post-call ESP.
+     * No ordinary guest-memory fault or unrelated CCCCCCCC value is bypassed.
+     */
+    eax = 0u;
+    g_esp = savedEsp;
+
+    sprintf(
+        line,
+        "P6DQ DSOUND POISON NOOP: calls=%u result=%08X new_esp=%08X object=%08X arg=%08X",
+        (unsigned int)s_phase6dqDsoundPoisonNoopCount,
+        (unsigned int)eax,
+        (unsigned int)g_esp,
+        (unsigned int)s_phase6dqDsoundPoisonLastObject,
+        (unsigned int)s_phase6dqDsoundPoisonLastArg);
+    trace(line);
+}
+
 static void phase6dq_ke_stall_execution_processor(uint32_t savedEsp)
 {
     uint32_t microSeconds = GUEST_READ32(g_esp + 4u);
@@ -628,7 +690,7 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u",
+        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u dsound_poison_sites=%u dsound_poison_noops=%u dsound_poison_object=%08X dsound_poison_arg=%08X",
         (unsigned int)s_phase6dqDispatchJournalCount,
         (unsigned int)s_phase6dqDispatchJournalOverflow,
         (unsigned int)s_phase6dqHardStopJournalCount,
@@ -643,7 +705,11 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqKeStall151Count,
         (unsigned int)s_phase6dqKeStall151LastUs,
         (unsigned __int64)s_phase6dqKeStall151TotalUs,
-        (unsigned int)s_phase6dqKeStall151MaxUs);
+        (unsigned int)s_phase6dqKeStall151MaxUs,
+        (unsigned int)s_phase6dqDsoundPoisonSiteCount,
+        (unsigned int)s_phase6dqDsoundPoisonNoopCount,
+        (unsigned int)s_phase6dqDsoundPoisonLastObject,
+        (unsigned int)s_phase6dqDsoundPoisonLastArg);
     trace(line);
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
@@ -759,7 +825,13 @@ def patch_dispatch_journal(text: str) -> str:
     # Handle this maintained one-argument stdcall before pack lookup so the
     # kernel thunk does not become a translated-function frontier.
     lookup_anchor = "    recomp_func_t fn = phase4c_lookup_pack_func(target);\n"
-    stall_hook = r'''    if (target == 0x80000097u)
+    stall_hook = r'''    if (target == 0xF6DCCCD0u)
+    {
+        phase6dq_dsound_poison_noop(savedEsp);
+        return;
+    }
+
+    if (target == 0x80000097u)
     {
         phase6dq_ke_stall_execution_processor(savedEsp);
         return;
@@ -991,6 +1063,65 @@ def patch_vp_accesses(text: str) -> str:
         text = text[:start] + body + text[end:]
 
     return text
+
+
+
+def patch_dsound_poison_slot_dispatch(text: str) -> str:
+    """Quarantine only the hardware-proven poisoned DSOUND virtual-dispatch site."""
+    sig = "static void sub_002A41EE(void)"
+    start, end = function_span(text, sig)
+    body = text[start:end]
+
+    tick = "PHASE4C_BUDGET_TICK(0x002A41F7u);"
+    tick_pos = body.find(tick)
+    if tick_pos < 0:
+        raise SystemExit("[Phase6DQ] DSOUND poison site 002A41F7 tick marker missing")
+
+    # R16 register proof: eax becomes CCCCCCCC immediately before the +4
+    # dispatch-slot dereference. Rewrite only that exact load. If generated
+    # source shape changes, fail before build instead of guessing.
+    tail = body[tick_pos: tick_pos + 900]
+    load_re = re.compile(
+        r"(?m)^(?P<indent>[ \t]*)eax\s*=\s*GUEST_READ32\(\s*eax\s*\+\s*(?:4|0x4|0x04)\s*\)\s*;\s*$"
+    )
+    m = load_re.search(tail)
+    if not m:
+        print("[Phase6DQ] 002A41F7 local source window:")
+        for line in tail.splitlines()[:24]:
+            print("[Phase6DQ]   " + line)
+        raise SystemExit(
+            "[Phase6DQ] hardware-proven DSOUND poison dereference source shape changed"
+        )
+
+    after = tail[m.end(): m.end() + 700]
+    if "RECOMP_ICALL_SAFE(eax" not in after:
+        print("[Phase6DQ] 002A41F7 post-load source window:")
+        for line in after.splitlines()[:20]:
+            print("[Phase6DQ]   " + line)
+        raise SystemExit(
+            "[Phase6DQ] DSOUND poison load is not followed by expected safe ICALL; refusing to guess"
+        )
+
+    indent = m.group("indent")
+    original = m.group(0)
+    replacement = (
+        f"{indent}eax = phase6dq_dsound_poison_dispatch_target(\\n"
+        f"{indent}    eax,\\n"
+        f"{indent}    ecx,\\n"
+        f"{indent}    esi);\\n"
+        f"{indent}if (eax != 0xF6DCCCD0u)\\n"
+        f"{indent}    eax = GUEST_READ32(eax + 4);"
+    )
+    local_start = tick_pos + m.start()
+    local_end = tick_pos + m.end()
+    body = body[:local_start] + replacement + body[local_end:]
+
+    if body.count("phase6dq_dsound_poison_dispatch_target(") != 1:
+        raise SystemExit("[Phase6DQ] DSOUND poison-site rewrite count mismatch")
+    if original.strip() in body:
+        raise SystemExit("[Phase6DQ] stale unguarded DSOUND poison dereference remains")
+
+    return text[:start] + body + text[end:]
 
 
 def route_all_dsound_accesses(text: str, base) -> tuple[str, dict[str, int]]:
@@ -1289,6 +1420,7 @@ def main() -> int:
 
     # Runtime rocket layer.
     main_text = install_journal_support(main_text)
+    main_text = patch_dsound_poison_slot_dispatch(main_text)
     main_text = patch_escape_journal(main_text)
     main_text = patch_dispatch_journal(main_text)
     main_text = patch_quiet_logging(main_text)
@@ -1354,6 +1486,11 @@ def main() -> int:
         "target == 0x80000097u",
         "P6DQ KESTALL151: calls=%u us=%u",
         "microSeconds > 1000000u",
+        "PHASE4C_BUDGET_TICK(0x002A41F7u);",
+        "phase6dq_dsound_poison_dispatch_target(",
+        "target == 0xF6DCCCD0u",
+        "P6DQ DSOUND POISON SLOT:",
+        "P6DQ DSOUND POISON NOOP:",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
@@ -1436,6 +1573,19 @@ def main() -> int:
             "hardware_seed_microseconds": 1000,
             "max_safe_microseconds": 1000000,
             "unreasonable_duration_fenced": True,
+        },
+        "dsound_poison_slot_bridge": {
+            "hardware_seed_ticks": 27025451,
+            "translated_function": "0x002A41EE",
+            "fault_site": "0x002A41F7",
+            "poison_value": "0xCCCCCCCC",
+            "historical_fault_address": "0xCCCCCCD0",
+            "synthetic_noop_target": "0xF6DCCCD0",
+            "scope": "exact hardware-proven DSOUND dispatch site only",
+            "result": "DS_OK",
+            "saved_esp_restored": True,
+            "ordinary_guest_faults_bypassed": False,
+            "unrelated_poison_values_bypassed": False,
         },
         "vp_diagnostic_continue": {
             "aligned_write32_continue": True,
