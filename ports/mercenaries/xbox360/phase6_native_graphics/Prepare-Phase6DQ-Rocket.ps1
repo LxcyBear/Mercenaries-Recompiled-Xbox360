@@ -86,10 +86,15 @@ Write-Host "[Phase6DQ] Kernel FP guard pair 142/139: KeSave/KeRestoreFloatingPoi
 Write-Host "[Phase6DQ] DSOUND poison dispatch 002A41F7: EXACT SLOT QUARANTINE ARMED (CCCCCCCC -> journaled DS_OK no-op)"
 Write-Host "[Phase6DQ] Non-VP MMIO/NV2A unknowns: HARD FENCE"
 Write-Host "[Phase6DQ] Dispatch logging: first unique + aggregate, progress every 65536"
-Write-Host "[Phase6DQ] Predictive frontier clearing: A41EE ARG PROVENANCE + TRUE ICALL FILTER + CALLSITE RING"
-Write-Host "[Phase6DQ] Predictive safety: raw constants are not calls; unknown kernel/MMIO/read semantics remain HARD FENCED"
-Write-Host "[Phase6DQ] Graphics consumer probe: 024FC000-02627FFF SURFACE + 00299380 D3D DEVICE, BOUNDED TELEMETRY ONLY"
+Write-Host "[Phase6DQ] Predictive frontier clearing: AUDIO CALLERS + DSOUND KERNEL LITERALS + DISPLAY INTENT AUDIT"
+Write-Host "[Phase6DQ] Predictive safety: unknown kernel/MMIO/read semantics remain HARD FENCED"
+Write-Host "[Phase6DQ] R29 SAFEBOOT: R27 runtime callsite probes REMOVED; graphics runtime probes NOT INJECTED"
+Write-Host "[Phase6DQ] R29 SAFEBOOT: one FULL CLEAN build is required to rule out stale/corrupt incremental artifacts"
 Write-Host "[Phase6DQ] Build mode: $(if($PredictOnly){'PREDICT-ONLY (NO VS BUILD)'}elseif($FullClean){'FULL CLEAN'}else{'INCREMENTAL (clean skipped)'})"
+
+if(-not $PredictOnly -and -not $FullClean){
+  throw "Phase 6DQ R29 SAFEBOOT requires -FullClean for this recovery build"
+}
 
 & $python -m py_compile $emitter
 if($LASTEXITCODE-ne0){
@@ -97,10 +102,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R28"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R28"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R29"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R29"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R28"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R29"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -150,7 +155,7 @@ if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"){
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R28"-or
+if($q.emitter_revision-ne"6DQ-R29"-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -190,12 +195,6 @@ if($q.emitter_revision-ne"6DQ-R28"-or
    $q.predictive_frontier_clearing.unknown_kernel_calls_auto_succeeded-ne$false-or
    $q.predictive_frontier_clearing.unknown_mmio_auto_accepted-ne$false-or
    $q.predictive_frontier_clearing.unknown_reads_zero_filled-ne$false-or
-   $q.predictive_frontier_clearing.runtime_a41ee_callsite_probe-ne$true-or
-   $q.predictive_frontier_clearing.runtime_fault_policy_changed-ne$false-or
-   $q.predictive_frontier_clearing.graphics_consumer_probe.fault_semantics_changed-ne$false-or
-   $q.predictive_frontier_clearing.graphics_consumer_probe.unknown_reads_zero_filled-ne$false-or
-   $q.predictive_frontier_clearing.graphics_consumer_probe.unknown_mmio_accepted-ne$false-or
-   $q.predictive_frontier_clearing.graphics_consumer_probe.surface_bytes-ne1228800-or
    $q.predictive_frontier_clearing.r25_hardware_seed.fault_address-ne"0xEC83F0E4"-or
    $q.predictive_frontier_clearing.r25_hardware_seed.ticks-ne27025727-or
    $q.execution_budget-ne64000000-or
@@ -231,11 +230,6 @@ foreach($marker in @(
   "P6DQ KERESTOREFP139:",
   "P6DQ DSOUND POISON SLOT:",
   "P6DQ DSOUND POISON NOOP:",
-  "P6DQ A41EE CALLSITE:",
-  "P6DQ A41EE RING[%u]",
-  "P6DR GRAPHICS CONSUMER:",
-  "P6DR GRAPHICS CONSUMER SUMMARY:",
-  "P6DR GRAPHICS RING[%u]",
   "target == 0xF6DCCCD0u",
   "#define PHASE4C_EXEC_BUDGET 64000000u",
   "#pragma warning(disable:4146)"
@@ -280,13 +274,12 @@ Write-Host "[Phase6DQ] Detailed bounded runtime journals: ARMED"
 Write-Host "[Phase6DQ] DSOUND CCCCCCCC poison-slot quarantine: ARMED at exact site 002A41F7"
 Write-Host "[Phase6DQ] Pixel/present instrumentation: INHERITED"
 Write-Host "[Phase6DQ] C4146 generated-code suppression: INHERITED"
+Write-Host "[Phase6DQ] R29 SAFEBOOT runtime: R26-equivalent (no R27 A41EE caller instrumentation)"
 Write-Host ("[Phase6DQ] Predictive seed functions   : {0}" -f [int]$q.predictive_frontier_clearing.seed_count)
 Write-Host ("[Phase6DQ] Predictive pack priority   : {0}" -f [int]$q.predictive_frontier_clearing.predictive_candidate_count)
 Write-Host ("[Phase6DQ] Audio producer callsites   : {0}" -f [int]$q.predictive_frontier_clearing.audio_direct_call_site_count)
-Write-Host ("[Phase6DQ] DSOUND literal ICALLs      : {0}" -f [int]$q.predictive_frontier_clearing.dsound_kernel_call_count)
-Write-Host ("[Phase6DQ] Display ordinal-3 ICALLs   : {0}" -f [int]$q.predictive_frontier_clearing.display_kernel_call_site_count)
-Write-Host ("[Phase6DQ] Graphics anchor owners     : {0}" -f [int]$q.predictive_frontier_clearing.graphics_static_anchor_site_count)
-Write-Host ("[Phase6DQ] Graphics probe functions  : {0}" -f [int]$q.predictive_frontier_clearing.graphics_consumer_probe.instrumented_functions)
+Write-Host ("[Phase6DQ] DSOUND kernel literals     : {0}" -f [int]$q.predictive_frontier_clearing.dsound_kernel_literal_count)
+Write-Host ("[Phase6DQ] Display-intent callsites   : {0}" -f [int]$q.predictive_frontier_clearing.display_intent_site_count)
 Write-Host ("[Phase6DQ] Predictive audit JSON      : {0}" -f $predictiveAudit)
 
 if($PredictOnly){
