@@ -182,13 +182,14 @@ function Resolve-SolutionProjectAndSources {
     $solutionText = Get-Content -LiteralPath $solution.FullName -Raw
     $projectMatches = [regex]::Matches(
         $solutionText,
-        'Project\("[^"]+"\)\s*=\s*"[^"]+",\s*"([^"]+\.vcxproj)"',
+        'Project\("[^"]+"\)\s*=\s*"([^"]+)",\s*"([^"]+\.vcxproj)"',
         [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
     )
 
     $projects = @()
     foreach ($match in $projectMatches) {
-        $relative = [string]$match.Groups[1].Value
+        $projectName = [string]$match.Groups[1].Value
+        $relative = [string]$match.Groups[2].Value
         $relative = $relative -replace '/', '\'
         $candidate = [System.IO.Path]::GetFullPath((Join-Path $solution.DirectoryName $relative))
         if (Test-Path -LiteralPath $candidate -PathType Leaf) {
@@ -196,6 +197,7 @@ function Resolve-SolutionProjectAndSources {
             $mainMatches = @($compiled | Where-Object { $_.Leaf -ieq "main.cpp" })
             if (@($mainMatches).Count -eq 1) {
                 $projects += [pscustomobject]@{
+                    Name = $projectName
                     Path = $candidate
                     Compiled = $compiled
                     Main = $mainMatches[0]
@@ -229,6 +231,7 @@ function Resolve-SolutionProjectAndSources {
     return @{
         SolutionPath = $solution.FullName
         SolutionText = $solutionText
+        ProjectName = $project.Name
         ProjectPath = $project.Path
         MainPath = $project.Main.FullPath
         EnvPath = $envMatches[0].FullPath
@@ -327,6 +330,7 @@ else {
 
 $resolved = Resolve-SolutionProjectAndSources -RootPath $effectiveSolutionRoot
 $solutionPath = [string]$resolved.SolutionPath
+$projectName = [string]$resolved.ProjectName
 $projectPath = [string]$resolved.ProjectPath
 $mainPath = [string]$resolved.MainPath
 $envPath = [string]$resolved.EnvPath
@@ -338,7 +342,7 @@ Assert-SolutionConfiguration -SolutionText $solutionText -ConfigurationName $sol
 
 Write-Host "[XDK-BUILD] Effective root : $effectiveSolutionRoot"
 Write-Host "[XDK-BUILD] Solution       : $solutionPath"
-Write-Host "[XDK-BUILD] Project        : $projectPath"
+Write-Host "[XDK-BUILD] Project        : $projectName ($projectPath)"
 Write-Host "[XDK-BUILD] main.cpp       : $mainPath"
 Write-Host "[XDK-BUILD] env source     : $envPath"
 Write-Host "[XDK-BUILD] Configuration  : $solutionConfiguration"
@@ -435,7 +439,7 @@ if ($SkipClean) {
 }
 else {
     Write-Host "[XDK-BUILD] CLEAN: $solutionConfiguration"
-    & $devenv $solutionPath /Clean $solutionConfiguration /Out $CleanLog
+    & $devenv $solutionPath /Clean $solutionConfiguration /Project $projectName /Out $CleanLog
     $cleanRc = $LASTEXITCODE
     if ($cleanRc -ne 0) {
         Write-Host "[XDK-BUILD] CLEAN LOG TAIL:"
@@ -449,7 +453,7 @@ else {
 
 $buildStart = Get-Date
 Write-Host "[XDK-BUILD] BUILD: $solutionConfiguration"
-& $devenv $solutionPath /Build $solutionConfiguration /Out $BuildLog
+& $devenv $solutionPath /Build $solutionConfiguration /Project $projectName /Out $BuildLog
 $buildRc = $LASTEXITCODE
 $buildElapsed = (Get-Date) - $buildStart
 if ($buildRc -ne 0) {
