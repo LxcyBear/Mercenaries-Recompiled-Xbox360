@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R39"
+EMITTER_REVISION = "6DQ-R40"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -247,6 +247,19 @@ static uint32_t s_phase6dqAc97GlobCnt = 0u;
 static uint32_t s_phase6dqAc97GlobSta = 0x00000100u;
 static uint32_t s_phase6dqAc97ReadCount = 0u;
 static uint32_t s_phase6dqAc97WriteCount = 0u;
+static uint32_t s_phase6dqHalGetVector44Count = 0u;
+static uint32_t s_phase6dqHalGetVector44LastBus = 0u;
+static uint32_t s_phase6dqHalGetVector44LastVector = 0u;
+static uint32_t s_phase6dqHalGetVector44LastIrql = 0u;
+static uint32_t s_phase6dqKeInitInterrupt109Count = 0u;
+static uint32_t s_phase6dqKeInitInterrupt109LastObject = 0u;
+static uint32_t s_phase6dqKeInitInterrupt109LastRoutine = 0u;
+static uint32_t s_phase6dqKeInitInterrupt109LastContext = 0u;
+static uint32_t s_phase6dqKeInitInterrupt109LastVector = 0u;
+static uint32_t s_phase6dqKeInitInterrupt109LastIrql = 0u;
+static uint32_t s_phase6dqKeConnectInterrupt98Count = 0u;
+static uint32_t s_phase6dqKeConnectInterrupt98Successes = 0u;
+static uint32_t s_phase6dqKeConnectInterrupt98LastObject = 0u;
 static uint32_t s_phase6dqKeStall151Count = 0u;
 static uint64_t s_phase6dqKeStall151TotalUs = 0ui64;
 static uint32_t s_phase6dqKeStall151LastUs = 0u;
@@ -841,6 +854,174 @@ static void phase6dq_ke_restore_floating_point_state(uint32_t savedEsp)
     trace(line);
 }
 
+
+static void phase6dq_hal_get_interrupt_vector(uint32_t savedEsp)
+{
+    uint32_t busInterruptLevel = GUEST_READ32(g_esp + 4u);
+    uint32_t irqlPtr = GUEST_READ32(g_esp + 8u);
+    uint32_t vector = 0u;
+    uint32_t irql = 0u;
+    char line[384];
+
+    ++s_phase6dqHalGetVector44Count;
+    s_phase6dqHalGetVector44LastBus = busInterruptLevel;
+
+    /*
+     * Xbox IRQ mapping used by retail/nxdk/Cxbx:
+     *   vector = IRQ_BASE(0x30) + bus IRQ
+     *   IRQL   = MAX_BUS_INTERRUPT_LEVEL(27) - bus IRQ
+     *
+     * R39 hardware proves retail DSOUND requests bus IRQ 6 (ACI/AC97).
+     */
+    if (busInterruptLevel <= 27u)
+    {
+        vector = 0x30u + busInterruptLevel;
+        irql = 27u - busInterruptLevel;
+
+        if (irqlPtr != 0u)
+            GUEST_WRITE8(irqlPtr, (uint8_t)irql);
+    }
+
+    s_phase6dqHalGetVector44LastVector = vector;
+    s_phase6dqHalGetVector44LastIrql = irql;
+    eax = vector;
+    g_esp = savedEsp;
+
+    sprintf(
+        line,
+        "P6DQ HALGETVECTOR44: calls=%u bus=%u irql_ptr=%08X vector=%08X irql=%u caller=%08X new_esp=%08X",
+        (unsigned int)s_phase6dqHalGetVector44Count,
+        (unsigned int)busInterruptLevel,
+        (unsigned int)irqlPtr,
+        (unsigned int)vector,
+        (unsigned int)irql,
+        (unsigned int)phase4c_current_caller(),
+        (unsigned int)g_esp);
+    trace(line);
+}
+
+static void phase6dq_ke_initialize_interrupt(uint32_t savedEsp)
+{
+    uint32_t interruptObject = GUEST_READ32(g_esp + 4u);
+    uint32_t serviceRoutine = GUEST_READ32(g_esp + 8u);
+    uint32_t serviceContext = GUEST_READ32(g_esp + 12u);
+    uint32_t vector = GUEST_READ32(g_esp + 16u);
+    uint32_t irql = GUEST_READ32(g_esp + 20u);
+    uint32_t interruptMode = GUEST_READ32(g_esp + 24u);
+    uint32_t shareVector = GUEST_READ32(g_esp + 28u);
+    uint32_t busInterruptLevel =
+        (vector >= 0x30u && vector <= 0x4Bu) ? (vector - 0x30u) : 0u;
+    char line[512];
+
+    ++s_phase6dqKeInitInterrupt109Count;
+    s_phase6dqKeInitInterrupt109LastObject = interruptObject;
+    s_phase6dqKeInitInterrupt109LastRoutine = serviceRoutine;
+    s_phase6dqKeInitInterrupt109LastContext = serviceContext;
+    s_phase6dqKeInitInterrupt109LastVector = vector;
+    s_phase6dqKeInitInterrupt109LastIrql = irql;
+
+    if (interruptObject == 0u || vector < 0x30u || vector > 0x4Bu)
+    {
+        phase4c_escape(
+            PHASE4C_BOUNDARY_ICALL_SAFE,
+            0x8000006Du,
+            savedEsp);
+        return;
+    }
+
+    /*
+     * Original Xbox KINTERRUPT layout:
+     *   +00 ServiceRoutine
+     *   +04 ServiceContext
+     *   +08 BusInterruptLevel
+     *   +0C Irql (ULONG in Xbox layout)
+     *   +10 Connected
+     *   +11 ShareVector
+     *   +12 Mode
+     *   +14 ServiceCount
+     * DispatchCode begins at +18 and is not needed by this serialized native
+     * runtime because interrupt dispatch is not executed from guest thunk code.
+     */
+    GUEST_WRITE32(interruptObject + 0x00u, serviceRoutine);
+    GUEST_WRITE32(interruptObject + 0x04u, serviceContext);
+    GUEST_WRITE32(interruptObject + 0x08u, busInterruptLevel);
+    GUEST_WRITE32(interruptObject + 0x0Cu, irql);
+    GUEST_WRITE8(interruptObject + 0x10u, 0u);
+    GUEST_WRITE8(interruptObject + 0x11u, (uint8_t)(shareVector != 0u));
+    GUEST_WRITE8(interruptObject + 0x12u, (uint8_t)interruptMode);
+    GUEST_WRITE8(interruptObject + 0x13u, 0u);
+    GUEST_WRITE32(interruptObject + 0x14u, 0u);
+
+    g_esp = savedEsp;
+
+    sprintf(
+        line,
+        "P6DQ KEINITINT109: calls=%u object=%08X routine=%08X context=%08X vector=%08X bus=%u irql=%u mode=%u share=%u caller=%08X new_esp=%08X",
+        (unsigned int)s_phase6dqKeInitInterrupt109Count,
+        (unsigned int)interruptObject,
+        (unsigned int)serviceRoutine,
+        (unsigned int)serviceContext,
+        (unsigned int)vector,
+        (unsigned int)busInterruptLevel,
+        (unsigned int)irql,
+        (unsigned int)interruptMode,
+        (unsigned int)(shareVector != 0u),
+        (unsigned int)phase4c_current_caller(),
+        (unsigned int)g_esp);
+    trace(line);
+}
+
+static void phase6dq_ke_connect_interrupt(uint32_t savedEsp)
+{
+    uint32_t interruptObject = GUEST_READ32(g_esp + 4u);
+    uint32_t connected = 0u;
+    uint32_t busInterruptLevel = 0u;
+    uint32_t irql = 0u;
+    uint32_t mode = 0u;
+    char line[448];
+
+    ++s_phase6dqKeConnectInterrupt98Count;
+    s_phase6dqKeConnectInterrupt98LastObject = interruptObject;
+
+    if (interruptObject != 0u)
+    {
+        busInterruptLevel = GUEST_READ32(interruptObject + 0x08u);
+        irql = GUEST_READ32(interruptObject + 0x0Cu);
+        mode = (uint32_t)GUEST_READ8(interruptObject + 0x12u);
+
+        if (busInterruptLevel <= 27u &&
+            GUEST_READ8(interruptObject + 0x10u) == 0u)
+        {
+            /*
+             * Serialized runtime: record the connection contract and allow
+             * retail initialization to proceed. No host ISR is fabricated;
+             * actual APU/AC97 interrupt delivery remains a separately modeled
+             * hardware concern.
+             */
+            GUEST_WRITE8(interruptObject + 0x10u, 1u);
+            connected = 1u;
+            ++s_phase6dqKeConnectInterrupt98Successes;
+        }
+    }
+
+    eax = connected;
+    g_esp = savedEsp;
+
+    sprintf(
+        line,
+        "P6DQ KECONNECT98: calls=%u successes=%u object=%08X bus=%u irql=%u mode=%u result=%u caller=%08X new_esp=%08X",
+        (unsigned int)s_phase6dqKeConnectInterrupt98Count,
+        (unsigned int)s_phase6dqKeConnectInterrupt98Successes,
+        (unsigned int)interruptObject,
+        (unsigned int)busInterruptLevel,
+        (unsigned int)irql,
+        (unsigned int)mode,
+        (unsigned int)connected,
+        (unsigned int)phase4c_current_caller(),
+        (unsigned int)g_esp);
+    trace(line);
+}
+
 static void phase6dq_ke_stall_execution_processor(uint32_t savedEsp)
 {
     uint32_t microSeconds = GUEST_READ32(g_esp + 4u);
@@ -963,6 +1144,21 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqAc97GlobCnt,
         (unsigned int)(s_phase6dqAc97GlobSta | 0x00000100u),
         (unsigned int)(((s_phase6dqAc97GlobSta | 0x00000100u) & 0x00000100u) != 0u));
+    trace(line);
+
+    sprintf(
+        line,
+        "P6DQ IRQ SETUP: hal44=%u bus=%u vector=%08X irql=%u init109=%u object=%08X routine=%08X context=%08X connect98=%u successes=%u",
+        (unsigned int)s_phase6dqHalGetVector44Count,
+        (unsigned int)s_phase6dqHalGetVector44LastBus,
+        (unsigned int)s_phase6dqHalGetVector44LastVector,
+        (unsigned int)s_phase6dqHalGetVector44LastIrql,
+        (unsigned int)s_phase6dqKeInitInterrupt109Count,
+        (unsigned int)s_phase6dqKeInitInterrupt109LastObject,
+        (unsigned int)s_phase6dqKeInitInterrupt109LastRoutine,
+        (unsigned int)s_phase6dqKeInitInterrupt109LastContext,
+        (unsigned int)s_phase6dqKeConnectInterrupt98Count,
+        (unsigned int)s_phase6dqKeConnectInterrupt98Successes);
     trace(line);
 
     sprintf(
@@ -1194,6 +1390,24 @@ def patch_dispatch_journal(text: str) -> str:
     if (target == 0x8000008Bu)
     {
         phase6dq_ke_restore_floating_point_state(savedEsp);
+        return;
+    }
+
+    if (target == 0x8000002Cu)
+    {
+        phase6dq_hal_get_interrupt_vector(savedEsp);
+        return;
+    }
+
+    if (target == 0x8000006Du)
+    {
+        phase6dq_ke_initialize_interrupt(savedEsp);
+        return;
+    }
+
+    if (target == 0x80000062u)
+    {
+        phase6dq_ke_connect_interrupt(savedEsp);
         return;
     }
 
@@ -1582,7 +1796,7 @@ def instrument_f78f_origin_probe(text: str, base) -> tuple[str, list[dict]]:
     start = matches[0].start()
     brace = masked.find("{", matches[0].start(), matches[0].end() + 1)
     if brace < 0:
-        raise SystemExit("[Phase6DQ] R39 F78F body brace missing")
+        raise SystemExit("[Phase6DQ] R40 F78F body brace missing")
     end = base.closing_brace(masked, brace)
     body = text[start:end]
     body_masked = base.mask_noncode(body)
@@ -2334,6 +2548,13 @@ def main() -> int:
         "P6DQ AC97 GLOBAL: reads=%u writes=%u glob_cnt=%08X glob_sta=%08X codec_ready=%u",
         "address == 0xFEC0012Cu || address == 0xFEC00130u",
         "value = s_phase6dqAc97GlobSta | 0x00000100u",
+        "target == 0x8000002Cu",
+        "target == 0x8000006Du",
+        "target == 0x80000062u",
+        "P6DQ HALGETVECTOR44: calls=%u bus=%u irql_ptr=%08X vector=%08X irql=%u",
+        "P6DQ KEINITINT109: calls=%u object=%08X routine=%08X context=%08X vector=%08X",
+        "P6DQ KECONNECT98: calls=%u successes=%u object=%08X bus=%u irql=%u mode=%u result=%u",
+        "P6DQ IRQ SETUP: hal44=%u bus=%u vector=%08X irql=%u init109=%u object=%08X routine=%08X context=%08X connect98=%u successes=%u",
         "target == 0x80000097u",
         "target == 0x8000008Eu",
         "target == 0x8000008Bu",
@@ -2433,6 +2654,29 @@ def main() -> int:
             "final_aggregate_dump": True,
             "register_context_on_hard_stop": True,
             "dispatch_log_stride": 65536,
+        },
+        "audio_interrupt_registration_bridge": {
+            "hardware_proof": "R39",
+            "hal_get_interrupt_vector": {
+                "ordinal": 44,
+                "target": "0x8000002C",
+                "observed_bus_irq": 6,
+                "irq_base": "0x30",
+                "expected_vector": "0x36",
+                "expected_irql": 21,
+            },
+            "ke_initialize_interrupt": {
+                "ordinal": 109,
+                "target": "0x8000006D",
+                "guest_kinterrupt_layout_written": True,
+                "dispatch_code_fabricated": False,
+            },
+            "ke_connect_interrupt": {
+                "ordinal": 98,
+                "target": "0x80000062",
+                "serialized_connection_state": True,
+                "host_isr_fabricated": False,
+            },
         },
         "kernel_timing_bridge": {
             "target": "0x80000097",
@@ -2594,17 +2838,18 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print(f"[Phase6DQ] R39 A41EE site tags: {len(a41ee_site_tags)}")
-    print(f"[Phase6DQ] R39 A4622 upstream site tags: {len(a4622_site_tags)}")
-    print(f"[Phase6DQ] R39 A52AD upstream site tags: {len(a52ad_site_tags)}")
-    print(f"[Phase6DQ] R39 F78F targeted READ32 sites: {len(f78f_read_sites)}")
+    print(f"[Phase6DQ] R40 A41EE site tags: {len(a41ee_site_tags)}")
+    print(f"[Phase6DQ] R40 A4622 upstream site tags: {len(a4622_site_tags)}")
+    print(f"[Phase6DQ] R40 A52AD upstream site tags: {len(a52ad_site_tags)}")
+    print(f"[Phase6DQ] R40 F78F targeted READ32 sites: {len(f78f_read_sites)}")
     for site in f78f_read_sites:
-        print(f"[Phase6DQ] R39 F78F READ[{site['site_id']}] expr={site['address_expr']}")
-    print("[Phase6DQ] R39 AC97 CODEC READY: FEC0012C GLOB_CNT + FEC00130 GLOB_STA exact semantics")
-    print("[Phase6DQ] R39 XACT INIT PROBE: inherited 29FDF0 + 28345A + event-array results")
-    print("[Phase6DQ] R39 ORIGIN TRAP: inherited F78F provenance")
-    print("[Phase6DQ] R39 pack/runtime: exact AC97 global pair only; no fake HRESULT/control-flow bypass")
-    print("[Phase6DQ] R39 debugger safety: bounded runtime DebugStrings retained")
+        print(f"[Phase6DQ] R40 F78F READ[{site['site_id']}] expr={site['address_expr']}")
+    print("[Phase6DQ] R40 AC97 CODEC READY: R39 hardware-proven semantics retained")
+    print("[Phase6DQ] R40 AUDIO IRQ SETUP: ordinals 44/109/98 HalGetInterruptVector + KeInitializeInterrupt + KeConnectInterrupt")
+    print("[Phase6DQ] R40 XACT INIT PROBE: inherited 29FDF0 + 28345A + event-array results")
+    print("[Phase6DQ] R40 ORIGIN TRAP: inherited F78F provenance")
+    print("[Phase6DQ] R40 pack/runtime: serialized IRQ registration only; no fabricated ISR delivery")
+    print("[Phase6DQ] R40 debugger safety: bounded runtime DebugStrings retained")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
