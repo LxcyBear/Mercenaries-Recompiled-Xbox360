@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R13"
+EMITTER_REVISION = "6DQ-R14"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -234,8 +234,9 @@ static uint32_t s_phase6dqVpJournalCount = 0u;
 static uint32_t s_phase6dqVpJournalOverflow = 0u;
 static uint32_t s_phase6dqVpWrite32Count = 0u;
 static uint32_t s_phase6dqVpUnknownReadCount = 0u;
-static uint32_t s_phase6dqIoapic12cReadCount = 0u;
-static uint32_t s_phase6dqIoapic12cWriteCount = 0u;
+static uint32_t s_phase6dqIoapicDefaultReadCount = 0u;
+static uint32_t s_phase6dqIoapicDefaultWriteCount = 0u;
+static uint32_t s_phase6dqIoapicSpecialFenceCount = 0u;
 
 '''
     text = text[:start] + state + text[start:]
@@ -428,42 +429,102 @@ static void phase6dq_note_vp_write(
     trace(line);
 }
 
-static uint32_t phase6dq_ioapic_read32(uint32_t address)
+static int phase6dq_ioapic_is_page(uint32_t address)
 {
-    char line[320];
+    return address >= 0xFEC00000u && address < 0xFEC01000u;
+}
+
+static int phase6dq_ioapic_is_default_offset(uint32_t address)
+{
+    uint32_t offset = address & 0xFFu;
+
+    /*
+     * xemu/QEMU's IOAPIC MMIO handler masks the 4 KiB page address to the
+     * low byte. Only 0x00 (IOREGSEL), 0x10 (IOWIN), and 0x40 (EOI write)
+     * have device semantics. Every other offset returns zero on read and
+     * ignores writes. Keep those three special offsets fenced so this ROCKET
+     * bridge cannot accidentally emulate selector/window/EOI behavior.
+     */
+    return phase6dq_ioapic_is_page(address) &&
+        offset != 0x00u &&
+        offset != 0x10u &&
+        offset != 0x40u;
+}
+
+static uint32_t phase6dq_ioapic_default_read(
+    uint32_t address,
+    uint32_t width)
+{
+    char line[384];
     uint32_t value = 0u;
 
-    ++s_phase6dqIoapic12cReadCount;
+    ++s_phase6dqIoapicDefaultReadCount;
 
-    sprintf(
-        line,
-        "P6DQ ROCKET IOAPIC READ32 addr=%08X offset=%02X value=%08X caller=%08X esp=%08X count=%u",
-        (unsigned int)address,
-        (unsigned int)(address & 0xFFu),
-        (unsigned int)value,
-        (unsigned int)phase4c_current_caller(),
-        (unsigned int)g_esp,
-        (unsigned int)s_phase6dqIoapic12cReadCount);
-    trace(line);
+    if (s_phase6dqIoapicDefaultReadCount <= 16u ||
+        (s_phase6dqIoapicDefaultReadCount & 0xFFu) == 0u)
+    {
+        sprintf(
+            line,
+            "P6DQ ROCKET IOAPIC DEFAULT READ width=%u addr=%08X offset=%02X value=%08X caller=%08X esp=%08X count=%u",
+            (unsigned int)width,
+            (unsigned int)address,
+            (unsigned int)(address & 0xFFu),
+            (unsigned int)value,
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)g_esp,
+            (unsigned int)s_phase6dqIoapicDefaultReadCount);
+        trace(line);
+    }
 
     return value;
 }
 
-static void phase6dq_ioapic_write32(uint32_t address, uint32_t value)
+static void phase6dq_ioapic_default_write(
+    uint32_t address,
+    uint32_t width,
+    uint32_t value)
 {
-    char line[320];
+    char line[384];
 
-    ++s_phase6dqIoapic12cWriteCount;
+    ++s_phase6dqIoapicDefaultWriteCount;
 
+    if (s_phase6dqIoapicDefaultWriteCount <= 16u ||
+        (s_phase6dqIoapicDefaultWriteCount & 0xFFu) == 0u)
+    {
+        sprintf(
+            line,
+            "P6DQ ROCKET IOAPIC DEFAULT WRITE width=%u addr=%08X offset=%02X value=%08X caller=%08X esp=%08X count=%u no_op=1",
+            (unsigned int)width,
+            (unsigned int)address,
+            (unsigned int)(address & 0xFFu),
+            (unsigned int)value,
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)g_esp,
+            (unsigned int)s_phase6dqIoapicDefaultWriteCount);
+        trace(line);
+    }
+}
+
+static void phase6dq_note_ioapic_special_fence(
+    uint32_t address,
+    uint32_t width,
+    uint32_t isWrite,
+    uint32_t value)
+{
+    char line[384];
+
+    ++s_phase6dqIoapicSpecialFenceCount;
     sprintf(
         line,
-        "P6DQ ROCKET IOAPIC WRITE32 addr=%08X offset=%02X value=%08X caller=%08X esp=%08X count=%u no_op=1",
+        "P6DQ ROCKET IOAPIC SPECIAL HARD %s width=%u addr=%08X offset=%02X value=%08X caller=%08X esp=%08X count=%u",
+        isWrite ? "WRITE" : "READ",
+        (unsigned int)width,
         (unsigned int)address,
         (unsigned int)(address & 0xFFu),
         (unsigned int)value,
         (unsigned int)phase4c_current_caller(),
         (unsigned int)g_esp,
-        (unsigned int)s_phase6dqIoapic12cWriteCount);
+        (unsigned int)s_phase6dqIoapicSpecialFenceCount);
     trace(line);
 }
 
@@ -493,7 +554,7 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_12c_reads=%u ioapic_12c_writes=%u",
+        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u",
         (unsigned int)s_phase6dqDispatchJournalCount,
         (unsigned int)s_phase6dqDispatchJournalOverflow,
         (unsigned int)s_phase6dqHardStopJournalCount,
@@ -502,8 +563,9 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqVpJournalCount,
         (unsigned int)s_phase6dqVpJournalOverflow,
         (unsigned int)s_phase6dqVpUnknownReadCount,
-        (unsigned int)s_phase6dqIoapic12cReadCount,
-        (unsigned int)s_phase6dqIoapic12cWriteCount);
+        (unsigned int)s_phase6dqIoapicDefaultReadCount,
+        (unsigned int)s_phase6dqIoapicDefaultWriteCount,
+        (unsigned int)s_phase6dqIoapicSpecialFenceCount);
     trace(line);
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
@@ -703,26 +765,45 @@ def patch_vp_accesses(text: str) -> str:
         body = body.replace(fallback, probe + fallback, 1)
         text = text[:start] + body + text[end:]
 
-    # Hardware 6DQ proved the next boundary is READ32 FEC0012C at tick
-    # 26,712,264. FEC00000 is the IOAPIC MMIO window; xemu/QEMU masks the
-    # address to the low byte and returns zero for offsets other than IOREGSEL
-    # (0x00) and IOWIN (0x10). Therefore exact offset 0x2C is a modeled zero
-    # read, not an unknown-MMIO guess. Keep every other FEC access fenced.
-    sig = "static uint32_t phase6ch_apu_read32(uint32_t address)"
-    start, end = function_span(text, sig)
-    body = text[start:end]
-    fallback = "    return GUEST_READ32(address);\n"
-    ioapic_patch = r'''    if (address == 0xFEC0012Cu)
-        return phase6dq_ioapic_read32(address);
+    # Hardware R12/R13 proved a contiguous IOAPIC access sequence at
+    # FEC0012C -> FEC00130. xemu/QEMU masks the 4 KiB IOAPIC page address to
+    # the low byte; only 0x00 (IOREGSEL), 0x10 (IOWIN), and 0x40 (EOI write)
+    # carry device semantics. Batch-consume every other offset using the exact
+    # default behavior (read zero / write no-op) and keep those special
+    # register offsets hard-fenced.
+    for sig, width, fallback in (
+        (
+            "static uint8_t phase6ch_apu_read8(uint32_t address)",
+            1,
+            "    return GUEST_READ8(address);\\n",
+        ),
+        (
+            "static uint16_t phase6ch_apu_read16(uint32_t address)",
+            2,
+            "    return GUEST_READ16(address);\\n",
+        ),
+        (
+            "static uint32_t phase6ch_apu_read32(uint32_t address)",
+            4,
+            "    return GUEST_READ32(address);\\n",
+        ),
+    ):
+        start, end = function_span(text, sig)
+        body = text[start:end]
+        ioapic_patch = f"""    if (phase6dq_ioapic_is_default_offset(address))
+        return ({'uint8_t' if width == 1 else 'uint16_t' if width == 2 else 'uint32_t'})phase6dq_ioapic_default_read(address, {width}u);
 
-'''
-    body = replace_once(
-        body,
-        fallback,
-        ioapic_patch + fallback,
-        "IOAPIC FEC0012C READ32 bridge",
-    )
-    text = text[:start] + body + text[end:]
+    if (phase6dq_ioapic_is_page(address))
+        phase6dq_note_ioapic_special_fence(address, {width}u, 0u, 0u);
+
+"""
+        body = replace_once(
+            body,
+            fallback,
+            ioapic_patch + fallback,
+            f"IOAPIC default READ{width * 8} batch bridge",
+        )
+        text = text[:start] + body + text[end:]
 
     # VP writes are command-style. For the rocket diagnostic run, consume
     # aligned dword writes after journaling rather than faulting one method per
@@ -754,23 +835,23 @@ def patch_vp_accesses(text: str) -> str:
         body, fallback, patch + fallback, "VP WRITE32 safe-continue"
     )
 
-    # Hardware R12 proved the zero-valued READ32 at FEC0012C is immediately
-    # followed by WRITE32 to the same IOAPIC offset. xemu/QEMU masks this MMIO
-    # address to low byte 0x2C; writes at 0x2C match no IOAPIC register case and
-    # therefore have no modeled side effect. Consume only this exact dword
-    # write and keep every other unknown FEC access hard fenced.
-    ioapic_write_patch = r'''    if (address == 0xFEC0012Cu)
+    # Batch the xemu/QEMU default IOAPIC write class. Special offsets remain
+    # hard-fenced and are journaled before the checked router reports them.
+    ioapic_write_patch = r'''    if (phase6dq_ioapic_is_default_offset(address))
     {
-        phase6dq_ioapic_write32(address, value);
+        phase6dq_ioapic_default_write(address, 4u, value);
         return;
     }
+
+    if (phase6dq_ioapic_is_page(address))
+        phase6dq_note_ioapic_special_fence(address, 4u, 1u, value);
 
 '''
     body = replace_once(
         body,
         fallback,
         ioapic_write_patch + fallback,
-        "IOAPIC FEC0012C WRITE32 no-op bridge",
+        "IOAPIC default WRITE32 batch bridge",
     )
     text = text[:start] + body + text[end:]
 
@@ -789,13 +870,22 @@ def patch_vp_accesses(text: str) -> str:
     ):
         start, end = function_span(text, sig)
         body = text[start:end]
-        probe = f"""    if (address >= 0xFE820000u &&
+        probe = f"""    if (phase6dq_ioapic_is_default_offset(address))
+    {{
+        phase6dq_ioapic_default_write(address, {width}u, (uint32_t)value);
+        return;
+    }}
+
+    if (phase6dq_ioapic_is_page(address))
+        phase6dq_note_ioapic_special_fence(address, {width}u, 1u, (uint32_t)value);
+
+    if (address >= 0xFE820000u &&
         address < 0xFE830000u)
         phase6dq_note_vp_unknown_read(address, {width}u);
 
 """
         body = replace_once(
-            body, fallback, probe + fallback, f"VP WRITE{width * 8} hard fence"
+            body, fallback, probe + fallback, f"VP/IOAPIC WRITE{width * 8} hard fence"
         )
         text = text[:start] + body + text[end:]
 
@@ -1157,8 +1247,9 @@ def main() -> int:
         "vp_write32_diagnostic_continue=1 unknown_vp_reads_fenced=1",
         "P6DQ PIXEL CHASE:",
         "P6DQ PRESENT PROXIMITY:",
-        "P6DQ ROCKET IOAPIC READ32 addr=%08X",
-        "P6DQ ROCKET IOAPIC WRITE32 addr=%08X",
+        "P6DQ ROCKET IOAPIC DEFAULT READ width=%u addr=%08X",
+        "P6DQ ROCKET IOAPIC DEFAULT WRITE width=%u addr=%08X",
+        "P6DQ ROCKET IOAPIC SPECIAL HARD %s width=%u addr=%08X",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
