@@ -343,6 +343,7 @@ def predictive_static_audit(text: str, base) -> dict:
     audio_sites = []
     kernel_calls = []
     display_calls = []
+    graphics_anchor_sites = []
     raw_kernel_constants = 0
     raw_display_constants = 0
 
@@ -361,6 +362,20 @@ def predictive_static_audit(text: str, base) -> dict:
             re.findall(r"0x800000[0-9A-Fa-f]{2}u?", body)
         )
         raw_display_constants += body.count("0x80000003")
+
+        body_lower = body.lower()
+        matched_anchors = [
+            anchor
+            for anchor in GRAPHICS_STATIC_ANCHORS
+            if (f"0x{anchor:x}" in body_lower) or
+               (f"0x{anchor:08x}" in body_lower)
+        ]
+        if matched_anchors:
+            graphics_anchor_sites.append({
+                "owner_va": f"0x{row['va']:08X}",
+                "owner_name": row["name"],
+                "anchors": [f"0x{x:08X}" for x in matched_anchors],
+            })
 
         for match in direct_re.finditer(body):
             site_id += 1
@@ -418,6 +433,14 @@ def predictive_static_audit(text: str, base) -> dict:
         "display_ordinal": "0x80000003",
         "display_kernel_call_sites": display_calls,
         "display_kernel_call_site_count": len(display_calls),
+        "graphics_static_anchor_sites": graphics_anchor_sites,
+        "graphics_static_anchor_site_count": len(graphics_anchor_sites),
+        "graphics_surface_base": f"0x{GRAPHICS_SURFACE_BASE:08X}",
+        "graphics_surface_end": f"0x{GRAPHICS_SURFACE_END:08X}",
+        "graphics_surface_bytes": GRAPHICS_SURFACE_END - GRAPHICS_SURFACE_BASE,
+        "graphics_surface_pitch": 0xA00,
+        "graphics_surface_width_32bpp": 640,
+        "graphics_surface_height": 480,
         "raw_kernel_constant_occurrences": raw_kernel_constants,
         "raw_display_ordinal_constant_occurrences": raw_display_constants,
         "raw_constants_are_not_calls": True,
@@ -471,6 +494,15 @@ def print_predictive_audit(audit: dict) -> None:
         f"[Phase6DQ] DISPLAY ordinal-3 literal ICALL sites: "
         f"{audit['display_kernel_call_site_count']}"
     )
+    print(
+        f"[Phase6DQ] GRAPHICS static anchor owners: "
+        f"{audit['graphics_static_anchor_site_count']}"
+    )
+    for site in audit["graphics_static_anchor_sites"][:24]:
+        print(
+            f"[Phase6DQ] GRAPHICS ANCHOR owner={site['owner_va']} "
+            f"name={site['owner_name']} anchors={','.join(site['anchors'])}"
+        )
     print(
         f"[Phase6DQ] RAW CONSTANT NOISE: kernel_like="
         f"{audit['raw_kernel_constant_occurrences']} "
