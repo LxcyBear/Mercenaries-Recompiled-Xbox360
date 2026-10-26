@@ -70,6 +70,70 @@ function Resolve-VS17Devenv {
     throw "Visual Studio 2017 devenv.com was not found. The helper searched VS 2017 / version 15.x plus the standard 2017 install paths."
 }
 
+function Sync-SolutionShadow {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceRoot,
+        [Parameter(Mandatory = $true)][string]$DestinationRoot
+    )
+
+    if (-not (Test-Path -LiteralPath $SourceRoot -PathType Container)) {
+        throw "Source Xbox 360 solution root does not exist: $SourceRoot"
+    }
+
+    $robocopy = Join-Path $env:SystemRoot "System32\robocopy.exe"
+    if (-not (Test-Path -LiteralPath $robocopy -PathType Leaf)) {
+        throw "robocopy.exe was not found; cannot create fast local shadow build"
+    }
+
+    if (-not (Test-Path -LiteralPath $DestinationRoot -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $DestinationRoot | Out-Null
+    }
+
+    $started = Get-Date
+    $args = @(
+        $SourceRoot,
+        $DestinationRoot,
+        "/MIR",
+        "/COPY:DAT",
+        "/DCOPY:DAT",
+        "/R:1",
+        "/W:1",
+        "/NFL",
+        "/NDL",
+        "/NJH",
+        "/NJS",
+        "/NP",
+        "/XD",
+        ".vs",
+        "Debug",
+        "Release",
+        "x64",
+        "Win32",
+        "ipch",
+        "/XF",
+        "*.obj",
+        "*.pdb",
+        "*.ilk",
+        "*.idb",
+        "*.tlog",
+        "*.lastbuildstate",
+        "*.xex",
+        "*.log",
+        "*.suo",
+        "*.user"
+    )
+
+    & $robocopy @args | Out-Null
+    $rc = $LASTEXITCODE
+    if ($rc -ge 8) {
+        throw "Fast local shadow sync failed (robocopy exit $rc)"
+    }
+
+    $elapsed = (Get-Date) - $started
+    Write-Host ("[XDK-BUILD] Shadow sync     : PASS source='{0}' dest='{1}' elapsed={2:N2}s robocopy_rc={3}" -f $SourceRoot, $DestinationRoot, $elapsed.TotalSeconds, $rc)
+    return $DestinationRoot
+}
+
 function Get-ProjectCompiledFiles {
     param([string]$ProjectPath)
 
