@@ -39,7 +39,7 @@ BASE_TAG = "P6DN-XACT-MM166-SUBPAGE-REPAIR-20261026-A"
 BUILD_TAG = "P6DO-MM166-ALIGNMENT-GAP-REPAIR-20261026-A"
 COOKIE_OLD = "phase6dn_env_build_cookie"
 COOKIE_NEW = "phase6do_env_build_cookie"
-EMITTER_REVISION = "6DO-R3"
+EMITTER_REVISION = "6DO-R4"
 
 
 def load(path: Path, name: str):
@@ -236,8 +236,20 @@ def main() -> int:
         if marker not in main_text:
             raise SystemExit(f"[Phase6DO] generated source lost marker: {marker}")
 
-    if "base + size != oldPageNext" in main_text:
-        raise SystemExit("[Phase6DO] stale exact-end tail restriction remains")
+    verify_start = main_text.find(
+        "static uint32_t phase6at_claim_post_create_tail(\n"
+    )
+    verify_end = main_text.find(
+        "\nstatic void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)\n",
+        verify_start,
+    )
+    if verify_start < 0 or verify_end < 0:
+        raise SystemExit("[Phase6DO] generated tail helper verification bounds missing")
+    verify_helper = main_text[verify_start:verify_end]
+    if "base + size != oldPageNext" in verify_helper:
+        raise SystemExit(
+            "[Phase6DO] stale exact-end restriction remains inside tail helper"
+        )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     layout = p6bl.write_sharded_main(args.out_dir, main_text, base)
