@@ -110,7 +110,11 @@ function Sync-SolutionShadow {
         "x64",
         "Win32",
         "ipch",
+        "translated_shards",
         "/XF",
+        "main.cpp",
+        "phase4c_env.cpp",
+        "phase5_env.cpp",
         "*.obj",
         "*.pdb",
         "*.ilk",
@@ -131,6 +135,7 @@ function Sync-SolutionShadow {
 
     $elapsed = (Get-Date) - $started
     Write-Host ("[XDK-BUILD] Shadow sync     : PASS source='{0}' dest='{1}' elapsed={2:N2}s robocopy_rc={3}" -f $SourceRoot, $DestinationRoot, $elapsed.TotalSeconds, $rc)
+    Write-Host "[XDK-BUILD] Shadow policy   : generated main/env/shards excluded from mirror; content sync owns their timestamps"
     return $DestinationRoot
 }
 
