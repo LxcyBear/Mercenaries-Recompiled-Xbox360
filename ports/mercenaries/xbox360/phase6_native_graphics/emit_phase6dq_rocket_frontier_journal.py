@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R31"
+EMITTER_REVISION = "6DQ-R32"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -381,21 +381,26 @@ static void phase6dq_note_hard_stop(
 
     sprintf(
         line,
-        "P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X esp=%08X ticks=%u eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X a41ee_site=%u a41ee_owner=%08X a41ee_writes=%u",
+        "P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X esp=%08X ticks=%u a41ee_site=%u a41ee_owner=%08X a41ee_writes=%u",
         (unsigned int)kind,
         (unsigned int)caller,
         (unsigned int)target,
         (unsigned int)savedEsp,
         (unsigned int)s_phase4cBlockTicks,
+        (unsigned int)s_phase6dqA41eeLastSite,
+        (unsigned int)s_phase6dqA41eeLastOwner,
+        (unsigned int)s_phase6dqA41eeSiteWrites);
+    trace(line);
+
+    sprintf(
+        line,
+        "P6DQ ROCKET HARD REGS eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X",
         (unsigned int)g_eax,
         (unsigned int)g_ecx,
         (unsigned int)g_edx,
         (unsigned int)g_ebx,
         (unsigned int)g_esi,
-        (unsigned int)g_edi,
-        (unsigned int)s_phase6dqA41eeLastSite,
-        (unsigned int)s_phase6dqA41eeLastOwner,
-        (unsigned int)s_phase6dqA41eeSiteWrites);
+        (unsigned int)g_edi);
     trace(line);
 }
 
@@ -785,18 +790,28 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u fpsave142_calls=%u fprestore139_calls=%u fpguard_depth=%u fpguard_mismatches=%u fpguard_last_state=%08X dsound_poison_sites=%u dsound_poison_noops=%u dsound_poison_object=%08X dsound_poison_arg=%08X",
+        "P6DQ ROCKET JOURNAL SUMMARY A dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u",
         (unsigned int)s_phase6dqDispatchJournalCount,
         (unsigned int)s_phase6dqDispatchJournalOverflow,
         (unsigned int)s_phase6dqHardStopJournalCount,
-        (unsigned int)s_phase6dqHardStopJournalOverflow,
+        (unsigned int)s_phase6dqHardStopJournalOverflow);
+    trace(line);
+
+    sprintf(
+        line,
+        "P6DQ ROCKET JOURNAL SUMMARY B vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_reads=%u ioapic_writes=%u ioapic_fences=%u",
         (unsigned int)s_phase6dqVpWrite32Count,
         (unsigned int)s_phase6dqVpJournalCount,
         (unsigned int)s_phase6dqVpJournalOverflow,
         (unsigned int)s_phase6dqVpUnknownReadCount,
         (unsigned int)s_phase6dqIoapicDefaultReadCount,
         (unsigned int)s_phase6dqIoapicDefaultWriteCount,
-        (unsigned int)s_phase6dqIoapicSpecialFenceCount,
+        (unsigned int)s_phase6dqIoapicSpecialFenceCount);
+    trace(line);
+
+    sprintf(
+        line,
+        "P6DQ ROCKET JOURNAL SUMMARY C kestall_calls=%u last_us=%u total_us=%I64u max_us=%u fpsave=%u fprestore=%u fpdepth=%u fpmismatch=%u fpstate=%08X",
         (unsigned int)s_phase6dqKeStall151Count,
         (unsigned int)s_phase6dqKeStall151LastUs,
         (unsigned __int64)s_phase6dqKeStall151TotalUs,
@@ -805,11 +820,19 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqFpRestore139Count,
         (unsigned int)s_phase6dqFpGuardDepth,
         (unsigned int)s_phase6dqFpGuardMismatchCount,
-        (unsigned int)s_phase6dqFpGuardLastState,
+        (unsigned int)s_phase6dqFpGuardLastState);
+    trace(line);
+
+    sprintf(
+        line,
+        "P6DQ ROCKET JOURNAL SUMMARY D dsound_poison_sites=%u dsound_noops=%u object=%08X arg=%08X a41ee_site=%u a41ee_owner=%08X a41ee_writes=%u",
         (unsigned int)s_phase6dqDsoundPoisonSiteCount,
         (unsigned int)s_phase6dqDsoundPoisonNoopCount,
         (unsigned int)s_phase6dqDsoundPoisonLastObject,
-        (unsigned int)s_phase6dqDsoundPoisonLastArg);
+        (unsigned int)s_phase6dqDsoundPoisonLastArg,
+        (unsigned int)s_phase6dqA41eeLastSite,
+        (unsigned int)s_phase6dqA41eeLastOwner,
+        (unsigned int)s_phase6dqA41eeSiteWrites);
     trace(line);
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
@@ -1672,8 +1695,7 @@ def main() -> int:
         "functions, journals unique packed dispatches and hard stops, diagnostic-"
         "continues aligned VP WRITE32 commands while unknown VP reads remain hard "
         "fences, preserves 64M/C4146/allocator/XACT/NV2A semantics, and prioritizes "
-        "maximum trustworthy progress toward guest presentation per hardware run; "
-        "R31 keeps the exact R25 pack order and adds only two-global A41EE provenance"
+        "maximum trustworthy progress toward guest presentation per hardware run"
     )
     # Replace only the payload inside the existing C string literal. Preserve
     # the closing quote, parenthesis and semicolon from the inherited trace().
@@ -1696,9 +1718,11 @@ def main() -> int:
         "PHASE6DQ_DISPATCH_JOURNAL_CAP 96u",
         "P6DQ ROCKET DISPATCH FIRST",
         "P6DQ ROCKET HARD STOP",
+        "P6DQ ROCKET HARD REGS",
         "P6DQ ROCKET VP WRITE FIRST",
         "P6DQ ROCKET VP READ HARD",
-        "P6DQ ROCKET JOURNAL SUMMARY",
+        "P6DQ ROCKET JOURNAL SUMMARY A",
+        "P6DQ ROCKET JOURNAL SUMMARY D",
         "phase6dq_dump_journals();",
         "address >= 0xFE820000u",
         "address < 0xFE830000u",
@@ -1875,6 +1899,8 @@ def main() -> int:
             "callsite_traces": False,
             "ring_buffer": False,
             "fault_semantics_changed": False,
+            "trace_records_bounded": True,
+            "startup_policy_restored_to_r25_length": True,
         },
         "execution_budget": 64000000,
         "generated_c4146_scope_inherited": True,
@@ -1932,8 +1958,9 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print(f"[Phase6DQ] R31 minimal A41EE site tags: {len(a41ee_site_tags)} packed direct callers")
-    print("[Phase6DQ] R31 pack order/runtime base: EXACT R25 + two-global provenance only")
+    print(f"[Phase6DQ] R32 minimal A41EE site tags: {len(a41ee_site_tags)} packed direct callers")
+    print("[Phase6DQ] R32 pack/runtime: EXACT R25 order + two-global provenance")
+    print("[Phase6DQ] R32 debugger safety: startup policy restored; giant journal summary split")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
