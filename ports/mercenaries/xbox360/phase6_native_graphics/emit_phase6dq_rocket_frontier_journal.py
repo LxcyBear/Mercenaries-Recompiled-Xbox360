@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R34"
+EMITTER_REVISION = "6DQ-R35"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -267,6 +267,37 @@ static uint32_t s_phase6dqA4622SiteWrites = 0u;
 static uint32_t s_phase6dqA52adLastSite = 0u;
 static uint32_t s_phase6dqA52adLastOwner = 0u;
 static uint32_t s_phase6dqA52adSiteWrites = 0u;
+#define PHASE6DQ_F78F_READ_CAP 24u
+typedef struct Phase6DQF78fRead
+{
+    uint32_t seq;
+    uint32_t site;
+    uint32_t address;
+    uint32_t value;
+} Phase6DQF78fRead;
+static Phase6DQF78fRead s_phase6dqF78fReads[PHASE6DQ_F78F_READ_CAP];
+static uint32_t s_phase6dqF78fReadCount = 0u;
+static uint32_t s_phase6dqF78fPoisonHits = 0u;
+static uint32_t s_phase6dqF78fPoisonSite = 0u;
+static uint32_t s_phase6dqF78fPoisonAddress = 0u;
+static uint32_t s_phase6dqF78fPoisonValue = 0u;
+static uint32_t s_phase6dqF78fPoisonEax = 0u;
+static uint32_t s_phase6dqF78fPoisonEcx = 0u;
+static uint32_t s_phase6dqF78fPoisonEdx = 0u;
+static uint32_t s_phase6dqF78fPoisonEbx = 0u;
+static uint32_t s_phase6dqF78fPoisonEsi = 0u;
+static uint32_t s_phase6dqF78fPoisonEdi = 0u;
+static uint32_t s_phase6dqF78fPoisonEsp = 0u;
+static uint32_t s_phase6dqF78fA52adCalls = 0u;
+static uint32_t s_phase6dqF78fA52adArg1 = 0u;
+static uint32_t s_phase6dqF78fA52adEsp = 0u;
+static uint32_t s_phase6dqF78fCallEax = 0u;
+static uint32_t s_phase6dqF78fCallEcx = 0u;
+static uint32_t s_phase6dqF78fCallEdx = 0u;
+static uint32_t s_phase6dqF78fCallEbx = 0u;
+static uint32_t s_phase6dqF78fCallEsi = 0u;
+static uint32_t s_phase6dqF78fCallEdi = 0u;
+static const char* phase6dq_f78f_site_expr(uint32_t site);
 
 '''
     text = text[:start] + state + text[start:]
@@ -853,6 +884,63 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqA52adSiteWrites);
     trace(line);
 
+    sprintf(
+        line,
+        "P6DQ F78F ORIGIN: reads=%u poison_hits=%u poison_site=%u poison_addr=%08X poison_value=%08X a52ad_calls=%u a52ad_arg1=%08X a52ad_esp=%08X",
+        (unsigned int)s_phase6dqF78fReadCount,
+        (unsigned int)s_phase6dqF78fPoisonHits,
+        (unsigned int)s_phase6dqF78fPoisonSite,
+        (unsigned int)s_phase6dqF78fPoisonAddress,
+        (unsigned int)s_phase6dqF78fPoisonValue,
+        (unsigned int)s_phase6dqF78fA52adCalls,
+        (unsigned int)s_phase6dqF78fA52adArg1,
+        (unsigned int)s_phase6dqF78fA52adEsp);
+    trace(line);
+
+    sprintf(
+        line,
+        "P6DQ F78F CALL REGS eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X poison_regs=%08X/%08X/%08X/%08X/%08X/%08X esp=%08X",
+        (unsigned int)s_phase6dqF78fCallEax,
+        (unsigned int)s_phase6dqF78fCallEcx,
+        (unsigned int)s_phase6dqF78fCallEdx,
+        (unsigned int)s_phase6dqF78fCallEbx,
+        (unsigned int)s_phase6dqF78fCallEsi,
+        (unsigned int)s_phase6dqF78fCallEdi,
+        (unsigned int)s_phase6dqF78fPoisonEax,
+        (unsigned int)s_phase6dqF78fPoisonEcx,
+        (unsigned int)s_phase6dqF78fPoisonEdx,
+        (unsigned int)s_phase6dqF78fPoisonEbx,
+        (unsigned int)s_phase6dqF78fPoisonEsi,
+        (unsigned int)s_phase6dqF78fPoisonEdi,
+        (unsigned int)s_phase6dqF78fPoisonEsp);
+    trace(line);
+
+    {
+        uint32_t phase6dqF78fCount =
+            s_phase6dqF78fReadCount < PHASE6DQ_F78F_READ_CAP
+                ? s_phase6dqF78fReadCount
+                : PHASE6DQ_F78F_READ_CAP;
+        uint32_t phase6dqF78fStart =
+            s_phase6dqF78fReadCount > PHASE6DQ_F78F_READ_CAP
+                ? (s_phase6dqF78fReadCount % PHASE6DQ_F78F_READ_CAP)
+                : 0u;
+        for (i = 0u; i < phase6dqF78fCount; ++i)
+        {
+            uint32_t phase6dqF78fIndex =
+                (phase6dqF78fStart + i) % PHASE6DQ_F78F_READ_CAP;
+            Phase6DQF78fRead* row = &s_phase6dqF78fReads[phase6dqF78fIndex];
+            sprintf(
+                line,
+                "P6DQ F78F READ seq=%u site=%u addr=%08X value=%08X expr=%s",
+                (unsigned int)row->seq,
+                (unsigned int)row->site,
+                (unsigned int)row->address,
+                (unsigned int)row->value,
+                phase6dq_f78f_site_expr(row->site));
+            trace(line);
+        }
+    }
+
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
     {
         Phase6DQDispatchJournal* row = &s_phase6dqDispatchJournal[i];
@@ -1339,6 +1427,137 @@ def patch_dsound_poison_slot_dispatch(text: str, base) -> str:
     return text[:start] + body + text[end:]
 
 
+def _phase6dq_c_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\r", " ").replace("\n", " ")
+
+
+def instrument_f78f_origin_probe(text: str, base) -> tuple[str, list[dict]]:
+    """
+    R35: instrument only sub_0029F78F's routed READ32 calls.
+    No read result is changed. The helper records a 24-entry ring and the first/
+    latest EC83F0E4-producing read, if one exists.
+    """
+    signature_re = re.compile(r"(?m)^\s*(?:static\s+)?void\s+sub_0029F78F\(void\)\s*\{")
+    matches = list(signature_re.finditer(text))
+    if len(matches) != 1:
+        raise SystemExit(f"[Phase6DQ] R35 expected one sub_0029F78F body, found {len(matches)}")
+
+    masked = base.mask_noncode(text)
+    start = matches[0].start()
+    brace = masked.find("{", matches[0].start(), matches[0].end() + 1)
+    if brace < 0:
+        raise SystemExit("[Phase6DQ] R35 F78F body brace missing")
+    end = base.closing_brace(masked, brace)
+    body = text[start:end]
+    body_masked = base.mask_noncode(body)
+
+    needle = "phase6ch_apu_read32("
+    sites = []
+    spans = []
+    pos = 0
+    site_id = 0
+    while True:
+        call = body_masked.find(needle, pos)
+        if call < 0:
+            break
+        open_paren = call + len(needle) - 1
+        depth = 0
+        cursor = open_paren
+        close_paren = -1
+        while cursor < len(body_masked):
+            ch = body_masked[cursor]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    close_paren = cursor
+                    break
+            cursor += 1
+        if close_paren < 0:
+            raise SystemExit("[Phase6DQ] R35 unterminated F78F READ32 call")
+
+        site_id += 1
+        expr = body[open_paren + 1:close_paren].strip()
+        expr_short = " ".join(expr.split())
+        if len(expr_short) > 96:
+            expr_short = expr_short[:93] + "..."
+        replacement = f"phase6dq_f78f_read32({site_id}u, {expr})"
+        spans.append((call, close_paren + 1, replacement))
+        sites.append({
+            "site_id": site_id,
+            "address_expr": expr_short,
+        })
+        pos = close_paren + 1
+
+    if not sites:
+        raise SystemExit("[Phase6DQ] R35 found no routed READ32 calls in sub_0029F78F")
+
+    for a, b, repl in reversed(spans):
+        body = body[:a] + repl + body[b:]
+
+    text = text[:start] + body + text[end:]
+    return text, sites
+
+
+def install_f78f_origin_support(text: str, sites: list[dict]) -> str:
+    marker = '#pragma optimize("", off)\n'
+    pos = text.find(marker)
+    if pos < 0:
+        raise SystemExit("[Phase6DQ] R35 optimize-off insertion marker missing")
+
+    cases = []
+    for row in sites:
+        expr = _phase6dq_c_escape(row["address_expr"])
+        cases.append(
+            f'    case {row["site_id"]}u: return "{expr}";'
+        )
+    case_text = "\n".join(cases)
+
+    block = f"""
+static const char* phase6dq_f78f_site_expr(uint32_t site)
+{{
+    switch (site)
+    {{
+{case_text}
+    default: return "<unknown>";
+    }}
+}}
+
+static uint32_t phase6dq_f78f_read32(uint32_t site, uint32_t address)
+{{
+    uint32_t value = phase6ch_apu_read32(address);
+    uint32_t index = s_phase6dqF78fReadCount % PHASE6DQ_F78F_READ_CAP;
+    Phase6DQF78fRead* row = &s_phase6dqF78fReads[index];
+
+    row->seq = s_phase6dqF78fReadCount + 1u;
+    row->site = site;
+    row->address = address;
+    row->value = value;
+    ++s_phase6dqF78fReadCount;
+
+    if (value == 0xEC83F0E4u)
+    {{
+        ++s_phase6dqF78fPoisonHits;
+        s_phase6dqF78fPoisonSite = site;
+        s_phase6dqF78fPoisonAddress = address;
+        s_phase6dqF78fPoisonValue = value;
+        s_phase6dqF78fPoisonEax = eax;
+        s_phase6dqF78fPoisonEcx = ecx;
+        s_phase6dqF78fPoisonEdx = edx;
+        s_phase6dqF78fPoisonEbx = ebx;
+        s_phase6dqF78fPoisonEsi = esi;
+        s_phase6dqF78fPoisonEdi = edi;
+        s_phase6dqF78fPoisonEsp = esp;
+    }}
+
+    return value;
+}}
+
+"""
+    return text[:pos] + block + text[pos:]
+
+
 def instrument_a41ee_site_tags(text: str, base) -> tuple[str, list[dict]]:
     """
     Minimal R31 provenance: before each direct sub_002A41EE call, write only
@@ -1479,6 +1698,18 @@ def instrument_a52ad_site_tags(text: str, base) -> tuple[str, list[dict]]:
                 f"{indent}s_phase6dqA52adLastOwner = 0x{owner:08X}u;\n"
                 f"{indent}++s_phase6dqA52adSiteWrites;\n"
             )
+            if owner == 0x0029F78F:
+                tag += (
+                    f"{indent}++s_phase6dqF78fA52adCalls;\n"
+                    f"{indent}s_phase6dqF78fA52adArg1 = recomp_guest_read32(esp);\n"
+                    f"{indent}s_phase6dqF78fA52adEsp = esp;\n"
+                    f"{indent}s_phase6dqF78fCallEax = eax;\n"
+                    f"{indent}s_phase6dqF78fCallEcx = ecx;\n"
+                    f"{indent}s_phase6dqF78fCallEdx = edx;\n"
+                    f"{indent}s_phase6dqF78fCallEbx = ebx;\n"
+                    f"{indent}s_phase6dqF78fCallEsi = esi;\n"
+                    f"{indent}s_phase6dqF78fCallEdi = edi;\n"
+                )
             patches.append((absolute, tag))
 
             # Static-only context: keep the nearest preceding PUSH32 expression
@@ -1805,6 +2036,8 @@ def main() -> int:
     main_text = patch_quiet_logging(main_text)
     main_text = patch_vp_accesses(main_text)
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
+    main_text, f78f_read_sites = instrument_f78f_origin_probe(main_text, base)
+    main_text = install_f78f_origin_support(main_text, f78f_read_sites)
     main_text, a41ee_site_tags = instrument_a41ee_site_tags(main_text, base)
     main_text, a4622_site_tags = instrument_a4622_site_tags(main_text, base)
     main_text, a52ad_site_tags = instrument_a52ad_site_tags(main_text, base)
@@ -1888,6 +2121,10 @@ def main() -> int:
         "s_phase6dqA52adLastSite = ",
         "a4622_site=%u a4622_owner=%08X a4622_writes=%u",
         "a52ad_site=%u a52ad_owner=%08X a52ad_writes=%u",
+        "P6DQ F78F ORIGIN:",
+        "P6DQ F78F READ seq=%u site=%u addr=%08X value=%08X expr=%s",
+        "phase6dq_f78f_read32(",
+        "s_phase6dqF78fA52adArg1 = recomp_guest_read32(esp);",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
@@ -2035,7 +2272,17 @@ def main() -> int:
             "a4622_sites": a4622_site_tags,
             "a52ad_site_count": len(a52ad_site_tags),
             "a52ad_sites": a52ad_site_tags,
-            "callsite_stack_reads": False,
+            "f78f_origin_probe": {
+                "target": "0x0029F78F",
+                "read_site_count": len(f78f_read_sites),
+                "read_sites": f78f_read_sites,
+                "ring_capacity": 24,
+                "poison_value": "0xEC83F0E4",
+                "per_read_logging": False,
+                "read_values_changed": False,
+                "a52ad_arg1_capture": True,
+            },
+            "callsite_stack_reads": True,
             "callsite_traces": False,
             "ring_buffer": False,
             "fault_semantics_changed": False,
@@ -2098,13 +2345,15 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print(f"[Phase6DQ] R34 A41EE site tags: {len(a41ee_site_tags)}")
-    print(f"[Phase6DQ] R34 A4622 upstream site tags: {len(a4622_site_tags)}")
-    print(f"[Phase6DQ] R34 A52AD upstream site tags: {len(a52ad_site_tags)}")
-    for site in a52ad_site_tags:
-        print(f"[Phase6DQ] R34 A52AD SITE[{site['site_id']}] owner={site['owner_va']} arg_expr={site['nearest_pushed_arg_expr']}")
-    print("[Phase6DQ] R34 pack/runtime: EXACT R25 order + three-level minimal provenance")
-    print("[Phase6DQ] R34 debugger safety: bounded runtime DebugStrings retained")
+    print(f"[Phase6DQ] R35 A41EE site tags: {len(a41ee_site_tags)}")
+    print(f"[Phase6DQ] R35 A4622 upstream site tags: {len(a4622_site_tags)}")
+    print(f"[Phase6DQ] R35 A52AD upstream site tags: {len(a52ad_site_tags)}")
+    print(f"[Phase6DQ] R35 F78F targeted READ32 sites: {len(f78f_read_sites)}")
+    for site in f78f_read_sites:
+        print(f"[Phase6DQ] R35 F78F READ[{site['site_id']}] expr={site['address_expr']}")
+    print("[Phase6DQ] R35 ORIGIN TRAP: 24-read ring + EC83F0E4 producer + A52AD arg/register capture")
+    print("[Phase6DQ] R35 pack/runtime: EXACT R25 order; no read value or fault-policy changes")
+    print("[Phase6DQ] R35 debugger safety: bounded runtime DebugStrings retained")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
