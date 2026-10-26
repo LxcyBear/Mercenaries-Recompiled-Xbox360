@@ -20,8 +20,9 @@ the XACT root remained published, and native Xenos/D3D remained alive.
 
 This phase does NOT claim complete VP/audio semantics. VP write continuation is
 explicitly diagnostic so audio initialization cannot force one build per method
-while we chase the renderer. Unknown VP reads, non-VP MMIO, guest faults, ABI
-boundaries, missing translated bodies and unresolved support remain hard stops.
+while we chase the renderer. Unknown VP reads, meaningful non-VP MMIO, guest faults, ABI boundaries,
+missing translated bodies and unresolved support remain hard stops. Hardware-proven
+kernel timing ordinal 151 is bridged with maintained busy-wait semantics.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R15"
+EMITTER_REVISION = "6DQ-R16"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -237,6 +238,10 @@ static uint32_t s_phase6dqVpUnknownReadCount = 0u;
 static uint32_t s_phase6dqIoapicDefaultReadCount = 0u;
 static uint32_t s_phase6dqIoapicDefaultWriteCount = 0u;
 static uint32_t s_phase6dqIoapicSpecialFenceCount = 0u;
+static uint32_t s_phase6dqKeStall151Count = 0u;
+static uint64_t s_phase6dqKeStall151TotalUs = 0ui64;
+static uint32_t s_phase6dqKeStall151LastUs = 0u;
+static uint32_t s_phase6dqKeStall151MaxUs = 0u;
 
 '''
     text = text[:start] + state + text[start:]
@@ -528,6 +533,61 @@ static void phase6dq_note_ioapic_special_fence(
     trace(line);
 }
 
+static void phase6dq_ke_stall_execution_processor(uint32_t savedEsp)
+{
+    uint32_t microSeconds = GUEST_READ32(g_esp + 4u);
+    LARGE_INTEGER frequency;
+    LARGE_INTEGER start;
+    LARGE_INTEGER now;
+    uint64_t waitTicks = 0ui64;
+    char line[384];
+
+    ++s_phase6dqKeStall151Count;
+    s_phase6dqKeStall151LastUs = microSeconds;
+    s_phase6dqKeStall151TotalUs += (uint64_t)microSeconds;
+    if (microSeconds > s_phase6dqKeStall151MaxUs)
+        s_phase6dqKeStall151MaxUs = microSeconds;
+
+    /*
+     * Xbox ordinal 151 is VOID KeStallExecutionProcessor(ULONG MicroSeconds).
+     * Preserve its busy-wait contract using the native high-resolution
+     * counter. The guest frame is stdcall: return slot + one dword argument.
+     */
+    if (microSeconds != 0u &&
+        QueryPerformanceFrequency(&frequency) &&
+        frequency.QuadPart > 0 &&
+        QueryPerformanceCounter(&start))
+    {
+        waitTicks =
+            (((uint64_t)frequency.QuadPart * (uint64_t)microSeconds) +
+             999999ui64) /
+            1000000ui64;
+
+        do
+        {
+            QueryPerformanceCounter(&now);
+        }
+        while ((uint64_t)(now.QuadPart - start.QuadPart) < waitTicks);
+    }
+
+    g_esp = savedEsp;
+
+    if (s_phase6dqKeStall151Count <= 16u ||
+        (s_phase6dqKeStall151Count & 0xFFu) == 0u)
+    {
+        sprintf(
+            line,
+            "P6DQ KESTALL151: calls=%u us=%u total_us=%I64u max_us=%u caller=%08X new_esp=%08X",
+            (unsigned int)s_phase6dqKeStall151Count,
+            (unsigned int)microSeconds,
+            (unsigned __int64)s_phase6dqKeStall151TotalUs,
+            (unsigned int)s_phase6dqKeStall151MaxUs,
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)g_esp);
+        trace(line);
+    }
+}
+
 static void phase6dq_note_vp_unknown_read(
     uint32_t address,
     uint32_t width)
@@ -554,7 +614,7 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u",
+        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u",
         (unsigned int)s_phase6dqDispatchJournalCount,
         (unsigned int)s_phase6dqDispatchJournalOverflow,
         (unsigned int)s_phase6dqHardStopJournalCount,
@@ -565,7 +625,11 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqVpUnknownReadCount,
         (unsigned int)s_phase6dqIoapicDefaultReadCount,
         (unsigned int)s_phase6dqIoapicDefaultWriteCount,
-        (unsigned int)s_phase6dqIoapicSpecialFenceCount);
+        (unsigned int)s_phase6dqIoapicSpecialFenceCount,
+        (unsigned int)s_phase6dqKeStall151Count,
+        (unsigned int)s_phase6dqKeStall151LastUs,
+        (unsigned __int64)s_phase6dqKeStall151TotalUs,
+        (unsigned int)s_phase6dqKeStall151MaxUs);
     trace(line);
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
@@ -673,6 +737,29 @@ def patch_dispatch_journal(text: str) -> str:
     # Hook the actual packed call in each dispatcher. Do not depend on the
     # surrounding Phase-5/Phase-6 bookkeeping layout, which has evolved.
     sig = "static void phase5bc_dispatch_packed_icall("
+    start, end = function_span(text, sig)
+    body = text[start:end]
+
+    # R15 hardware crossed the IOAPIC default-offset batch and immediately
+    # reached Xbox kernel ordinal 151 (0x80000097), KeStallExecutionProcessor.
+    # Handle this maintained one-argument stdcall before pack lookup so the
+    # kernel thunk does not become a translated-function frontier.
+    lookup_anchor = "    recomp_func_t fn = phase4c_lookup_pack_func(target);\n"
+    stall_hook = r'''    if (target == 0x80000097u)
+    {
+        phase6dq_ke_stall_execution_processor(savedEsp);
+        return;
+    }
+
+'''
+    body = replace_once(
+        body,
+        lookup_anchor,
+        stall_hook + lookup_anchor,
+        "KeStallExecutionProcessor ordinal-151 ICALL bridge",
+    )
+    text = text[:start] + body + text[end:]
+
     start, end = function_span(text, sig)
     body = text[start:end]
     call_pattern = re.compile(r"(?m)^(?P<indent>[ \t]*)fn\s*\(\s*\)\s*;")
@@ -1250,6 +1337,8 @@ def main() -> int:
         "P6DQ ROCKET IOAPIC DEFAULT READ width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC DEFAULT WRITE width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC SPECIAL HARD %s width=%u addr=%08X",
+        "target == 0x80000097u",
+        "P6DQ KESTALL151: calls=%u us=%u",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
