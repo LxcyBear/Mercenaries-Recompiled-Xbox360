@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R9"
+EMITTER_REVISION = "6DQ-R10"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -806,6 +806,42 @@ def relabel(text: str) -> str:
     )
 
 
+def assert_no_newline_in_c_string(text: str) -> None:
+    """Reject accidental physical newlines inside ordinary C/C++ string literals."""
+    in_string = False
+    escaped = False
+    line = 1
+    string_line = 0
+
+    for ch in text:
+        if ch == "\n":
+            if in_string and not escaped:
+                raise SystemExit(
+                    f"[Phase6DQ] generated C string literal crosses physical newline "
+                    f"(opened line {string_line}, reached line {line})"
+                )
+            line += 1
+            escaped = False
+            continue
+
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+            string_line = line
+
+    if in_string:
+        raise SystemExit(
+            f"[Phase6DQ] generated C string literal is unterminated "
+            f"(opened line {string_line})"
+        )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-dir", type=Path, required=True)
@@ -927,11 +963,13 @@ def main() -> int:
     policy_pos = main_text.find(old_policy_prefix)
     if policy_pos < 0:
         raise SystemExit("[Phase6DQ] inherited runtime policy line missing")
-    policy_end = main_text.find("\n", policy_pos)
-    if policy_end < 0:
-        raise SystemExit("[Phase6DQ] inherited runtime policy line unterminated")
-    old_policy_line = main_text[policy_pos:policy_end]
-    new_policy_line = (
+    policy_line_end = main_text.find("\n", policy_pos)
+    if policy_line_end < 0:
+        policy_line_end = len(main_text)
+    policy_quote_end = main_text.find('"', policy_pos)
+    if policy_quote_end < 0 or policy_quote_end > policy_line_end:
+        raise SystemExit("[Phase6DQ] inherited runtime policy closing quote missing")
+    new_policy_payload = (
         "Policy: Phase 6DQ ROCKET carries the hardware-proven 6DP VP FREE success, "
         "batch-packs up to 4096 additional support-clean D3D/XGRPH/DSOUND/XACTENG "
         "functions, journals unique packed dispatches and hard stops, diagnostic-"
@@ -939,7 +977,13 @@ def main() -> int:
         "fences, preserves 64M/C4146/allocator/XACT/NV2A semantics, and prioritizes "
         "maximum trustworthy progress toward guest presentation per hardware run"
     )
-    main_text = main_text[:policy_pos] + new_policy_line + main_text[policy_end:]
+    # Replace only the payload inside the existing C string literal. Preserve
+    # the closing quote, parenthesis and semicolon from the inherited trace().
+    main_text = (
+        main_text[:policy_pos]
+        + new_policy_payload
+        + main_text[policy_quote_end:]
+    )
 
     main_text = relabel(main_text)
     env_text = (
@@ -977,6 +1021,8 @@ def main() -> int:
         raise SystemExit("[Phase6DQ] stale 4096 ICALL logging cadence remains")
     if "(s_phase5bcPackedDirectDispatchCount & 0xFFFu) == 0u" in main_text:
         raise SystemExit("[Phase6DQ] stale 4096 DIRECT logging cadence remains")
+
+    assert_no_newline_in_c_string(main_text)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     layout = p6bl.write_sharded_main(args.out_dir, main_text, base)
