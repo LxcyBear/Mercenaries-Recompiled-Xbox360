@@ -311,7 +311,21 @@ foreach ($required in @($GeneratedMain, $GeneratedEnv, $GeneratedShardDir)) {
     }
 }
 
-$resolved = Resolve-SolutionProjectAndSources -RootPath $SolutionRoot
+$effectiveSolutionRoot = $SolutionRoot
+if (-not $DisableShadowBuild) {
+    $sourceFull = [System.IO.Path]::GetFullPath($SolutionRoot).TrimEnd('\')
+    $shadowFull = [System.IO.Path]::GetFullPath($ShadowBuildRoot).TrimEnd('\')
+    if ($sourceFull -ieq $shadowFull) {
+        throw "ShadowBuildRoot must differ from SolutionRoot"
+    }
+    $effectiveSolutionRoot = Sync-SolutionShadow -SourceRoot $sourceFull -DestinationRoot $shadowFull
+    Write-Host "[XDK-BUILD] Build location  : LOCAL SHADOW (OneDrive avoided for compile/intermediates)"
+}
+else {
+    Write-Host "[XDK-BUILD] Build location  : SOURCE TREE (shadow disabled)"
+}
+
+$resolved = Resolve-SolutionProjectAndSources -RootPath $effectiveSolutionRoot
 $solutionPath = [string]$resolved.SolutionPath
 $projectPath = [string]$resolved.ProjectPath
 $mainPath = [string]$resolved.MainPath
@@ -322,6 +336,7 @@ $solutionConfiguration = "$Configuration|$Platform"
 
 Assert-SolutionConfiguration -SolutionText $solutionText -ConfigurationName $solutionConfiguration
 
+Write-Host "[XDK-BUILD] Effective root : $effectiveSolutionRoot"
 Write-Host "[XDK-BUILD] Solution       : $solutionPath"
 Write-Host "[XDK-BUILD] Project        : $projectPath"
 Write-Host "[XDK-BUILD] main.cpp       : $mainPath"
@@ -400,10 +415,10 @@ $devenv = Resolve-VS17Devenv
 Write-Host "[XDK-BUILD] VS2017 builder   : $devenv"
 
 if ([string]::IsNullOrWhiteSpace($CleanLog)) {
-    $CleanLog = Join-Path $SolutionRoot "phase6-vs17-clean.log"
+    $CleanLog = Join-Path $effectiveSolutionRoot "phase6-vs17-clean.log"
 }
 if ([string]::IsNullOrWhiteSpace($BuildLog)) {
-    $BuildLog = Join-Path $SolutionRoot "phase6-vs17-build.log"
+    $BuildLog = Join-Path $effectiveSolutionRoot "phase6-vs17-build.log"
 }
 foreach ($log in @($CleanLog, $BuildLog)) {
     $parent = Split-Path -Parent $log
@@ -471,7 +486,7 @@ if (-not $solutionMainText.Contains($ExpectedBuildTag)) {
 }
 
 $xexCandidates = @(
-    Get-ChildItem -LiteralPath $SolutionRoot -Filter "*.xex" -File -Recurse -ErrorAction SilentlyContinue |
+    Get-ChildItem -LiteralPath $effectiveSolutionRoot -Filter "*.xex" -File -Recurse -ErrorAction SilentlyContinue |
         Where-Object { $_.LastWriteTime -ge $buildStart.AddSeconds(-2) } |
         Sort-Object LastWriteTime -Descending
 )
@@ -500,7 +515,7 @@ if (@($xexCandidates).Count -gt 0) {
     }
 }
 else {
-    throw "VS17 reported build success, but no newly-written .xex was found under '$SolutionRoot'."
+    throw "VS17 reported build success, but no newly-written .xex was found under '$effectiveSolutionRoot'."
 }
 
 Write-Host "[XDK-BUILD] FULL PIPELINE: PASS"
