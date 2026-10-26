@@ -39,7 +39,7 @@ BASE_TAG = "P6DN-XACT-MM166-SUBPAGE-REPAIR-20261026-A"
 BUILD_TAG = "P6DO-MM166-ALIGNMENT-GAP-REPAIR-20261026-A"
 COOKIE_OLD = "phase6dn_env_build_cookie"
 COOKIE_NEW = "phase6do_env_build_cookie"
-EMITTER_REVISION = "6DO-R2"
+EMITTER_REVISION = "6DO-R3"
 
 
 def load(path: Path, name: str):
@@ -107,29 +107,6 @@ def patch_tail_alignment_gap(text: str) -> str:
         return 0u;
 '''
     helper = replace_once(helper, old, new, "exact-end tail gate")
-
-    old_fmt = (
-        '"PASS: Phase 6AT post-create tail claim base=%08X requested=%u '
-        'rounded=%u actual=%u align=%u old_page_next=%08X new_page_next=%08X '
-        'heap_high=%08X reservations=%u calls=%u successes=%u",'
-    )
-    new_fmt = (
-        '"PASS: Phase 6AT post-create tail claim base=%08X requested=%u '
-        'rounded=%u actual=%u align=%u alignment_pad=%u old_page_next=%08X '
-        'new_page_next=%08X heap_high=%08X reservations=%u calls=%u successes=%u",'
-    )
-    helper = replace_once(helper, old_fmt, new_fmt, "tail trace format")
-
-    old_args = r'''        (unsigned int)alignment,
-        (unsigned int)oldPageNext,
-        (unsigned int)s_phase4cVmPageNext,
-'''
-    new_args = r'''        (unsigned int)alignment,
-        (unsigned int)alignmentPad,
-        (unsigned int)oldPageNext,
-        (unsigned int)s_phase4cVmPageNext,
-'''
-    helper = replace_once(helper, old_args, new_args, "tail trace arguments")
 
     marker = r'''    if (actualSize)
         *actualSize = size;
