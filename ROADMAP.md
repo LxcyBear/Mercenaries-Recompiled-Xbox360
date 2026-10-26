@@ -1,6 +1,6 @@
 # Mercenaries Recompiled — Xbox 360 Roadmap
 
-> **Updated:** October 24, 2026  
+> **Updated:** October 26, 2026  
 > **Default branch:** `master`  
 > **Active development branch:** `xbox360/phase6-native-graphics`  
 > **Current focus:** Phase 6 — native Xbox 360 graphics / NV2A-to-Xenos bring-up
@@ -21,7 +21,7 @@ No retail game data is distributed by this repository. Users must provide their 
 | 3 — PPC recompilation + guest ABI | **Complete** | Translated-code scale/ABI gates passed on hardware |
 | 4 — Native platform/kernel layer | **Complete** | Retail startup executes through migrated Xenon service layer |
 | 5 — Subsystem bring-up | **Complete** | Repeatability and Phase-6 handoff gates passed |
-| 6 — Native Xenos graphics | **In progress** | 6BY relocated ordinal 357 and cleared the old low-KSEG-looking fault; retail now reaches `IdexChannelObject.DeviceQueue.DeviceListHead` at `+0x28`; 6BZ queue model is prepared |
+| 6 — Native Xenos graphics | **In progress — late bring-up** | 6DQ ROCKET is hardware-proven through eight VP writes and exact `FEC0012C` READ32; R13 exact matching WRITE32 no-op bridge is prepared. Internal bring-up estimate: ~75–80% (non-formal). |
 | 7 — Audio/movies/input/streaming integration | Not started | Begins after stable graphics path |
 | 8 — Gameplay/compatibility hardening | Not started | Playability, save/load, missions, stability |
 
@@ -68,16 +68,31 @@ The graphics path has moved from speculative initialization debugging into the r
 - **Phase 6BW — hardware PASS / guest IRQL continuation:** ordinal-129 `KeRaiseIrqlToDpcLevel@0` received the canonical 4-byte return-slot-only frame and advanced maintained guest IRQL from `0` to `DISPATCH_LEVEL=2` exactly once without changing real Xenon processor IRQL. The very next checked operation is READ32 `0x8000018D`, producing `GUEST_FAULT` at retail path `0022AC56 -> 0022AC78 -> 0022AC89 -> 0022AC8F`. The exact 111-import audit contains no ordinal `0x18D/397`; because the address lies inside the deliberately fenced `0x80000000..0x80000FFF` low-KSEG ambiguity page, the fence remains intact pending origin proof.
 - **Phase 6BX — hardware PASS / low-KSEG false lead closed:** all four origin probes fired. At `0022AC8F`, EDX was still `00406298` before the translated instruction `edx = GUEST_READ32(0x2DBDBC)`; the immediate boundary then showed `EDX=8000018D` and READ32 `8000018D`. Phase-4A identifies slot 55 / `002DBDBC` as ordinal 357 `IdexChannelObject`, a DATA export. Therefore the fault is a missing pointer-valued data-import relocation, not a reason to relax the low-KSEG fence.
 - **Phase 6BY — hardware PASS / IdexChannelObject relocation crossed:** the raw retail token `80000165` at thunk slot `002DBDBC` was relocated to guest `0087E0A0`, and the old `READ32 8000018D` boundary disappeared. Retail then accessed `0087E0C8 = IdexChannelObject + 0x28`, matching Xbox `IDE_CHANNEL_OBJECT.DeviceQueue.DeviceListHead`. Because the temporary object was zeroed there, the queue walk later reached `READ32 FFFFFFFF`; execution nevertheless advanced through `0022AC9E/0022ACA1/0022ACD1`. The console surface changed from blue to orange during this run; treat that as a diagnostic presentation-state change, not yet as game pixels.
+- **Phase 6BZ onward — hardware progression:** the DeviceQueue structure issue was crossed and subsequent hardware-driven work continued through D3D/XGRPH, XACT/DSOUND/APU and VP setup while retaining the strict MMIO safety fences.
+- **Phase 6DQ ROCKET — build/hardware PASS:** the static pack reached 13,516 total translated members (357 new support-clean functions in the R11 build) across 54 generated shards. On hardware, VP FREE `FE820010 -> 00000080` passed and eight VP writes were journaled/continued, starting at former frontier `FE8202A4`.
+- **Phase 6DQ R12 — hardware PASS / new exact frontier:** exact `READ32 FEC0012C` returned `00000000` through the narrow IOAPIC bridge. One translated tick later, retail issued `WRITE32 FEC0012C`, which remained hard-fenced and became the new boundary at tick `26,712,265`.
+- **Phase 6DQ R13 — PREPARED:** model only the observed matching `WRITE32 FEC0012C` as an IOAPIC no-op and journal it. Every unrelated FEC/MMIO access remains hard-fenced.
 
-### Current next step — Phase 6BZ
+### Current next step — Phase 6DQ R13
 
-Phase 6BY is hardware-proven. The ordinal-357 thunk relocation is correct and eliminated the old `0x8000018D` fault. The next live access is `IdexChannelObject + 0x28 = 0x0087E0C8`, exactly the embedded `KDEVICE_QUEUE.DeviceListHead` in the Xbox `IDE_CHANNEL_OBJECT` layout. The temporary 6BY model left that list head zero, and retail's file-close queue walk eventually produced `READ32 0xFFFFFFFF`.
+Phase 6 is now clearly **more complete than incomplete**. The internal planning estimate is roughly **75–80% through bring-up**, but this is intentionally not a formal completion score: the phase still exits only when a repeatable game-generated frame, functional title/menu graphics, a reproducible 3D scene and maintained GPU synchronization are proven on hardware.
 
-Phase 6BZ models the export directly as an `IDE_CHANNEL_OBJECT` at `0x0087E0A0`. Its embedded queue is initialized like Xbox `KeInitializeDeviceQueue`: `Type=0x14`, `Size=0x0C`, `Busy=0`, and `DeviceListHead.Flink/Blink` both point back to `0x0087E0C8`, representing the truthful empty queue for synchronous host-backed I/O. The low-KSEG ambiguity fence, guest IRQL model, FILE_OBJECT sentinel, file/delay/GPU semantics, allocator geometry and 8M execution budget remain unchanged.
+The latest R12 hardware run did not reveal a broad regression. Instead, it proved a tightly bounded IOAPIC transaction: `READ32 FEC0012C` returned modeled zero successfully, immediately followed one translated tick later by `WRITE32 FEC0012C`. R13 therefore completes only that exact observed read/write pair; it does not relax the rest of the FEC/MMIO fence.
+
+The surrounding subsystem state is substantially stronger than earlier Phase 6:
+- native Xenos is alive and a 640×480 guest D3D device is published;
+- PFIFO/PGRAPH/PFB tile and ZCOMP initialization paths are hardware-proven;
+- D3D and XGRPH frontiers execute repeatedly;
+- XACT and DSOUND/APU initialization are active, including DSP/VP programming;
+- the ROCKET pack can carry 13,516 translated members and has already sustained roughly 760k indirect dispatches in a hardware run.
+
+The remaining visible gap is presentation. The latest cleanup still reports `display_calls=0`, `framebuffer=00000000`, and no present/pixel-root entries, so the orange screen remains a diagnostic Xenos surface rather than Mercenaries-generated pixels. Audio initialization is further along than display presentation, but audible playback is not yet claimed.
+
+R13's goal is to cross the complete `FEC0012C` transaction and expose the next genuinely unsupported operation. If the next boundary is not immediate, the broad translated closure is already in place to make a substantially larger hardware jump.
 
 ## Next major graphics milestones
 
-1. Run Phase 6BZ and verify `IdexChannelObject+0x28` reads the self-referential empty DeviceQueue list, then capture the next retail/kernel frontier.
+1. Run Phase 6DQ R13, cross the exact `FEC0012C` READ32/WRITE32 pair, and capture the next unsupported hardware boundary.
 2. Capture and classify the next NV2A register or command-stream access.
 3. Route proven PFIFO/PFB/PGRAPH behavior into the maintained NV2A/Xenos translation layer.
 4. Reach pushbuffer/resource/surface setup.
