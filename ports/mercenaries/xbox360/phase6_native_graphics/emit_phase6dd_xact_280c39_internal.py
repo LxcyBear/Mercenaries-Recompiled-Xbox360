@@ -31,7 +31,7 @@ BASE_TAG = "P6DC-XACT-00280C39-PROVENANCE-20261026-A"
 BUILD_TAG = "P6DD-XACT-280C39-ARG1-INTERNAL-20261026-A"
 COOKIE_OLD = "phase6dc_env_build_cookie"
 COOKIE_NEW = "phase6dd_env_build_cookie"
-EMITTER_REVISION = "6DD-R1"
+EMITTER_REVISION = "6DD-R2"
 
 TARGET_NAME = "sub_00280C39"
 TARGET_VA = 0x00280C39
@@ -256,7 +256,13 @@ def patch_target(text: str, base):
                 f"0x{current_va:08X}u, {site}u, {source_line}u, "
             )
 
-        wrapped_lines.append(read_re.sub(repl, line))
+        # Do not instrument inherited diagnostic reads from 6DB/6DC.
+        # Those probes intentionally reread the already-known call frame and
+        # would create a false "producer" hit for 0x00041D90.
+        if "phase6db" in line or "phase6dc" in line:
+            wrapped_lines.append(line)
+        else:
+            wrapped_lines.append(read_re.sub(repl, line))
 
     body = "\n".join(wrapped_lines)
     if text[start:end].endswith("\n"):
