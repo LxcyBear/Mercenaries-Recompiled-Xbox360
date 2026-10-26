@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R41"
+EMITTER_REVISION = "6DQ-R43"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -267,6 +267,19 @@ static uint32_t s_phase6dqAc97OutputWriteCount = 0u;
 static uint32_t s_phase6dqAc97DescriptorLatchCount = 0u;
 static uint32_t s_phase6dqAc97LastDescriptorAddress = 0u;
 static uint32_t s_phase6dqAc97LastDescriptorControl = 0u;
+static uint32_t s_phase6dqAc97TableWriteWatchCount = 0u;
+static uint32_t s_phase6dqAc97TableWriteLastAddress = 0u;
+static uint32_t s_phase6dqAc97TableWriteLastWidth = 0u;
+static uint32_t s_phase6dqAc97TableWriteLastValue = 0u;
+static uint32_t s_phase6dqAc97TableWriteLastOld0 = 0u;
+static uint32_t s_phase6dqAc97TableWriteLastOld1 = 0u;
+static uint32_t s_phase6dqAc97ChannelWriteNoteCount = 0u;
+static uint32_t s_phase6dqAc97ChannelWriteLastSite = 0u;
+static uint32_t s_phase6dqAc97ChannelWriteLastObject = 0u;
+static uint32_t s_phase6dqAc97ChannelWriteLastIndex = 0u;
+static uint32_t s_phase6dqAc97ChannelWriteLastTableValue = 0u;
+static uint32_t s_phase6dqAc97ChannelWriteLastDestination = 0u;
+static uint32_t s_phase6dqAc97ChannelWriteLastValue = 0u;
 static uint32_t s_phase6dqHalGetVector44Count = 0u;
 static uint32_t s_phase6dqHalGetVector44LastBus = 0u;
 static uint32_t s_phase6dqHalGetVector44LastVector = 0u;
@@ -551,6 +564,92 @@ static void phase6dq_note_vp_write(
 static int phase6dq_ioapic_is_page(uint32_t address)
 {
     return address >= 0xFEC00000u && address < 0xFEC01000u;
+}
+
+static int phase6dq_ac97_offset_table_overlap(
+    uint32_t address,
+    uint32_t width)
+{
+    uint32_t end = address + width;
+    return address < 0x002BA9C8u && end > 0x002BA9C0u;
+}
+
+static void phase6dq_note_ac97_offset_table_write(
+    uint32_t address,
+    uint32_t width,
+    uint32_t value)
+{
+    char line[512];
+
+    ++s_phase6dqAc97TableWriteWatchCount;
+    s_phase6dqAc97TableWriteLastAddress = address;
+    s_phase6dqAc97TableWriteLastWidth = width;
+    s_phase6dqAc97TableWriteLastValue = value;
+    s_phase6dqAc97TableWriteLastOld0 = GUEST_READ32(0x002BA9C0u);
+    s_phase6dqAc97TableWriteLastOld1 = GUEST_READ32(0x002BA9C4u);
+
+    sprintf(
+        line,
+        "P6DQ AC97 TABLE WRITE WATCH: count=%u addr=%08X width=%u value=%08X old0=%08X old1=%08X caller=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X",
+        (unsigned int)s_phase6dqAc97TableWriteWatchCount,
+        (unsigned int)address,
+        (unsigned int)width,
+        (unsigned int)value,
+        (unsigned int)s_phase6dqAc97TableWriteLastOld0,
+        (unsigned int)s_phase6dqAc97TableWriteLastOld1,
+        (unsigned int)phase4c_current_caller(),
+        (unsigned int)eax,
+        (unsigned int)ecx,
+        (unsigned int)edx,
+        (unsigned int)ebx,
+        (unsigned int)esi,
+        (unsigned int)edi,
+        (unsigned int)g_esp);
+    trace(line);
+}
+
+static void phase6dq_note_ac97_channel_write(
+    uint32_t site,
+    uint32_t object,
+    uint32_t index,
+    uint32_t tableValue,
+    uint32_t writeValue)
+{
+    uint32_t tableAddress = 0x002BA9C0u + (index * 4u);
+    uint32_t destination = tableValue + 0xFEC0010Bu;
+    uint32_t table0 = GUEST_READ32(0x002BA9C0u);
+    uint32_t table1 = GUEST_READ32(0x002BA9C4u);
+    char line[640];
+
+    ++s_phase6dqAc97ChannelWriteNoteCount;
+    s_phase6dqAc97ChannelWriteLastSite = site;
+    s_phase6dqAc97ChannelWriteLastObject = object;
+    s_phase6dqAc97ChannelWriteLastIndex = index;
+    s_phase6dqAc97ChannelWriteLastTableValue = tableValue;
+    s_phase6dqAc97ChannelWriteLastDestination = destination;
+    s_phase6dqAc97ChannelWriteLastValue = writeValue;
+
+    sprintf(
+        line,
+        "P6DQ AC97 CHANNEL WRITE: count=%u site=%08X object=%08X index=%08X table_addr=%08X table_value=%08X table0=%08X table1=%08X dest=%08X value=%02X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X",
+        (unsigned int)s_phase6dqAc97ChannelWriteNoteCount,
+        (unsigned int)site,
+        (unsigned int)object,
+        (unsigned int)index,
+        (unsigned int)tableAddress,
+        (unsigned int)tableValue,
+        (unsigned int)table0,
+        (unsigned int)table1,
+        (unsigned int)destination,
+        (unsigned int)(writeValue & 0xFFu),
+        (unsigned int)eax,
+        (unsigned int)ecx,
+        (unsigned int)edx,
+        (unsigned int)ebx,
+        (unsigned int)esi,
+        (unsigned int)edi,
+        (unsigned int)g_esp);
+    trace(line);
 }
 
 static int phase6dq_ac97_is_output_busmaster(uint32_t address)
@@ -1386,6 +1485,26 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
+        "P6DQ AC97 TABLE PROVENANCE: table0=%08X table1=%08X write_watch=%u last_write_addr=%08X last_write_width=%u last_write_value=%08X last_old0=%08X last_old1=%08X channel_notes=%u last_site=%08X last_object=%08X last_index=%08X last_table_value=%08X last_dest=%08X last_value=%02X",
+        (unsigned int)GUEST_READ32(0x002BA9C0u),
+        (unsigned int)GUEST_READ32(0x002BA9C4u),
+        (unsigned int)s_phase6dqAc97TableWriteWatchCount,
+        (unsigned int)s_phase6dqAc97TableWriteLastAddress,
+        (unsigned int)s_phase6dqAc97TableWriteLastWidth,
+        (unsigned int)s_phase6dqAc97TableWriteLastValue,
+        (unsigned int)s_phase6dqAc97TableWriteLastOld0,
+        (unsigned int)s_phase6dqAc97TableWriteLastOld1,
+        (unsigned int)s_phase6dqAc97ChannelWriteNoteCount,
+        (unsigned int)s_phase6dqAc97ChannelWriteLastSite,
+        (unsigned int)s_phase6dqAc97ChannelWriteLastObject,
+        (unsigned int)s_phase6dqAc97ChannelWriteLastIndex,
+        (unsigned int)s_phase6dqAc97ChannelWriteLastTableValue,
+        (unsigned int)s_phase6dqAc97ChannelWriteLastDestination,
+        (unsigned int)(s_phase6dqAc97ChannelWriteLastValue & 0xFFu));
+    trace(line);
+
+    sprintf(
+        line,
         "P6DQ AC97 OUTPUT: reads=%u writes=%u pcm_bdbar=%08X pcm_civ=%u pcm_lvi=%u pcm_sr=%04X pcm_picb=%u pcm_piv=%u pcm_cr=%02X spdif_bdbar=%08X spdif_civ=%u spdif_lvi=%u spdif_sr=%04X spdif_picb=%u spdif_piv=%u spdif_cr=%02X desc_latches=%u last_desc_addr=%08X last_desc_ctl=%08X",
         (unsigned int)s_phase6dqAc97OutputReadCount,
         (unsigned int)s_phase6dqAc97OutputWriteCount,
@@ -1860,7 +1979,10 @@ def patch_vp_accesses(text: str) -> str:
 
     # Batch the xemu/QEMU default IOAPIC write class. Special offsets remain
     # hard-fenced and are journaled before the checked router reports them.
-    ioapic_write_patch = r'''    if (phase6dq_ac97_is_output_busmaster(address))
+    ioapic_write_patch = r'''    if (phase6dq_ac97_offset_table_overlap(address, 4u))
+        phase6dq_note_ac97_offset_table_write(address, 4u, value);
+
+    if (phase6dq_ac97_is_output_busmaster(address))
     {
         phase6dq_ac97_output_write(address, 4u, value);
         return;
@@ -1905,7 +2027,10 @@ def patch_vp_accesses(text: str) -> str:
     ):
         start, end = function_span(text, sig)
         body = text[start:end]
-        probe = f"""    if (phase6dq_ac97_is_output_busmaster(address))
+        probe = f"""    if (phase6dq_ac97_offset_table_overlap(address, {width}u))
+        phase6dq_note_ac97_offset_table_write(address, {width}u, (uint32_t)value);
+
+    if (phase6dq_ac97_is_output_busmaster(address))
     {{
         phase6dq_ac97_output_write(address, {width}u, (uint32_t)value);
         return;
@@ -2073,7 +2198,7 @@ def instrument_f78f_origin_probe(text: str, base) -> tuple[str, list[dict]]:
     start = matches[0].start()
     brace = masked.find("{", matches[0].start(), matches[0].end() + 1)
     if brace < 0:
-        raise SystemExit("[Phase6DQ] R41 F78F body brace missing")
+        raise SystemExit("[Phase6DQ] R43 F78F body brace missing")
     end = base.closing_brace(masked, brace)
     body = text[start:end]
     body_masked = base.mask_noncode(body)
@@ -2453,6 +2578,48 @@ def instrument_a52ad_site_tags(text: str, base) -> tuple[str, list[dict]]:
     return text, sites
 
 
+def instrument_r43_ac97_channel_writes(text: str) -> str:
+    """Tag the exact AC97 channel-table consumers implicated by R41/R42."""
+    specs = (
+        (
+            "static void sub_002A74D9(void)",
+            "phase6ch_apu_write8(eax + -20971253, 0);",
+            "phase6dq_note_ac97_channel_write(0x002A74EDu, esi, phase6ch_apu_read32(esi), eax, 0u);\n    phase6ch_apu_write8(eax + -20971253, 0);",
+            "002A74ED channel write",
+        ),
+        (
+            "static void sub_002A76FE(void)",
+            "phase6ch_apu_write8(eax + -20971253, 2);",
+            "phase6dq_note_ac97_channel_write(0x002A7712u, esi, phase6ch_apu_read32(esi), eax, 2u);\n    phase6ch_apu_write8(eax + -20971253, 2);",
+            "002A7712 channel write",
+        ),
+        (
+            "static void sub_002A77BE(void)",
+            "phase6ch_apu_write8(eax + -20971253, 0x1D);",
+            "phase6dq_note_ac97_channel_write(0x002A77FBu, esi, phase6ch_apu_read32(esi), eax, 0x1Du);\n    phase6ch_apu_write8(eax + -20971253, 0x1D);",
+            "002A77FB channel write",
+        ),
+        (
+            "static void sub_002A7B73(void)",
+            "phase6ch_apu_write8(ecx + -20971253, 2);",
+            "phase6dq_note_ac97_channel_write(0x002A7BA6u, 0u, (eax - 4u) >> 2, ecx, 2u);\n    phase6ch_apu_write8(ecx + -20971253, 2);",
+            "002A7BA6 startup channel reset",
+        ),
+    )
+
+    for sig, old, new, label in specs:
+        start, end = function_span(text, sig)
+        body = text[start:end]
+        if body.count(old) != 1:
+            raise SystemExit(
+                f"[Phase6DQ] R43 expected one {label}, found {body.count(old)}"
+            )
+        body = body.replace(old, new, 1)
+        text = text[:start] + body + text[end:]
+
+    return text
+
+
 def route_all_dsound_accesses(text: str, base) -> tuple[str, dict[str, int]]:
     """Route raw guest accesses in every translated DSOUND sub_* through APU wrappers."""
     masked = base.mask_noncode(text)
@@ -2755,6 +2922,7 @@ def main() -> int:
     main_text = patch_quiet_logging(main_text)
     main_text = patch_vp_accesses(main_text)
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
+    main_text = instrument_r43_ac97_channel_writes(main_text)
     main_text = instrument_xact_init_probe(main_text, base)
     main_text, f78f_read_sites = instrument_f78f_origin_probe(main_text, base)
     main_text = install_f78f_origin_support(main_text, f78f_read_sites)
@@ -2820,6 +2988,13 @@ def main() -> int:
         "P6DQ ROCKET IOAPIC DEFAULT READ width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC DEFAULT WRITE width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC SPECIAL HARD %s width=%u addr=%08X",
+        "P6DQ AC97 TABLE WRITE WATCH: count=%u addr=%08X width=%u value=%08X",
+        "P6DQ AC97 CHANNEL WRITE: count=%u site=%08X object=%08X index=%08X",
+        "P6DQ AC97 TABLE PROVENANCE: table0=%08X table1=%08X write_watch=%u",
+        "phase6dq_note_ac97_channel_write(0x002A74EDu",
+        "phase6dq_note_ac97_channel_write(0x002A7712u",
+        "phase6dq_note_ac97_channel_write(0x002A77FBu",
+        "phase6dq_note_ac97_channel_write(0x002A7BA6u",
         "P6DQ AC97 OUT READ stream=%s width=%u addr=%08X",
         "P6DQ AC97 OUT WRITE stream=%s width=%u addr=%08X",
         "P6DQ AC97 OUTPUT: reads=%u writes=%u pcm_bdbar=%08X",
@@ -3013,6 +3188,21 @@ def main() -> int:
             "ordinary_guest_faults_bypassed": False,
             "unrelated_poison_values_bypassed": False,
         },
+        "r43_ac97_channel_table_provenance": {
+            "r41_fault": "WRITE8 0xDEA85111",
+            "r42_table_base": "0x002BA9C0",
+            "r42_expected_entry_shape": ["0x00000010", "0x00000070"],
+            "candidate_sites": [
+                "0x002A74ED",
+                "0x002A7712",
+                "0x002A77FB",
+                "0x002A7BA6",
+            ],
+            "table_write_watch": True,
+            "channel_index_and_table_value_capture": True,
+            "invalid_write_bypassed": False,
+            "guest_memory_semantics_changed": False,
+        },
         "ac97_output_busmaster_bridge": {
             "hardware_proof": "R40",
             "pcm_out_base": "0xFEC00110",
@@ -3147,20 +3337,19 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print(f"[Phase6DQ] R41 A41EE site tags: {len(a41ee_site_tags)}")
-    print(f"[Phase6DQ] R41 A4622 upstream site tags: {len(a4622_site_tags)}")
-    print(f"[Phase6DQ] R41 A52AD upstream site tags: {len(a52ad_site_tags)}")
-    print(f"[Phase6DQ] R41 F78F targeted READ32 sites: {len(f78f_read_sites)}")
+    print(f"[Phase6DQ] R43 A41EE site tags: {len(a41ee_site_tags)}")
+    print(f"[Phase6DQ] R43 A4622 upstream site tags: {len(a4622_site_tags)}")
+    print(f"[Phase6DQ] R43 A52AD upstream site tags: {len(a52ad_site_tags)}")
+    print(f"[Phase6DQ] R43 F78F targeted READ32 sites: {len(f78f_read_sites)}")
     for site in f78f_read_sites:
-        print(f"[Phase6DQ] R41 F78F READ[{site['site_id']}] expr={site['address_expr']}")
-    print("[Phase6DQ] R41 AC97 CODEC READY: R39 hardware-proven semantics retained")
-    print("[Phase6DQ] R41 AUDIO IRQ SETUP: R40 hardware-proven ordinals 44/109/98 retained")
-    print("[Phase6DQ] R41 AC97 OUTPUT BUSMASTER: PCM 0x110 + SPDIF 0x170 descriptor/control blocks modeled")
-    print("[Phase6DQ] R41 BDBAR: R40 hardware-proven PCM descriptor base write 0248F000 accepted + journaled")
-    print("[Phase6DQ] R41 XACT INIT PROBE: inherited 29FDF0 + 28345A + event-array results")
-    print("[Phase6DQ] R41 ORIGIN TRAP: inherited F78F provenance")
-    print("[Phase6DQ] R41 pack/runtime: bus-master register state only; no native sample output or fabricated ISR")
-    print("[Phase6DQ] R41 debugger safety: bounded runtime DebugStrings retained")
+        print(f"[Phase6DQ] R43 F78F READ[{site['site_id']}] expr={site['address_expr']}")
+    print("[Phase6DQ] R43 AC97 CODEC READY: R39 hardware-proven semantics retained")
+    print("[Phase6DQ] R43 AUDIO IRQ SETUP: R40 hardware-proven ordinals 44/109/98 retained")
+    print("[Phase6DQ] R43 AC97 OUTPUT BUSMASTER: R41 hardware-proven PCM BDBAR state retained")
+    print("[Phase6DQ] R43 TABLE PROVENANCE: watch 002BA9C0/4 mutations + exact channel-index consumers")
+    print("[Phase6DQ] R43 CANDIDATES: 002A74ED / 002A7712 / 002A77FB / startup 002A7BA6")
+    print("[Phase6DQ] R43 SAFETY: no invalid-write bypass; ordinary guest fault policy unchanged")
+    print("[Phase6DQ] R43 debugger safety: bounded runtime DebugStrings retained")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
