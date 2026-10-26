@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R12"
+EMITTER_REVISION = "6DQ-R13"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -235,6 +235,7 @@ static uint32_t s_phase6dqVpJournalOverflow = 0u;
 static uint32_t s_phase6dqVpWrite32Count = 0u;
 static uint32_t s_phase6dqVpUnknownReadCount = 0u;
 static uint32_t s_phase6dqIoapic12cReadCount = 0u;
+static uint32_t s_phase6dqIoapic12cWriteCount = 0u;
 
 '''
     text = text[:start] + state + text[start:]
@@ -448,6 +449,24 @@ static uint32_t phase6dq_ioapic_read32(uint32_t address)
     return value;
 }
 
+static void phase6dq_ioapic_write32(uint32_t address, uint32_t value)
+{
+    char line[320];
+
+    ++s_phase6dqIoapic12cWriteCount;
+
+    sprintf(
+        line,
+        "P6DQ ROCKET IOAPIC WRITE32 addr=%08X offset=%02X value=%08X caller=%08X esp=%08X count=%u no_op=1",
+        (unsigned int)address,
+        (unsigned int)(address & 0xFFu),
+        (unsigned int)value,
+        (unsigned int)phase4c_current_caller(),
+        (unsigned int)g_esp,
+        (unsigned int)s_phase6dqIoapic12cWriteCount);
+    trace(line);
+}
+
 static void phase6dq_note_vp_unknown_read(
     uint32_t address,
     uint32_t width)
@@ -474,7 +493,7 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_12c_reads=%u",
+        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_12c_reads=%u ioapic_12c_writes=%u",
         (unsigned int)s_phase6dqDispatchJournalCount,
         (unsigned int)s_phase6dqDispatchJournalOverflow,
         (unsigned int)s_phase6dqHardStopJournalCount,
@@ -483,7 +502,8 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqVpJournalCount,
         (unsigned int)s_phase6dqVpJournalOverflow,
         (unsigned int)s_phase6dqVpUnknownReadCount,
-        (unsigned int)s_phase6dqIoapic12cReadCount);
+        (unsigned int)s_phase6dqIoapic12cReadCount,
+        (unsigned int)s_phase6dqIoapic12cWriteCount);
     trace(line);
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
@@ -732,6 +752,25 @@ def patch_vp_accesses(text: str) -> str:
 '''
     body = replace_once(
         body, fallback, patch + fallback, "VP WRITE32 safe-continue"
+    )
+
+    # Hardware R12 proved the zero-valued READ32 at FEC0012C is immediately
+    # followed by WRITE32 to the same IOAPIC offset. xemu/QEMU masks this MMIO
+    # address to low byte 0x2C; writes at 0x2C match no IOAPIC register case and
+    # therefore have no modeled side effect. Consume only this exact dword
+    # write and keep every other unknown FEC access hard fenced.
+    ioapic_write_patch = r'''    if (address == 0xFEC0012Cu)
+    {
+        phase6dq_ioapic_write32(address, value);
+        return;
+    }
+
+'''
+    body = replace_once(
+        body,
+        fallback,
+        ioapic_write_patch + fallback,
+        "IOAPIC FEC0012C WRITE32 no-op bridge",
     )
     text = text[:start] + body + text[end:]
 
@@ -1119,6 +1158,7 @@ def main() -> int:
         "P6DQ PIXEL CHASE:",
         "P6DQ PRESENT PROXIMITY:",
         "P6DQ ROCKET IOAPIC READ32 addr=%08X",
+        "P6DQ ROCKET IOAPIC WRITE32 addr=%08X",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
