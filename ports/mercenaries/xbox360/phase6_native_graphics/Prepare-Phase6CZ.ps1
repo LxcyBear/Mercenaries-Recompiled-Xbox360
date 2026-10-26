@@ -62,7 +62,7 @@ Write-Host "[Phase6CZ] CCCCCCCC KILL-SHOT PROVENANCE"
 Write-Host "[Phase6CZ] 6CY hardware reproduced READ32 CCCCCCD0 at tick 27021609"
 Write-Host "[Phase6CZ] Correction: 6CY post-read report was unreachable after router longjmp"
 Write-Host "[Phase6CZ] New probe: log BEFORE CCCCCCD0 enters checked guest router"
-Write-Host "[Phase6CZ] Coverage: translated READ32 + maintained/manual/support READ32"
+Write-Host "[Phase6CZ] Coverage: translated READ32 + central READ32 router"
 Write-Host "[Phase6CZ] Static audit: resolve final DSOUND VA ring 002A41EE / 002A41F7"
 Write-Host "[Phase6CZ] Value fabrication: NONE"
 Write-Host "[Phase6CZ] Address widening: NONE"
@@ -71,10 +71,10 @@ Write-Host "[Phase6CZ] Address widening: NONE"
 if($LASTEXITCODE-ne0){throw "Phase 6CZ emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CZ-R1"')){
-  throw "Phase 6CZ stale emitter detected; expected revision 6CZ-R1"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CZ-R2"')){
+  throw "Phase 6CZ stale emitter detected; expected revision 6CZ-R2"
 }
-Write-Host "[Phase6CZ] Emitter revision       : 6CZ-R1"
+Write-Host "[Phase6CZ] Emitter revision       : 6CZ-R2"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -112,7 +112,7 @@ if($z.phase6cy_hardware.fault_address-ne"0xCCCCCCD0"-or
    $z.phase6cy_hardware.eax-ne"0xCCCCCCCC"-or
    $z.phase6cy_hardware.ticks-ne27021609-or
    $z.translated_prefault_probe-ne$true-or
-   $z.support_prefault_probe-ne$true-or
+   $z.router_prefault_probe-ne$true-or
    $z.guest_memory_semantics_changed-ne$false-or
    $z.value_fabrication-ne$false-or
    $z.address_range_widened-ne$false-or
@@ -121,9 +121,6 @@ if($z.phase6cy_hardware.fault_address-ne"0xCCCCCCD0"-or
    $z.manual_dsound_decrypt_preserved-ne$true-or
    $z.hard_fences_weakened-ne$false){
   throw "Phase 6CZ manifest gate failed"
-}
-if(([int]$z.support_guest_read32_sites+[int]$z.support_direct_read32_sites)-lt1){
-  throw "Phase 6CZ found no support-side READ32 sites"
 }
 if(@($z.final_va_source_audit.rows).Count-ne2){
   throw "Phase 6CZ final-VA source audit did not resolve two target VAs"
@@ -134,7 +131,7 @@ foreach($marker in @(
   "P6CZ-PREFAULT-CCCCCCD0-PROVENANCE-20261026-A",
   "phase6cz_env_build_cookie",
   "P6CZ PREFAULT TRANSLATED READ32:",
-  "P6CZ PREFAULT SUPPORT READ32:",
+  "P6CZ PREFAULT ROUTER READ32:",
   "P6CZ PREFAULT PROVENANCE:",
   "PASS: Phase 6CZ ExFreePool ITAIL",
   "PASS: Phase 6CZ manual DSOUND decrypt",
@@ -151,8 +148,7 @@ if($shardCount-lt1){throw "Phase 6CZ translated shard output is empty"}
 
 Write-Host ""
 Write-Host "[Phase6CZ] READY"
-Write-Host ("[Phase6CZ] Support GUEST_READ32 sites     : {0}" -f [int]$z.support_guest_read32_sites)
-Write-Host ("[Phase6CZ] Support direct READ32 sites    : {0}" -f [int]$z.support_direct_read32_sites)
+Write-Host "[Phase6CZ] Central READ32 router           : wrapped pre-fault"
 foreach($row in @($z.final_va_source_audit.rows)){
   Write-Host ("[Phase6CZ] Final VA {0} owner={1} start={2} generated={3}" -f $row.va,$row.owner_name,$row.owner_start,$row.generated)
   foreach($line in @($row.context)){Write-Host ("[Phase6CZ]   "+$line)}
