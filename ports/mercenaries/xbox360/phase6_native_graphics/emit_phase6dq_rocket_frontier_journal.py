@@ -1077,42 +1077,6 @@ static void phase6dq_note_dispatch(
     uint32_t i;
     char line[320];
 
-    sprintf(
-        line,
-        "P6DR GRAPHICS CONSUMER SUMMARY: relevant=%u surface_touch_r=%u surface_touch_w=%u surface_ptr_r=%u surface_ptr_w=%u device_touch_r=%u device_touch_w=%u device_ptr_r=%u device_ptr_w=%u unique=%u last_kind=%u last_owner=%08X last_addr=%08X last_value=%08X",
-        (unsigned int)s_phase6drGraphicsRelevantHits,
-        (unsigned int)s_phase6drSurfaceTouchReads,
-        (unsigned int)s_phase6drSurfaceTouchWrites,
-        (unsigned int)s_phase6drSurfacePointerReads,
-        (unsigned int)s_phase6drSurfacePointerWrites,
-        (unsigned int)s_phase6drDeviceTouchReads,
-        (unsigned int)s_phase6drDeviceTouchWrites,
-        (unsigned int)s_phase6drDevicePointerReads,
-        (unsigned int)s_phase6drDevicePointerWrites,
-        (unsigned int)s_phase6drGraphicsRingCount,
-        (unsigned int)s_phase6drGraphicsLastKind,
-        (unsigned int)s_phase6drGraphicsLastOwner,
-        (unsigned int)s_phase6drGraphicsLastAddress,
-        (unsigned int)s_phase6drGraphicsLastValue);
-    trace(line);
-
-    for (i = 0u; i < s_phase6drGraphicsRingCount; ++i)
-    {
-        Phase6DRGraphicsEvent* row = &s_phase6drGraphicsRing[i];
-        sprintf(
-            line,
-            "P6DR GRAPHICS RING[%u] kind=%u owner=%08X address=%08X value=%08X width=%u write=%u hits=%u",
-            (unsigned int)i,
-            (unsigned int)row->kind,
-            (unsigned int)row->owner,
-            (unsigned int)row->address,
-            (unsigned int)row->value,
-            (unsigned int)row->width,
-            (unsigned int)row->isWrite,
-            (unsigned int)row->hits);
-        trace(line);
-    }
-
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
     {
         Phase6DQDispatchJournal* row = &s_phase6dqDispatchJournal[i];
@@ -1644,6 +1608,42 @@ static void phase6dq_dump_journals(void)
             (unsigned int)row->site,
             (unsigned int)row->owner,
             (unsigned int)row->arg1);
+        trace(line);
+    }
+
+    sprintf(
+        line,
+        "P6DR GRAPHICS CONSUMER SUMMARY: relevant=%u surface_touch_r=%u surface_touch_w=%u surface_ptr_r=%u surface_ptr_w=%u device_touch_r=%u device_touch_w=%u device_ptr_r=%u device_ptr_w=%u unique=%u last_kind=%u last_owner=%08X last_addr=%08X last_value=%08X",
+        (unsigned int)s_phase6drGraphicsRelevantHits,
+        (unsigned int)s_phase6drSurfaceTouchReads,
+        (unsigned int)s_phase6drSurfaceTouchWrites,
+        (unsigned int)s_phase6drSurfacePointerReads,
+        (unsigned int)s_phase6drSurfacePointerWrites,
+        (unsigned int)s_phase6drDeviceTouchReads,
+        (unsigned int)s_phase6drDeviceTouchWrites,
+        (unsigned int)s_phase6drDevicePointerReads,
+        (unsigned int)s_phase6drDevicePointerWrites,
+        (unsigned int)s_phase6drGraphicsRingCount,
+        (unsigned int)s_phase6drGraphicsLastKind,
+        (unsigned int)s_phase6drGraphicsLastOwner,
+        (unsigned int)s_phase6drGraphicsLastAddress,
+        (unsigned int)s_phase6drGraphicsLastValue);
+    trace(line);
+
+    for (i = 0u; i < s_phase6drGraphicsRingCount; ++i)
+    {
+        Phase6DRGraphicsEvent* row = &s_phase6drGraphicsRing[i];
+        sprintf(
+            line,
+            "P6DR GRAPHICS RING[%u] kind=%u owner=%08X address=%08X value=%08X width=%u write=%u hits=%u",
+            (unsigned int)i,
+            (unsigned int)row->kind,
+            (unsigned int)row->owner,
+            (unsigned int)row->address,
+            (unsigned int)row->value,
+            (unsigned int)row->width,
+            (unsigned int)row->isWrite,
+            (unsigned int)row->hits);
         trace(line);
     }
 
@@ -2481,7 +2481,7 @@ def main() -> int:
         "continues aligned VP WRITE32 commands while unknown VP reads remain hard "
         "fences, preserves 64M/C4146/allocator/XACT/NV2A semantics, and prioritizes "
         "maximum trustworthy progress toward guest presentation per hardware run; "
-        "R27 adds call-shape-filtered predictive provenance audits while unknown "
+        "R28 adds predictive provenance plus bounded graphics-consumer telemetry; unknown "
         "kernel calls, MMIO and reads remain hard fences"
     )
     # Replace only the payload inside the existing C string literal. Preserve
@@ -2540,7 +2540,7 @@ def main() -> int:
         "P6DR GRAPHICS CONSUMER:",
         "P6DR GRAPHICS CONSUMER SUMMARY:",
         "P6DR GRAPHICS RING[%u]",
-        "R27 adds call-shape-filtered predictive provenance audits",
+        "R28 adds predictive provenance plus bounded graphics-consumer telemetry; unknown",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
