@@ -1,0 +1,540 @@
+#!/usr/bin/env python3
+"""Emit real C++ translation units from the Phase 6 monolithic generated source.
+
+The older "translated_shards/*.inl" layout only made the generated source easier
+to manage: every shard was still #included by main.cpp, so cl.exe saw one giant
+translation unit.  This emitter keeps runtime/support code in main.cpp and emits
+64 independently compiled translated_###.cpp files.
+
+Design goals:
+  * deterministic VA-based shard ownership (adding one function does not reshuffle
+    unrelated functions);
+  * content-stable writes (unchanged files keep their mtimes);
+  * translated functions and shared runtime helpers/state use external linkage;
+  * each shard declares only the translated callees it actually references;
+  * fail closed when a runtime global needed by translated code cannot be
+    declarationized safely.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+from pathlib import Path
+
+SHARD_COUNT = 64
+OFF_MARKER = '#pragma optimize("", off)\n'
+ON_MARKER = '\n#pragma optimize("", on)'
+
+FUNC_RE = re.compile(
+    r"(?m)^(?P<indent>\s*)(?P<static>static\s+)?"
+    r"(?P<ret>(?:__forceinline\s+)?(?:[A-Za-z_]\w*(?:::\w+)?(?:\s*[*&])?"
+    r"(?:\s+const)?|const\s+[A-Za-z_]\w*(?:\s*[*&])?))\s+"
+    r"(?P<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{"
+)
+SUB_DEF_RE = re.compile(r"(?m)^\s*static\s+void\s+(sub_([0-9A-Fa-f]{8}))\(void\)\s*\{")
+SUB_DECL_RE = re.compile(r"(?m)^(\s*)static\s+void\s+(sub_[0-9A-Fa-f]{8})\(void\)\s*;")
+SUB_CALL_RE = re.compile(r"\b(sub_[0-9A-Fa-f]{8})\s*\(")
+ID_RE = re.compile(r"\b[A-Za-z_]\w*\b")
+
+
+def mask_noncode(text: str) -> str:
+    out = list(text)
+    i = 0
+    state = "code"
+    quote = ""
+    while i < len(text):
+        c = text[i]
+        n = text[i + 1] if i + 1 < len(text) else ""
+        if state == "line":
+            if c == "\n":
+                state = "code"
+            else:
+                out[i] = " "
+            i += 1
+            continue
+        if state == "block":
+            out[i] = " "
+            if c == "*" and n == "/":
+                out[i + 1] = " "
+                i += 2
+                state = "code"
+            else:
+                i += 1
+            continue
+        if state == "string":
+            out[i] = " "
+            if c == "\\":
+                if i + 1 < len(text):
+                    out[i + 1] = " "
+                    i += 2
+                    continue
+            if c == quote:
+                state = "code"
+            i += 1
+            continue
+        if c == "/" and n == "/":
+            out[i] = out[i + 1] = " "
+            i += 2
+            state = "line"
+            continue
+        if c == "/" and n == "*":
+            out[i] = out[i + 1] = " "
+            i += 2
+            state = "block"
+            continue
+        if c in ("'", '"'):
+            out[i] = " "
+            quote = c
+            state = "string"
+            i += 1
+            continue
+        i += 1
+    return "".join(out)
+
+
+def closing_brace(masked: str, brace: int) -> int:
+    depth = 0
+    for i in range(brace, len(masked)):
+        c = masked[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    raise RuntimeError("unterminated brace block")
+
+
+def function_spans(text: str) -> list[dict]:
+    masked = mask_noncode(text)
+    rows = []
+    for m in FUNC_RE.finditer(masked):
+        brace = masked.find("{", m.start(), m.end())
+        if brace < 0:
+            continue
+        end = closing_brace(masked, brace)
+        rows.append(
+            {
+                "start": m.start(),
+                "brace": brace,
+                "end": end,
+                "name": m.group("name"),
+                "source": text[m.start():end],
+                "signature": text[m.start():brace].rstrip(),
+                "static": bool(m.group("static")),
+            }
+        )
+    # Reject nested false positives by retaining only non-overlapping top-level defs.
+    out = []
+    last_end = -1
+    for row in rows:
+        if row["start"] >= last_end:
+            out.append(row)
+            last_end = row["end"]
+    return out
+
+
+def write_if_changed(path: Path, data: str) -> bool:
+    encoded = data.encode("utf-8")
+    if path.exists() and path.read_bytes() == encoded:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(encoded)
+    return True
+
+
+def extract_preprocessor(prefix: str) -> str:
+    lines = prefix.splitlines(True)
+    out: list[str] = []
+    i = 0
+    keep_heads = ("#include", "#define", "#pragma", "#if", "#ifdef", "#ifndef",
+                  "#elif", "#else", "#endif", "#undef")
+    while i < len(lines):
+        stripped = lines[i].lstrip()
+        if stripped.startswith(keep_heads):
+            block = [lines[i]]
+            while block[-1].rstrip("\r\n").endswith("\\") and i + 1 < len(lines):
+                i += 1
+                block.append(lines[i])
+            out.extend(block)
+        i += 1
+    return "".join(out)
+
+
+def extract_type_blocks(prefix_without_functions: str) -> list[str]:
+    """Extract top-level typedef/struct/enum/union declarations conservatively."""
+    masked = mask_noncode(prefix_without_functions)
+    starts = list(re.finditer(r"(?m)^\s*(?:typedef\s+|struct\s+[A-Za-z_]\w*\s*\{|enum\s+[A-Za-z_]\w*\s*\{|union\s+[A-Za-z_]\w*\s*\{)", masked))
+    blocks: list[str] = []
+    consumed_until = -1
+    for m in starts:
+        if m.start() < consumed_until:
+            continue
+        # Walk to a semicolon at brace/paren/bracket depth zero.
+        depth_b = depth_p = depth_s = 0
+        i = m.start()
+        while i < len(masked):
+            c = masked[i]
+            if c == "{":
+                depth_b += 1
+            elif c == "}":
+                depth_b -= 1
+            elif c == "(":
+                depth_p += 1
+            elif c == ")":
+                depth_p -= 1
+            elif c == "[":
+                depth_s += 1
+            elif c == "]":
+                depth_s -= 1
+            elif c == ";" and depth_b == depth_p == depth_s == 0:
+                end = i + 1
+                block = prefix_without_functions[m.start():end].strip()
+                if block and block not in blocks:
+                    blocks.append(block)
+                consumed_until = end
+                break
+            i += 1
+    return blocks
+
+
+def remove_spans(text: str, spans: list[dict]) -> str:
+    pieces = []
+    pos = 0
+    for row in spans:
+        pieces.append(text[pos:row["start"]])
+        pieces.append("\n")
+        pos = row["end"]
+    pieces.append(text[pos:])
+    return "".join(pieces)
+
+
+def prototype_from_signature(signature: str) -> str:
+    sig = re.sub(r"^\s*static\s+", "", signature, count=1)
+    return sig.strip() + ";"
+
+
+def externalize_prefix_functions(prefix: str) -> tuple[str, list[str]]:
+    spans = function_spans(prefix)
+    prototypes = []
+    pieces = []
+    pos = 0
+    for row in spans:
+        pieces.append(prefix[pos:row["start"]])
+        src = row["source"]
+        if row["static"]:
+            src = re.sub(r"^(\s*)static\s+", r"\1", src, count=1)
+        pieces.append(src)
+        prototypes.append(prototype_from_signature(row["signature"]))
+        pos = row["end"]
+    pieces.append(prefix[pos:])
+    runtime = "".join(pieces)
+    runtime = SUB_DECL_RE.sub(lambda m: f"{m.group(1)}void {m.group(2)}(void);", runtime)
+    return runtime, prototypes
+
+
+def line_statement_for_name(prefix_no_funcs: str, name: str) -> tuple[int, int, str] | None:
+    """Find a simple top-level variable declaration containing name.
+
+    Generated register/runtime state is deliberately simple C-style storage.
+    We fail closed rather than guessing if the declaration is not semicolon
+    terminated in a bounded window.
+    """
+    pattern = re.compile(rf"(?m)^[ \t]*(?:static\s+)?(?:extern\s+)?(?:const\s+)?[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*(?:\s*[*&]\s*)?[A-Za-z_]\w*[^;\n]*\b{re.escape(name)}\b[^;]*;")
+    candidates = []
+    for m in pattern.finditer(prefix_no_funcs):
+        stmt = m.group(0)
+        if "(" in stmt and ")" in stmt:
+            continue
+        candidates.append((m.start(), m.end(), stmt))
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # Multiline array/object declaration fallback, bounded to 4 KiB.
+    idx = 0
+    hits = []
+    while True:
+        idx = prefix_no_funcs.find(name, idx)
+        if idx < 0:
+            break
+        if (idx > 0 and (prefix_no_funcs[idx - 1].isalnum() or prefix_no_funcs[idx - 1] == "_")):
+            idx += len(name)
+            continue
+        after = idx + len(name)
+        if after < len(prefix_no_funcs) and (prefix_no_funcs[after].isalnum() or prefix_no_funcs[after] == "_"):
+            idx = after
+            continue
+        start = prefix_no_funcs.rfind("\n", 0, idx) + 1
+        end = prefix_no_funcs.find(";", idx, min(len(prefix_no_funcs), idx + 4096))
+        if end >= 0:
+            stmt = prefix_no_funcs[start:end + 1]
+            head = stmt.lstrip()
+            if not head.startswith(("#", "typedef")) and "(" not in head.split("=", 1)[0]:
+                hits.append((start, end + 1, stmt))
+        idx = after
+    uniq = {(a, b): (a, b, c) for a, b, c in hits}
+    if len(uniq) == 1:
+        return next(iter(uniq.values()))
+    return None
+
+
+def strip_initializer(stmt: str) -> str:
+    # Remove a top-level initializer while preserving array suffixes.
+    depth_p = depth_b = depth_s = 0
+    for i, c in enumerate(stmt):
+        if c == "(":
+            depth_p += 1
+        elif c == ")":
+            depth_p -= 1
+        elif c == "{":
+            depth_b += 1
+        elif c == "}":
+            depth_b -= 1
+        elif c == "[":
+            depth_s += 1
+        elif c == "]":
+            depth_s -= 1
+        elif c == "=" and depth_p == depth_b == depth_s == 0:
+            return stmt[:i].rstrip() + ";"
+    return stmt
+
+
+def externize_statement(stmt: str) -> str:
+    x = stmt.strip()
+    x = re.sub(r"^static\s+", "", x, count=1)
+    x = re.sub(r"^extern\s+", "", x, count=1)
+    x = strip_initializer(x)
+    return "extern " + x
+
+
+def collect_runtime_globals(prefix: str, body: str, preprocessor: str) -> tuple[list[tuple[int,int,str,str]], list[str]]:
+    spans = function_spans(prefix)
+    no_funcs = remove_spans(prefix, spans)
+    tokens = set(ID_RE.findall(body + "\n" + preprocessor))
+    names = sorted(
+        n for n in tokens
+        if n in {"eax","ecx","edx","ebx","esi","edi","ebp","esp",
+                 "g_eax","g_ecx","g_edx","g_ebx","g_esi","g_edi","g_ebp","g_esp",
+                 "g_eflags","g_seh_ebp","g_ram"}
+        or n.startswith("g_xmm") or n.startswith("g_mm")
+    )
+    found = []
+    missing = []
+    seen_spans = set()
+    for name in names:
+        row = line_statement_for_name(no_funcs, name)
+        if row is None:
+            # Some register aliases are macros; those are already in preprocessor.
+            macro_pat = re.compile(rf"(?m)^\s*#define\s+{re.escape(name)}\b")
+            if macro_pat.search(preprocessor):
+                continue
+            missing.append(name)
+            continue
+        a, b, stmt = row
+        key = (a, b)
+        if key in seen_spans:
+            continue
+        seen_spans.add(key)
+        found.append((a, b, stmt, externize_statement(stmt)))
+    return found, missing
+
+
+def externalize_runtime_globals(runtime_prefix: str, declarations: list[tuple[int,int,str,str]]) -> str:
+    # Match exact original statements in the runtime prefix.  They survived
+    # function externalization byte-for-byte.
+    out = runtime_prefix
+    for _, _, stmt, _ in declarations:
+        replacement = re.sub(r"^(\s*)static\s+", r"\1", stmt, count=1)
+        if out.count(stmt) != 1:
+            raise SystemExit(f"[Phase6TU] runtime global declaration shape changed: {stmt[:120]!r}")
+        out = out.replace(stmt, replacement, 1)
+    return out
+
+
+def shard_index_for_va(va: int) -> int:
+    # Multiplicative hash of the guest VA. Stable: adding/removing a function
+    # never changes ownership of existing functions.
+    return ((va * 2654435761) & 0xFFFFFFFF) >> 26
+
+
+def parse_translated_functions(body: str) -> list[dict]:
+    masked = mask_noncode(body)
+    rows = []
+    for m in SUB_DEF_RE.finditer(masked):
+        brace = masked.find("{", m.start(), m.end())
+        if brace < 0:
+            raise SystemExit("[Phase6TU] translated function opening brace missing")
+        end = closing_brace(masked, brace)
+        name = m.group(1)
+        va = int(m.group(2), 16)
+        src = body[m.start():end]
+        src = re.sub(r"^(\s*)static\s+void\s+", r"\1void ", src, count=1)
+        rows.append({"name": name, "va": va, "source": src})
+    if not rows:
+        raise SystemExit("[Phase6TU] no translated functions found")
+    return rows
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--source", type=Path, required=True)
+    ap.add_argument("--out-dir", type=Path, required=True)
+    ap.add_argument("--shards", type=int, default=SHARD_COUNT)
+    args = ap.parse_args()
+
+    if args.shards != 64:
+        raise SystemExit("[Phase6TU] Phase 6 currently requires exactly 64 shards")
+
+    text = args.source.read_text(encoding="utf-8", errors="strict")
+    off = text.find(OFF_MARKER)
+    if off < 0:
+        raise SystemExit("[Phase6TU] optimize-off marker missing")
+    body_start = off + len(OFF_MARKER)
+    on = text.find(ON_MARKER, body_start)
+    if on < 0:
+        raise SystemExit("[Phase6TU] optimize-on marker missing")
+
+    prefix = text[:body_start]
+    body = text[body_start:on]
+    suffix = text[on:]
+    funcs = parse_translated_functions(body)
+
+    runtime_prefix, helper_prototypes = externalize_prefix_functions(prefix)
+    preprocessor = extract_preprocessor(prefix)
+    prefix_no_funcs = remove_spans(prefix, function_spans(prefix))
+    type_blocks = extract_type_blocks(prefix_no_funcs)
+    globals_found, globals_missing = collect_runtime_globals(prefix, body, preprocessor)
+    if globals_missing:
+        raise SystemExit(
+            "[Phase6TU] could not safely declarationize runtime globals: "
+            + ", ".join(globals_missing)
+        )
+    runtime_prefix = externalize_runtime_globals(runtime_prefix, globals_found)
+
+    # main.cpp keeps exactly one definition of runtime/support state. No translated
+    # bodies remain here; linker resolves them from translated_###.cpp.
+    runtime_main = runtime_prefix + suffix
+
+    header_parts = [
+        "#pragma once\n",
+        "/* AUTO-GENERATED Phase6 true-TU runtime declarations. */\n",
+        preprocessor,
+        "\n/* shared generated types */\n",
+    ]
+    for block in type_blocks:
+        header_parts.append(block + "\n")
+    header_parts.append("\n/* shared runtime storage */\n")
+    for _, _, _, decl in globals_found:
+        header_parts.append(decl + "\n")
+    header_parts.append("\n/* runtime/support entry points */\n")
+    seen_proto = set()
+    for proto in helper_prototypes:
+        # Translated sub_* declarations are emitted per shard instead.
+        if re.search(r"\bsub_[0-9A-Fa-f]{8}\s*\(", proto):
+            continue
+        normalized = " ".join(proto.split())
+        if normalized in seen_proto:
+            continue
+        seen_proto.add(normalized)
+        header_parts.append(proto + "\n")
+    header = "".join(header_parts)
+
+    buckets: list[list[dict]] = [[] for _ in range(args.shards)]
+    for row in funcs:
+        buckets[shard_index_for_va(row["va"])].append(row)
+    for bucket in buckets:
+        bucket.sort(key=lambda r: r["va"])
+
+    out_dir = args.out_dir
+    shard_dir = out_dir / "translated_shards"
+    shard_dir.mkdir(parents=True, exist_ok=True)
+
+    changed = []
+    unchanged = []
+    main_path = out_dir / "main.cpp"
+    mono_path = out_dir / "main_monolithic.cpp"
+    header_path = shard_dir / "translated_runtime.h"
+    for path, payload in (
+        (main_path, runtime_main),
+        (mono_path, text),
+        (header_path, header),
+    ):
+        (changed if write_if_changed(path, payload) else unchanged).append(path.name)
+
+    shard_rows = []
+    expected_names = {"translated_runtime.h"}
+    for index, bucket in enumerate(buckets):
+        name = f"translated_{index:03d}.cpp"
+        expected_names.add(name)
+        callees = sorted(
+            {
+                callee
+                for row in bucket
+                for callee in SUB_CALL_RE.findall(row["source"])
+                if callee not in {x["name"] for x in bucket}
+            }
+        )
+        payload = [
+            '#include "translated_runtime.h"\n',
+            '#pragma optimize("", off)\n',
+        ]
+        if callees:
+            payload.append("\n/* cross-TU translated callees used by this shard */\n")
+            payload.extend(f"void {name_}(void);\n" for name_ in callees)
+        payload.append("\n")
+        for row in bucket:
+            payload.append(row["source"])
+            payload.append("\n\n")
+        payload.append('#pragma optimize("", on)\n')
+        shard_text = "".join(payload)
+        shard_path = shard_dir / name
+        (changed if write_if_changed(shard_path, shard_text) else unchanged).append(name)
+        shard_rows.append(
+            {
+                "name": name,
+                "functions": len(bucket),
+                "chars": len(shard_text),
+                "min_va": f"0x{bucket[0]['va']:08X}" if bucket else None,
+                "max_va": f"0x{bucket[-1]['va']:08X}" if bucket else None,
+                "sha256": hashlib.sha256(shard_text.encode("utf-8")).hexdigest(),
+            }
+        )
+
+    stale_removed = []
+    for p in shard_dir.iterdir():
+        if p.is_file() and p.name not in expected_names:
+            p.unlink()
+            stale_removed.append(p.name)
+
+    manifest = {
+        "phase": "6TU",
+        "source": str(args.source),
+        "shard_count": args.shards,
+        "translated_functions": len(funcs),
+        "runtime_helpers_externalized": len(helper_prototypes),
+        "runtime_globals_externalized": len(globals_found),
+        "stable_assignment": "multiplicative guest-VA hash",
+        "content_stable_writes": True,
+        "changed_files": sorted(changed),
+        "unchanged_files": sorted(unchanged),
+        "stale_removed": sorted(stale_removed),
+        "shards": shard_rows,
+    }
+    manifest_path = out_dir / "phase6tu-manifest.json"
+    write_if_changed(manifest_path, json.dumps(manifest, indent=2) + "\n")
+
+    counts = [len(x) for x in buckets]
+    print("[Phase6TU] TRUE TRANSLATION-UNIT EMISSION: PASS")
+    print(f"[Phase6TU] translated_functions={len(funcs)} shards={args.shards}")
+    print(f"[Phase6TU] shard_functions_min={min(counts)} max={max(counts)}")
+    print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
+    print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
+    print(f"[Phase6TU] changed_files={len(changed)} unchanged_files={len(unchanged)} stale_removed={len(stale_removed)}")
+    print(f"[Phase6TU] out={out_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
