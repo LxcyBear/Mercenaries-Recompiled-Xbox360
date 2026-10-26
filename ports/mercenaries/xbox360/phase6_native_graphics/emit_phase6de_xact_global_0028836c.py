@@ -34,7 +34,7 @@ BASE_TAG = "P6DD-XACT-280C39-ARG1-INTERNAL-20261026-A"
 BUILD_TAG = "P6DE-XACT-GLOBAL-0028836C-PROVENANCE-20261026-A"
 COOKIE_OLD = "phase6dd_env_build_cookie"
 COOKIE_NEW = "phase6de_env_build_cookie"
-EMITTER_REVISION = "6DE-R2"
+EMITTER_REVISION = "6DE-R3"
 
 GLOBAL_VA = 0x0028836C
 READ_BLOCK_VA = 0x00280CD2
@@ -80,21 +80,26 @@ def matching_brace(text: str, open_pos: int) -> int:
 
 
 def install_state(text: str) -> str:
-    # The WRITE32 watch is emitted very early in main_monolithic.cpp.  Keep
-    # its telemetry state immediately before the central router definition so
-    # MSVC sees the declarations before the wrapper uses them.
-    anchor = "void recomp_guest_write32(uint32_t address, uint32_t value)"
-    if text.count(anchor) != 1:
+    # The WRITE32 signature can also appear as a forward declaration. Anchor
+    # on the actual central function definition only, matching the same shape
+    # used by install_write32_watch().
+    definition_re = re.compile(
+        r"(?m)^void\\s+recomp_guest_write32\\(uint32_t address, uint32_t value\\)\\s*\\{"
+    )
+    matches = list(definition_re.finditer(text))
+    if len(matches) != 1:
         raise SystemExit(
-            f"[Phase6DE] expected one central WRITE32 state anchor, found {text.count(anchor)}"
+            f"[Phase6DE] expected one central WRITE32 definition for state placement, found {len(matches)}"
         )
+
     state = """static DWORD s_phase6deGlobalWriteReports = 0u;
 static DWORD s_phase6deGlobalLastCaller = 0u;
 static DWORD s_phase6deGlobalLastValue = 0u;
 static DWORD s_phase6deGlobalLastEsp = 0u;
 
 """
-    return text.replace(anchor, state + anchor, 1)
+    pos = matches[0].start()
+    return text[:pos] + state + text[pos:]
 
 
 def install_write32_watch(text: str) -> str:
@@ -379,7 +384,11 @@ def main() -> int:
     # Compile-order gate: the early WRITE32 wrapper must never precede the
     # telemetry declarations it consumes.
     state_pos = main_text.find("static DWORD s_phase6deGlobalWriteReports = 0u;")
-    wrapper_pos = main_text.find("void recomp_guest_write32(uint32_t address, uint32_t value)")
+    wrapper_match = re.search(
+        r"(?m)^void\\s+recomp_guest_write32\\(uint32_t address, uint32_t value\\)\\s*\\{",
+        main_text,
+    )
+    wrapper_pos = wrapper_match.start() if wrapper_match else -1
     if state_pos < 0 or wrapper_pos < 0 or state_pos > wrapper_pos:
         raise SystemExit("[Phase6DE] WRITE32 telemetry compile-order gate failed")
 
