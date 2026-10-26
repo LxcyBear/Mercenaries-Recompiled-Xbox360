@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R3"
+EMITTER_REVISION = "6DQ-R4"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -533,25 +533,33 @@ def patch_escape_journal(text: str) -> str:
     if "phase6dq_note_hard_stop(" in body:
         raise SystemExit("[Phase6DQ] phase4c escape journal hook already installed")
 
-    # Later Phase-6 instrumentation may insert additional statements between
-    # caller capture and longjmp. Anchor only on the stable caller assignment
-    # instead of assuming the original two-line Phase-4C function body.
-    anchor = "    s_phase4cBoundaryCaller = phase4c_current_caller();\n"
-    hook = anchor + """    phase6dq_note_hard_stop(
-        kind,
-        target,
-        s_phase4cBoundaryCaller,
-        savedEsp);
-"""
-    body = replace_once(
-        body,
-        anchor,
-        hook,
-        "phase4c escape caller anchor",
+    # Phase-6 has repeatedly evolved the bookkeeping inside phase4c_escape.
+    # The only semantic invariant we need is the actual escape itself. Insert
+    # immediately before the function's longjmp and compute caller context
+    # directly at that point rather than depending on any inherited assignment.
+    pattern = re.compile(
+        r"(?m)^(?P<indent>[ \t]*)longjmp\s*\(\s*s_phase4cEscape\s*,\s*1\s*\)\s*;"
     )
+    matches = list(pattern.finditer(body))
+    if len(matches) != 1:
+        raise SystemExit(
+            f"[Phase6DQ] expected one phase4c escape longjmp, found {len(matches)}"
+        )
 
-    if "longjmp(s_phase4cEscape, 1);" not in body:
-        raise SystemExit("[Phase6DQ] phase4c escape lost longjmp after journal patch")
+    m = matches[0]
+    indent = m.group("indent")
+    hook = (
+        f"{indent}phase6dq_note_hard_stop(\n"
+        f"{indent}    kind,\n"
+        f"{indent}    target,\n"
+        f"{indent}    phase4c_current_caller(),\n"
+        f"{indent}    savedEsp);\n"
+    )
+    body = body[:m.start()] + hook + body[m.start():]
+
+    # Preserve inherited escape bookkeeping and the real longjmp exactly.
+    if len(list(pattern.finditer(body))) != 1:
+        raise SystemExit("[Phase6DQ] phase4c escape longjmp changed unexpectedly")
 
     return text[:start] + body + text[end:]
 
