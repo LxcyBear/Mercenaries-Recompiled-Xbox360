@@ -39,7 +39,7 @@ BASE_TAG = "P6DN-XACT-MM166-SUBPAGE-REPAIR-20261026-A"
 BUILD_TAG = "P6DO-MM166-ALIGNMENT-GAP-REPAIR-20261026-A"
 COOKIE_OLD = "phase6dn_env_build_cookie"
 COOKIE_NEW = "phase6do_env_build_cookie"
-EMITTER_REVISION = "6DO-R1"
+EMITTER_REVISION = "6DO-R2"
 
 
 def load(path: Path, name: str):
@@ -59,8 +59,24 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 
 def patch_tail_alignment_gap(text: str) -> str:
-    text = replace_once(
-        text,
+    # Scope every rewrite to the actual tail-claim helper. Several generic
+    # declaration/trace fragments also occur in other allocator helpers.
+    helper_start = text.find(
+        "static uint32_t phase6at_claim_post_create_tail(\n"
+    )
+    helper_end_marker = (
+        "\nstatic void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)\n"
+    )
+    if helper_start < 0:
+        raise SystemExit("[Phase6DO] tail-claim helper start missing")
+    helper_end = text.find(helper_end_marker, helper_start)
+    if helper_end < 0:
+        raise SystemExit("[Phase6DO] tail-claim helper end missing")
+
+    helper = text[helper_start:helper_end]
+
+    helper = replace_once(
+        helper,
         "    uint32_t page;\n"
         "    uint32_t index;\n"
         "    uint32_t heapHigh = PHASE4C_TITLE_HEAP_START;\n",
@@ -90,7 +106,7 @@ def patch_tail_alignment_gap(text: str) -> str:
     if (alignmentPad >= alignment)
         return 0u;
 '''
-    text = replace_once(text, old, new, "exact-end tail gate")
+    helper = replace_once(helper, old, new, "exact-end tail gate")
 
     old_fmt = (
         '"PASS: Phase 6AT post-create tail claim base=%08X requested=%u '
@@ -102,7 +118,7 @@ def patch_tail_alignment_gap(text: str) -> str:
         'rounded=%u actual=%u align=%u alignment_pad=%u old_page_next=%08X '
         'new_page_next=%08X heap_high=%08X reservations=%u calls=%u successes=%u",'
     )
-    text = replace_once(text, old_fmt, new_fmt, "tail trace format")
+    helper = replace_once(helper, old_fmt, new_fmt, "tail trace format")
 
     old_args = r'''        (unsigned int)alignment,
         (unsigned int)oldPageNext,
@@ -113,7 +129,7 @@ def patch_tail_alignment_gap(text: str) -> str:
         (unsigned int)oldPageNext,
         (unsigned int)s_phase4cVmPageNext,
 '''
-    text = replace_once(text, old_args, new_args, "tail trace arguments")
+    helper = replace_once(helper, old_args, new_args, "tail trace arguments")
 
     marker = r'''    if (actualSize)
         *actualSize = size;
@@ -139,7 +155,11 @@ def patch_tail_alignment_gap(text: str) -> str:
 
     ++s_phase6atTailClaimSuccesses;
 '''
-    return replace_once(text, marker, replacement, "alignment-gap success trace")
+    helper = replace_once(
+        helper, marker, replacement, "alignment-gap success trace"
+    )
+
+    return text[:helper_start] + helper + text[helper_end:]
 
 
 def relabel_main(text: str) -> str:
