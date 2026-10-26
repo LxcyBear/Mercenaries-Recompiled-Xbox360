@@ -76,7 +76,7 @@ Write-Host "[Phase6DQ] Next proven boundary: WRITE32 FE8202A4 at tick 26,712,259
 Write-Host "[Phase6DQ] Historical CCCCCCD0 path: ELIMINATED"
 Write-Host "[Phase6DQ] XACT root teardown/global-zero regression: ABSENT"
 Write-Host "[Phase6DQ] Static pack cap: 4096 new support-clean functions"
-Write-Host "[Phase6DQ] Priority: D3D -> XGRPH -> DSOUND -> XACTENG"
+Write-Host "[Phase6DQ] Priority: D3D -> XGRPH -> DSOUND -> TEXT_HOT -> XACTENG -> WMADEC/XPP/XMV"
 Write-Host "[Phase6DQ] VP aligned WRITE32: diagnostic continue + journal"
 Write-Host "[Phase6DQ] Unknown VP reads: HARD FENCE"
 Write-Host "[Phase6DQ] Non-VP MMIO/NV2A unknowns: HARD FENCE"
@@ -89,10 +89,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R1"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R1"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R2"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R2"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R1"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R2"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -141,7 +141,7 @@ if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"){
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R1"-or
+if($q.emitter_revision-ne"6DQ-R2"-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -218,6 +218,10 @@ Write-Host ("[Phase6DQ] Generated shards        : {0}" -f $shardCount)
 Write-Host ("[Phase6DQ] D3D selected            : {0}" -f [int]$q.static_pack.selected_by_section_before_prune.D3D)
 Write-Host ("[Phase6DQ] XGRPH selected          : {0}" -f [int]$q.static_pack.selected_by_section_before_prune.XGRPH)
 Write-Host ("[Phase6DQ] DSOUND selected         : {0}" -f [int]$q.static_pack.selected_by_section_before_prune.DSOUND)
+Write-Host ("[Phase6DQ] TEXT_HOT selected       : {0}" -f [int]$q.static_pack.selected_by_section_before_prune.TEXT_HOT)
+Write-Host ("[Phase6DQ] WMADEC selected         : {0}" -f [int]$q.static_pack.selected_by_section_before_prune.WMADEC)
+Write-Host ("[Phase6DQ] XPP selected            : {0}" -f [int]$q.static_pack.selected_by_section_before_prune.XPP)
+Write-Host ("[Phase6DQ] XMV selected            : {0}" -f [int]$q.static_pack.selected_by_section_before_prune.XMV)
 Write-Host ("[Phase6DQ] XACTENG selected        : {0}" -f [int]$q.static_pack.selected_by_section_before_prune.XACTENG)
 Write-Host "[Phase6DQ] VP WRITE32 diagnostic continuation: ARMED"
 Write-Host "[Phase6DQ] Unknown VP READs: HARD FENCED"
