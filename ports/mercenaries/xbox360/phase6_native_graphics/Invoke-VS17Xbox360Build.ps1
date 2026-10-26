@@ -500,14 +500,50 @@ $xexCandidates = @(
         Sort-Object LastWriteTime -Descending
 )
 
+$buildReportedUpToDate = $false
+if (Test-Path -LiteralPath $BuildLog) {
+    $buildReportedUpToDate = $null -ne (
+        Select-String -LiteralPath $BuildLog -Pattern "up-to-date" -CaseSensitive:$false -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    )
+}
+
+$generatedInputsUnchanged = (
+    (-not $mainChanged) -and
+    (-not $envChanged) -and
+    ($changedShardCount -eq 0) -and
+    (@($staleShards).Count -eq 0)
+)
+
+$builtXex = $null
+$xexDisposition = ""
+
+if (@($xexCandidates).Count -gt 0) {
+    $builtXex = $xexCandidates[0]
+    $xexDisposition = "Fresh"
+}
+elseif ($SkipClean -and $generatedInputsUnchanged -and $buildReportedUpToDate) {
+    $existingXexCandidates = @(
+        Get-ChildItem -LiteralPath $effectiveSolutionRoot -Filter "*.xex" -File -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
+    )
+
+    if (@($existingXexCandidates).Count -gt 0) {
+        $builtXex = $existingXexCandidates[0]
+        $xexDisposition = "Reused up-to-date"
+    }
+}
+
 Write-Host "[XDK-BUILD] BUILD: PASS"
 Write-Host ("[XDK-BUILD] Build elapsed  : {0:N2}s" -f $buildElapsed.TotalSeconds)
 Write-Host "[XDK-BUILD] Clean log      : $CleanLog"
 Write-Host "[XDK-BUILD] Build log      : $BuildLog"
+Write-Host ("[XDK-BUILD] VS up-to-date  : {0}" -f $buildReportedUpToDate)
+Write-Host ("[XDK-BUILD] Inputs unchanged: {0}" -f $generatedInputsUnchanged)
 
-if (@($xexCandidates).Count -gt 0) {
-    $builtXex = $xexCandidates[0]
-    Write-Host "[XDK-BUILD] Fresh XEX      : $($builtXex.FullName)"
+if ($null -ne $builtXex) {
+    Write-Host ("[XDK-BUILD] XEX disposition: {0}" -f $xexDisposition)
+    Write-Host "[XDK-BUILD] XEX path       : $($builtXex.FullName)"
     Write-Host "[XDK-BUILD] XEX timestamp  : $($builtXex.LastWriteTime)"
     Write-Host "[XDK-BUILD] XEX size       : $($builtXex.Length) bytes"
 
@@ -523,8 +559,11 @@ if (@($xexCandidates).Count -gt 0) {
         Write-Host "[XDK-BUILD] Published size : $($published.Length) bytes"
     }
 }
+elseif ($buildReportedUpToDate -and -not $generatedInputsUnchanged) {
+    throw "VS17 reported the project up-to-date even though generated inputs changed; refusing to reuse a potentially stale .xex."
+}
 else {
-    throw "VS17 reported build success, but no newly-written .xex was found under '$effectiveSolutionRoot'."
+    throw "VS17 reported build success, but no usable .xex was found under '$effectiveSolutionRoot'."
 }
 
 Write-Host "[XDK-BUILD] FULL PIPELINE: PASS"
