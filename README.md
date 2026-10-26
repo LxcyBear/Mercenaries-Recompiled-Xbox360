@@ -4,7 +4,7 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 24, 2026 · **Current focus:** Phase 6 — native Xbox 360 graphics (Xenos). Phases 6BD–6BJ proved the NV2A PFIFO/PGRAPH/PFB initialization chain; 6BK escaped the old GPU-init choke point; and 6BL–6BN crossed D3D/XGRPH back into title-side `.text`. 6BO–6BQ repaired the post-XGRPH file/volume ABI path; 6BR entered exact root `0x00209A70`; 6BS consumed retail `game:\xesrb.tga` completely; 6BT crossed the 200 ms relative kernel delay; 6BU identified the live file-object request; 6BV proved the diagnostic FILE_OBJECT sentinel is not dereferenced there; 6BW crossed guest `KeRaiseIrqlToDpcLevel`; 6BX pinned the low-KSEG-looking fault to ordinal-357 DATA. **Phase 6BY is now hardware-proven:** raw ordinal 357 at thunk `0x002DBDBC` relocated to `0x0087E0A0`, the old `0x8000018D` fault disappeared, and retail advanced into `IdexChannelObject+0x28` at `0x0087E0C8`. That field is the embedded `KDEVICE_QUEUE.DeviceListHead`; its uninitialized zero Flink led to a later `READ32 0xFFFFFFFF` boundary after execution advanced through `0x0022AC9E/ACA1/ACD1`. The console also changed from the long-standing blue diagnostic surface to orange on this run; that is a meaningful presentation-state change, but not yet counted as Mercenaries-rendered pixels. Phase 6BZ is prepared with the correct direct `IDE_CHANNEL_OBJECT` export and an empty circular DeviceQueue list.
+> **Last roadmap review:** October 26, 2026 · **Current focus:** Phase 6 — native Xbox 360 graphics (Xenos), now in the late bring-up / hardware-handshake stage. The retail path has a live 640×480 guest D3D device, proven NV2A PFIFO/PGRAPH/PFB state traffic, repeated D3D/XGRPH frontier execution, XACT/DSOUND/APU initialization, and the 6DQ ROCKET pack (13,516 translated members) running on hardware. 6DQ crossed the former VP `WRITE32 FE8202A4` frontier plus seven additional VP writes, then R12 proved `READ32 FEC0012C -> 0`; the next operation was the matching `WRITE32 FEC0012C` one translated tick later. R13 is prepared to model that exact write as a no-op while keeping all unrelated FEC/MMIO accesses fenced. No Mercenaries-generated framebuffer/present has appeared yet; the current orange surface remains diagnostic, not game-rendered pixels.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
 
@@ -47,7 +47,10 @@ emulator running inside an XEX. `default.xex` is the intended native output.
 ## Live project status
 
 Progress is based on **tested exit criteria**, not invented percentage values.
-Each phase has independently checkable checkpoints below.
+Each phase has independently checkable checkpoints below. As an internal planning
+estimate only, Phase 6 bring-up is now considered **more complete than incomplete**
+and roughly **75–80% through bring-up**; that estimate is not a substitute for the
+formal Phase-6 exit criteria.
 
 | Phase | State | Exit criterion |
 | --- | --- | --- |
@@ -57,7 +60,7 @@ Each phase has independently checkable checkpoints below.
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
 | **5 — Subsystem bring-up under native game execution** | **COMPLETE — repeatability 3/3 PASS + exit reconnaissance READY/PASS** | Stable translated/runtime path, classified endpoint, subsystem inventory, first-touch baseline, risk map and ordered Phase-6 handoff |
-| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — 6BY relocated ordinal-357 `IdexChannelObject`, cleared the old `0x8000018D` fault and reached its `DeviceQueue.DeviceListHead` at `+0x28`; 6BZ empty-queue structure model prepared** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
+| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — late bring-up; 6DQ ROCKET hardware-proven through VP command writes and exact `FEC0012C` IOAPIC read; R13 matching write bridge prepared** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
 | 7 — Audio, movies, input and streaming integration | Not started | Functional startup media/menu audio/input with stable timing and storage streaming |
 | 8 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
@@ -76,11 +79,12 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 5 is complete and frozen. Phase 6 has now crossed from graphics-startup reconnaissance into the real Xbox GPU command path. Native Xbox 360 D3D/Xenos device creation and physical presentation remain hardware-proven, as do the retail title heap and both contiguous graphics-memory claims (`0x02880000` for 23,592,960 bytes and `0x02628000` for 2,457,600 bytes).
+**Present blockers:** Phase 5 is complete and frozen. Phase 6 is no longer blocked on basic startup, D3D device creation, the original NV2A PFIFO/PGRAPH/PFB initialization chain, or the earlier ordinal-357 / DeviceQueue issue. The current hardware path has a live guest D3D device, working graphics-pool/tile/ZCOMP state, repeated D3D/XGRPH execution, active XACT/DSOUND/APU setup, and a broad translated closure capable of hundreds of thousands of indirect dispatches per run.
 
-Phase 6BD proved the missing retail child-context relationship: `D3DState 0x00299380 + 0x1C28 = 0x0029AFA8`, and the retail constructor helper `sub_00291F31` initializes that child object's first dword to the NV2A BAR0 base `0xFD000000`. Restoring only that proven field caused the first real guest GPU access, READ8 `0xFD003214`, and the hardware diagnostic turned **purple**. Phase 6BE then supplied only the existing-backend PFIFO idle semantics for `FD003214`, `FD002400`, and `FD003220`; the translated wait completed and execution advanced to READ32 `0xFD400700` at translated function `0x0029528C`.
+The immediate blocker is now a narrow hardware handshake inside the audio/APIC-side path. 6DQ crossed the former VP boundary at `FE8202A4` and seven more VP writes. R12 then handled exact `READ32 FEC0012C` as a modeled zero; the very next translated operation was `WRITE32 FEC0012C`, which remained fenced and stopped the run at tick 26,712,265. R13 models only that exact matching write as a no-op, preserving hard fences for every unrelated FEC/MMIO access.
 
-The immediate blocker is therefore no longer a null D3D child context, PFIFO spin, or PGRAPH idle poll. Phase 6BF crossed `FD400700` twice and exposed a real PFB tiled-memory programming write: WRITE32 `0xFD100254 = 0x02627FFF`. That address is tile #1 LIMIT, and the value exactly matches the inclusive end of the newly allocated `0x024FC000..0x02627FFF` graphics range. Phase 6BG proved that path on hardware: the game programmed tile #1 LIMIT `FD100254=02627FFF` and PITCH `FD100258=00000A00`, then advanced to WRITE32 `FD400914`. Phase 6BH proved that scoped PGRAPH state path on hardware by crossing writes at `FD400914`, `FD400918`, and `FD400910`. The next boundary is WRITE32 `FD100250`, tile #1 BASE with value `0x024FC003`. Phase 6BI reuses the existing documented PFB tile BASE/LIMIT/PITCH shadow helper for this dynamic access inside `sub_00292586`; all unrelated functions and MMIO/VRAM remain hard-fenced.
+The major visible gap remains presentation: Xenos is alive and the guest D3D device is published, but the latest hardware cleanup still reports `display_calls=0`, `framebuffer=00000000`, and zero present/pixel-root entries. Audio is further into real initialization than display, but audible playback is not yet claimed.
+
 ### Current Phase-6 hardware map
 
 - **6W/6X:** reached and crossed retail graphics-pool root `0x0020F9C0`.
@@ -135,9 +139,13 @@ The immediate blocker is therefore no longer a null D3D child context, PFIFO spi
   boundary became READ32 `0xFD400700` at `sub_0029528C`.
 - **6BF — hardware PASS:** the exact PGRAPH `FD400700` idle-status read returned backend-equivalent zero twice. Retail D3D then allocated another 1,228,800-byte contiguous block at `0x024FC000` and advanced to WRITE32 `0xFD100254` with `EDX=0x02627FFF`. The final VA ring reached `0x00292618`.\n- **6BG — hardware PASS:** tile #1 LIMIT `FD100254=02627FFF` and PITCH `FD100258=00000A00` were both bridged successfully. The next hard boundary became WRITE32 `FD400914` in PGRAPH.
 - **6BH — hardware PASS:** the scoped PGRAPH state bridge crossed `FD400914=02627FFF`, `FD400918=00000A00`, and `FD400910=024FC003`, then advanced to PFB WRITE32 `FD100250`.
-- **6BI — PREPARED / hardware test pending:** route the dynamic tile #1 BASE access through the already-proven documented PFB tile BASE/LIMIT/PITCH helper inside `sub_00292586`; scoped PGRAPH behavior remains unchanged and all unrelated MMIO/VRAM remains fenced.
+- **6BI — hardware PASS:** PFB tile #1 BASE `FD100250=024FC003` crossed and read back correctly; the later PGRAPH/PFB tile/ZCOMP path also became hardware-proven.
+- **6BJ–6BN — hardware PASS:** the tile/ZCOMP chain completed, the later PFIFO clear crossed, D3D roots `0028B180/00290970` executed, XGRPH root `0029C8BE` repeated, and retail returned to title-side `.text`.
+- **6BO–6BY — hardware PASS:** post-XGRPH file/volume, delay, object, IRQL and ordinal-357/IdexChannelObject issues were classified and crossed without relaxing unrelated safety fences.
+- **6DQ ROCKET — hardware PASS through R12 frontier:** the broad pack contains 13,516 translated members. Hardware crossed VP FREE `FE820010 -> 00000080`, then eight VP writes beginning at `FE8202A4`. Exact `READ32 FEC0012C` returned modeled zero successfully; the next operation, one translated tick later, was the matching `WRITE32 FEC0012C`, which became the new hard fence at tick 26,712,265.
+- **6DQ R13 — PREPARED:** consume only the exact observed `WRITE32 FEC0012C` as an IOAPIC no-op and journal it; all other unknown FEC/MMIO behavior remains hard-fenced.
 
-The immediate hardware goal is Phase 6BI: cross the hardware-proven PFB tile #1 BASE write `FD100250=024FC003` using the existing documented tile shadow semantics, then capture the next unsupported GPU operation. The next major visual milestone remains the first **Mercenaries-generated pixel/frame**; purple remains the hardware-proven "real NV2A boundary reached" diagnostic.
+The immediate hardware goal is R13: cross the complete observed `FEC0012C` read/write pair and let the 13,516-member ROCKET pack run until the next genuinely unsupported boundary. The next major visual milestone remains the first **Mercenaries-generated pixel/frame**; the current orange surface is still diagnostic because no guest display/framebuffer/present call has been reached.
 
 ### Immediate next tests
 
