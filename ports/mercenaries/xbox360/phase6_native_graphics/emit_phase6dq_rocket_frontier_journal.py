@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R5"
+EMITTER_REVISION = "6DQ-R6"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -889,7 +889,9 @@ def main() -> int:
         # expected support-clean fence lines.
         sweep_output = io.StringIO()
         try:
-            with contextlib.redirect_stdout(sweep_output):
+            with contextlib.redirect_stdout(sweep_output), contextlib.redirect_stderr(
+                sweep_output
+            ):
                 main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
                     main_text,
                     base,
@@ -900,9 +902,11 @@ def main() -> int:
                     require_sweep_root=False,
                 )
         except BaseException:
-            buffered = sweep_output.getvalue()
+            buffered = sweep_output.getvalue().splitlines()
             if buffered:
-                print(buffered, end="")
+                print("[Phase6DQ] Phase5BC buffered failure tail:")
+                for line in buffered[-40:]:
+                    print(line)
             raise
     else:
         rendered = {}
