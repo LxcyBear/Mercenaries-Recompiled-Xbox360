@@ -613,7 +613,7 @@ static void phase6dq_ke_stall_execution_processor(uint32_t savedEsp)
     /*
      * A real stall is expected to be short. Refuse a corrupted/unbounded
      * duration rather than pinning the Xenon CPU for an arbitrarily long time.
-     * The hardware-proven call is 1000 us, far below this guard.
+     * R16 hardware proved 20 us per call, far below this guard.
      */
     if (microSeconds > 1000000u)
     {
@@ -1570,7 +1570,9 @@ def main() -> int:
             "calling_convention": "stdcall",
             "implementation": "QPC-backed busy-wait",
             "hardware_seed_ticks": 26712270,
-            "hardware_seed_microseconds": 1000,
+            "hardware_seed_microseconds": 20,
+            "hardware_seed_calls": 1000,
+            "hardware_seed_total_microseconds": 20000,
             "max_safe_microseconds": 1000000,
             "unreasonable_duration_fenced": True,
         },
