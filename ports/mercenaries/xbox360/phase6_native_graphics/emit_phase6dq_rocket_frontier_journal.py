@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R20"
+EMITTER_REVISION = "6DQ-R21"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -1081,7 +1081,7 @@ def patch_dsound_poison_slot_dispatch(text: str) -> str:
     #   ... RECOMP_ICALL_SAFE(eax ...)
     # Require exactly one such pair inside this exact function or refuse to emit.
     load_re = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)eax\s*=\s*GUEST_READ32\(\s*eax\s*\+\s*(?:4|0x4|0x04)\s*\)\s*;\s*$"
+        r"(?m)^(?P<indent>[ \t]*)eax\s*=\s*(?P<accessor>GUEST_READ32|phase6ch_apu_read32)\(\s*eax\s*\+\s*(?:4|0x4|0x04)\s*\)\s*;\s*$"
     )
     candidates = []
     for m in load_re.finditer(body):
@@ -1102,20 +1102,20 @@ def patch_dsound_poison_slot_dispatch(text: str) -> str:
 
     m = candidates[0]
     indent = m.group("indent")
-    original = m.group(0)
+    accessor = m.group("accessor")
     replacement = (
         f"{indent}eax = phase6dq_dsound_poison_dispatch_target(\n"
         f"{indent}    eax,\n"
         f"{indent}    ecx,\n"
         f"{indent}    esi);\n"
         f"{indent}if (eax != 0xF6DCCCD0u)\n"
-        f"{indent}    eax = GUEST_READ32(eax + 4);"
+        f"{indent}    eax = {accessor}(eax + 4);"
     )
     body = body[:m.start()] + replacement + body[m.end():]
 
     guarded = (
         f"{indent}if (eax != 0xF6DCCCD0u)\n"
-        f"{indent}    eax = GUEST_READ32(eax + 4);"
+        f"{indent}    eax = {accessor}(eax + 4);"
     )
     if body.count("phase6dq_dsound_poison_dispatch_target(") != 1:
         raise SystemExit("[Phase6DQ] DSOUND poison-site rewrite count mismatch")
@@ -1588,6 +1588,7 @@ def main() -> int:
             "emitter_source_shape_guard": True,
             "function_local_unique_dispatch_pair_guard": True,
             "guarded_dereference_postcheck": True,
+            "accepts_inherited_apu_routed_accessor": True,
             "whitespace_tolerant_icall_guard": True,
             "result": "DS_OK",
             "saved_esp_restored": True,
