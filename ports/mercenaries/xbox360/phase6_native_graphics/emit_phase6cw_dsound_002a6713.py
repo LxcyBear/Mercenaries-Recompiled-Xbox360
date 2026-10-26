@@ -33,7 +33,7 @@ BASE_TAG = "P6CV-SHADOW-RAM-F0000000-20261025-A"
 BUILD_TAG = "P6CW-DSOUND-SWEEP-002A6713-20261026-A"
 COOKIE_OLD = "phase6cv_env_build_cookie"
 COOKIE_NEW = "phase6cw_env_build_cookie"
-EMITTER_REVISION = "6CW-R5"
+EMITTER_REVISION = "6CW-R6"
 
 ROOT = 0x002A6713
 CALLER = 0x0023A3CE
@@ -369,32 +369,22 @@ def main() -> int:
     candidate_new = candidate_order[:SWEEP_CAP]
     truncated = max(0, len(candidate_order) - len(candidate_new))
 
-    new_members = list(candidate_new)
-    expanded = old | set(new_members)
-
-    # The mandatory root is maintained manual support, not a generated member.
-    # Sweep generated siblings independently; then install the exact root body
-    # and dispatch case from recomp_manual.c semantics.
-    # Install maintained manual support first so the support-clean scanner
-    # treats calls to sub_002A6713 as resolved dependencies of generated
-    # DSOUND siblings rather than pruning those callers.
+    # R5 proved that every newly selected generated DSOUND sibling was
+    # rejected by the inherited Phase-5BC support-clean scanner. That is useful
+    # information, but it must not block the maintained manual root itself.
+    #
+    # 6CW-R6 therefore makes the sibling batch explicitly opportunistic:
+    # keep the existing proven pack unchanged, defer these new generated
+    # siblings, and test only the exact maintained 0x002A6713 decryptor.
+    # A later hardware frontier can justify the next support implementation
+    # instead of widening blindly.
+    new_members = []
+    frontiers = set()
+    pruned = {}
+    rendered = {}
+    deferred_members = list(candidate_new)
     main_text = install_manual_dsound_root(main_text)
-
-    p5bc.SWEEP_ROOT = ROOT
-    p5bc.instrument_root_entry = instrument_root
-    main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
-        main_text,
-        base,
-        p5bb,
-        generated,
-        new_members,
-        expanded,
-        require_sweep_root=False,
-    )
-
-    # p5bc may prune candidates in place; recompute the authoritative generated
-    # pack. The manual root is tracked separately in the manifest.
-    total_pack = old | set(new_members)
+    total_pack = set(old)
 
     if main_text.count(BASE_TAG) != 1:
         raise SystemExit(
@@ -472,6 +462,8 @@ def main() -> int:
         "forward_remaining_members": len(forward),
         "prefrontier_remaining_members": len(prefrontier),
         "selected_candidate_members": len(candidate_new),
+        "deferred_candidate_members": len(deferred_members),
+        "sibling_sweep_policy": "deferred after R5 support-clean all-candidates rejection",
         "manual_root_dispatch": True,
         "manual_root_source": "ports/mercenaries/src/recomp_manual.c",
         "truncated_candidate_members": truncated,
@@ -499,17 +491,11 @@ def main() -> int:
     manifest["phase6cw_candidate_new_members"] = [
         f"0x{x:08X}" for x in candidate_new
     ]
-    manifest["phase6cw_new_members"] = [
-        f"0x{x:08X}" for x in sorted(new_members)
+    manifest["phase6cw_new_members"] = []
+    manifest["phase6cw_deferred_members"] = [
+        f"0x{x:08X}" for x in deferred_members
     ]
-    manifest["phase6cw_pruned_members"] = [
-        {
-            "address": f"0x{va:08X}",
-            "name": generated[va]["name"],
-            "unresolved_support": names,
-        }
-        for va, names in sorted(pruned.items())
-    ]
+    manifest["phase6cw_pruned_members"] = []
 
     (args.out_dir / "phase6cw-manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n",
@@ -524,9 +510,10 @@ def main() -> int:
     print(
         f"[Phase6CW] sibling sweep: generated={len(dsound_generated)} "
         f"remaining={len(remaining)} selected={len(candidate_new)} "
-        f"truncated={truncated} pruned={len(pruned)} "
-        f"packed_new={len(new_members)} total={len(total_pack)}"
+        f"truncated={truncated} deferred={len(deferred_members)} "
+        f"packed_new=0 total={len(total_pack)}"
     )
+    print("[Phase6CW] generated DSOUND sibling expansion deferred")
     print("[Phase6CW] 6CV shadow RAM alias preserved")
     print("[Phase6CW] XACT/Partition0/D3D/XGRPH/APU semantics preserved")
     print("[Phase6CW] 64M watchdog preserved")
