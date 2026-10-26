@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R36"
+EMITTER_REVISION = "6DQ-R39"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -243,6 +243,10 @@ static uint32_t s_phase6dqVpUnknownReadCount = 0u;
 static uint32_t s_phase6dqIoapicDefaultReadCount = 0u;
 static uint32_t s_phase6dqIoapicDefaultWriteCount = 0u;
 static uint32_t s_phase6dqIoapicSpecialFenceCount = 0u;
+static uint32_t s_phase6dqAc97GlobCnt = 0u;
+static uint32_t s_phase6dqAc97GlobSta = 0x00000100u;
+static uint32_t s_phase6dqAc97ReadCount = 0u;
+static uint32_t s_phase6dqAc97WriteCount = 0u;
 static uint32_t s_phase6dqKeStall151Count = 0u;
 static uint64_t s_phase6dqKeStall151TotalUs = 0ui64;
 static uint32_t s_phase6dqKeStall151LastUs = 0u;
@@ -514,6 +518,98 @@ static void phase6dq_note_vp_write(
 static int phase6dq_ioapic_is_page(uint32_t address)
 {
     return address >= 0xFEC00000u && address < 0xFEC01000u;
+}
+
+static int phase6dq_ac97_is_global32(uint32_t address)
+{
+    return address == 0xFEC0012Cu || address == 0xFEC00130u;
+}
+
+static uint32_t phase6dq_ac97_global_read32(uint32_t address)
+{
+    uint32_t value = 0u;
+    char line[384];
+
+    ++s_phase6dqAc97ReadCount;
+
+    if (address == 0xFEC0012Cu)
+    {
+        value = s_phase6dqAc97GlobCnt;
+    }
+    else if (address == 0xFEC00130u)
+    {
+        /*
+         * AC'97 native-audio bus-master GLOB_STA. Bit 8 is the read-only
+         * primary-codec-ready bit (GS_S0CR). QEMU's AC97 model exposes that
+         * bit on every GLOB_STA read; retail DirectSound polls it in
+         * CAc97Device::CodecReady before deciding that an audio driver exists.
+         */
+        value = s_phase6dqAc97GlobSta | 0x00000100u;
+    }
+
+    if (s_phase6dqAc97ReadCount <= 16u)
+    {
+        sprintf(
+            line,
+            "P6DQ AC97 GLOBAL READ addr=%08X value=%08X cnt=%08X sta=%08X caller=%08X reads=%u",
+            (unsigned int)address,
+            (unsigned int)value,
+            (unsigned int)s_phase6dqAc97GlobCnt,
+            (unsigned int)(s_phase6dqAc97GlobSta | 0x00000100u),
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)s_phase6dqAc97ReadCount);
+        trace(line);
+    }
+
+    return value;
+}
+
+static void phase6dq_ac97_global_write32(uint32_t address, uint32_t value)
+{
+    char line[384];
+
+    ++s_phase6dqAc97WriteCount;
+
+    if (address == 0xFEC0012Cu)
+    {
+        /*
+         * AC'97 GLOB_CNT: bits 1/2 are cold/warm reset requests. Match the
+         * conservative QEMU behavior: reset-request writes are commands and
+         * do not become persistent control state; ordinary writable bits are
+         * retained within the six-bit valid mask.
+         */
+        if ((value & 0x00000006u) == 0u)
+            s_phase6dqAc97GlobCnt = value & 0x0000003Fu;
+
+        /* The native codec is modeled present/ready after reset sequencing. */
+        s_phase6dqAc97GlobSta |= 0x00000100u;
+    }
+    else if (address == 0xFEC00130u)
+    {
+        /*
+         * Preserve the read-only primary-codec-ready bit. Mirror the AC'97
+         * W1C status class used by QEMU for RCS/S1R1/S0R1/GSCI, and retain
+         * only the two writable modem-status bits.
+         */
+        s_phase6dqAc97GlobSta &= ~(value & 0x00008C01u);
+        s_phase6dqAc97GlobSta &= ~0x00030000u;
+        s_phase6dqAc97GlobSta |= value & 0x00030000u;
+        s_phase6dqAc97GlobSta |= 0x00000100u;
+    }
+
+    if (s_phase6dqAc97WriteCount <= 16u)
+    {
+        sprintf(
+            line,
+            "P6DQ AC97 GLOBAL WRITE addr=%08X value=%08X cnt=%08X sta=%08X caller=%08X writes=%u",
+            (unsigned int)address,
+            (unsigned int)value,
+            (unsigned int)s_phase6dqAc97GlobCnt,
+            (unsigned int)(s_phase6dqAc97GlobSta | 0x00000100u),
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)s_phase6dqAc97WriteCount);
+        trace(line);
+    }
 }
 
 static int phase6dq_ioapic_is_default_offset(uint32_t address)
@@ -861,6 +957,16 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
+        "P6DQ AC97 GLOBAL: reads=%u writes=%u glob_cnt=%08X glob_sta=%08X codec_ready=%u",
+        (unsigned int)s_phase6dqAc97ReadCount,
+        (unsigned int)s_phase6dqAc97WriteCount,
+        (unsigned int)s_phase6dqAc97GlobCnt,
+        (unsigned int)(s_phase6dqAc97GlobSta | 0x00000100u),
+        (unsigned int)(((s_phase6dqAc97GlobSta | 0x00000100u) & 0x00000100u) != 0u));
+    trace(line);
+
+    sprintf(
+        line,
         "P6DQ ROCKET JOURNAL SUMMARY C kestall_calls=%u last_us=%u total_us=%I64u max_us=%u fpsave=%u fprestore=%u fpdepth=%u fpmismatch=%u fpstate=%08X",
         (unsigned int)s_phase6dqKeStall151Count,
         (unsigned int)s_phase6dqKeStall151LastUs,
@@ -1198,12 +1304,11 @@ def patch_vp_accesses(text: str) -> str:
         body = body.replace(fallback, probe + fallback, 1)
         text = text[:start] + body + text[end:]
 
-    # Hardware R12/R13 proved a contiguous IOAPIC access sequence at
-    # FEC0012C -> FEC00130. xemu/QEMU masks the 4 KiB IOAPIC page address to
-    # the low byte; only 0x00 (IOREGSEL), 0x10 (IOWIN), and 0x40 (EOI write)
-    # carry device semantics. Batch-consume every other offset using the exact
-    # default behavior (read zero / write no-op) and keep those special
-    # register offsets hard-fenced.
+    # R38 proved FEC0012C/FEC00130 are the AC'97 native-audio bus-master
+    # GLOB_CNT/GLOB_STA pair used by retail DirectSound's codec-ready probe.
+    # Route those exact dword registers first. Preserve the inherited broad
+    # FEC-page default/fence policy everywhere else until additional retail
+    # accesses are hardware-proven.
     for sig, width, fallback in (
         (
             "static uint8_t phase6ch_apu_read8(uint32_t address)",
@@ -1223,7 +1328,13 @@ def patch_vp_accesses(text: str) -> str:
     ):
         start, end = function_span(text, sig)
         body = text[start:end]
-        ioapic_patch = f"""    if (phase6dq_ioapic_is_default_offset(address))
+        ac97_patch = ""
+        if width == 4:
+            ac97_patch = """    if (phase6dq_ac97_is_global32(address))
+        return phase6dq_ac97_global_read32(address);
+
+"""
+        ioapic_patch = ac97_patch + f"""    if (phase6dq_ioapic_is_default_offset(address))
         return ({'uint8_t' if width == 1 else 'uint16_t' if width == 2 else 'uint32_t'})phase6dq_ioapic_default_read(address, {width}u);
 
     if (phase6dq_ioapic_is_page(address))
@@ -1270,7 +1381,13 @@ def patch_vp_accesses(text: str) -> str:
 
     # Batch the xemu/QEMU default IOAPIC write class. Special offsets remain
     # hard-fenced and are journaled before the checked router reports them.
-    ioapic_write_patch = r'''    if (phase6dq_ioapic_is_default_offset(address))
+    ioapic_write_patch = r'''    if (phase6dq_ac97_is_global32(address))
+    {
+        phase6dq_ac97_global_write32(address, value);
+        return;
+    }
+
+    if (phase6dq_ioapic_is_default_offset(address))
     {
         phase6dq_ioapic_default_write(address, 4u, value);
         return;
@@ -1465,7 +1582,7 @@ def instrument_f78f_origin_probe(text: str, base) -> tuple[str, list[dict]]:
     start = matches[0].start()
     brace = masked.find("{", matches[0].start(), matches[0].end() + 1)
     if brace < 0:
-        raise SystemExit("[Phase6DQ] R36 F78F body brace missing")
+        raise SystemExit("[Phase6DQ] R39 F78F body brace missing")
     end = base.closing_brace(masked, brace)
     body = text[start:end]
     body_masked = base.mask_noncode(body)
@@ -2212,6 +2329,11 @@ def main() -> int:
         "P6DQ ROCKET IOAPIC DEFAULT READ width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC DEFAULT WRITE width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC SPECIAL HARD %s width=%u addr=%08X",
+        "P6DQ AC97 GLOBAL READ addr=%08X value=%08X",
+        "P6DQ AC97 GLOBAL WRITE addr=%08X value=%08X",
+        "P6DQ AC97 GLOBAL: reads=%u writes=%u glob_cnt=%08X glob_sta=%08X codec_ready=%u",
+        "address == 0xFEC0012Cu || address == 0xFEC00130u",
+        "value = s_phase6dqAc97GlobSta | 0x00000100u",
         "target == 0x80000097u",
         "target == 0x8000008Eu",
         "target == 0x8000008Bu",
@@ -2364,6 +2486,17 @@ def main() -> int:
             "ordinary_guest_faults_bypassed": False,
             "unrelated_poison_values_bypassed": False,
         },
+        "ac97_codec_ready_bridge": {
+            "hardware_proof": "R36/R38",
+            "glob_cnt_address": "0xFEC0012C",
+            "glob_sta_address": "0xFEC00130",
+            "primary_codec_ready_mask": "0x00000100",
+            "reference_model": "QEMU AC97 GLOB_CNT/GLOB_STA",
+            "scope": "exact global-control/status dword pair only",
+            "other_fec_page_semantics_expanded": False,
+            "dsound_nodriver_bypass_faked": False,
+            "retail_poll_semantics_preserved": True,
+        },
         "vp_diagnostic_continue": {
             "aligned_write32_continue": True,
             "write32_semantics_complete": False,
@@ -2461,16 +2594,17 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print(f"[Phase6DQ] R36 A41EE site tags: {len(a41ee_site_tags)}")
-    print(f"[Phase6DQ] R36 A4622 upstream site tags: {len(a4622_site_tags)}")
-    print(f"[Phase6DQ] R36 A52AD upstream site tags: {len(a52ad_site_tags)}")
-    print(f"[Phase6DQ] R36 F78F targeted READ32 sites: {len(f78f_read_sites)}")
+    print(f"[Phase6DQ] R39 A41EE site tags: {len(a41ee_site_tags)}")
+    print(f"[Phase6DQ] R39 A4622 upstream site tags: {len(a4622_site_tags)}")
+    print(f"[Phase6DQ] R39 A52AD upstream site tags: {len(a52ad_site_tags)}")
+    print(f"[Phase6DQ] R39 F78F targeted READ32 sites: {len(f78f_read_sites)}")
     for site in f78f_read_sites:
-        print(f"[Phase6DQ] R36 F78F READ[{site['site_id']}] expr={site['address_expr']}")
-    print("[Phase6DQ] R36 XACT INIT PROBE: 29FDF0 + 28345A + event-array allocation results captured")
-    print("[Phase6DQ] R36 ORIGIN TRAP: inherited 24-read F78F ring + EC83F0E4 provenance")
-    print("[Phase6DQ] R36 pack/runtime: EXACT R25 order; no control-flow/allocator/fault-policy changes")
-    print("[Phase6DQ] R36 debugger safety: bounded runtime DebugStrings retained")
+        print(f"[Phase6DQ] R39 F78F READ[{site['site_id']}] expr={site['address_expr']}")
+    print("[Phase6DQ] R39 AC97 CODEC READY: FEC0012C GLOB_CNT + FEC00130 GLOB_STA exact semantics")
+    print("[Phase6DQ] R39 XACT INIT PROBE: inherited 29FDF0 + 28345A + event-array results")
+    print("[Phase6DQ] R39 ORIGIN TRAP: inherited F78F provenance")
+    print("[Phase6DQ] R39 pack/runtime: exact AC97 global pair only; no fake HRESULT/control-flow bypass")
+    print("[Phase6DQ] R39 debugger safety: bounded runtime DebugStrings retained")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
