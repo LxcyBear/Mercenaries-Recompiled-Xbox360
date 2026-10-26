@@ -29,6 +29,8 @@ frontier clearing: direct DSOUND producer callsites, literal DSOUND kernel
 targets, and real AvSetDisplayMode intent callers are audited before VS builds.
 R27 rejects raw constant false positives, backward-slices A41EE arg1 producers,
 and adds a bounded runtime callsite ring without suppressing guest faults.
+R28 adds bounded graphics surface/device consumer telemetry around the proven
+640x480x32 tile without changing guest-memory or MMIO semantics.
 """
 
 from __future__ import annotations
@@ -1074,6 +1076,42 @@ static void phase6dq_note_dispatch(
 {
     uint32_t i;
     char line[320];
+
+    sprintf(
+        line,
+        "P6DR GRAPHICS CONSUMER SUMMARY: relevant=%u surface_touch_r=%u surface_touch_w=%u surface_ptr_r=%u surface_ptr_w=%u device_touch_r=%u device_touch_w=%u device_ptr_r=%u device_ptr_w=%u unique=%u last_kind=%u last_owner=%08X last_addr=%08X last_value=%08X",
+        (unsigned int)s_phase6drGraphicsRelevantHits,
+        (unsigned int)s_phase6drSurfaceTouchReads,
+        (unsigned int)s_phase6drSurfaceTouchWrites,
+        (unsigned int)s_phase6drSurfacePointerReads,
+        (unsigned int)s_phase6drSurfacePointerWrites,
+        (unsigned int)s_phase6drDeviceTouchReads,
+        (unsigned int)s_phase6drDeviceTouchWrites,
+        (unsigned int)s_phase6drDevicePointerReads,
+        (unsigned int)s_phase6drDevicePointerWrites,
+        (unsigned int)s_phase6drGraphicsRingCount,
+        (unsigned int)s_phase6drGraphicsLastKind,
+        (unsigned int)s_phase6drGraphicsLastOwner,
+        (unsigned int)s_phase6drGraphicsLastAddress,
+        (unsigned int)s_phase6drGraphicsLastValue);
+    trace(line);
+
+    for (i = 0u; i < s_phase6drGraphicsRingCount; ++i)
+    {
+        Phase6DRGraphicsEvent* row = &s_phase6drGraphicsRing[i];
+        sprintf(
+            line,
+            "P6DR GRAPHICS RING[%u] kind=%u owner=%08X address=%08X value=%08X width=%u write=%u hits=%u",
+            (unsigned int)i,
+            (unsigned int)row->kind,
+            (unsigned int)row->owner,
+            (unsigned int)row->address,
+            (unsigned int)row->value,
+            (unsigned int)row->width,
+            (unsigned int)row->isWrite,
+            (unsigned int)row->hits);
+        trace(line);
+    }
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
     {
@@ -2499,6 +2537,9 @@ def main() -> int:
         "P6DQ DSOUND POISON NOOP:",
         "P6DQ A41EE CALLSITE:",
         "P6DQ A41EE RING[%u]",
+        "P6DR GRAPHICS CONSUMER:",
+        "P6DR GRAPHICS CONSUMER SUMMARY:",
+        "P6DR GRAPHICS RING[%u]",
         "R27 adds call-shape-filtered predictive provenance audits",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
@@ -2713,6 +2754,10 @@ def main() -> int:
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
     print("[Phase6DQ] A41EE runtime provenance ring: ARMED (fault semantics unchanged)")
+    print(
+        f"[Phase6DQ] Graphics consumer probe: functions={graphics_consumer_probe['instrumented_functions']} "
+        f"surface={graphics_consumer_probe['surface_base']}-{graphics_consumer_probe['surface_end']}"
+    )
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
