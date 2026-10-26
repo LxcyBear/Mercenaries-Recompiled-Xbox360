@@ -73,10 +73,10 @@ Write-Host "[Phase6DD] Address widening: NONE"
 if($LASTEXITCODE-ne0){throw "Phase 6DD emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DD-R1"')){
-  throw "Phase 6DD stale emitter detected; expected revision 6DD-R1"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DD-R2"')){
+  throw "Phase 6DD stale emitter detected; expected revision 6DD-R2"
 }
-Write-Host "[Phase6DD] Emitter revision       : 6DD-R1"
+Write-Host "[Phase6DD] Emitter revision       : 6DD-R2"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
