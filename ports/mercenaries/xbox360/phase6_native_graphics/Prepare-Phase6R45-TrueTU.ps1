@@ -67,8 +67,22 @@ if($LASTEXITCODE-ne0){throw "Phase 6 TrueTU emitter syntax check failed"}
 # IMPORTANT: do not delete $tuOut. emit_phase6_true_tu.py performs content-stable
 # writes so unchanged shards keep their mtimes across runs.
 New-Item -ItemType Directory -Force -Path $tuOut|Out-Null
-& $python $tuEmitter "--source" $mono "--out-dir" $tuOut "--shards" "64"
-if($LASTEXITCODE-ne0){throw "Phase 6 TrueTU emission failed"}
+
+$oldErrorActionPreference=$ErrorActionPreference
+$ErrorActionPreference="Continue"
+try{
+  & $python $tuEmitter "--source" $mono "--out-dir" $tuOut "--shards" "64" 2>&1 |
+    Tee-Object -Variable phase6tuEmitOutput
+  $tuEmitRc=$LASTEXITCODE
+}finally{
+  $ErrorActionPreference=$oldErrorActionPreference
+}
+
+if($tuEmitRc-ne0){
+  Write-Host "[Phase6R45] TRUE TU EMITTER OUTPUT:"
+  $phase6tuEmitOutput|ForEach-Object{Write-Host $_}
+  throw "Phase 6 TrueTU emission failed (exit $tuEmitRc)"
+}
 
 $main=Join-Path $tuOut "main.cpp"
 $shards=Join-Path $tuOut "translated_shards"
