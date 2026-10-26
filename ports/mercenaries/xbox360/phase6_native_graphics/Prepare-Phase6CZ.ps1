@@ -153,7 +153,7 @@ foreach($row in @($z.final_va_source_audit.rows)){
   Write-Host ("[Phase6CZ] Final VA {0} owner={1} start={2} generated={3}" -f $row.va,$row.owner_name,$row.owner_start,$row.generated)
   foreach($line in @($row.context)){Write-Host ("[Phase6CZ]   "+$line)}
 }
-Write-Host "[Phase6CZ] Money line will identify TRANSLATED or SUPPORT provenance before fault"
+Write-Host "[Phase6CZ] Money line will identify TRANSLATED and/or ROUTER provenance before fault"
 Write-Host "[Phase6CZ] Guest-memory semantics         : unchanged"
 Write-Host "[Phase6CZ] CCCCCCD0 fabrication           : NO"
 Write-Host "[Phase6CZ] ExFreePool / DSOUND / APU/GPU  : preserved"
