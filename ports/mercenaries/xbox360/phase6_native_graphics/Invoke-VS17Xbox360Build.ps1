@@ -20,7 +20,8 @@ param(
     [string]$Platform = "Xbox 360",
     [string]$CleanLog = "",
     [string]$BuildLog = "",
-    [string]$PublishedXex = ""
+    [string]$PublishedXex = "",
+    [switch]$SkipClean
 )
 
 $ErrorActionPreference = "Stop"
@@ -289,17 +290,22 @@ foreach ($log in @($CleanLog, $BuildLog)) {
     }
 }
 
-Write-Host "[XDK-BUILD] CLEAN: $solutionConfiguration"
-& $devenv $solutionPath /Clean $solutionConfiguration /Out $CleanLog
-$cleanRc = $LASTEXITCODE
-if ($cleanRc -ne 0) {
-    Write-Host "[XDK-BUILD] CLEAN LOG TAIL:"
-    if (Test-Path -LiteralPath $CleanLog) {
-        Get-Content -LiteralPath $CleanLog -Tail 120
-    }
-    throw "VS17 solution clean failed (exit $cleanRc)"
+if ($SkipClean) {
+    Write-Host "[XDK-BUILD] CLEAN: SKIPPED (incremental build requested)"
 }
-Write-Host "[XDK-BUILD] CLEAN: PASS"
+else {
+    Write-Host "[XDK-BUILD] CLEAN: $solutionConfiguration"
+    & $devenv $solutionPath /Clean $solutionConfiguration /Out $CleanLog
+    $cleanRc = $LASTEXITCODE
+    if ($cleanRc -ne 0) {
+        Write-Host "[XDK-BUILD] CLEAN LOG TAIL:"
+        if (Test-Path -LiteralPath $CleanLog) {
+            Get-Content -LiteralPath $CleanLog -Tail 120
+        }
+        throw "VS17 solution clean failed (exit $cleanRc)"
+    }
+    Write-Host "[XDK-BUILD] CLEAN: PASS"
+}
 
 $buildStart = Get-Date
 Write-Host "[XDK-BUILD] BUILD: $solutionConfiguration"
