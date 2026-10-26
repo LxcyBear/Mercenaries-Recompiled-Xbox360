@@ -92,10 +92,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R21"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R21"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R22"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R22"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R21"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R22"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -144,7 +144,7 @@ if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"){
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R21"-or
+if($q.emitter_revision-ne"6DQ-R22"-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -166,6 +166,7 @@ if($q.emitter_revision-ne"6DQ-R21"-or
    $q.dsound_poison_slot_bridge.synthetic_noop_target-ne"0xF6DCCCD0"-or
    $q.dsound_poison_slot_bridge.ordinary_guest_faults_bypassed-ne$false-or
    $q.dsound_poison_slot_bridge.emitter_source_shape_guard-ne$true-or
+   $q.dsound_poison_slot_bridge.definition_not_forward_declaration_guard-ne$true-or
    $q.dsound_poison_slot_bridge.function_local_unique_dispatch_pair_guard-ne$true-or
    $q.dsound_poison_slot_bridge.guarded_dereference_postcheck-ne$true-or
    $q.dsound_poison_slot_bridge.accepts_inherited_apu_routed_accessor-ne$true-or
