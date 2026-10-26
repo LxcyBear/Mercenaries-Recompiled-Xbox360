@@ -2800,23 +2800,35 @@ def instrument_r45_audio_object_provenance(text: str) -> str:
     if lookup_begin < 0 or lookup_end < 0:
         raise SystemExit("[Phase6DQ] R45 002A7712 lookup window missing")
     lookup_window = text[lookup_begin:lookup_end]
-    lookup = (
-        "eax = phase6ch_apu_read32(esi);\\n"
-        "    eax = phase6ch_apu_read32(eax * 4 + 0x2BA9C0);"
-    )
-    replacement = (
-        "eax = phase6ch_apu_read32(esi);\\n"
-        "    phase6dq_r45_note_audio_object_call(0x002A7712u, esi);\\n"
-        "    if (phase6dq_r45_bad_audio_object(0x002A7712u, esi, eax)) "
-        "goto loc_002A776D;\\n"
-        "    eax = phase6ch_apu_read32(eax * 4 + 0x2BA9C0);"
-    )
-    if lookup_window.count(lookup) != 1:
-        raise SystemExit(
-            "[Phase6DQ] R45 expected one 002A7712 table lookup shape, "
-            f"found {lookup_window.count(lookup)}"
+
+    # R43 already instruments this same basic block, so do not require the
+    # object-index read and table read to remain textually adjacent. Anchor the
+    # containment immediately after the unique object->index read and separately
+    # prove that the expected 0x002BA9C0 table consumer still exists in-window.
+    object_read = "eax = phase6ch_apu_read32(esi);"
+    object_read_count = lookup_window.count(object_read)
+    table_read_matches = list(
+        re.finditer(
+            r"eax\\s*=\\s*phase6ch_apu_read32\\(\\s*eax\\s*\\*\\s*4\\s*\\+\\s*0x2BA9C0\\s*\\)\\s*;",
+            lookup_window,
         )
-    lookup_window = lookup_window.replace(lookup, replacement, 1)
+    )
+    if object_read_count != 1 or len(table_read_matches) != 1:
+        print("[Phase6DQ] R45 002A7712 lookup window:")
+        for source_line in lookup_window.splitlines():
+            print("[Phase6DQ]   " + source_line)
+        raise SystemExit(
+            "[Phase6DQ] R45 expected one object-index read and one 002BA9C0 "
+            f"table read; found object={object_read_count} table={len(table_read_matches)}"
+        )
+
+    replacement = (
+        object_read
+        + "\\n    phase6dq_r45_note_audio_object_call(0x002A7712u, esi);"
+        + "\\n    if (phase6dq_r45_bad_audio_object(0x002A7712u, esi, eax)) "
+        + "goto loc_002A776D;"
+    )
+    lookup_window = lookup_window.replace(object_read, replacement, 1)
     text = text[:lookup_begin] + lookup_window + text[lookup_end:]
 
     return text
