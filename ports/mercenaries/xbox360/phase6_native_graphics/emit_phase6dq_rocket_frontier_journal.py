@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R8"
+EMITTER_REVISION = "6DQ-R9"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -526,37 +526,43 @@ static void phase6dq_dump_journals(void)
 
 
 def patch_escape_journal(text: str) -> str:
-    sig = "static void phase4c_escape("
-    start, end = function_span(text, sig)
-    body = text[start:end]
+    # Do not patch phase4c_escape itself. That function's exact generated shape
+    # has evolved across Phase 6 and is intentionally treated as opaque here.
+    # Instead, journal at the existing escaped-boundary report, where Phase4C
+    # has already published the stable boundary globals and register state.
+    marker = (
+        '"BOUNDARY: kind=%s caller=%08X target=%08X esp=%08X '
+        'saved_esp=%08X ticks=%u trace=%u"'
+    )
+    if text.count(marker) != 1:
+        raise SystemExit(
+            f"[Phase6DQ] expected one escaped boundary report, found {text.count(marker)}"
+        )
 
-    if "phase6dq_note_hard_stop(" in body:
-        raise SystemExit("[Phase6DQ] phase4c escape journal hook already installed")
+    marker_pos = text.find(marker)
+    sprintf_pos = text.rfind("sprintf(", 0, marker_pos)
+    if sprintf_pos < 0:
+        raise SystemExit("[Phase6DQ] escaped boundary sprintf anchor missing")
 
-    # phase4c_escape itself is the stable hard-stop boundary. Later Phase-6
-    # revisions have changed the exact terminal escape mechanism, so do not
-    # couple this journal hook to a particular longjmp/caller-assignment shape.
-    # Record the incoming boundary context immediately on function entry and
-    # leave all inherited bookkeeping/escape semantics untouched.
-    brace = body.find("{")
-    if brace < 0:
-        raise SystemExit("[Phase6DQ] phase4c escape opening brace missing")
+    line_start = text.rfind("\n", 0, sprintf_pos) + 1
+    indent = text[line_start:sprintf_pos]
+    if indent.strip():
+        raise SystemExit("[Phase6DQ] escaped boundary sprintf indentation malformed")
 
-    # Insert immediately after the opening brace. Do not assume any particular
-    # whitespace/newline layout in the inherited generated function.
-    hook = """
-    phase6dq_note_hard_stop(
-        kind,
-        target,
-        phase4c_current_caller(),
-        savedEsp);
-"""
-    body = body[: brace + 1] + hook + body[brace + 1 :]
+    hook = (
+        f"{indent}phase6dq_note_hard_stop(\n"
+        f"{indent}    s_phase4cBoundaryKind,\n"
+        f"{indent}    s_phase4cBoundaryTarget,\n"
+        f"{indent}    s_phase4cBoundaryCaller,\n"
+        f"{indent}    s_phase4cBoundarySavedEsp);\n\n"
+    )
+    text = text[:line_start] + hook + text[line_start:]
 
-    if body.count("phase6dq_note_hard_stop(") != 1:
-        raise SystemExit("[Phase6DQ] phase4c escape journal hook count mismatch")
+    if text.count("phase6dq_note_hard_stop(") != 2:
+        # One definition + exactly one call site.
+        raise SystemExit("[Phase6DQ] hard-stop journal definition/call count mismatch")
 
-    return text[:start] + body + text[end:]
+    return text
 
 def patch_dispatch_journal(text: str) -> str:
     # Hook the actual packed call in each dispatcher. Do not depend on the
