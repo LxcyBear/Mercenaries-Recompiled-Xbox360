@@ -75,10 +75,10 @@ Write-Host "[Phase6DE] Address widening: NONE"
 if($LASTEXITCODE-ne0){throw "Phase 6DE emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DE-R2"')){
-  throw "Phase 6DE stale emitter detected; expected revision 6DE-R2"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DE-R3"')){
+  throw "Phase 6DE stale emitter detected; expected revision 6DE-R3"
 }
-Write-Host "[Phase6DE] Emitter revision       : 6DE-R2"
+Write-Host "[Phase6DE] Emitter revision       : 6DE-R3"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -145,9 +145,13 @@ if(@($de.site_audit.context).Count-lt1){
 
 $text=Get-Content $mono -Raw
 $statePos=$text.IndexOf("static DWORD s_phase6deGlobalWriteReports = 0u;")
-$write32Pos=$text.IndexOf("void recomp_guest_write32(uint32_t address, uint32_t value)")
+$write32Match=[regex]::Match(
+  $text,
+  '(?m)^void\s+recomp_guest_write32\(uint32_t address, uint32_t value\)\s*\{'
+)
+$write32Pos=if($write32Match.Success){$write32Match.Index}else{-1}
 if($statePos-lt0-or$write32Pos-lt0-or$statePos-gt$write32Pos){
-  throw "Phase 6DE compile-order gate failed: WRITE32 telemetry state must precede wrapper"
+  throw "Phase 6DE compile-order gate failed: WRITE32 telemetry state must precede wrapper definition"
 }
 Write-Host "[Phase6DE] WRITE32 compile order      : PASS"
 foreach($marker in @(
