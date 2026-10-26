@@ -81,10 +81,10 @@ Write-Host "[Phase6CW] Watchdog: preserve 64,000,000 translated blocks"
 if($LASTEXITCODE-ne0){throw "Phase 6CW emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CW-R5"')){
-  throw "Phase 6CW stale emitter detected; expected revision 6CW-R5"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CW-R6"')){
+  throw "Phase 6CW stale emitter detected; expected revision 6CW-R6"
 }
-Write-Host "[Phase6CW] Emitter revision       : 6CW-R5"
+Write-Host "[Phase6CW] Emitter revision       : 6CW-R6"
 
 $recompileText=Get-Content $recompile -Raw
 $manualText=Get-Content $manualSource -Raw
@@ -163,8 +163,14 @@ if($k.phase6cv_hardware.boundary_kind-ne"DIRECT_FRONTIER"-or
    $k.hard_fences_weakened-ne$false){
   throw "Phase 6CW manifest gate failed"
 }
-if([int]$k.packed_new_members-lt1){
-  throw "Phase 6CW packed no new DSOUND members"
+if($k.manual_root_dispatch-ne$true){
+  throw "Phase 6CW maintained manual DSOUND root was not dispatched"
+}
+if([int]$k.packed_new_members-ne0){
+  throw "Phase 6CW-R6 must keep generated DSOUND sibling expansion deferred"
+}
+if([int]$k.deferred_candidate_members-ne[int]$k.selected_candidate_members){
+  throw "Phase 6CW-R6 deferred sibling accounting mismatch"
 }
 
 $text=Get-Content $mono -Raw
@@ -202,8 +208,8 @@ Write-Host ("[Phase6CW] Generated DSOUND members     : {0}" -f [int]$k.total_gen
 Write-Host ("[Phase6CW] Remaining DSOUND members     : {0}" -f [int]$k.remaining_generated_dsound_members)
 Write-Host ("[Phase6CW] Selected sibling candidates  : {0}" -f [int]$k.selected_candidate_members)
 Write-Host ("[Phase6CW] Truncated by 1024 cap        : {0}" -f [int]$k.truncated_candidate_members)
-Write-Host ("[Phase6CW] Pruned unsafe members        : {0}" -f [int]$k.pruned_members)
-Write-Host ("[Phase6CW] Packed new members           : {0}" -f [int]$k.packed_new_members)
+Write-Host ("[Phase6CW] Deferred sibling candidates  : {0}" -f [int]$k.deferred_candidate_members)
+Write-Host ("[Phase6CW] Packed new siblings          : {0}" -f [int]$k.packed_new_members)
 Write-Host ("[Phase6CW] Expanded pack members        : {0}" -f [int]$k.expanded_pack_members)
 Write-Host ("[Phase6CW] Generated shards             : {0}" -f $shardCount)
 Write-Host "[Phase6CW] Shadow RAM alias             : preserved"
