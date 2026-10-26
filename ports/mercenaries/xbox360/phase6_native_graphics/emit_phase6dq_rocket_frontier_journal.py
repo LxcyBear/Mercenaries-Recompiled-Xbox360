@@ -490,11 +490,11 @@ def instrument_a41ee_callsites(text: str, base) -> tuple[str, list[dict]]:
             indent = call.group("indent")
             original = text[absolute_start:absolute_end]
             probe = (
-                f"{indent}{{\\n"
-                f"{indent}    uint32_t phase6dqA41eeArg1 = GUEST_READ32(esp);\\n"
+                f"{indent}{{\n"
+                f"{indent}    uint32_t phase6dqA41eeArg1 = GUEST_READ32(esp);\n"
                 f"{indent}    phase6dq_note_a41ee_callsite("
-                f"{site_id}u, 0x{owner:08X}u, phase6dqA41eeArg1);\\n"
-                f"{indent}}}\\n"
+                f"{site_id}u, 0x{owner:08X}u, phase6dqA41eeArg1);\n"
+                f"{indent}}}\n"
                 + original
             )
             patches.append((absolute_start, absolute_end, probe))
@@ -2049,6 +2049,15 @@ def main() -> int:
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
     predictive_audit = predictive_static_audit(main_text, base)
     main_text, a41ee_site_map = instrument_a41ee_callsites(main_text, base)
+    by_site_id = {
+        int(row["site_id"]): row
+        for row in predictive_audit["audio_direct_call_sites"]
+    }
+    for row in a41ee_site_map:
+        detail = by_site_id.get(int(row["site_id"]))
+        if detail:
+            row["arg1_expression"] = detail["arg1_expression"]
+            row["arg1_kind"] = detail["arg1_kind"]
     main_text = insert_final_dump(main_text)
     main_text = update_vp_summary(main_text)
 
@@ -2069,7 +2078,7 @@ def main() -> int:
         "continues aligned VP WRITE32 commands while unknown VP reads remain hard "
         "fences, preserves 64M/C4146/allocator/XACT/NV2A semantics, and prioritizes "
         "maximum trustworthy progress toward guest presentation per hardware run; "
-        "R26 adds predictive pre-build caller/kernel/display audits while unknown "
+        "R27 adds call-shape-filtered predictive provenance audits while unknown "
         "kernel calls, MMIO and reads remain hard fences"
     )
     # Replace only the payload inside the existing C string literal. Preserve
@@ -2125,7 +2134,7 @@ def main() -> int:
         "P6DQ DSOUND POISON NOOP:",
         "P6DQ A41EE CALLSITE:",
         "P6DQ A41EE RING[%u]",
-        "R26 adds predictive pre-build caller/kernel/display audits",
+        "R27 adds call-shape-filtered predictive provenance audits",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
