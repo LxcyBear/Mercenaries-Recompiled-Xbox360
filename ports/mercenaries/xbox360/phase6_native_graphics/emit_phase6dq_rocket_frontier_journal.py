@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R14"
+EMITTER_REVISION = "6DQ-R15"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -775,17 +775,17 @@ def patch_vp_accesses(text: str) -> str:
         (
             "static uint8_t phase6ch_apu_read8(uint32_t address)",
             1,
-            "    return GUEST_READ8(address);\\n",
+            "    return GUEST_READ8(address);\n",
         ),
         (
             "static uint16_t phase6ch_apu_read16(uint32_t address)",
             2,
-            "    return GUEST_READ16(address);\\n",
+            "    return GUEST_READ16(address);\n",
         ),
         (
             "static uint32_t phase6ch_apu_read32(uint32_t address)",
             4,
-            "    return GUEST_READ32(address);\\n",
+            "    return GUEST_READ32(address);\n",
         ),
     ):
         start, end = function_span(text, sig)
