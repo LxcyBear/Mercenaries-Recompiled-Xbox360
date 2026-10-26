@@ -34,7 +34,7 @@ BASE_TAG = "P6DD-XACT-280C39-ARG1-INTERNAL-20261026-A"
 BUILD_TAG = "P6DE-XACT-GLOBAL-0028836C-PROVENANCE-20261026-A"
 COOKIE_OLD = "phase6dd_env_build_cookie"
 COOKIE_NEW = "phase6de_env_build_cookie"
-EMITTER_REVISION = "6DE-R1"
+EMITTER_REVISION = "6DE-R2"
 
 GLOBAL_VA = 0x0028836C
 READ_BLOCK_VA = 0x00280CD2
@@ -80,10 +80,13 @@ def matching_brace(text: str, open_pos: int) -> int:
 
 
 def install_state(text: str) -> str:
-    anchor = "static DWORD s_phase6ddBlockNotes = 0u;\n"
+    # The WRITE32 watch is emitted very early in main_monolithic.cpp.  Keep
+    # its telemetry state immediately before the central router definition so
+    # MSVC sees the declarations before the wrapper uses them.
+    anchor = "void recomp_guest_write32(uint32_t address, uint32_t value)"
     if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6DE] expected one 6DD state anchor, found {text.count(anchor)}"
+            f"[Phase6DE] expected one central WRITE32 state anchor, found {text.count(anchor)}"
         )
     state = """static DWORD s_phase6deGlobalWriteReports = 0u;
 static DWORD s_phase6deGlobalLastCaller = 0u;
@@ -372,6 +375,14 @@ def main() -> int:
 
     main_text = install_state(main_text)
     main_text = install_write32_watch(main_text)
+
+    # Compile-order gate: the early WRITE32 wrapper must never precede the
+    # telemetry declarations it consumes.
+    state_pos = main_text.find("static DWORD s_phase6deGlobalWriteReports = 0u;")
+    wrapper_pos = main_text.find("void recomp_guest_write32(uint32_t address, uint32_t value)")
+    if state_pos < 0 or wrapper_pos < 0 or state_pos > wrapper_pos:
+        raise SystemExit("[Phase6DE] WRITE32 telemetry compile-order gate failed")
+
     main_text = insert_summary(main_text)
     main_text = relabel_main(main_text)
     env_text = relabel_env(env_text)
@@ -441,6 +452,7 @@ def main() -> int:
     )
 
     print(f"[Phase6DE] emitter revision: {EMITTER_REVISION}")
+    print("[Phase6DE] WRITE32 telemetry compile-order gate: PASS")
     print(
         "[Phase6DE] 6DD hardware chain: "
         "READ32 0028836C -> 00000000; then READ32 00000010 -> 00041D90"
