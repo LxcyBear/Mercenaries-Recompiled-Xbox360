@@ -2579,43 +2579,66 @@ def instrument_a52ad_site_tags(text: str, base) -> tuple[str, list[dict]]:
 
 
 def instrument_r43_ac97_channel_writes(text: str) -> str:
-    """Tag the exact AC97 channel-table consumers implicated by R41/R42."""
+    """Tag the exact AC97 channel-table consumers implicated by R41/R42.
+
+    Anchor on translated VA labels rather than generated function wrapper
+    names. The support-clean pack can change wrapper boundaries while the
+    retail instruction labels themselves remain authoritative.
+    """
     specs = (
         (
-            "static void sub_002A74D9(void)",
+            "loc_002A74ED: ;",
+            "loc_002A7505: ;",
             "phase6ch_apu_write8(eax + -20971253, 0);",
             "phase6dq_note_ac97_channel_write(0x002A74EDu, esi, phase6ch_apu_read32(esi), eax, 0u);\n    phase6ch_apu_write8(eax + -20971253, 0);",
             "002A74ED channel write",
         ),
         (
-            "static void sub_002A76FE(void)",
+            "loc_002A7712: ;",
+            "loc_002A7734: ;",
             "phase6ch_apu_write8(eax + -20971253, 2);",
             "phase6dq_note_ac97_channel_write(0x002A7712u, esi, phase6ch_apu_read32(esi), eax, 2u);\n    phase6ch_apu_write8(eax + -20971253, 2);",
             "002A7712 channel write",
         ),
         (
-            "static void sub_002A77BE(void)",
+            "loc_002A77FB: ;",
+            "loc_002A7813: ;",
             "phase6ch_apu_write8(eax + -20971253, 0x1D);",
             "phase6dq_note_ac97_channel_write(0x002A77FBu, esi, phase6ch_apu_read32(esi), eax, 0x1Du);\n    phase6ch_apu_write8(eax + -20971253, 0x1D);",
             "002A77FB channel write",
         ),
         (
-            "static void sub_002A7B73(void)",
+            "loc_002A7BA6: ;",
+            "loc_002A7BBB: ;",
             "phase6ch_apu_write8(ecx + -20971253, 2);",
             "phase6dq_note_ac97_channel_write(0x002A7BA6u, 0u, (eax - 4u) >> 2, ecx, 2u);\n    phase6ch_apu_write8(ecx + -20971253, 2);",
             "002A7BA6 startup channel reset",
         ),
     )
 
-    for sig, old, new, label in specs:
-        start, end = function_span(text, sig)
-        body = text[start:end]
-        if body.count(old) != 1:
+    for begin_label, end_label, old, new, label in specs:
+        begin = text.find(begin_label)
+        if begin < 0:
+            raise SystemExit(f"[Phase6DQ] R43 missing translated label {begin_label}")
+
+        finish = text.find(end_label, begin + len(begin_label))
+        if finish < 0:
             raise SystemExit(
-                f"[Phase6DQ] R43 expected one {label}, found {body.count(old)}"
+                f"[Phase6DQ] R43 missing successor {end_label} after {begin_label}"
             )
-        body = body.replace(old, new, 1)
-        text = text[:start] + body + text[end:]
+
+        window = text[begin:finish]
+        count = window.count(old)
+        if count != 1:
+            print(f"[Phase6DQ] R43 source window for {label}:")
+            for source_line in window.splitlines():
+                print("[Phase6DQ]   " + source_line)
+            raise SystemExit(
+                f"[Phase6DQ] R43 expected one {label} in exact label window, found {count}"
+            )
+
+        window = window.replace(old, new, 1)
+        text = text[:begin] + window + text[finish:]
 
     return text
 
@@ -2991,6 +3014,10 @@ def main() -> int:
         "P6DQ AC97 TABLE WRITE WATCH: count=%u addr=%08X width=%u value=%08X",
         "P6DQ AC97 CHANNEL WRITE: count=%u site=%08X object=%08X index=%08X",
         "P6DQ AC97 TABLE PROVENANCE: table0=%08X table1=%08X write_watch=%u",
+        "loc_002A74ED: ;",
+        "loc_002A7712: ;",
+        "loc_002A77FB: ;",
+        "loc_002A7BA6: ;",
         "phase6dq_note_ac97_channel_write(0x002A74EDu",
         "phase6dq_note_ac97_channel_write(0x002A7712u",
         "phase6dq_note_ac97_channel_write(0x002A77FBu",
