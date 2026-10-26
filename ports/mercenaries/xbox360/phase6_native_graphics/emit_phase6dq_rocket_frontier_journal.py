@@ -24,13 +24,9 @@ while we chase the renderer. Unknown VP reads, meaningful non-VP MMIO, guest fau
 missing translated bodies and unresolved support remain hard stops. Hardware-proven
 kernel timing ordinal 151 is bridged with maintained busy-wait semantics. R23 also\nbatches the hardware-proven kernel floating-point guard pair 142/139 using opaque\nState-pointer nesting under the serialized runtime. R16's
 hardware-proven DSOUND poison-dispatch site 002A41F7 is quarantined without
-widening ordinary guest-memory fault handling. R26 adds predictive static
-frontier clearing: direct DSOUND producer callsites, literal DSOUND kernel
-targets, and real AvSetDisplayMode intent callers are audited before VS builds.
-R27 rejects raw constant false positives, backward-slices A41EE arg1 producers,
-and adds a bounded runtime callsite ring without suppressing guest faults.
-R28 adds bounded graphics surface/device consumer telemetry around the proven
-640x480x32 tile without changing guest-memory or MMIO semantics.
+widening ordinary guest-memory fault handling. R29 SAFEBOOT deliberately restores the hardware-proven R26 runtime shape after
+an R27 zero-log native startup regression. Predictive analysis remains static-only;
+no A41EE caller probes or graphics runtime telemetry are injected.
 """
 
 from __future__ import annotations
@@ -47,7 +43,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R28"
+EMITTER_REVISION = "6DQ-R29"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -64,19 +60,6 @@ MAINTAINED_KERNEL_TARGETS = {
     0x8000008E,  # KeSaveFloatingPointState
     0x80000097,  # KeStallExecutionProcessor
 }
-
-GRAPHICS_SURFACE_BASE = 0x024FC000
-GRAPHICS_SURFACE_END = 0x02628000
-GRAPHICS_DEVICE_BASE = 0x00299380
-GRAPHICS_DEVICE_END = 0x0029B000
-GRAPHICS_STATIC_ANCHORS = (
-    0x00299380,
-    0x0029AFA0,
-    0x0029AFA8,
-    0x024FC000,
-    0x024FC003,
-    0x02627FFF,
-)
 
 SECTIONS = (
     ("D3D", 0x00288640, 0x0029B874, 0x0028E700),
@@ -193,61 +176,20 @@ def translated_function_defs(text: str, base) -> list[dict]:
     return rows
 
 
-def _literal_icall_occurrences(source: str) -> list[dict]:
-    """Return only literal 0x800000XX values used inside an ICALL_SAFE statement."""
-    rows = []
-    for match in re.finditer(r"0x800000([0-9A-Fa-f]{2})u?", source):
-        literal_pos = match.start()
-        previous_semi = source.rfind(";", 0, literal_pos)
-        statement_start = previous_semi + 1
-        prefix = source[statement_start:literal_pos]
-        if "ICALL_SAFE" not in prefix:
-            continue
-
-        statement_end = source.find(";", match.end())
-        if statement_end < 0:
-            continue
-        statement = source[statement_start:statement_end + 1]
-        if "ICALL_SAFE" not in statement:
-            continue
-
-        target = 0x80000000 | int(match.group(1), 16)
-        rows.append({
-            "target": target,
-            "statement": " ".join(statement.split()),
-            "offset": literal_pos,
-        })
-    return rows
-
-
 def predictive_seed_vas(generated: dict) -> list[int]:
-    """
-    Prioritize real call-path owners only.
-
-    Raw occurrences of 0x80000003 are NOT seeds: R26 proved several are plain
-    status masks/object fields. Display seeding requires a literal ordinal 3
-    inside an ICALL_SAFE statement.
-    """
+    """Find source-backed audio/display callers worth packing before broad sweep."""
     seeds = []
     for va, row in generated.items():
         source = row["source"]
-        source_lower = source.lower()
-        if "sub_002A41EE();" in source:
-            seeds.append(va)
-            continue
-        if any(
-            call["target"] == PREDICTIVE_DISPLAY_ORDINAL
-            for call in _literal_icall_occurrences(source)
-        ):
-            seeds.append(va)
-            continue
-        if any(
-            (f"0x{anchor:x}" in source_lower) or
-            (f"0x{anchor:08x}" in source_lower)
-            for anchor in GRAPHICS_STATIC_ANCHORS
+        if (
+            "sub_002A41EE();" in source
+            or "call 0x002A41EE" in source
+            or "0x80000003" in source
         ):
             seeds.append(va)
 
+    # Keep established subsystem roots nearby even if already packed; caller
+    # closure expansion below will simply skip old members.
     seeds.extend((0x002A6713, 0x0029C8BE, 0x0028E700))
     return list(dict.fromkeys(seeds))
 
@@ -283,6 +225,9 @@ def build_predictive_candidates(
                 PREDICTIVE_CLOSURE_CAP_PER_SEED,
             )
         except BaseException:
+            # Predictive prioritization may never weaken emission safety.
+            # If a seed cannot form a closure, the normal support-clean sweep
+            # still handles it or fences it later.
             closure = []
         for va in closure:
             add(va)
@@ -290,131 +235,79 @@ def build_predictive_candidates(
     return selected
 
 
-def _previous_arg1_push(body: str, call_offset: int) -> tuple[str, str]:
-    """
-    Recover the already-pushed A41EE arg1 expression immediately before the
-    synthetic return-slot PUSH32(esp, 0). This is static provenance only.
-    """
-    prefix = body[:call_offset]
-    lines = prefix.splitlines()
-    for line in reversed(lines[-32:]):
-        stripped = line.strip()
-        if not stripped or stripped.startswith("loc_"):
-            if stripped.startswith("loc_"):
-                break
-            continue
-        match = re.search(r"PUSH32\(\s*esp\s*,\s*(.+)\s*\)\s*;", stripped)
-        if match:
-            expr = match.group(1).strip()
-            kind = "register_or_expression"
-            if "read32(esp" in expr.lower():
-                kind = "stack_relative"
-            elif "read32(ebp" in expr.lower():
-                kind = "frame_relative"
-            elif re.fullmatch(r"(?:e?ax|e?bx|e?cx|e?dx|esi|edi|ebp)", expr, re.I):
-                kind = "register"
-            elif re.search(r"read32\(\s*0x[0-9A-Fa-f]+", expr):
-                kind = "global_read"
-            elif re.fullmatch(r"0x[0-9A-Fa-f]+|\d+", expr):
-                kind = "literal"
-            return expr, kind
-    return "<not-found>", "unknown"
-
-
-def _last_register_assignments(body: str, call_offset: int) -> dict:
-    lines = body[:call_offset].splitlines()
-    result = {}
-    for reg in ("eax", "ebx", "ecx", "edx", "esi", "edi"):
-        pat = re.compile(rf"^\s*{reg}\s*=\s*(.+);\s*$", re.I)
-        for line in reversed(lines[-80:]):
-            m = pat.match(line)
-            if m:
-                result[reg] = m.group(1).strip()
-                break
-    return result
-
-
 def predictive_static_audit(text: str, base) -> dict:
     """
-    R27 static pre-build provenance audit.
+    Static, pre-build frontier audit.
 
-    Only syntactic call shapes are labeled calls. Plain constants are retained
-    as noise counts and never drive predictive pack priority.
+    It does not fabricate values or change runtime semantics. It maps:
+      * every direct caller of sub_002A41EE and its local source context;
+      * literal Xbox-kernel targets referenced by DSOUND translated bodies;
+      * translated callers that reference AvSetDisplayMode ordinal 3.
     """
     defs = translated_function_defs(text, base)
     audio_sites = []
-    kernel_calls = []
-    display_calls = []
-    graphics_anchor_sites = []
-    raw_kernel_constants = 0
-    raw_display_constants = 0
+    kernel_owners = {}
+    display_sites = []
 
     direct_re = re.compile(
-        r"PUSH32\(\s*esp\s*,\s*0\s*\)\s*;\s*"
         r"sub_002A41EE\(\)\s*;\s*/\*\s*call\s+0x002A41EE\s*\*/"
     )
+    kernel_re = re.compile(r"0x800000([0-9A-Fa-f]{2})u?")
 
-    site_id = 0
     for row in defs:
         if not row["va"]:
             continue
         body = text[row["open"]:row["end"]]
 
-        raw_kernel_constants += len(
-            re.findall(r"0x800000[0-9A-Fa-f]{2}u?", body)
-        )
-        raw_display_constants += body.count("0x80000003")
-
-        body_lower = body.lower()
-        matched_anchors = [
-            anchor
-            for anchor in GRAPHICS_STATIC_ANCHORS
-            if (f"0x{anchor:x}" in body_lower) or
-               (f"0x{anchor:08x}" in body_lower)
-        ]
-        if matched_anchors:
-            graphics_anchor_sites.append({
-                "owner_va": f"0x{row['va']:08X}",
-                "owner_name": row["name"],
-                "anchors": [f"0x{x:08X}" for x in matched_anchors],
-            })
-
-        for match in direct_re.finditer(body):
-            site_id += 1
-            arg1_expr, arg1_kind = _previous_arg1_push(body, match.start())
-            rel_line = body[:match.start()].count("\n")
+        for m in direct_re.finditer(body):
+            absolute = row["open"] + m.start()
+            line_no = text.count("\n", row["start"], absolute) + 1
             body_lines = body.splitlines()
-            lo = max(0, rel_line - 18)
-            hi = min(len(body_lines), rel_line + 7)
+            # Approximate line within body from the direct-call offset.
+            rel_line = body[:m.start()].count("\n")
+            lo = max(0, rel_line - 12)
+            hi = min(len(body_lines), rel_line + 9)
             audio_sites.append({
-                "site_id": site_id,
                 "owner_va": f"0x{row['va']:08X}",
                 "owner_name": row["name"],
-                "arg1_expression": arg1_expr,
-                "arg1_kind": arg1_kind,
-                "last_register_assignments": _last_register_assignments(
-                    body, match.start()
-                ),
+                "owner_line": line_no,
                 "context": body_lines[lo:hi],
             })
 
         if DSOUND_START <= row["va"] < DSOUND_END:
-            for call in _literal_icall_occurrences(body):
-                item = {
+            for km in kernel_re.finditer(body):
+                target = 0x80000000 | int(km.group(1), 16)
+                key = f"0x{target:08X}"
+                kernel_owners.setdefault(key, set()).add(
+                    f"0x{row['va']:08X}"
+                )
+
+        if "0x80000003" in body:
+            body_lines = body.splitlines()
+            for idx, line in enumerate(body_lines):
+                if "0x80000003" not in line:
+                    continue
+                lo = max(0, idx - 8)
+                hi = min(len(body_lines), idx + 9)
+                display_sites.append({
                     "owner_va": f"0x{row['va']:08X}",
                     "owner_name": row["name"],
-                    "target": f"0x{call['target']:08X}",
-                    "ordinal": call["target"] & 0xFFFF,
-                    "maintained": call["target"] in MAINTAINED_KERNEL_TARGETS,
-                    "statement": call["statement"],
-                }
-                kernel_calls.append(item)
-                if call["target"] == PREDICTIVE_DISPLAY_ORDINAL:
-                    display_calls.append(item)
+                    "context": body_lines[lo:hi],
+                })
+
+    kernel_rows = []
+    for key in sorted(kernel_owners):
+        target = int(key, 16)
+        kernel_rows.append({
+            "target": key,
+            "ordinal": target & 0xFFFF,
+            "owners": sorted(kernel_owners[key]),
+            "maintained": target in MAINTAINED_KERNEL_TARGETS,
+        })
 
     return {
         "enabled": True,
-        "mode": "static_prebuild_predictive_frontier_clearing_r27",
+        "mode": "static_prebuild_predictive_frontier_clearing",
         "r25_hardware_seed": {
             "ticks": 27025727,
             "boundary_kind": "GUEST_FAULT",
@@ -430,22 +323,11 @@ def predictive_static_audit(text: str, base) -> dict:
         "audio_target": "0x002A41EE",
         "audio_direct_call_sites": audio_sites,
         "audio_direct_call_site_count": len(audio_sites),
-        "dsound_kernel_calls": kernel_calls,
-        "dsound_kernel_call_count": len(kernel_calls),
+        "dsound_kernel_literals": kernel_rows,
+        "dsound_kernel_literal_count": len(kernel_rows),
         "display_ordinal": "0x80000003",
-        "display_kernel_call_sites": display_calls,
-        "display_kernel_call_site_count": len(display_calls),
-        "graphics_static_anchor_sites": graphics_anchor_sites,
-        "graphics_static_anchor_site_count": len(graphics_anchor_sites),
-        "graphics_surface_base": f"0x{GRAPHICS_SURFACE_BASE:08X}",
-        "graphics_surface_end": f"0x{GRAPHICS_SURFACE_END:08X}",
-        "graphics_surface_bytes": GRAPHICS_SURFACE_END - GRAPHICS_SURFACE_BASE,
-        "graphics_surface_pitch": 0xA00,
-        "graphics_surface_width_32bpp": 640,
-        "graphics_surface_height": 480,
-        "raw_kernel_constant_occurrences": raw_kernel_constants,
-        "raw_display_ordinal_constant_occurrences": raw_display_constants,
-        "raw_constants_are_not_calls": True,
+        "display_intent_sites": display_sites,
+        "display_intent_site_count": len(display_sites),
         "ordinary_guest_faults_bypassed": False,
         "unknown_kernel_calls_auto_succeeded": False,
         "unknown_mmio_auto_accepted": False,
@@ -454,7 +336,7 @@ def predictive_static_audit(text: str, base) -> dict:
 
 
 def print_predictive_audit(audit: dict) -> None:
-    print("[Phase6DQ] ============ PREDICTIVE PROVENANCE AUDIT R27 ============")
+    print("[Phase6DQ] ============== PREDICTIVE FRONTIER AUDIT ==============")
     seed = audit["r25_hardware_seed"]
     print(
         "[Phase6DQ] R25 seed: ticks={ticks} fault={fault_address} "
@@ -466,181 +348,38 @@ def print_predictive_audit(audit: dict) -> None:
         f"[Phase6DQ] AUDIO direct callers of 002A41EE: "
         f"{audit['audio_direct_call_site_count']}"
     )
-    for site in audit["audio_direct_call_sites"]:
+    for index, site in enumerate(audit["audio_direct_call_sites"], 1):
         print(
-            f"[Phase6DQ] AUDIO SITE[{site['site_id']}] "
-            f"owner={site['owner_va']} name={site['owner_name']} "
-            f"arg1_kind={site['arg1_kind']} arg1_expr={site['arg1_expression']}"
+            f"[Phase6DQ] AUDIO SITE[{index}] owner={site['owner_va']} "
+            f"name={site['owner_name']} owner_line={site['owner_line']}"
         )
-        regs = site["last_register_assignments"]
-        if regs:
-            print(
-                "[Phase6DQ]   LAST-REGS "
-                + " ".join(f"{k}={v}" for k, v in regs.items())
-            )
         for line in site["context"]:
             print("[Phase6DQ]   " + line)
 
     print(
-        f"[Phase6DQ] DSOUND literal ICALL kernel targets: "
-        f"{audit['dsound_kernel_call_count']}"
+        f"[Phase6DQ] DSOUND literal kernel targets: "
+        f"{audit['dsound_kernel_literal_count']}"
     )
-    for call in audit["dsound_kernel_calls"]:
+    for row in audit["dsound_kernel_literals"]:
         print(
-            f"[Phase6DQ] KERNEL CALL owner={call['owner_va']} "
-            f"target={call['target']} ordinal={call['ordinal']} "
-            f"maintained={int(call['maintained'])} stmt={call['statement']}"
+            f"[Phase6DQ] KERNEL target={row['target']} ordinal={row['ordinal']} "
+            f"maintained={int(row['maintained'])} owners={','.join(row['owners'])}"
         )
 
     print(
-        f"[Phase6DQ] DISPLAY ordinal-3 literal ICALL sites: "
-        f"{audit['display_kernel_call_site_count']}"
+        f"[Phase6DQ] DISPLAY ordinal-3 intent callers: "
+        f"{audit['display_intent_site_count']}"
     )
-    print(
-        f"[Phase6DQ] GRAPHICS static anchor owners: "
-        f"{audit['graphics_static_anchor_site_count']}"
-    )
-    for site in audit["graphics_static_anchor_sites"][:24]:
+    for index, site in enumerate(audit["display_intent_sites"], 1):
         print(
-            f"[Phase6DQ] GRAPHICS ANCHOR owner={site['owner_va']} "
-            f"name={site['owner_name']} anchors={','.join(site['anchors'])}"
+            f"[Phase6DQ] DISPLAY SITE[{index}] owner={site['owner_va']} "
+            f"name={site['owner_name']}"
         )
-    print(
-        f"[Phase6DQ] RAW CONSTANT NOISE: kernel_like="
-        f"{audit['raw_kernel_constant_occurrences']} "
-        f"ordinal3={audit['raw_display_ordinal_constant_occurrences']} "
-        "(not treated as calls)"
-    )
+        for line in site["context"]:
+            print("[Phase6DQ]   " + line)
+
     print("[Phase6DQ] Predictive policy: unknown kernel/MMIO/read semantics remain HARD FENCES")
     print("[Phase6DQ] =========================================================")
-
-
-def instrument_a41ee_callsites(text: str, base) -> tuple[str, list[dict]]:
-    """Tag every direct A41EE caller without changing the callee or fault policy."""
-    masked = base.mask_noncode(text)
-    direct_re = re.compile(
-        r"(?P<indent>[ \t]*)PUSH32\(\s*esp\s*,\s*0\s*\)\s*;\s*"
-        r"sub_002A41EE\(\)\s*;\s*/\*\s*call\s+0x002A41EE\s*\*/"
-    )
-    patches = []
-    site_map = []
-    site_id = 0
-
-    for match in base.FUNC_RE.finditer(masked):
-        name = match.group(1)
-        vm = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
-        if not vm:
-            continue
-        owner = int(vm.group(1), 16)
-        open_pos = masked.find("{", match.start(), match.end())
-        if open_pos < 0:
-            continue
-        end = base.closing_brace(masked, open_pos)
-        body = text[open_pos:end]
-
-        for call in direct_re.finditer(body):
-            site_id += 1
-            absolute_start = open_pos + call.start()
-            absolute_end = open_pos + call.end()
-            indent = call.group("indent")
-            original = text[absolute_start:absolute_end]
-            probe = (
-                f"{indent}{{\n"
-                f"{indent}    uint32_t phase6dqA41eeArg1 = GUEST_READ32(esp);\n"
-                f"{indent}    phase6dq_note_a41ee_callsite("
-                f"{site_id}u, 0x{owner:08X}u, phase6dqA41eeArg1);\n"
-                f"{indent}}}\n"
-                + original
-            )
-            patches.append((absolute_start, absolute_end, probe))
-            site_map.append({
-                "site_id": site_id,
-                "owner_va": f"0x{owner:08X}",
-                "owner_name": name,
-            })
-
-    for start, end, replacement in reversed(patches):
-        text = text[:start] + replacement + text[end:]
-
-    if not site_map:
-        raise SystemExit("[Phase6DQ] predictive A41EE callsite instrumentation found no sites")
-
-    return text, site_map
-
-def instrument_graphics_consumers(text: str, base) -> tuple[str, dict]:
-    """Wrap guest-memory accesses in D3D/XGRPH + static-anchor owners only."""
-    masked = base.mask_noncode(text)
-    patches = []
-    functions = 0
-    counts = {
-        "read8": 0, "read16": 0, "read32": 0, "read64": 0,
-        "write8": 0, "write16": 0, "write32": 0, "write64": 0,
-    }
-
-    replacements = (
-        ("GUEST_READ8(", "phase6dr_graphics_read8(0x{va:08X}u, ", "read8"),
-        ("GUEST_READ16(", "phase6dr_graphics_read16(0x{va:08X}u, ", "read16"),
-        ("GUEST_READ32(", "phase6dr_graphics_read32(0x{va:08X}u, ", "read32"),
-        ("GUEST_READ64(", "phase6dr_graphics_read64(0x{va:08X}u, ", "read64"),
-        ("GUEST_WRITE8(", "phase6dr_graphics_write8(0x{va:08X}u, ", "write8"),
-        ("GUEST_WRITE16(", "phase6dr_graphics_write16(0x{va:08X}u, ", "write16"),
-        ("GUEST_WRITE32(", "phase6dr_graphics_write32(0x{va:08X}u, ", "write32"),
-        ("GUEST_WRITE64(", "phase6dr_graphics_write64(0x{va:08X}u, ", "write64"),
-    )
-
-    for match in base.FUNC_RE.finditer(masked):
-        name = match.group(1)
-        vm = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
-        if not vm:
-            continue
-        va = int(vm.group(1), 16)
-        open_pos = masked.find("{", match.start(), match.end())
-        if open_pos < 0:
-            continue
-        end = base.closing_brace(masked, open_pos)
-        body = text[open_pos:end]
-        body_lower = body.lower()
-
-        in_graphics_region = (
-            D3D_START <= va < D3D_END or
-            XGRPH_START <= va < XGRPH_END
-        )
-        has_anchor = any(
-            (f"0x{anchor:x}" in body_lower) or
-            (f"0x{anchor:08x}" in body_lower)
-            for anchor in GRAPHICS_STATIC_ANCHORS
-        )
-        if not in_graphics_region and not has_anchor:
-            continue
-
-        replaced = body
-        local_count = 0
-        for old, new_template, key in replacements:
-            n = replaced.count(old)
-            if n:
-                replaced = replaced.replace(old, new_template.format(va=va))
-                counts[key] += n
-                local_count += n
-
-        if local_count:
-            functions += 1
-            patches.append((open_pos, end, replaced))
-
-    for start, end, replacement in reversed(patches):
-        text = text[:start] + replacement + text[end:]
-
-    return text, {
-        "instrumented_functions": functions,
-        "access_replacements": counts,
-        "surface_base": f"0x{GRAPHICS_SURFACE_BASE:08X}",
-        "surface_end": f"0x{GRAPHICS_SURFACE_END:08X}",
-        "surface_bytes": GRAPHICS_SURFACE_END - GRAPHICS_SURFACE_BASE,
-        "device_base": f"0x{GRAPHICS_DEVICE_BASE:08X}",
-        "device_end": f"0x{GRAPHICS_DEVICE_END:08X}",
-        "fault_semantics_changed": False,
-        "unknown_reads_zero_filled": False,
-        "unknown_mmio_accepted": False,
-    }
 
 
 def select_candidates(
@@ -757,54 +496,6 @@ static uint32_t s_phase6dqFpSave142Count = 0u;
 static uint32_t s_phase6dqFpRestore139Count = 0u;
 static uint32_t s_phase6dqFpGuardMismatchCount = 0u;
 static uint32_t s_phase6dqFpGuardLastState = 0u;
-#define PHASE6DQ_A41EE_RING_CAP 16u
-typedef struct Phase6DQA41eeCall
-{
-    uint32_t sequence;
-    uint32_t site;
-    uint32_t owner;
-    uint32_t arg1;
-} Phase6DQA41eeCall;
-static Phase6DQA41eeCall s_phase6dqA41eeRing[PHASE6DQ_A41EE_RING_CAP];
-static uint32_t s_phase6dqA41eeSequence = 0u;
-static uint32_t s_phase6dqA41eeRingWrite = 0u;
-static uint32_t s_phase6dqA41eeRingCount = 0u;
-static uint32_t s_phase6dqA41eeLastSite = 0u;
-static uint32_t s_phase6dqA41eeLastOwner = 0u;
-static uint32_t s_phase6dqA41eeLastArg1 = 0u;
-
-#define PHASE6DR_GRAPHICS_RING_CAP 64u
-#define PHASE6DR_SURFACE_BASE 0x024FC000u
-#define PHASE6DR_SURFACE_END  0x02628000u
-#define PHASE6DR_DEVICE_BASE  0x00299380u
-#define PHASE6DR_DEVICE_END   0x0029B000u
-
-typedef struct Phase6DRGraphicsEvent
-{
-    uint32_t kind;
-    uint32_t owner;
-    uint32_t address;
-    uint32_t value;
-    uint32_t width;
-    uint32_t isWrite;
-    uint32_t hits;
-} Phase6DRGraphicsEvent;
-
-static Phase6DRGraphicsEvent s_phase6drGraphicsRing[PHASE6DR_GRAPHICS_RING_CAP];
-static uint32_t s_phase6drGraphicsRingCount = 0u;
-static uint32_t s_phase6drSurfaceTouchReads = 0u;
-static uint32_t s_phase6drSurfaceTouchWrites = 0u;
-static uint32_t s_phase6drSurfacePointerReads = 0u;
-static uint32_t s_phase6drSurfacePointerWrites = 0u;
-static uint32_t s_phase6drDeviceTouchReads = 0u;
-static uint32_t s_phase6drDeviceTouchWrites = 0u;
-static uint32_t s_phase6drDevicePointerReads = 0u;
-static uint32_t s_phase6drDevicePointerWrites = 0u;
-static uint32_t s_phase6drGraphicsRelevantHits = 0u;
-static uint32_t s_phase6drGraphicsLastKind = 0u;
-static uint32_t s_phase6drGraphicsLastOwner = 0u;
-static uint32_t s_phase6drGraphicsLastAddress = 0u;
-static uint32_t s_phase6drGraphicsLastValue = 0u;
 
 '''
     text = text[:start] + state + text[start:]
@@ -829,243 +520,6 @@ static const char* phase6dq_vp_method_name(uint32_t offset)
     if (offset >= 0x00000600u && offset <= 0x00000808u &&
         (offset & 3u) == 0u) return "NV1BA0_PIO_BUFFER_OR_SSL";
     return "VP_UNNAMED_OR_UNMODELED";
-}
-
-static void phase6dr_record_graphics_event(
-    uint32_t kind,
-    uint32_t owner,
-    uint32_t address,
-    uint32_t value,
-    uint32_t width,
-    uint32_t isWrite)
-{
-    uint32_t i;
-    uint32_t keyAddress = address;
-    char line[420];
-
-    if (kind == 1u)
-        keyAddress = (address - PHASE6DR_SURFACE_BASE) >> 12;
-    else if (kind == 3u)
-        keyAddress = address - PHASE6DR_DEVICE_BASE;
-
-    ++s_phase6drGraphicsRelevantHits;
-    s_phase6drGraphicsLastKind = kind;
-    s_phase6drGraphicsLastOwner = owner;
-    s_phase6drGraphicsLastAddress = address;
-    s_phase6drGraphicsLastValue = value;
-
-    for (i = 0u; i < s_phase6drGraphicsRingCount; ++i)
-    {
-        Phase6DRGraphicsEvent* row = &s_phase6drGraphicsRing[i];
-        uint32_t rowKey = row->address;
-        if (row->kind == 1u)
-            rowKey = (row->address - PHASE6DR_SURFACE_BASE) >> 12;
-        else if (row->kind == 3u)
-            rowKey = row->address - PHASE6DR_DEVICE_BASE;
-
-        if (row->kind == kind &&
-            row->owner == owner &&
-            rowKey == keyAddress &&
-            row->isWrite == isWrite)
-        {
-            ++row->hits;
-            row->address = address;
-            row->value = value;
-            row->width = width;
-            return;
-        }
-    }
-
-    if (s_phase6drGraphicsRingCount < PHASE6DR_GRAPHICS_RING_CAP)
-    {
-        Phase6DRGraphicsEvent* row =
-            &s_phase6drGraphicsRing[s_phase6drGraphicsRingCount++];
-        row->kind = kind;
-        row->owner = owner;
-        row->address = address;
-        row->value = value;
-        row->width = width;
-        row->isWrite = isWrite;
-        row->hits = 1u;
-
-        if (s_phase6drGraphicsRingCount <= 24u)
-        {
-            sprintf(
-                line,
-                "P6DR GRAPHICS CONSUMER: kind=%u owner=%08X address=%08X value=%08X width=%u write=%u unique=%u",
-                (unsigned int)kind,
-                (unsigned int)owner,
-                (unsigned int)address,
-                (unsigned int)value,
-                (unsigned int)width,
-                (unsigned int)isWrite,
-                (unsigned int)s_phase6drGraphicsRingCount);
-            trace(line);
-        }
-    }
-}
-
-static void phase6dr_note_graphics_access(
-    uint32_t owner,
-    uint32_t address,
-    uint32_t width,
-    uint32_t isWrite,
-    uint32_t value)
-{
-    uint32_t pointerValue = value & ~3u;
-    uint32_t addressEnd = address + (width ? width - 1u : 0u);
-    uint32_t surfaceTouch =
-        address < PHASE6DR_SURFACE_END &&
-        addressEnd >= PHASE6DR_SURFACE_BASE;
-    uint32_t deviceTouch =
-        address < PHASE6DR_DEVICE_END &&
-        addressEnd >= PHASE6DR_DEVICE_BASE;
-    uint32_t surfacePointer =
-        pointerValue >= PHASE6DR_SURFACE_BASE &&
-        pointerValue < PHASE6DR_SURFACE_END;
-    uint32_t devicePointer =
-        pointerValue >= PHASE6DR_DEVICE_BASE &&
-        pointerValue < PHASE6DR_DEVICE_END;
-
-    if (surfaceTouch)
-    {
-        if (isWrite) ++s_phase6drSurfaceTouchWrites;
-        else ++s_phase6drSurfaceTouchReads;
-        phase6dr_record_graphics_event(
-            1u, owner, address, value, width, isWrite);
-    }
-    if (surfacePointer)
-    {
-        if (isWrite) ++s_phase6drSurfacePointerWrites;
-        else ++s_phase6drSurfacePointerReads;
-        phase6dr_record_graphics_event(
-            2u, owner, address, value, width, isWrite);
-    }
-    if (deviceTouch)
-    {
-        if (isWrite) ++s_phase6drDeviceTouchWrites;
-        else ++s_phase6drDeviceTouchReads;
-        phase6dr_record_graphics_event(
-            3u, owner, address, value, width, isWrite);
-    }
-    if (devicePointer)
-    {
-        if (isWrite) ++s_phase6drDevicePointerWrites;
-        else ++s_phase6drDevicePointerReads;
-        phase6dr_record_graphics_event(
-            4u, owner, address, value, width, isWrite);
-    }
-}
-
-static uint8_t phase6dr_graphics_read8(uint32_t owner, uint32_t address)
-{
-    uint8_t value = GUEST_READ8(address);
-    if (!s_accessFault)
-        phase6dr_note_graphics_access(owner, address, 1u, 0u, (uint32_t)value);
-    return value;
-}
-
-static uint16_t phase6dr_graphics_read16(uint32_t owner, uint32_t address)
-{
-    uint16_t value = GUEST_READ16(address);
-    if (!s_accessFault)
-        phase6dr_note_graphics_access(owner, address, 2u, 0u, (uint32_t)value);
-    return value;
-}
-
-static uint32_t phase6dr_graphics_read32(uint32_t owner, uint32_t address)
-{
-    uint32_t value = GUEST_READ32(address);
-    if (!s_accessFault)
-        phase6dr_note_graphics_access(owner, address, 4u, 0u, value);
-    return value;
-}
-
-static uint64_t phase6dr_graphics_read64(uint32_t owner, uint32_t address)
-{
-    uint64_t value = GUEST_READ64(address);
-    if (!s_accessFault)
-    {
-        phase6dr_note_graphics_access(
-            owner, address, 8u, 0u, (uint32_t)value);
-        phase6dr_note_graphics_access(
-            owner, address + 4u, 4u, 0u, (uint32_t)(value >> 32));
-    }
-    return value;
-}
-
-static void phase6dr_graphics_write8(
-    uint32_t owner, uint32_t address, uint8_t value)
-{
-    GUEST_WRITE8(address, value);
-    if (!s_accessFault)
-        phase6dr_note_graphics_access(owner, address, 1u, 1u, (uint32_t)value);
-}
-
-static void phase6dr_graphics_write16(
-    uint32_t owner, uint32_t address, uint16_t value)
-{
-    GUEST_WRITE16(address, value);
-    if (!s_accessFault)
-        phase6dr_note_graphics_access(owner, address, 2u, 1u, (uint32_t)value);
-}
-
-static void phase6dr_graphics_write32(
-    uint32_t owner, uint32_t address, uint32_t value)
-{
-    GUEST_WRITE32(address, value);
-    if (!s_accessFault)
-        phase6dr_note_graphics_access(owner, address, 4u, 1u, value);
-}
-
-static void phase6dr_graphics_write64(
-    uint32_t owner, uint32_t address, uint64_t value)
-{
-    GUEST_WRITE64(address, value);
-    if (!s_accessFault)
-    {
-        phase6dr_note_graphics_access(
-            owner, address, 8u, 1u, (uint32_t)value);
-        phase6dr_note_graphics_access(
-            owner, address + 4u, 4u, 1u, (uint32_t)(value >> 32));
-    }
-}
-
-static void phase6dq_note_a41ee_callsite(
-    uint32_t site,
-    uint32_t owner,
-    uint32_t arg1)
-{
-    Phase6DQA41eeCall* row;
-    char line[384];
-
-    ++s_phase6dqA41eeSequence;
-    s_phase6dqA41eeLastSite = site;
-    s_phase6dqA41eeLastOwner = owner;
-    s_phase6dqA41eeLastArg1 = arg1;
-
-    row = &s_phase6dqA41eeRing[s_phase6dqA41eeRingWrite];
-    row->sequence = s_phase6dqA41eeSequence;
-    row->site = site;
-    row->owner = owner;
-    row->arg1 = arg1;
-    s_phase6dqA41eeRingWrite =
-        (s_phase6dqA41eeRingWrite + 1u) % PHASE6DQ_A41EE_RING_CAP;
-    if (s_phase6dqA41eeRingCount < PHASE6DQ_A41EE_RING_CAP)
-        ++s_phase6dqA41eeRingCount;
-
-    if (s_phase6dqA41eeSequence <= 16u || arg1 == 0xEC83F0E4u)
-    {
-        sprintf(
-            line,
-            "P6DQ A41EE CALLSITE: seq=%u site=%u owner=%08X arg1=%08X esp=%08X",
-            (unsigned int)s_phase6dqA41eeSequence,
-            (unsigned int)site,
-            (unsigned int)owner,
-            (unsigned int)arg1,
-            (unsigned int)g_esp);
-        trace(line);
-    }
 }
 
 static void phase6dq_note_dispatch(
@@ -1563,7 +1017,7 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
-        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u fpsave142_calls=%u fprestore139_calls=%u fpguard_depth=%u fpguard_mismatches=%u fpguard_last_state=%08X dsound_poison_sites=%u dsound_poison_noops=%u dsound_poison_object=%08X dsound_poison_arg=%08X a41ee_seq=%u a41ee_last_site=%u a41ee_last_owner=%08X a41ee_last_arg1=%08X",
+        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u ioapic_default_reads=%u ioapic_default_writes=%u ioapic_special_fences=%u kestall151_calls=%u kestall151_last_us=%u kestall151_total_us=%I64u kestall151_max_us=%u fpsave142_calls=%u fprestore139_calls=%u fpguard_depth=%u fpguard_mismatches=%u fpguard_last_state=%08X dsound_poison_sites=%u dsound_poison_noops=%u dsound_poison_object=%08X dsound_poison_arg=%08X",
         (unsigned int)s_phase6dqDispatchJournalCount,
         (unsigned int)s_phase6dqDispatchJournalOverflow,
         (unsigned int)s_phase6dqHardStopJournalCount,
@@ -1587,65 +1041,8 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqDsoundPoisonSiteCount,
         (unsigned int)s_phase6dqDsoundPoisonNoopCount,
         (unsigned int)s_phase6dqDsoundPoisonLastObject,
-        (unsigned int)s_phase6dqDsoundPoisonLastArg,
-        (unsigned int)s_phase6dqA41eeSequence,
-        (unsigned int)s_phase6dqA41eeLastSite,
-        (unsigned int)s_phase6dqA41eeLastOwner,
-        (unsigned int)s_phase6dqA41eeLastArg1);
+        (unsigned int)s_phase6dqDsoundPoisonLastArg);
     trace(line);
-
-    for (i = 0u; i < s_phase6dqA41eeRingCount; ++i)
-    {
-        uint32_t index =
-            (s_phase6dqA41eeRingWrite + PHASE6DQ_A41EE_RING_CAP -
-             s_phase6dqA41eeRingCount + i) % PHASE6DQ_A41EE_RING_CAP;
-        Phase6DQA41eeCall* row = &s_phase6dqA41eeRing[index];
-        sprintf(
-            line,
-            "P6DQ A41EE RING[%u] seq=%u site=%u owner=%08X arg1=%08X",
-            (unsigned int)i,
-            (unsigned int)row->sequence,
-            (unsigned int)row->site,
-            (unsigned int)row->owner,
-            (unsigned int)row->arg1);
-        trace(line);
-    }
-
-    sprintf(
-        line,
-        "P6DR GRAPHICS CONSUMER SUMMARY: relevant=%u surface_touch_r=%u surface_touch_w=%u surface_ptr_r=%u surface_ptr_w=%u device_touch_r=%u device_touch_w=%u device_ptr_r=%u device_ptr_w=%u unique=%u last_kind=%u last_owner=%08X last_addr=%08X last_value=%08X",
-        (unsigned int)s_phase6drGraphicsRelevantHits,
-        (unsigned int)s_phase6drSurfaceTouchReads,
-        (unsigned int)s_phase6drSurfaceTouchWrites,
-        (unsigned int)s_phase6drSurfacePointerReads,
-        (unsigned int)s_phase6drSurfacePointerWrites,
-        (unsigned int)s_phase6drDeviceTouchReads,
-        (unsigned int)s_phase6drDeviceTouchWrites,
-        (unsigned int)s_phase6drDevicePointerReads,
-        (unsigned int)s_phase6drDevicePointerWrites,
-        (unsigned int)s_phase6drGraphicsRingCount,
-        (unsigned int)s_phase6drGraphicsLastKind,
-        (unsigned int)s_phase6drGraphicsLastOwner,
-        (unsigned int)s_phase6drGraphicsLastAddress,
-        (unsigned int)s_phase6drGraphicsLastValue);
-    trace(line);
-
-    for (i = 0u; i < s_phase6drGraphicsRingCount; ++i)
-    {
-        Phase6DRGraphicsEvent* row = &s_phase6drGraphicsRing[i];
-        sprintf(
-            line,
-            "P6DR GRAPHICS RING[%u] kind=%u owner=%08X address=%08X value=%08X width=%u write=%u hits=%u",
-            (unsigned int)i,
-            (unsigned int)row->kind,
-            (unsigned int)row->owner,
-            (unsigned int)row->address,
-            (unsigned int)row->value,
-            (unsigned int)row->width,
-            (unsigned int)row->isWrite,
-            (unsigned int)row->hits);
-        trace(line);
-    }
 
     for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
     {
@@ -2447,22 +1844,10 @@ def main() -> int:
     main_text = patch_quiet_logging(main_text)
     main_text = patch_vp_accesses(main_text)
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
-    predictive_audit = predictive_static_audit(main_text, base)
-    main_text, a41ee_site_map = instrument_a41ee_callsites(main_text, base)
-    by_site_id = {
-        int(row["site_id"]): row
-        for row in predictive_audit["audio_direct_call_sites"]
-    }
-    for row in a41ee_site_map:
-        detail = by_site_id.get(int(row["site_id"]))
-        if detail:
-            row["arg1_expression"] = detail["arg1_expression"]
-            row["arg1_kind"] = detail["arg1_kind"]
-    main_text, graphics_consumer_probe = instrument_graphics_consumers(
-        main_text, base
-    )
     main_text = insert_final_dump(main_text)
     main_text = update_vp_summary(main_text)
+
+    predictive_audit = predictive_static_audit(main_text, base)
 
     old_policy_prefix = "Policy: Phase 6DP "
     policy_pos = main_text.find(old_policy_prefix)
@@ -2481,7 +1866,7 @@ def main() -> int:
         "continues aligned VP WRITE32 commands while unknown VP reads remain hard "
         "fences, preserves 64M/C4146/allocator/XACT/NV2A semantics, and prioritizes "
         "maximum trustworthy progress toward guest presentation per hardware run; "
-        "R28 adds predictive provenance plus bounded graphics-consumer telemetry; unknown "
+        "R29 SAFEBOOT keeps predictive analysis static-only while unknown "
         "kernel calls, MMIO and reads remain hard fences"
     )
     # Replace only the payload inside the existing C string literal. Preserve
@@ -2535,12 +1920,7 @@ def main() -> int:
         "target == 0xF6DCCCD0u",
         "P6DQ DSOUND POISON SLOT:",
         "P6DQ DSOUND POISON NOOP:",
-        "P6DQ A41EE CALLSITE:",
-        "P6DQ A41EE RING[%u]",
-        "P6DR GRAPHICS CONSUMER:",
-        "P6DR GRAPHICS CONSUMER SUMMARY:",
-        "P6DR GRAPHICS RING[%u]",
-        "R28 adds predictive provenance plus bounded graphics-consumer telemetry; unknown",
+        "R29 SAFEBOOT keeps predictive analysis static-only",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
@@ -2671,10 +2051,6 @@ def main() -> int:
             "closure_depth": PREDICTIVE_CLOSURE_DEPTH,
             "closure_cap_per_seed": PREDICTIVE_CLOSURE_CAP_PER_SEED,
             "broad_sweep_runs_after_predictive_priority": True,
-            "runtime_a41ee_callsite_probe": True,
-            "runtime_a41ee_site_map": a41ee_site_map,
-            "runtime_fault_policy_changed": False,
-            "graphics_consumer_probe": graphics_consumer_probe,
         },
         "vp_diagnostic_continue": {
             "aligned_write32_continue": True,
@@ -2753,11 +2129,6 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print("[Phase6DQ] A41EE runtime provenance ring: ARMED (fault semantics unchanged)")
-    print(
-        f"[Phase6DQ] Graphics consumer probe: functions={graphics_consumer_probe['instrumented_functions']} "
-        f"surface={graphics_consumer_probe['surface_base']}-{graphics_consumer_probe['surface_end']}"
-    )
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
