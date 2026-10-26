@@ -30,7 +30,7 @@ BASE_TAG = "P6CX-EXFREEPOOL-ITAIL-80000011-20261026-A"
 BUILD_TAG = "P6CY-READ32-CCCCCCD0-SITE-20261026-A"
 COOKIE_OLD = "phase6cx_env_build_cookie"
 COOKIE_NEW = "phase6cy_env_build_cookie"
-EMITTER_REVISION = "6CY-R1"
+EMITTER_REVISION = "6CY-R2"
 
 TRACE_RE = re.compile(r"RECOMP_TRACE_FUNC\s*\(\s*0x([0-9A-Fa-f]{8})u?\s*\)")
 READ32_RE = re.compile(r"\bGUEST_READ32\s*\(")
@@ -211,7 +211,7 @@ def insert_summary(text: str, site_count: int, function_count: int) -> str:
     return text[:line_start] + block + text[line_start:]
 
 
-def relabel(text: str) -> str:
+def relabel_main(text: str) -> str:
     if text.count(BASE_TAG) != 1:
         raise SystemExit(
             f"[Phase6CY] expected one inherited build tag, found {text.count(BASE_TAG)}"
@@ -222,6 +222,16 @@ def relabel(text: str) -> str:
         text.replace("PHASE 6CX", "PHASE 6CY")
         .replace("Phase 6CX", "Phase 6CY")
         .replace('"P6CX ', '"P6CY ')
+    )
+
+
+def relabel_env(text: str) -> str:
+    if COOKIE_OLD not in text:
+        raise SystemExit("[Phase6CY] inherited env cookie missing")
+    text = text.replace(COOKIE_OLD, COOKIE_NEW)
+    return (
+        text.replace("PHASE 6CX", "PHASE 6CY")
+        .replace("Phase 6CX", "Phase 6CY")
     )
 
 
@@ -283,8 +293,8 @@ def main() -> int:
     )
     main_text = install_site_support(main_text)
     main_text = insert_summary(main_text, site_count, function_count)
-    main_text = relabel(main_text)
-    env_text = relabel(env_text)
+    main_text = relabel_main(main_text)
+    env_text = relabel_env(env_text)
 
     required = (
         BUILD_TAG,
