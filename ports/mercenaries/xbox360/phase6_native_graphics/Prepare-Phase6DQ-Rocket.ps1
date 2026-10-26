@@ -73,7 +73,7 @@ Write-Host "[Phase6DQ]          ROCKET FRONTIER JOURNAL"
 Write-Host "[Phase6DQ] ================================================"
 Write-Host "[Phase6DQ] Hardware seed: 6DP crossed VP FREE FE820010 -> 00000080"
 Write-Host "[Phase6DQ] Next proven boundary: WRITE32 FE8202A4 at tick 26,712,259"
-Write-Host "[Phase6DQ] Historical CCCCCCD0 path: ELIMINATED"
+Write-Host "[Phase6DQ] Historical early CCCCCCD0 path: ELIMINATED; R16 deep DSOUND recurrence: CLASSIFIED + R17 QUARANTINED"
 Write-Host "[Phase6DQ] XACT root teardown/global-zero regression: ABSENT"
 Write-Host "[Phase6DQ] Static pack cap: 4096 new support-clean functions"
 Write-Host "[Phase6DQ] Priority: D3D -> XGRPH -> DSOUND -> TEXT_HOT -> XACTENG -> WMADEC/XPP/XMV"
@@ -161,6 +161,12 @@ if($q.emitter_revision-ne"6DQ-R17"-or
    $q.vp_diagnostic_continue.write32_semantics_complete-ne$false-or
    $q.vp_diagnostic_continue.unknown_read32_fenced-ne$true-or
    $q.vp_diagnostic_continue.audio_fidelity_claimed-ne$false-or
+   $q.dsound_poison_slot_bridge.fault_site-ne"0x002A41F7"-or
+   $q.dsound_poison_slot_bridge.poison_value-ne"0xCCCCCCCC"-or
+   $q.dsound_poison_slot_bridge.synthetic_noop_target-ne"0xF6DCCCD0"-or
+   $q.dsound_poison_slot_bridge.ordinary_guest_faults_bypassed-ne$false-or
+   $q.kernel_timing_bridge.hardware_seed_microseconds-ne20-or
+   $q.kernel_timing_bridge.hardware_seed_calls-ne1000-or
    $q.execution_budget-ne64000000-or
    $q.generated_c4146_scope_inherited-ne$true-or
    $q.allocator_repairs_inherited-ne$true-or
