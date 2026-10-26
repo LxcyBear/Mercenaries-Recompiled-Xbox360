@@ -67,10 +67,10 @@ Write-Host "[Phase6DA] Fault suppression: NONE"
 if($LASTEXITCODE-ne0){throw "Phase 6DA emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DA-R3"')){
-  throw "Phase 6DA stale emitter detected; expected revision 6DA-R3"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DA-R4"')){
+  throw "Phase 6DA stale emitter detected; expected revision 6DA-R4"
 }
-Write-Host "[Phase6DA] Emitter revision       : 6DA-R3"
+Write-Host "[Phase6DA] Emitter revision       : 6DA-R4"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
