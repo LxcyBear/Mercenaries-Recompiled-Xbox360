@@ -33,7 +33,7 @@ BASE_TAG = "P6CV-SHADOW-RAM-F0000000-20261025-A"
 BUILD_TAG = "P6CW-DSOUND-SWEEP-002A6713-20261026-A"
 COOKIE_OLD = "phase6cv_env_build_cookie"
 COOKIE_NEW = "phase6cw_env_build_cookie"
-EMITTER_REVISION = "6CW-R2"
+EMITTER_REVISION = "6CW-R3"
 
 ROOT = 0x002A6713
 CALLER = 0x0023A3CE
@@ -51,7 +51,7 @@ def load(path: Path, name: str):
     return mod
 
 
-def validate_exact_dsound_target(root: int, by_va: dict, generated: dict) -> None:
+def validate_exact_dsound_target(root: int, by_va: dict, generated: dict) -> dict:
     if not (DSOUND_START <= root < DSOUND_END):
         raise SystemExit(
             f"[Phase6CW] target 0x{root:08X} is outside DSOUND "
@@ -79,12 +79,21 @@ def validate_exact_dsound_target(root: int, by_va: dict, generated: dict) -> Non
             f"[Phase6CW] DSOUND target 0x{root:08X} is absent from the function inventory"
         )
 
-    if root not in generated:
+    if row.get("name") != "sub_002A6713":
         raise SystemExit(
-            f"[Phase6CW] DSOUND target 0x{root:08X} is exact function "
-            f"{row['name']} but has no generated translated body. "
-            "Translation coverage must be extended; refusing to fabricate a return."
+            f"[Phase6CW] exact root name changed: {row.get('name')}"
         )
+
+    # 0x002A6713 is deliberately a --manual-function in Recompile.ps1.
+    # Its maintained source-equivalent DSOUND decryptor lives in
+    # ports/mercenaries/src/recomp_manual.c, so absence from runtime/gen is
+    # expected and must not be treated as missing translation coverage.
+    if root in generated:
+        raise SystemExit(
+            "[Phase6CW] 0x002A6713 unexpectedly has a generated body; "
+            "manual-function ownership changed and needs review"
+        )
+    return row
 
 
 def instrument_root(rendered: str, name: str) -> str:
@@ -97,6 +106,186 @@ def instrument_root(rendered: str, name: str) -> str:
     trace("PASS: Phase 6CW entered DSOUND frontier 002A6713");
 '''
     return rendered[:brace_pos + 1] + probe + rendered[brace_pos + 1:]
+
+
+def install_manual_dsound_root(text: str) -> str:
+    """Install the maintained source-equivalent 0x002A6713 DSOUND decryptor."""
+    lookup_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    lookup_pos = text.find(lookup_marker)
+    if lookup_pos < 0:
+        raise SystemExit("[Phase6CW] pack lookup definition marker changed")
+    if "static void sub_002A6713(void)\n{" in text:
+        raise SystemExit("[Phase6CW] manual DSOUND root is already defined")
+
+    body = r'''
+static uint32_t s_phase6cwDsoundDecryptCalls;
+static uint32_t s_phase6cwDsoundDecryptBytes;
+static uint32_t s_phase6cwDsoundDecryptLastBytes;
+static uint32_t s_phase6cwDsoundDecryptLastHeader;
+static uint32_t s_phase6cwDsoundDecryptLastInput;
+static uint32_t s_phase6cwDsoundDecryptLastOutput;
+
+static void phase6cw_dsound_rng_step(
+    uint32_t low,
+    uint32_t high,
+    uint32_t* nextLow,
+    uint32_t* nextHigh)
+{
+    uint32_t feedback = low;
+
+    feedback = (feedback << 2) ^ low;
+    feedback = (feedback << 1) ^ low;
+    feedback = (feedback << 28) ^ high;
+
+    *nextLow = (low >> 1) | (high << 31);
+    *nextHigh = (high >> 1) | (feedback & 0x80000000u);
+}
+
+static void phase6cw_dsound_rng_store(uint32_t low, uint32_t high)
+{
+    GUEST_WRITE32(0x002BB168u, low);
+    GUEST_WRITE32(0x002BB16Cu, high);
+}
+
+static void phase6cw_dsound_rng_advance(uint32_t* low, uint32_t* high)
+{
+    uint32_t nextLow;
+    uint32_t nextHigh;
+
+    phase6cw_dsound_rng_step(*low, *high, &nextLow, &nextHigh);
+    *low = nextLow;
+    *high = nextHigh;
+    phase6cw_dsound_rng_store(nextLow, nextHigh);
+}
+
+/*
+ * Source-equivalent manual replacement from ports/mercenaries/src/recomp_manual.c.
+ * The production runtime keeps this manual because the retail XDK DirectSound
+ * image loader decrypts dsstdfx.bin through a PRNG byte loop. Running that loop
+ * through translated calls is needlessly expensive. This Xbox 360 copy uses the
+ * checked guest-memory ABI and spells out little-endian state bytes explicitly,
+ * because Xenon itself is big-endian.
+ */
+static void sub_002A6713(void)
+{
+    const uint32_t stateAddress = GUEST_READ32(g_esp + 4u);
+    uint32_t inputAddress = GUEST_READ32(g_esp + 8u);
+    uint32_t length = GUEST_READ32(g_esp + 12u);
+    const uint32_t outputAddress = GUEST_READ32(g_esp + 16u);
+    const uint32_t decodeHeader = GUEST_READ32(g_esp + 20u);
+    uint8_t initialState[8];
+    uint8_t decodedState[8];
+    uint32_t rngLow = 0x49DE12BAu;
+    uint32_t rngHigh = 0x7FA49BCAu;
+    uint32_t index;
+    uint32_t processed;
+
+    RECOMP_TRACE_FUNC(0x002A6713u);
+    PHASE4C_BUDGET_TICK(0x002A6713u);
+    trace("PASS: Phase 6CW entered DSOUND frontier 002A6713");
+
+    ++s_phase6cwDsoundDecryptCalls;
+    s_phase6cwDsoundDecryptLastHeader = decodeHeader;
+    s_phase6cwDsoundDecryptLastInput = inputAddress;
+    s_phase6cwDsoundDecryptLastOutput = outputAddress;
+
+    /* sub_002A66E6 advances constants once, then advances state 80 times. */
+    for (index = 0u; index < 81u; ++index)
+        phase6cw_dsound_rng_advance(&rngLow, &rngHigh);
+
+    /* The retail state bytes are little-endian even though Xenon is not. */
+    initialState[0] = (uint8_t)(rngLow);
+    initialState[1] = (uint8_t)(rngLow >> 8);
+    initialState[2] = (uint8_t)(rngLow >> 16);
+    initialState[3] = (uint8_t)(rngLow >> 24);
+    initialState[4] = (uint8_t)(rngHigh);
+    initialState[5] = (uint8_t)(rngHigh >> 8);
+    initialState[6] = (uint8_t)(rngHigh >> 16);
+    initialState[7] = (uint8_t)(rngHigh >> 24);
+
+    if (decodeHeader != 0u) {
+        for (index = 0u; index < 8u; ++index)
+            decodedState[index] =
+                GUEST_READ8(inputAddress + index) ^ initialState[index];
+        if (stateAddress != 0u) {
+            for (index = 0u; index < 8u; ++index)
+                GUEST_WRITE8(stateAddress + index, decodedState[index]);
+        }
+    } else {
+        if (stateAddress == 0u) {
+            g_eax = 0xFFFFFFFFu;
+            g_esp += 24u;
+            return;
+        }
+        for (index = 0u; index < 8u; ++index)
+            decodedState[index] = GUEST_READ8(stateAddress + index);
+    }
+
+    rngLow =
+        (uint32_t)initialState[0] |
+        ((uint32_t)initialState[1] << 8) |
+        ((uint32_t)initialState[2] << 16) |
+        ((uint32_t)initialState[3] << 24);
+    rngHigh =
+        (uint32_t)initialState[4] |
+        ((uint32_t)initialState[5] << 8) |
+        ((uint32_t)initialState[6] << 16) |
+        ((uint32_t)initialState[7] << 24);
+    phase6cw_dsound_rng_advance(&rngLow, &rngHigh);
+
+    if (decodeHeader != 0u) {
+        inputAddress += 8u;
+        length -= 8u;
+    }
+
+    processed = length;
+    for (index = 0u; index < length; ++index) {
+        const uint32_t keyIndex = index & 7u;
+        const uint8_t input = GUEST_READ8(inputAddress + index);
+        const uint8_t product = (uint8_t)(
+            decodedState[keyIndex] * initialState[keyIndex]);
+        const uint8_t mixed = (uint8_t)(input - product);
+
+        phase6cw_dsound_rng_advance(&rngLow, &rngHigh);
+        GUEST_WRITE8(
+            outputAddress + index,
+            (uint8_t)(initialState[keyIndex] ^ (uint8_t)rngLow ^ mixed));
+    }
+
+    s_phase6cwDsoundDecryptBytes += processed;
+    s_phase6cwDsoundDecryptLastBytes = processed;
+
+    if (s_phase6cwDsoundDecryptCalls <= 8u) {
+        char line[256];
+        sprintf(
+            line,
+            "PASS: Phase 6CW manual DSOUND decrypt call=%u bytes=%u header=%u input=%08X output=%08X total=%u",
+            (unsigned int)s_phase6cwDsoundDecryptCalls,
+            (unsigned int)processed,
+            (unsigned int)decodeHeader,
+            (unsigned int)inputAddress,
+            (unsigned int)outputAddress,
+            (unsigned int)s_phase6cwDsoundDecryptBytes);
+        trace(line);
+    }
+
+    g_eax = 0u;
+    g_esp += 24u;
+}
+
+'''
+    text = text[:lookup_pos] + body + text[lookup_pos:]
+
+    lookup_pos = text.find(lookup_marker)
+    default_marker = "    default: return (recomp_func_t)0;"
+    default_pos = text.find(default_marker, lookup_pos)
+    if default_pos < 0:
+        raise SystemExit("[Phase6CW] pack lookup default marker changed")
+    case_line = "    case 0x002A6713u: return sub_002A6713;\n"
+    if case_line in text:
+        raise SystemExit("[Phase6CW] manual DSOUND dispatch already present")
+    text = text[:default_pos] + case_line + text[default_pos:]
+    return text
 
 
 def main() -> int:
@@ -163,39 +352,29 @@ def main() -> int:
 
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated_root, by_name)
-    validate_exact_dsound_target(ROOT, by_va, generated)
+    root_row = validate_exact_dsound_target(ROOT, by_va, generated)
 
     base.STANDARD_CALLS.add("cos")
     base.STANDARD_CALLS.add("sin")
 
     old = {int(x, 0) for x in manifest.get("members", [])}
-    if ROOT in old:
-        raise SystemExit(
-            "[Phase6CW] target 0x002A6713 is already in the manifest pack; "
-            "the observed direct frontier would then require dispatch-bookkeeping diagnosis"
-        )
 
     dsound_generated = sorted(
         va for va in generated if DSOUND_START <= va < DSOUND_END
     )
     remaining = [va for va in dsound_generated if va not in old]
-    if ROOT not in remaining:
-        raise SystemExit(
-            "[Phase6CW] mandatory root is not an unpacked exact generated DSOUND start"
-        )
-
-    forward = [ROOT] + [va for va in remaining if va > ROOT]
+    forward = [va for va in remaining if va > ROOT]
     prefrontier = [va for va in remaining if va < ROOT]
     candidate_order = forward + prefrontier
     candidate_new = candidate_order[:SWEEP_CAP]
     truncated = max(0, len(candidate_order) - len(candidate_new))
 
-    if ROOT not in candidate_new:
-        raise SystemExit("[Phase6CW] candidate construction lost mandatory root")
-
     new_members = list(candidate_new)
     expanded = old | set(new_members)
 
+    # The mandatory root is maintained manual support, not a generated member.
+    # Sweep generated siblings independently; then install the exact root body
+    # and dispatch case from recomp_manual.c semantics.
     p5bc.SWEEP_ROOT = ROOT
     p5bc.instrument_root_entry = instrument_root
     main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
@@ -205,17 +384,12 @@ def main() -> int:
         generated,
         new_members,
         expanded,
-        require_sweep_root=True,
+        require_sweep_root=False,
     )
+    main_text = install_manual_dsound_root(main_text)
 
-    if ROOT not in new_members:
-        names = pruned.get(ROOT, [])
-        raise SystemExit(
-            "[Phase6CW] support-clean pruning removed mandatory 002A6713: "
-            + ", ".join(names)
-        )
-
-    # p5bc may prune candidates in place; recompute the authoritative pack.
+    # p5bc may prune candidates in place; recompute the authoritative generated
+    # pack. The manual root is tracked separately in the manifest.
     total_pack = old | set(new_members)
 
     if main_text.count(BASE_TAG) != 1:
@@ -248,6 +422,8 @@ def main() -> int:
         "P6CW ASYNC STREAM READ:",
         "P6CW PIXEL CHASE:",
         "P6CW PRESENT PROXIMITY:",
+        "PASS: Phase 6CW manual DSOUND decrypt",
+        "GUEST_WRITE32(0x002BB168u, low);",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
     )
     for marker in required:
@@ -281,7 +457,7 @@ def main() -> int:
             "framebuffer": "0x00000000",
         },
         "root": f"0x{ROOT:08X}",
-        "root_name": generated[ROOT]["name"],
+        "root_name": root_row["name"],
         "frontier_caller": f"0x{CALLER:08X}",
         "target_section": "DSOUND",
         "target_section_start": f"0x{DSOUND_START:08X}",
@@ -291,7 +467,7 @@ def main() -> int:
         "remaining_generated_dsound_members": len(remaining),
         "forward_remaining_members": len(forward),
         "prefrontier_remaining_members": len(prefrontier),
-        "selected_candidate_members": len(candidate_new),
+        "selected_candidate_members": len(candidate_new),\n        "manual_root_dispatch": True,\n        "manual_root_source": "ports/mercenaries/src/recomp_manual.c",
         "truncated_candidate_members": truncated,
         "packed_new_members": len(new_members),
         "pruned_members": len(pruned),
@@ -337,7 +513,7 @@ def main() -> int:
     print(f"[Phase6CW] emitter revision: {EMITTER_REVISION}")
     print(
         f"[Phase6CW] DSOUND root: 0x{ROOT:08X} "
-        f"{generated[ROOT]['name']}"
+        f"{root_row['name']} (maintained manual)"
     )
     print(
         f"[Phase6CW] sibling sweep: generated={len(dsound_generated)} "
