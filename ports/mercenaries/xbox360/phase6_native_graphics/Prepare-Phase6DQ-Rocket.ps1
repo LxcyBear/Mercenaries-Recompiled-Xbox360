@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
   [string]$SolutionRoot="C:\Users\jorda\OneDrive\Desktop\My Xbox\My Projects\Mercenaries - Xbox 360\Mercenaries-PPC-Port",
+  [string]$FastBuildRoot="C:\Merc360Build\Mercenaries-PPC-Port",
+  [switch]$DisableFastLocalBuild,
   [switch]$SkipSolutionBuild,
   [switch]$FullClean
 )
@@ -89,6 +91,8 @@ Write-Host "[Phase6DQ] R33 STABLE-PACK: exact hardware-proven R25 pack order ret
 Write-Host "[Phase6DQ] R33 PROVENANCE: minimal tags on A41EE and upstream A4622 callers"
 Write-Host "[Phase6DQ] R33 DEBUGGER SAFETY: bounded runtime DebugStrings retained"
 Write-Host "[Phase6DQ] Build mode: $(if($FullClean){'FULL CLEAN'}else{'INCREMENTAL (clean skipped)'})"
+Write-Host ("[Phase6DQ] Build root: {0}" -f $(if($DisableFastLocalBuild){$SolutionRoot}else{$FastBuildRoot}))
+Write-Host ("[Phase6DQ] Fast local shadow: {0}" -f $(if($DisableFastLocalBuild){"DISABLED"}else{"ENABLED (persistent intermediates, OneDrive avoided)"}))
 
 
 & $python -m py_compile $emitter
@@ -276,6 +280,11 @@ if(-not$SkipSolutionBuild){
     CleanLog=(Join-Path $root "build\phase6_native_graphics\phase6dq-vs2017-clean.log")
     BuildLog=(Join-Path $root "build\phase6_native_graphics\phase6dq-vs2017-build.log")
     PublishedXex=(Join-Path $out "Mercenaries-PPC-Port-P6DQ-ROCKET-A.xex")
+    ShadowBuildRoot=$FastBuildRoot
+  }
+
+  if($DisableFastLocalBuild){
+    $buildArgs["DisableShadowBuild"]=$true
   }
 
   if(-not$FullClean){
