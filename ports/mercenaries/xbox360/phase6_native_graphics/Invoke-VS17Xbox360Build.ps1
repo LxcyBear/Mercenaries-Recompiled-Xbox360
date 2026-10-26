@@ -402,15 +402,34 @@ if (-not (Test-Path -LiteralPath $destinationShards -PathType Container)) {
     New-Item -ItemType Directory -Force -Path $destinationShards | Out-Null
 }
 
-$sourceShards = @(Get-ChildItem -LiteralPath $GeneratedShardDir -Filter "*.inl" -File | Sort-Object Name)
-$sourceShardNames = @{}
-foreach ($sourceShard in $sourceShards) {
-    $sourceShardNames[$sourceShard.Name.ToLowerInvariant()] = $true
+$sourceCppShards = @(Get-ChildItem -LiteralPath $GeneratedShardDir -Filter "translated_*.cpp" -File -ErrorAction SilentlyContinue | Sort-Object Name)
+$trueTuMode = @($sourceCppShards).Count -gt 0
+if ($trueTuMode) {
+    $sourceShards = $sourceCppShards
+    $sourceAuxiliary = @(Get-ChildItem -LiteralPath $GeneratedShardDir -Filter "*.h" -File -ErrorAction SilentlyContinue | Sort-Object Name)
+    Write-Host ("[XDK-BUILD] Shard mode      : TRUE TU ({0} compiled .cpp shards)" -f @($sourceShards).Count)
+}
+else {
+    $sourceShards = @(Get-ChildItem -LiteralPath $GeneratedShardDir -Filter "*.inl" -File | Sort-Object Name)
+    $sourceAuxiliary = @()
+    Write-Host ("[XDK-BUILD] Shard mode      : LEGACY INCLUDE ({0} .inl shards)" -f @($sourceShards).Count)
+}
+
+if (@($sourceShards).Count -lt 1) {
+    throw "Generated shard directory contains neither translated_*.cpp nor *.inl shards."
+}
+
+$sourceNames = @{}
+foreach ($sourceShard in @($sourceShards + $sourceAuxiliary)) {
+    $sourceNames[$sourceShard.Name.ToLowerInvariant()] = $true
 }
 
 $staleShards = @(
-    Get-ChildItem -LiteralPath $destinationShards -Filter "*.inl" -File -ErrorAction SilentlyContinue |
-        Where-Object { -not $sourceShardNames.ContainsKey($_.Name.ToLowerInvariant()) }
+    Get-ChildItem -LiteralPath $destinationShards -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            ($_.Extension -in @(".inl", ".cpp", ".h")) -and
+            -not $sourceNames.ContainsKey($_.Name.ToLowerInvariant())
+        }
 )
 foreach ($staleShard in $staleShards) {
     Remove-Item -LiteralPath $staleShard.FullName -Force
@@ -418,21 +437,23 @@ foreach ($staleShard in $staleShards) {
 
 $changedShardCount = 0
 $unchangedShardCount = 0
-foreach ($sourceShard in $sourceShards) {
+foreach ($sourceShard in @($sourceShards + $sourceAuxiliary)) {
     $destinationShard = Join-Path $destinationShards $sourceShard.Name
     $changed = Sync-FileIfChanged -Source $sourceShard.FullName -Destination $destinationShard -Label $sourceShard.Name
-    if ($changed) {
-        ++$changedShardCount
-    }
-    else {
-        ++$unchangedShardCount
-    }
+    if ($changed) { ++$changedShardCount } else { ++$unchangedShardCount }
 }
 
 Assert-FileHashMatch -Expected $GeneratedMain -Actual $mainPath -Label "main.cpp"
 Assert-FileHashMatch -Expected $GeneratedEnv -Actual $envPath -Label "env CPP"
 
-$destShards = @(Get-ChildItem -LiteralPath $destinationShards -Filter "*.inl" -File | Sort-Object Name)
+$destShards = @(
+    if ($trueTuMode) {
+        Get-ChildItem -LiteralPath $destinationShards -Filter "translated_*.cpp" -File | Sort-Object Name
+    }
+    else {
+        Get-ChildItem -LiteralPath $destinationShards -Filter "*.inl" -File | Sort-Object Name
+    }
+)
 if (@($sourceShards).Count -ne @($destShards).Count) {
     throw "translated_shards count mismatch: generated=$(@($sourceShards).Count), solution=$(@($destShards).Count)"
 }
@@ -442,11 +463,25 @@ for ($i = 0; $i -lt @($sourceShards).Count; $i++) {
     }
     Assert-FileHashMatch -Expected $sourceShards[$i].FullName -Actual $destShards[$i].FullName -Label $sourceShards[$i].Name
 }
+foreach ($sourceAux in $sourceAuxiliary) {
+    Assert-FileHashMatch -Expected $sourceAux.FullName -Actual (Join-Path $destinationShards $sourceAux.Name) -Label $sourceAux.Name
+}
 
+$projectChanged = $false
+if ($trueTuMode) {
+    if ($DisableShadowBuild) {
+        throw "True TU mode requires the fast local shadow build so generated project items do not mutate the source solution. Remove -DisableFastLocalBuild."
+    }
+    $compiledShardFiles = @(Get-ChildItem -LiteralPath $destinationShards -Filter "translated_*.cpp" -File | Sort-Object Name)
+    $projectChanged = Update-ProjectTrueTUItems -ProjectPath $projectPath -ProjectDirectory (Split-Path -Parent $projectPath) -ShardFiles $compiledShardFiles
+}
+else {
+    $projectChanged = Update-ProjectTrueTUItems -ProjectPath $projectPath -ProjectDirectory (Split-Path -Parent $projectPath) -ShardFiles @()
+}
 $syncElapsed = (Get-Date) - $syncStart
 $mainSyncState = if ($mainChanged) { "CHANGED" } else { "UNCHANGED" }
 $envSyncState = if ($envChanged) { "CHANGED" } else { "UNCHANGED" }
-Write-Host ("[XDK-BUILD] Content sync    : main={0} env={1} shards_changed={2} shards_unchanged={3} stale_removed={4} elapsed={5:N2}s" -f $mainSyncState, $envSyncState, $changedShardCount, $unchangedShardCount, @($staleShards).Count, $syncElapsed.TotalSeconds)
+Write-Host ("[XDK-BUILD] Content sync    : main={0} env={1} shards_changed={2} shards_unchanged={3} stale_removed={4} project_changed={5} elapsed={6:N2}s" -f $mainSyncState, $envSyncState, $changedShardCount, $unchangedShardCount, @($staleShards).Count, $projectChanged, $syncElapsed.TotalSeconds)
 
 $solutionMainText = Get-Content -LiteralPath $mainPath -Raw
 $solutionEnvText = Get-Content -LiteralPath $envPath -Raw
@@ -566,7 +601,8 @@ $generatedInputsUnchanged = (
     (-not $mainChanged) -and
     (-not $envChanged) -and
     ($changedShardCount -eq 0) -and
-    (@($staleShards).Count -eq 0)
+    (@($staleShards).Count -eq 0) -and
+    (-not $projectChanged)
 )
 
 $builtXex = $null
