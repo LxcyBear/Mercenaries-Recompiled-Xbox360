@@ -284,6 +284,47 @@ function Assert-FileHashMatch {
     }
 }
 
+function Update-ProjectTrueTUItems {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProjectPath,
+        [Parameter(Mandatory = $true)][string]$ProjectDirectory,
+        [Parameter(Mandatory = $true)][System.IO.FileInfo[]]$ShardFiles
+    )
+
+    $begin = "  <!-- BEGIN PHASE6 TRUE TU SHARDS -->"
+    $end = "  <!-- END PHASE6 TRUE TU SHARDS -->"
+    $text = Get-Content -LiteralPath $ProjectPath -Raw
+    $pattern = '(?s)\r?\n\s*<!-- BEGIN PHASE6 TRUE TU SHARDS -->.*?<!-- END PHASE6 TRUE TU SHARDS -->\s*'
+    $text = [regex]::Replace($text, $pattern, "`r`n")
+
+    if (@($ShardFiles).Count -gt 0) {
+        $items = @()
+        foreach ($shard in ($ShardFiles | Sort-Object Name)) {
+            $relative = $shard.FullName.Substring($ProjectDirectory.Length).TrimStart('\')
+            $escaped = [System.Security.SecurityElement]::Escape($relative)
+            $items += "    <ClCompile Include=`"$escaped`" />"
+        }
+
+        $block = @(
+            $begin
+            "  <ItemGroup>"
+            ($items -join "`r`n")
+            "  </ItemGroup>"
+            $end
+        ) -join "`r`n"
+
+        $projectClose = $text.LastIndexOf("</Project>")
+        if ($projectClose -lt 0) {
+            throw "Could not locate </Project> while injecting true-TU shard compile items."
+        }
+        $text = $text.Insert($projectClose, $block + "`r`n")
+    }
+
+    $current = Get-Content -LiteralPath $ProjectPath -Raw
+    if ($current -ceq $text) { return $false }
+    [System.IO.File]::WriteAllText($ProjectPath, $text, [System.Text.UTF8Encoding]::new($false))
+    return $true
+}
 function Sync-FileIfChanged {
     param(
         [Parameter(Mandatory = $true)][string]$Source,
