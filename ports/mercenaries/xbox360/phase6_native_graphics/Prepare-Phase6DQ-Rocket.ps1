@@ -85,8 +85,9 @@ Write-Host "[Phase6DQ] Kernel FP guard pair 142/139: KeSave/KeRestoreFloatingPoi
 Write-Host "[Phase6DQ] DSOUND poison dispatch 002A41F7: EXACT SLOT QUARANTINE ARMED (CCCCCCCC -> journaled DS_OK no-op)"
 Write-Host "[Phase6DQ] Non-VP MMIO/NV2A unknowns: HARD FENCE"
 Write-Host "[Phase6DQ] Dispatch logging: first unique + aggregate, progress every 65536"
-Write-Host "[Phase6DQ] R31 STABLE-PACK: exact hardware-proven R25 pack order retained"
-Write-Host "[Phase6DQ] R31 PROVENANCE: two globals only before packed direct A41EE calls; no stack reads/logging/ring"
+Write-Host "[Phase6DQ] R32 STABLE-PACK: exact hardware-proven R25 pack order retained"
+Write-Host "[Phase6DQ] R32 PROVENANCE: two globals only before packed direct A41EE calls"
+Write-Host "[Phase6DQ] R32 DEBUGGER SAFETY: long runtime DebugStrings split/bounded"
 Write-Host "[Phase6DQ] Build mode: $(if($FullClean){'FULL CLEAN'}else{'INCREMENTAL (clean skipped)'})"
 
 
@@ -96,10 +97,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R31"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R31"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R32"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R32"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R31"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R32"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -148,7 +149,7 @@ if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"){
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R31"-or
+if($q.emitter_revision-ne"6DQ-R32"-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -260,7 +261,7 @@ Write-Host "[Phase6DQ] Detailed bounded runtime journals: ARMED"
 Write-Host "[Phase6DQ] DSOUND CCCCCCCC poison-slot quarantine: ARMED at exact site 002A41F7"
 Write-Host "[Phase6DQ] Pixel/present instrumentation: INHERITED"
 Write-Host "[Phase6DQ] C4146 generated-code suppression: INHERITED"
-Write-Host "[Phase6DQ] R31 SOURCE: exact R25 hardware-proven pack + minimal A41EE provenance"
+Write-Host "[Phase6DQ] R32 SOURCE: exact R25 pack + minimal A41EE provenance + bounded debug strings"
 
 if(-not$SkipSolutionBuild){
   $buildArgs=@{
@@ -285,5 +286,5 @@ if(-not$SkipSolutionBuild){
 
   Write-Host "[Phase6DQ] BUILD PASS"
   Write-Host ("[Phase6DQ] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6DQ-ROCKET-A.xex"))
-  Write-Host "[Phase6DQ] R31 stable-pack build complete. Incremental build is allowed; use -FullClean only if needed."
+  Write-Host "[Phase6DQ] R32 stable-pack build complete. Incremental build is allowed; use -FullClean only if needed."
 }
