@@ -494,11 +494,24 @@ if (-not $solutionMainText.Contains($ExpectedBuildTag)) {
     throw "Post-build source identity gate failed: main.cpp lost expected build tag"
 }
 
+$xexSearchRoots = @(
+    $effectiveSolutionRoot,
+    $SolutionRoot
+) | Where-Object {
+    -not [string]::IsNullOrWhiteSpace($_) -and
+    (Test-Path -LiteralPath $_ -PathType Container)
+} | ForEach-Object {
+    [IO.Path]::GetFullPath($_).TrimEnd('\')
+} | Select-Object -Unique
+
 $xexCandidates = @(
-    Get-ChildItem -LiteralPath $effectiveSolutionRoot -Filter "*.xex" -File -Recurse -ErrorAction SilentlyContinue |
-        Where-Object { $_.LastWriteTime -ge $buildStart.AddSeconds(-2) } |
-        Sort-Object LastWriteTime -Descending
-)
+    foreach ($xexRoot in $xexSearchRoots) {
+        Get-ChildItem -LiteralPath $xexRoot -Filter "*.xex" -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -ge $buildStart.AddSeconds(-2) }
+    }
+) | Sort-Object LastWriteTime -Descending
+
+Write-Host ("[XDK-BUILD] XEX search roots : {0}" -f ($xexSearchRoots -join " ; "))
 
 $buildReportedUpToDate = $false
 if (Test-Path -LiteralPath $BuildLog) {
@@ -524,9 +537,10 @@ if (@($xexCandidates).Count -gt 0) {
 }
 elseif ($SkipClean -and $generatedInputsUnchanged -and $buildReportedUpToDate) {
     $existingXexCandidates = @(
-        Get-ChildItem -LiteralPath $effectiveSolutionRoot -Filter "*.xex" -File -Recurse -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending
-    )
+        foreach ($xexRoot in $xexSearchRoots) {
+            Get-ChildItem -LiteralPath $xexRoot -Filter "*.xex" -File -Recurse -ErrorAction SilentlyContinue
+        }
+    ) | Sort-Object LastWriteTime -Descending
 
     if (@($existingXexCandidates).Count -gt 0) {
         $builtXex = $existingXexCandidates[0]
@@ -563,7 +577,7 @@ elseif ($buildReportedUpToDate -and -not $generatedInputsUnchanged) {
     throw "VS17 reported the project up-to-date even though generated inputs changed; refusing to reuse a potentially stale .xex."
 }
 else {
-    throw "VS17 reported build success, but no usable .xex was found under '$effectiveSolutionRoot'."
+    throw ("VS17 reported build success, but no usable .xex was found under any build output root: " + ($xexSearchRoots -join " ; "))
 }
 
 Write-Host "[XDK-BUILD] FULL PIPELINE: PASS"
