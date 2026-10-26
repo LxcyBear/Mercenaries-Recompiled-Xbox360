@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R21"
+EMITTER_REVISION = "6DQ-R22"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -1068,10 +1068,37 @@ def patch_vp_accesses(text: str) -> str:
 
 
 
-def patch_dsound_poison_slot_dispatch(text: str) -> str:
+def patch_dsound_poison_slot_dispatch(text: str, base) -> str:
     """Quarantine only the hardware-proven poisoned DSOUND virtual-dispatch site."""
     sig = "static void sub_002A41EE(void)"
-    start, end = function_span(text, sig)
+
+    # main_monolithic.cpp contains a forward declaration before the real body.
+    # Locate the exact definition by requiring the next non-whitespace token
+    # after the signature to be '{', not ';'.
+    start = -1
+    search_pos = 0
+    definition_count = 0
+    while True:
+        pos = text.find(sig, search_pos)
+        if pos < 0:
+            break
+        cursor = pos + len(sig)
+        while cursor < len(text) and text[cursor].isspace():
+            cursor += 1
+        if cursor < len(text) and text[cursor] == "{":
+            start = pos
+            definition_count += 1
+        search_pos = pos + len(sig)
+
+    if definition_count != 1 or start < 0:
+        raise SystemExit(
+            f"[Phase6DQ] expected exactly one sub_002A41EE definition, found {definition_count}"
+        )
+
+    brace = text.find("{", start)
+    if brace < 0:
+        raise SystemExit("[Phase6DQ] sub_002A41EE definition opening brace missing")
+    end = base.closing_brace(base.mask_noncode(text), brace)
     body = text[start:end]
 
     # R16 runtime VA ring proved the faulting instruction is 002A41F7 inside
@@ -1421,7 +1448,7 @@ def main() -> int:
 
     # Runtime rocket layer.
     main_text = install_journal_support(main_text)
-    main_text = patch_dsound_poison_slot_dispatch(main_text)
+    main_text = patch_dsound_poison_slot_dispatch(main_text, base)
     main_text = patch_escape_journal(main_text)
     main_text = patch_dispatch_journal(main_text)
     main_text = patch_quiet_logging(main_text)
@@ -1586,6 +1613,7 @@ def main() -> int:
             "synthetic_noop_target": "0xF6DCCCD0",
             "scope": "exact hardware-proven DSOUND dispatch site only",
             "emitter_source_shape_guard": True,
+            "definition_not_forward_declaration_guard": True,
             "function_local_unique_dispatch_pair_guard": True,
             "guarded_dereference_postcheck": True,
             "accepts_inherited_apu_routed_accessor": True,
