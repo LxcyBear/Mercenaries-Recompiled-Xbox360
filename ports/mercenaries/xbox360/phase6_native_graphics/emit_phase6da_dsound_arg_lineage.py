@@ -30,7 +30,7 @@ BASE_TAG = "P6CZ-PREFAULT-CCCCCCD0-PROVENANCE-20261026-A"
 BUILD_TAG = "P6DA-DSOUND-ARG-LINEAGE-00041D88-20261026-A"
 COOKIE_OLD = "phase6cz_env_build_cookie"
 COOKIE_NEW = "phase6da_env_build_cookie"
-EMITTER_REVISION = "6DA-R1"
+EMITTER_REVISION = "6DA-R2"
 
 TARGETS = (
     ("0029F992", 0x0029F992),
@@ -113,13 +113,26 @@ def entry_probe(stage: int, va: int) -> str:
 def patch_entries(text: str) -> str:
     for stage, (name, va) in enumerate(TARGETS, 1):
         signature = f"void sub_{name}(void)"
-        sig = text.find(signature)
-        if sig < 0:
-            raise SystemExit(f"[Phase6DA] target function missing: {signature}")
+
+        # main_monolithic.cpp contains forward declarations before translated
+        # bodies.  Anchor on the actual function definition, not the prototype.
+        definition_re = re.compile(
+            rf"(?m)^void\s+sub_{name}\(void\)\s*\{{"
+        )
+        matches = list(definition_re.finditer(text))
+        if len(matches) != 1:
+            raise SystemExit(
+                f"[Phase6DA] expected one body for {signature}, found {len(matches)}"
+            )
+
+        sig = matches[0].start()
+        body_open = text.find("{", matches[0].start(), matches[0].end() + 1)
+        if body_open < 0:
+            raise SystemExit(f"[Phase6DA] body brace missing for {signature}")
 
         trace_marker = f"    RECOMP_TRACE_FUNC(0x{va:08X}u);\n"
-        pos = text.find(trace_marker, sig)
-        if pos < 0 or pos - sig > 4096:
+        pos = text.find(trace_marker, body_open)
+        if pos < 0 or pos - body_open > 4096:
             raise SystemExit(
                 f"[Phase6DA] entry trace marker missing/too far for {signature}"
             )
