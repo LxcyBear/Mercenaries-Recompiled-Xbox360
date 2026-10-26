@@ -62,10 +62,10 @@ Write-Host "[Phase6DO] XACT teardown semantics: UNCHANGED"
 if($LASTEXITCODE-ne0){throw "Phase 6DO emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DO-R3"')){
-  throw "Phase 6DO stale emitter detected; expected revision 6DO-R3"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DO-R4"')){
+  throw "Phase 6DO stale emitter detected; expected revision 6DO-R4"
 }
-Write-Host "[Phase6DO] Emitter revision       : 6DO-R3"
+Write-Host "[Phase6DO] Emitter revision       : 6DO-R4"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -147,8 +147,14 @@ foreach($marker in @(
   if(-not$text.Contains($marker)){throw "Phase 6DO source gate missing: $marker"}
 }
 
-if($text.Contains("base + size != oldPageNext")){
-  throw "Phase 6DO stale exact-end restriction remains"
+$helperStart=$text.IndexOf("static uint32_t phase6at_claim_post_create_tail(")
+$helperEnd=$text.IndexOf("static void phase5bb_mm_allocate_contiguous_ex(uint32_t savedEsp)",$helperStart)
+if($helperStart-lt0-or$helperEnd-lt0-or$helperEnd-le$helperStart){
+  throw "Phase 6DO generated tail helper verification bounds missing"
+}
+$helperText=$text.Substring($helperStart,$helperEnd-$helperStart)
+if($helperText.Contains("base + size != oldPageNext")){
+  throw "Phase 6DO stale exact-end restriction remains inside tail helper"
 }
 
 $shardCount=@(Get-ChildItem -LiteralPath $shards -Filter "*.inl" -File).Count
