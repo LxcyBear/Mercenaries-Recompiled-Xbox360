@@ -22,8 +22,10 @@ $p6bl=Join-Path $PSScriptRoot "emit_phase6bl_d3d_frontier_0028b180.py"
 $builder=Join-Path $PSScriptRoot "Invoke-VS17Xbox360Build.ps1"
 $generatedRoot=Join-Path $stage3 "runtime\gen"
 $functions=Join-Path $stage3 "analysis\disasm\functions.json"
+$recompile=Join-Path $root "ports\mercenaries\scripts\Recompile.ps1"
+$manualSource=Join-Path $root "ports\mercenaries\src\recomp_manual.c"
 
-foreach($f in @($python,$emitter,$baseEmitter,$p5bb,$p5bc,$p6bl,$builder,$generatedRoot,$functions)){
+foreach($f in @($python,$emitter,$baseEmitter,$p5bb,$p5bc,$p6bl,$builder,$generatedRoot,$functions,$recompile,$manualSource)){
   if(-not(Test-Path -LiteralPath $f)){throw "Missing Phase 6CW input: $f"}
 }
 
@@ -79,10 +81,22 @@ Write-Host "[Phase6CW] Watchdog: preserve 64,000,000 translated blocks"
 if($LASTEXITCODE-ne0){throw "Phase 6CW emitter syntax check failed"}
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6CW-R2"')){
-  throw "Phase 6CW stale emitter detected; expected revision 6CW-R2"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6CW-R3"')){
+  throw "Phase 6CW stale emitter detected; expected revision 6CW-R3"
 }
-Write-Host "[Phase6CW] Emitter revision       : 6CW-R2"
+Write-Host "[Phase6CW] Emitter revision       : 6CW-R3"
+
+$recompileText=Get-Content $recompile -Raw
+$manualText=Get-Content $manualSource -Raw
+if(-not$recompileText.Contains('"--manual-function", "0x002A6713"')){
+  throw "Phase 6CW source policy changed: Recompile.ps1 no longer marks 0x002A6713 manual"
+}
+if(-not$manualText.Contains("void sub_002A6713(void)") -or
+   -not$manualText.Contains("merc_dsound_rng_advance")){
+  throw "Phase 6CW maintained manual DSOUND source is missing"
+}
+Write-Host "[Phase6CW] Manual root policy      : verified in Recompile.ps1"
+Write-Host "[Phase6CW] Manual root source      : verified in recomp_manual.c"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -136,6 +150,8 @@ if($k.phase6cv_hardware.boundary_kind-ne"DIRECT_FRONTIER"-or
    $k.phase6cv_hardware.shadow_guest-ne"0xF08B0000"-or
    $k.phase6cv_hardware.shadow_physical-ne"0x008B0000"-or
    $k.root-ne"0x002A6713"-or
+   $k.manual_root_dispatch-ne$true-or
+   $k.manual_root_source-ne"ports/mercenaries/src/recomp_manual.c"-or
    $k.target_section-ne"DSOUND"-or
    $k.execution_budget_inherited-ne64000000-or
    $k.shadow_ram_alias_preserved-ne$true-or
@@ -157,6 +173,8 @@ foreach($marker in @(
   "phase6cw_env_build_cookie",
   "case 0x002A6713u:",
   "PASS: Phase 6CW entered DSOUND frontier 002A6713",
+  "PASS: Phase 6CW manual DSOUND decrypt",
+  "GUEST_WRITE32(0x002BB168u, low);",
   "#define PHASE6CV_SHADOW_BASE 0xF0000000u",
   "#define PHASE6CV_SHADOW_END  0xF4000000u",
   "offset = address - PHASE6CV_SHADOW_BASE;",
