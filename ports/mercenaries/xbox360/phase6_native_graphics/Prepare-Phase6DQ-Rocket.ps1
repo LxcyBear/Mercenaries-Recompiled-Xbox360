@@ -92,10 +92,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R17"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R17"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R18"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R18"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R17"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R18"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -144,7 +144,7 @@ if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"){
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R17"-or
+if($q.emitter_revision-ne"6DQ-R18"-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -165,6 +165,7 @@ if($q.emitter_revision-ne"6DQ-R17"-or
    $q.dsound_poison_slot_bridge.poison_value-ne"0xCCCCCCCC"-or
    $q.dsound_poison_slot_bridge.synthetic_noop_target-ne"0xF6DCCCD0"-or
    $q.dsound_poison_slot_bridge.ordinary_guest_faults_bypassed-ne$false-or
+   $q.dsound_poison_slot_bridge.emitter_source_shape_guard-ne$true-or
    $q.kernel_timing_bridge.hardware_seed_microseconds-ne20-or
    $q.kernel_timing_bridge.hardware_seed_calls-ne1000-or
    $q.execution_budget-ne64000000-or
