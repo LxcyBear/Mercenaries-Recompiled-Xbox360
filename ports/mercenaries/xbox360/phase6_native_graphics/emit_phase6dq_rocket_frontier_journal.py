@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R24"
+EMITTER_REVISION = "6DQ-R25"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -775,7 +775,7 @@ static void phase6dq_note_vp_unknown_read(
 static void phase6dq_dump_journals(void)
 {
     uint32_t i;
-    char line[512];
+    char line[1024];
 
     sprintf(
         line,
@@ -1766,6 +1766,7 @@ def main() -> int:
             "pointer_nesting_guard": True,
             "max_nesting": 8,
             "mismatch_hard_fenced": True,
+            "journal_summary_buffer_bytes": 1024,
             "result": "STATUS_SUCCESS",
         },
         "dsound_poison_slot_bridge": {
