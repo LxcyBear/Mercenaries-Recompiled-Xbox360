@@ -1,0 +1,1067 @@
+#!/usr/bin/env python3
+r"""Phase 6DQ ROCKET: broad support-clean pack + bounded runtime frontier journal.
+
+6DP hardware proved the exact VP FREE read and immediately advanced to:
+    WRITE32 FE8202A4
+at tick 26,712,259. The historical CCCCCCD0/XACT teardown path remained absent,
+the XACT root remained published, and native Xenos/D3D remained alive.
+
+6DQ is deliberately optimized for progress per hardware run:
+  * pre-pack up to 4096 additional support-clean generated functions across
+    D3D, XGRPH, DSOUND and XACTENG (graphics first);
+  * route all translated DSOUND guest accesses through the inherited APU
+    classifiers so newly packed DSOUND bodies get the same core/DSP/VP routing;
+  * permit aligned 32-bit VP command writes as a diagnostic safe-continue path,
+    recording every distinct method/address and value while preserving unknown
+    VP reads as hard fences;
+  * journal packed DIRECT/ICALL dispatch targets and every phase4c hard stop;
+  * reduce hot broad-sweep progress printing from every 4096 dispatches to every
+    65536 while preserving first-hit and final aggregate visibility.
+
+This phase does NOT claim complete VP/audio semantics. VP write continuation is
+explicitly diagnostic so audio initialization cannot force one build per method
+while we chase the renderer. Unknown VP reads, non-VP MMIO, guest faults, ABI
+boundaries, missing translated bodies and unresolved support remain hard stops.
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import re
+from pathlib import Path
+
+BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
+BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
+COOKIE_OLD = "phase6dp_env_build_cookie"
+COOKIE_NEW = "phase6dq_env_build_cookie"
+EMITTER_REVISION = "6DQ-R1"
+
+CANDIDATE_CAP = 4096
+DSOUND_START = 0x0029CB80
+DSOUND_END = 0x002BB274
+
+SECTIONS = (
+    ("D3D", 0x00288640, 0x0029B874, 0x0028E700),
+    ("XGRPH", 0x0029B880, 0x0029CB7C, 0x0029C8BE),
+    ("DSOUND", 0x0029CB80, 0x002BB274, 0x002A6713),
+    ("XACTENG", 0x0027D5C0, 0x00288630, 0x0027DB5C),
+)
+
+
+def load(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"[Phase6DQ] could not load helper {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"[Phase6DQ] expected one {label}, found {count}")
+    return text.replace(old, new, 1)
+
+
+def function_span(text: str, signature: str) -> tuple[int, int]:
+    start = text.find(signature)
+    if start < 0:
+        raise SystemExit(f"[Phase6DQ] function signature missing: {signature}")
+    brace = text.find("{", start)
+    if brace < 0:
+        raise SystemExit(f"[Phase6DQ] opening brace missing: {signature}")
+
+    depth = 0
+    i = brace
+    in_string = False
+    quote = ""
+    escape = False
+    line_comment = False
+    block_comment = False
+    while i < len(text):
+        c = text[i]
+        n = text[i + 1] if i + 1 < len(text) else ""
+
+        if line_comment:
+            if c == "\n":
+                line_comment = False
+            i += 1
+            continue
+        if block_comment:
+            if c == "*" and n == "/":
+                block_comment = False
+                i += 2
+            else:
+                i += 1
+            continue
+        if in_string:
+            if escape:
+                escape = False
+            elif c == "\\":
+                escape = True
+            elif c == quote:
+                in_string = False
+            i += 1
+            continue
+
+        if c == "/" and n == "/":
+            line_comment = True
+            i += 2
+            continue
+        if c == "/" and n == "*":
+            block_comment = True
+            i += 2
+            continue
+        if c in ('"', "'"):
+            in_string = True
+            quote = c
+            i += 1
+            continue
+
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return start, i + 1
+        i += 1
+
+    raise SystemExit(f"[Phase6DQ] unterminated function: {signature}")
+
+
+def select_candidates(
+    generated: dict,
+    old: set[int],
+    existing_defs: set[str],
+) -> tuple[list[int], dict[str, int], dict[str, int]]:
+    selected: list[int] = []
+    available_counts: dict[str, int] = {}
+    selected_counts: dict[str, int] = {}
+
+    for section, start, end, seed in SECTIONS:
+        choices = [
+            va
+            for va, row in generated.items()
+            if start <= va < end
+            and va not in old
+            and row["name"] not in existing_defs
+        ]
+        choices.sort(key=lambda va: (abs(va - seed), va))
+        available_counts[section] = len(choices)
+
+        room = CANDIDATE_CAP - len(selected)
+        take = choices[: max(0, room)]
+        selected.extend(take)
+        selected_counts[section] = len(take)
+
+        if len(selected) >= CANDIDATE_CAP:
+            break
+
+    for section, _, _, _ in SECTIONS:
+        available_counts.setdefault(section, 0)
+        selected_counts.setdefault(section, 0)
+
+    return selected, available_counts, selected_counts
+
+
+def install_journal_support(text: str) -> str:
+    caller_sig = "static DWORD phase4c_current_caller(void)"
+    start, end = function_span(text, caller_sig)
+
+    state = r'''
+#define PHASE6DQ_DISPATCH_JOURNAL_CAP 96u
+#define PHASE6DQ_HARDSTOP_JOURNAL_CAP 24u
+#define PHASE6DQ_VP_JOURNAL_CAP 64u
+
+typedef struct Phase6DQDispatchJournal
+{
+    uint32_t kind;
+    uint32_t target;
+    uint32_t caller;
+    uint32_t firstEsp;
+    uint32_t lastEsp;
+    uint32_t hits;
+} Phase6DQDispatchJournal;
+
+typedef struct Phase6DQHardStopJournal
+{
+    uint32_t kind;
+    uint32_t target;
+    uint32_t caller;
+    uint32_t savedEsp;
+    uint32_t eaxValue;
+    uint32_t ecxValue;
+    uint32_t edxValue;
+    uint32_t ebxValue;
+    uint32_t esiValue;
+    uint32_t ediValue;
+    uint32_t ticks;
+    uint32_t hits;
+} Phase6DQHardStopJournal;
+
+typedef struct Phase6DQVpJournal
+{
+    uint32_t address;
+    uint32_t firstValue;
+    uint32_t lastValue;
+    uint32_t firstCaller;
+    uint32_t lastCaller;
+    uint32_t firstEsp;
+    uint32_t lastEsp;
+    uint32_t hits;
+} Phase6DQVpJournal;
+
+static Phase6DQDispatchJournal
+    s_phase6dqDispatchJournal[PHASE6DQ_DISPATCH_JOURNAL_CAP];
+static Phase6DQHardStopJournal
+    s_phase6dqHardStopJournal[PHASE6DQ_HARDSTOP_JOURNAL_CAP];
+static Phase6DQVpJournal
+    s_phase6dqVpJournal[PHASE6DQ_VP_JOURNAL_CAP];
+static uint32_t s_phase6dqDispatchJournalCount = 0u;
+static uint32_t s_phase6dqDispatchJournalOverflow = 0u;
+static uint32_t s_phase6dqHardStopJournalCount = 0u;
+static uint32_t s_phase6dqHardStopJournalOverflow = 0u;
+static uint32_t s_phase6dqVpJournalCount = 0u;
+static uint32_t s_phase6dqVpJournalOverflow = 0u;
+static uint32_t s_phase6dqVpWrite32Count = 0u;
+static uint32_t s_phase6dqVpUnknownReadCount = 0u;
+
+'''
+    text = text[:start] + state + text[start:]
+    # Current-caller function shifted by inserted state; find it again.
+    _, end = function_span(text, caller_sig)
+
+    support = r'''
+
+static const char* phase6dq_vp_method_name(uint32_t offset)
+{
+    if (offset == 0x00000010u) return "NV1BA0_PIO_FREE";
+    if (offset >= 0x00000200u && offset <= 0x0000027Cu &&
+        (offset & 3u) == 0u) return "NV1BA0_PIO_SET_SUBMIX_HEADROOM";
+    if (offset == 0x00000280u) return "NV1BA0_PIO_SET_HRTF_HEADROOM";
+    if (offset == 0x000002C0u) return "NV1BA0_PIO_SET_HRTF_SUBMIXES";
+    if (offset == 0x000002F8u) return "NV1BA0_PIO_SET_CURRENT_VOICE";
+    if (offset == 0x000002FCu) return "NV1BA0_PIO_VOICE_LOCK";
+    if (offset >= 0x00000300u && offset <= 0x000003DCu &&
+        (offset & 3u) == 0u) return "NV1BA0_PIO_VOICE_CONFIG";
+    if (offset >= 0x00000400u && offset <= 0x0000043Cu &&
+        (offset & 3u) == 0u) return "NV1BA0_PIO_SET_HRIR";
+    if (offset >= 0x00000600u && offset <= 0x00000808u &&
+        (offset & 3u) == 0u) return "NV1BA0_PIO_BUFFER_OR_SSL";
+    return "VP_UNNAMED_OR_UNMODELED";
+}
+
+static void phase6dq_note_dispatch(
+    uint32_t kind,
+    uint32_t target,
+    uint32_t caller,
+    uint32_t espValue)
+{
+    uint32_t i;
+    char line[320];
+
+    for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
+    {
+        Phase6DQDispatchJournal* row = &s_phase6dqDispatchJournal[i];
+        if (row->kind == kind && row->target == target &&
+            row->caller == caller)
+        {
+            ++row->hits;
+            row->lastEsp = espValue;
+            return;
+        }
+    }
+
+    if (s_phase6dqDispatchJournalCount >= PHASE6DQ_DISPATCH_JOURNAL_CAP)
+    {
+        ++s_phase6dqDispatchJournalOverflow;
+        return;
+    }
+
+    {
+        Phase6DQDispatchJournal* row =
+            &s_phase6dqDispatchJournal[s_phase6dqDispatchJournalCount++];
+        row->kind = kind;
+        row->target = target;
+        row->caller = caller;
+        row->firstEsp = espValue;
+        row->lastEsp = espValue;
+        row->hits = 1u;
+    }
+
+    sprintf(
+        line,
+        "P6DQ ROCKET DISPATCH FIRST kind=%s caller=%08X target=%08X esp=%08X unique=%u",
+        kind == 1u ? "ICALL" : "DIRECT",
+        (unsigned int)caller,
+        (unsigned int)target,
+        (unsigned int)espValue,
+        (unsigned int)s_phase6dqDispatchJournalCount);
+    trace(line);
+}
+
+static void phase6dq_note_hard_stop(
+    uint32_t kind,
+    uint32_t target,
+    uint32_t caller,
+    uint32_t savedEsp)
+{
+    uint32_t i;
+    char line[448];
+
+    for (i = 0u; i < s_phase6dqHardStopJournalCount; ++i)
+    {
+        Phase6DQHardStopJournal* row = &s_phase6dqHardStopJournal[i];
+        if (row->kind == kind && row->target == target &&
+            row->caller == caller)
+        {
+            ++row->hits;
+            return;
+        }
+    }
+
+    if (s_phase6dqHardStopJournalCount >= PHASE6DQ_HARDSTOP_JOURNAL_CAP)
+    {
+        ++s_phase6dqHardStopJournalOverflow;
+        return;
+    }
+
+    {
+        Phase6DQHardStopJournal* row =
+            &s_phase6dqHardStopJournal[s_phase6dqHardStopJournalCount++];
+        row->kind = kind;
+        row->target = target;
+        row->caller = caller;
+        row->savedEsp = savedEsp;
+        row->eaxValue = g_eax;
+        row->ecxValue = g_ecx;
+        row->edxValue = g_edx;
+        row->ebxValue = g_ebx;
+        row->esiValue = g_esi;
+        row->ediValue = g_edi;
+        row->ticks = s_phase4cBlockTicks;
+        row->hits = 1u;
+    }
+
+    sprintf(
+        line,
+        "P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X esp=%08X ticks=%u eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X",
+        (unsigned int)kind,
+        (unsigned int)caller,
+        (unsigned int)target,
+        (unsigned int)savedEsp,
+        (unsigned int)s_phase4cBlockTicks,
+        (unsigned int)g_eax,
+        (unsigned int)g_ecx,
+        (unsigned int)g_edx,
+        (unsigned int)g_ebx,
+        (unsigned int)g_esi,
+        (unsigned int)g_edi);
+    trace(line);
+}
+
+static void phase6dq_note_vp_write(
+    uint32_t address,
+    uint32_t value,
+    uint32_t caller,
+    uint32_t espValue)
+{
+    uint32_t i;
+    uint32_t offset = address - 0xFE820000u;
+    char line[448];
+
+    ++s_phase6dqVpWrite32Count;
+
+    for (i = 0u; i < s_phase6dqVpJournalCount; ++i)
+    {
+        Phase6DQVpJournal* row = &s_phase6dqVpJournal[i];
+        if (row->address == address)
+        {
+            ++row->hits;
+            row->lastValue = value;
+            row->lastCaller = caller;
+            row->lastEsp = espValue;
+            return;
+        }
+    }
+
+    if (s_phase6dqVpJournalCount >= PHASE6DQ_VP_JOURNAL_CAP)
+    {
+        ++s_phase6dqVpJournalOverflow;
+        return;
+    }
+
+    {
+        Phase6DQVpJournal* row =
+            &s_phase6dqVpJournal[s_phase6dqVpJournalCount++];
+        row->address = address;
+        row->firstValue = value;
+        row->lastValue = value;
+        row->firstCaller = caller;
+        row->lastCaller = caller;
+        row->firstEsp = espValue;
+        row->lastEsp = espValue;
+        row->hits = 1u;
+    }
+
+    sprintf(
+        line,
+        "P6DQ ROCKET VP WRITE FIRST addr=%08X method=%04X name=%s value=%08X caller=%08X esp=%08X unique=%u",
+        (unsigned int)address,
+        (unsigned int)offset,
+        phase6dq_vp_method_name(offset),
+        (unsigned int)value,
+        (unsigned int)caller,
+        (unsigned int)espValue,
+        (unsigned int)s_phase6dqVpJournalCount);
+    trace(line);
+}
+
+static void phase6dq_note_vp_unknown_read(
+    uint32_t address,
+    uint32_t width)
+{
+    char line[384];
+    ++s_phase6dqVpUnknownReadCount;
+    sprintf(
+        line,
+        "P6DQ ROCKET VP READ HARD width=%u addr=%08X method=%04X name=%s caller=%08X esp=%08X count=%u",
+        (unsigned int)width,
+        (unsigned int)address,
+        (unsigned int)(address - 0xFE820000u),
+        phase6dq_vp_method_name(address - 0xFE820000u),
+        (unsigned int)phase4c_current_caller(),
+        (unsigned int)g_esp,
+        (unsigned int)s_phase6dqVpUnknownReadCount);
+    trace(line);
+}
+
+static void phase6dq_dump_journals(void)
+{
+    uint32_t i;
+    char line[512];
+
+    sprintf(
+        line,
+        "P6DQ ROCKET JOURNAL SUMMARY dispatch_unique=%u dispatch_overflow=%u hard_unique=%u hard_overflow=%u vp_write32=%u vp_unique=%u vp_overflow=%u vp_unknown_reads=%u",
+        (unsigned int)s_phase6dqDispatchJournalCount,
+        (unsigned int)s_phase6dqDispatchJournalOverflow,
+        (unsigned int)s_phase6dqHardStopJournalCount,
+        (unsigned int)s_phase6dqHardStopJournalOverflow,
+        (unsigned int)s_phase6dqVpWrite32Count,
+        (unsigned int)s_phase6dqVpJournalCount,
+        (unsigned int)s_phase6dqVpJournalOverflow,
+        (unsigned int)s_phase6dqVpUnknownReadCount);
+    trace(line);
+
+    for (i = 0u; i < s_phase6dqDispatchJournalCount; ++i)
+    {
+        Phase6DQDispatchJournal* row = &s_phase6dqDispatchJournal[i];
+        sprintf(
+            line,
+            "P6DQ ROCKET JOURNAL DISPATCH[%u] kind=%s caller=%08X target=%08X hits=%u first_esp=%08X last_esp=%08X",
+            (unsigned int)i,
+            row->kind == 1u ? "ICALL" : "DIRECT",
+            (unsigned int)row->caller,
+            (unsigned int)row->target,
+            (unsigned int)row->hits,
+            (unsigned int)row->firstEsp,
+            (unsigned int)row->lastEsp);
+        trace(line);
+    }
+
+    for (i = 0u; i < s_phase6dqVpJournalCount; ++i)
+    {
+        Phase6DQVpJournal* row = &s_phase6dqVpJournal[i];
+        sprintf(
+            line,
+            "P6DQ ROCKET JOURNAL VP[%u] addr=%08X method=%04X name=%s hits=%u first=%08X last=%08X first_caller=%08X last_caller=%08X first_esp=%08X last_esp=%08X",
+            (unsigned int)i,
+            (unsigned int)row->address,
+            (unsigned int)(row->address - 0xFE820000u),
+            phase6dq_vp_method_name(row->address - 0xFE820000u),
+            (unsigned int)row->hits,
+            (unsigned int)row->firstValue,
+            (unsigned int)row->lastValue,
+            (unsigned int)row->firstCaller,
+            (unsigned int)row->lastCaller,
+            (unsigned int)row->firstEsp,
+            (unsigned int)row->lastEsp);
+        trace(line);
+    }
+
+    for (i = 0u; i < s_phase6dqHardStopJournalCount; ++i)
+    {
+        Phase6DQHardStopJournal* row = &s_phase6dqHardStopJournal[i];
+        sprintf(
+            line,
+            "P6DQ ROCKET JOURNAL HARD[%u] kind=%u caller=%08X target=%08X hits=%u esp=%08X ticks=%u eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X",
+            (unsigned int)i,
+            (unsigned int)row->kind,
+            (unsigned int)row->caller,
+            (unsigned int)row->target,
+            (unsigned int)row->hits,
+            (unsigned int)row->savedEsp,
+            (unsigned int)row->ticks,
+            (unsigned int)row->eaxValue,
+            (unsigned int)row->ecxValue,
+            (unsigned int)row->edxValue,
+            (unsigned int)row->ebxValue,
+            (unsigned int)row->esiValue,
+            (unsigned int)row->ediValue);
+        trace(line);
+    }
+}
+'''
+    return text[:end] + support + text[end:]
+
+
+def patch_escape_journal(text: str) -> str:
+    sig = "static void phase4c_escape("
+    start, end = function_span(text, sig)
+    body = text[start:end]
+    old = """    s_phase4cBoundaryCaller = phase4c_current_caller();
+    longjmp(s_phase4cEscape, 1);
+"""
+    new = """    s_phase4cBoundaryCaller = phase4c_current_caller();
+    phase6dq_note_hard_stop(
+        kind,
+        target,
+        s_phase4cBoundaryCaller,
+        savedEsp);
+    longjmp(s_phase4cEscape, 1);
+"""
+    body = replace_once(body, old, new, "phase4c escape journal hook")
+    return text[:start] + body + text[end:]
+
+
+def patch_dispatch_journal(text: str) -> str:
+    # ICALL packed path.
+    sig = "static void phase5bc_dispatch_packed_icall("
+    start, end = function_span(text, sig)
+    body = text[start:end]
+    anchor = "    s_phase5bcPackedIcallLastSavedEsp = savedEsp;\n"
+    body = replace_once(
+        body,
+        anchor,
+        anchor
+        + """    phase6dq_note_dispatch(
+        1u,
+        target,
+        s_phase5bcPackedIcallLastCaller,
+        savedEsp);
+""",
+        "packed ICALL journal hook",
+    )
+    text = text[:start] + body + text[end:]
+
+    # DIRECT packed path.
+    sig = "static void phase4c_direct_frontier(uint32_t target)"
+    start, end = function_span(text, sig)
+    body = text[start:end]
+    anchor = (
+        "        s_phase5bcPackedDirectLastCaller = phase4c_current_caller();\n"
+    )
+    body = replace_once(
+        body,
+        anchor,
+        anchor
+        + """        phase6dq_note_dispatch(
+            2u,
+            target,
+            s_phase5bcPackedDirectLastCaller,
+            g_esp);
+""",
+        "packed DIRECT journal hook",
+    )
+    text = text[:start] + body + text[end:]
+    return text
+
+
+def patch_quiet_logging(text: str) -> str:
+    text = replace_once(
+        text,
+        "(s_phase5bcPackedIcallDispatchCount & 0xFFFu) == 0u",
+        "(s_phase5bcPackedIcallDispatchCount & 0xFFFFu) == 0u",
+        "ICALL 65536-stride logging",
+    )
+    text = replace_once(
+        text,
+        "(s_phase5bcPackedDirectDispatchCount & 0xFFFu) == 0u",
+        "(s_phase5bcPackedDirectDispatchCount & 0xFFFFu) == 0u",
+        "DIRECT 65536-stride logging",
+    )
+    return text
+
+
+def patch_vp_accesses(text: str) -> str:
+    # Unknown VP reads remain authoritative hard fences, but identify them
+    # before they enter the checked guest-access router.
+    for sig, width, fallback in (
+        (
+            "static uint8_t phase6ch_apu_read8(uint32_t address)",
+            1,
+            "    return GUEST_READ8(address);\n",
+        ),
+        (
+            "static uint16_t phase6ch_apu_read16(uint32_t address)",
+            2,
+            "    return GUEST_READ16(address);\n",
+        ),
+        (
+            "static uint32_t phase6ch_apu_read32(uint32_t address)",
+            4,
+            "    return GUEST_READ32(address);\n",
+        ),
+    ):
+        start, end = function_span(text, sig)
+        body = text[start:end]
+        probe = f"""    if (address >= 0xFE820000u &&
+        address < 0xFE830000u)
+        phase6dq_note_vp_unknown_read(address, {width}u);
+
+"""
+        if fallback not in body:
+            raise SystemExit(
+                f"[Phase6DQ] checked fallback missing in {sig}"
+            )
+        body = body.replace(fallback, probe + fallback, 1)
+        text = text[:start] + body + text[end:]
+
+    # VP writes are command-style. For the rocket diagnostic run, consume
+    # aligned dword writes after journaling rather than faulting one method per
+    # hardware build. Preserve one proven scalar side effect from xemu:
+    # SET_CURRENT_VOICE updates the APU FECV core register.
+    sig = "static void phase6ch_apu_write32(uint32_t address, uint32_t value)"
+    start, end = function_span(text, sig)
+    body = text[start:end]
+    fallback = "    GUEST_WRITE32(address, value);\n"
+    patch = r'''    if (address >= 0xFE820000u &&
+        address < 0xFE830000u &&
+        (address & 3u) == 0u)
+    {
+        uint32_t offset = address - 0xFE820000u;
+
+        if (offset == 0x000002F8u)
+            s_phase6chApuRegs[0x00001110u >> 2] = value;
+
+        phase6dq_note_vp_write(
+            address,
+            value,
+            phase4c_current_caller(),
+            g_esp);
+        return;
+    }
+
+'''
+    body = replace_once(
+        body, fallback, patch + fallback, "VP WRITE32 safe-continue"
+    )
+    text = text[:start] + body + text[end:]
+
+    # 8/16-bit VP writes remain hard fenced; add identification only.
+    for sig, width, fallback in (
+        (
+            "static void phase6ch_apu_write8(uint32_t address, uint8_t value)",
+            1,
+            "    GUEST_WRITE8(address, value);\n",
+        ),
+        (
+            "static void phase6ch_apu_write16(uint32_t address, uint16_t value)",
+            2,
+            "    GUEST_WRITE16(address, value);\n",
+        ),
+    ):
+        start, end = function_span(text, sig)
+        body = text[start:end]
+        probe = f"""    if (address >= 0xFE820000u &&
+        address < 0xFE830000u)
+        phase6dq_note_vp_unknown_read(address, {width}u);
+
+"""
+        body = replace_once(
+            body, fallback, probe + fallback, f"VP WRITE{width * 8} hard fence"
+        )
+        text = text[:start] + body + text[end:]
+
+    return text
+
+
+def route_all_dsound_accesses(text: str, base) -> tuple[str, dict[str, int]]:
+    """Route raw guest accesses in every translated DSOUND sub_* through APU wrappers."""
+    masked = base.mask_noncode(text)
+    replacements: list[tuple[int, int, str]] = []
+    counts = {
+        "read8": 0,
+        "read16": 0,
+        "read32": 0,
+        "write8": 0,
+        "write16": 0,
+        "write32": 0,
+        "functions": 0,
+    }
+
+    macros = (
+        ("GUEST_READ8(", "phase6ch_apu_read8(", "read8"),
+        ("GUEST_READ16(", "phase6ch_apu_read16(", "read16"),
+        ("GUEST_READ32(", "phase6ch_apu_read32(", "read32"),
+        ("GUEST_WRITE8(", "phase6ch_apu_write8(", "write8"),
+        ("GUEST_WRITE16(", "phase6ch_apu_write16(", "write16"),
+        ("GUEST_WRITE32(", "phase6ch_apu_write32(", "write32"),
+    )
+
+    for match in base.FUNC_RE.finditer(masked):
+        name = match.group(1)
+        m = re.fullmatch(r"sub_([0-9A-Fa-f]{8})", name)
+        if not m:
+            continue
+        va = int(m.group(1), 16)
+        if not (DSOUND_START <= va < DSOUND_END):
+            continue
+
+        open_index = masked.find("{", match.start(), match.end())
+        if open_index < 0:
+            continue
+        end = base.closing_brace(masked, open_index)
+        source = text[match.start():end]
+        changed = source
+        local = 0
+        for old, new, key in macros:
+            n = changed.count(old)
+            if n:
+                changed = changed.replace(old, new)
+                counts[key] += n
+                local += n
+        if local:
+            counts["functions"] += 1
+            replacements.append((match.start(), end, changed))
+
+    for start, end, changed in reversed(replacements):
+        text = text[:start] + changed + text[end:]
+
+    return text, counts
+
+
+def insert_final_dump(text: str) -> str:
+    anchor = "    phase6aw_dump_va_ring();\n"
+    return replace_once(
+        text,
+        anchor,
+        "    phase6dq_dump_journals();\n" + anchor,
+        "rocket final journal dump",
+    )
+
+
+def update_vp_summary(text: str) -> str:
+    old = (
+        "P6DP APU VP: free_reads=%u last_addr=%08X last_value=%08X "
+        "other_vp_accesses_fenced=1"
+    )
+    new = (
+        "P6DQ APU VP: free_reads=%u last_addr=%08X last_value=%08X "
+        "vp_write32_diagnostic_continue=1 unknown_vp_reads_fenced=1"
+    )
+    return replace_once(text, old, new, "VP summary policy")
+
+
+def relabel(text: str) -> str:
+    text = replace_once(text, BASE_TAG, BUILD_TAG, "6DP build tag")
+    text = text.replace(COOKIE_OLD, COOKIE_NEW)
+    return (
+        text.replace("PHASE 6DP", "PHASE 6DQ")
+        .replace("Phase 6DP", "Phase 6DQ")
+        .replace('"P6DP ', '"P6DQ ')
+    )
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--base-dir", type=Path, required=True)
+    ap.add_argument("--base-emitter", type=Path, required=True)
+    ap.add_argument("--phase5bb-emitter", type=Path, required=True)
+    ap.add_argument("--phase5bc-emitter", type=Path, required=True)
+    ap.add_argument("--phase6bl-emitter", type=Path, required=True)
+    ap.add_argument("--generated-root", type=Path, required=True)
+    ap.add_argument("--functions", type=Path, required=True)
+    ap.add_argument("--out-dir", type=Path, required=True)
+    args = ap.parse_args()
+
+    base = load(args.base_emitter, "phase6dq_base")
+    p5bb = load(args.phase5bb_emitter, "phase6dq_p5bb")
+    p5bc = load(args.phase5bc_emitter, "phase6dq_p5bc")
+    p6bl = load(args.phase6bl_emitter, "phase6dq_p6bl")
+
+    main_path = args.base_dir / "main_monolithic.cpp"
+    env_path = args.base_dir / "phase5_env.cpp"
+    manifest_path = args.base_dir / "phase6dp-manifest.json"
+    for p in (main_path, env_path, manifest_path):
+        if not p.exists():
+            raise SystemExit(f"[Phase6DQ] missing 6DP input: {p}")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("phase") != "6DP" or manifest.get("build_tag") != BASE_TAG:
+        raise SystemExit("[Phase6DQ] cached 6DP identity mismatch")
+
+    dp = manifest.get("phase6dp_apu_vp_free") or {}
+    if (
+        dp.get("hardware_proof", {}).get("old_failure_eliminated")
+        != "0xCCCCCCD0"
+        or dp.get("register_identity", {}).get("address") != "0xFE820010"
+        or dp.get("register_identity", {}).get("read_value") != "0x00000080"
+        or dp.get("xact_refcount_semantics_changed") is not False
+        or dp.get("guest_memory_fences_changed") is not False
+        or dp.get("execution_budget_inherited") != 64000000
+    ):
+        raise SystemExit("[Phase6DQ] inherited 6DP policy mismatch")
+
+    main_text = main_path.read_text(encoding="utf-8")
+    env_text = env_path.read_text(encoding="utf-8")
+
+    for marker in (
+        BASE_TAG,
+        COOKIE_OLD,
+        "#define PHASE4C_EXEC_BUDGET 64000000u",
+        "#pragma warning(disable:4146)",
+        "P6DP APU VP READ32",
+        "other_vp_accesses_fenced=1",
+        "static void phase5bc_dispatch_packed_icall(",
+        "static void phase4c_direct_frontier(uint32_t target)",
+        "(s_phase5bcPackedIcallDispatchCount & 0xFFFu) == 0u",
+        "(s_phase5bcPackedDirectDispatchCount & 0xFFFu) == 0u",
+        "P6DP PIXEL CHASE:",
+        "P6DP PRESENT PROXIMITY:",
+    ):
+        if marker not in main_text:
+            raise SystemExit(f"[Phase6DQ] inherited marker missing: {marker}")
+
+    by_va, by_name = base.load_ranges(args.functions)
+    generated = base.load_generated(args.generated_root, by_name)
+    old = {int(x, 0) for x in manifest.get("members", [])}
+    existing_defs = set(base.support_symbols(main_text))
+
+    candidates, available_counts, selected_counts = select_candidates(
+        generated, old, existing_defs
+    )
+    expanded = old | set(candidates)
+    new_members = list(candidates)
+
+    if candidates:
+        base.STANDARD_CALLS.add("sin")
+        base.STANDARD_CALLS.add("cos")
+        p5bc.SWEEP_ROOT = 0xFFFFFFFF
+        p5bc.instrument_root_entry = lambda rendered, name: rendered
+        main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
+            main_text,
+            base,
+            p5bb,
+            generated,
+            new_members,
+            expanded,
+            require_sweep_root=False,
+        )
+    else:
+        rendered = {}
+        frontiers = set()
+        pruned = {}
+
+    # Runtime rocket layer.
+    main_text = install_journal_support(main_text)
+    main_text = patch_escape_journal(main_text)
+    main_text = patch_dispatch_journal(main_text)
+    main_text = patch_quiet_logging(main_text)
+    main_text = patch_vp_accesses(main_text)
+    main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
+    main_text = insert_final_dump(main_text)
+    main_text = update_vp_summary(main_text)
+
+    old_policy_prefix = "Policy: Phase 6DP "
+    policy_pos = main_text.find(old_policy_prefix)
+    if policy_pos < 0:
+        raise SystemExit("[Phase6DQ] inherited runtime policy line missing")
+    policy_end = main_text.find("\n", policy_pos)
+    if policy_end < 0:
+        raise SystemExit("[Phase6DQ] inherited runtime policy line unterminated")
+    old_policy_line = main_text[policy_pos:policy_end]
+    new_policy_line = (
+        "Policy: Phase 6DQ ROCKET carries the hardware-proven 6DP VP FREE success, "
+        "batch-packs up to 4096 additional support-clean D3D/XGRPH/DSOUND/XACTENG "
+        "functions, journals unique packed dispatches and hard stops, diagnostic-"
+        "continues aligned VP WRITE32 commands while unknown VP reads remain hard "
+        "fences, preserves 64M/C4146/allocator/XACT/NV2A semantics, and prioritizes "
+        "maximum trustworthy progress toward guest presentation per hardware run"
+    )
+    main_text = main_text[:policy_pos] + new_policy_line + main_text[policy_end:]
+
+    main_text = relabel(main_text)
+    env_text = (
+        env_text.replace(COOKIE_OLD, COOKIE_NEW)
+        .replace("PHASE 6DP", "PHASE 6DQ")
+        .replace("Phase 6DP", "Phase 6DQ")
+    )
+
+    required = (
+        BUILD_TAG,
+        COOKIE_NEW,
+        "PHASE6DQ_DISPATCH_JOURNAL_CAP 96u",
+        "P6DQ ROCKET DISPATCH FIRST",
+        "P6DQ ROCKET HARD STOP",
+        "P6DQ ROCKET VP WRITE FIRST",
+        "P6DQ ROCKET VP READ HARD",
+        "P6DQ ROCKET JOURNAL SUMMARY",
+        "phase6dq_dump_journals();",
+        "address >= 0xFE820000u",
+        "address < 0xFE830000u",
+        "s_phase6chApuRegs[0x00001110u >> 2] = value;",
+        "(s_phase5bcPackedIcallDispatchCount & 0xFFFFu) == 0u",
+        "(s_phase5bcPackedDirectDispatchCount & 0xFFFFu) == 0u",
+        "vp_write32_diagnostic_continue=1 unknown_vp_reads_fenced=1",
+        "P6DQ PIXEL CHASE:",
+        "P6DQ PRESENT PROXIMITY:",
+        "#define PHASE4C_EXEC_BUDGET 64000000u",
+        "#pragma warning(disable:4146)",
+    )
+    for marker in required:
+        if marker not in main_text:
+            raise SystemExit(f"[Phase6DQ] generated source lost marker: {marker}")
+
+    if "(s_phase5bcPackedIcallDispatchCount & 0xFFFu) == 0u" in main_text:
+        raise SystemExit("[Phase6DQ] stale 4096 ICALL logging cadence remains")
+    if "(s_phase5bcPackedDirectDispatchCount & 0xFFFu) == 0u" in main_text:
+        raise SystemExit("[Phase6DQ] stale 4096 DIRECT logging cadence remains")
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    layout = p6bl.write_sharded_main(args.out_dir, main_text, base)
+    (args.out_dir / "phase5_env.cpp").write_text(env_text, encoding="utf-8")
+
+    final_members = old | set(new_members)
+    manifest.update(
+        {
+            "phase": "6DQ",
+            "build_tag": BUILD_TAG,
+            "pack_members": len(final_members),
+            "members": [f"0x{x:08X}" for x in sorted(final_members)],
+        }
+    )
+    manifest["phase6dq_rocket_frontier_journal"] = {
+        "source_phase": "6DP",
+        "emitter_revision": EMITTER_REVISION,
+        "phase6dp_hardware": {
+            "vp_free_read_passed": True,
+            "vp_free_address": "0xFE820010",
+            "vp_free_value": "0x00000080",
+            "new_boundary_kind": "GUEST_FAULT",
+            "new_boundary_access": "WRITE32",
+            "new_boundary_target": "0xFE8202A4",
+            "new_boundary_ticks": 26712259,
+            "historical_ccccccd0_observed": False,
+            "xact_final_release_entries": 0,
+            "xact_global_zero_writes": 0,
+            "xenos_ready": True,
+            "display_calls": 0,
+            "framebuffer": "0x00000000",
+        },
+        "static_pack": {
+            "candidate_cap": CANDIDATE_CAP,
+            "base_pack_members": len(old),
+            "candidate_members": len(candidates),
+            "packed_new_members": len(new_members),
+            "pruned_members": len(pruned),
+            "expanded_pack_members": len(final_members),
+            "available_by_section": available_counts,
+            "selected_by_section_before_prune": selected_counts,
+            "new_direct_frontier_targets": [
+                f"0x{x:08X}" for x in sorted(frontiers)
+            ],
+            "priority": ["D3D", "XGRPH", "DSOUND", "XACTENG"],
+        },
+        "runtime_journal": {
+            "dispatch_unique_capacity": 96,
+            "hard_stop_unique_capacity": 24,
+            "vp_write_unique_capacity": 64,
+            "first_unique_logged_immediately": True,
+            "final_aggregate_dump": True,
+            "register_context_on_hard_stop": True,
+            "dispatch_log_stride": 65536,
+        },
+        "vp_diagnostic_continue": {
+            "aligned_write32_continue": True,
+            "write32_semantics_complete": False,
+            "current_voice_scalar_side_effect": True,
+            "unknown_read8_fenced": True,
+            "unknown_read16_fenced": True,
+            "unknown_read32_fenced": True,
+            "write8_fenced": True,
+            "write16_fenced": True,
+            "reference_model_note": (
+                "xemu VP write default ignores unrecognized methods; 6DQ uses "
+                "write-only diagnostic continuation to avoid one-build-per-command"
+            ),
+            "audio_fidelity_claimed": False,
+        },
+        "dsound_apu_routing": dsound_route_counts,
+        "execution_budget": 64000000,
+        "generated_c4146_scope_inherited": True,
+        "allocator_repairs_inherited": True,
+        "xact_refcount_semantics_changed": False,
+        "destructor_suppressed": False,
+        "free_suppressed": False,
+        "ordinary_guest_memory_fences_changed": False,
+        "vp_write32_fence_changed_for_diagnostics": True,
+        "unknown_vp_read_fences_changed": False,
+        "non_vp_mmio_fences_changed": False,
+        "nv2a_mmio_policy_changed": False,
+        "source_layout": layout,
+    }
+    manifest["phase6dq_candidate_new_members"] = [
+        f"0x{x:08X}" for x in candidates
+    ]
+    manifest["phase6dq_new_members"] = [
+        f"0x{x:08X}" for x in sorted(new_members)
+    ]
+    manifest["phase6dq_pruned_members"] = [
+        {
+            "address": f"0x{va:08X}",
+            "name": generated[va]["name"],
+            "unresolved_support": names,
+        }
+        for va, names in sorted(pruned.items())
+    ]
+
+    (args.out_dir / "phase6dq-manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+
+    total_source = sum(len(rendered.get(va, "")) for va in new_members)
+    print(f"[Phase6DQ] emitter revision: {EMITTER_REVISION}")
+    print("[Phase6DQ] ROCKET PHASE: ENABLED")
+    print(
+        f"[Phase6DQ] STATIC PACK: base={len(old)} candidate={len(candidates)} "
+        f"pruned={len(pruned)} packed_new={len(new_members)} "
+        f"total={len(final_members)} new_source_bytes={total_source}"
+    )
+    print(
+        "[Phase6DQ] SECTION SELECTION: "
+        + " ".join(
+            f"{name}={selected_counts[name]}/{available_counts[name]}"
+            for name, _, _, _ in SECTIONS
+        )
+    )
+    print(
+        "[Phase6DQ] DSOUND APU ROUTING: "
+        + " ".join(f"{k}={v}" for k, v in dsound_route_counts.items())
+    )
+    print("[Phase6DQ] VP WRITE32 diagnostic continuation: ARMED")
+    print("[Phase6DQ] Unknown VP reads + non-VP MMIO: HARD FENCED")
+    print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
+    print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
+    print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
+    print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
+    print("[Phase6DQ] EMIT RESULT: PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
