@@ -22,7 +22,9 @@ This phase does NOT claim complete VP/audio semantics. VP write continuation is
 explicitly diagnostic so audio initialization cannot force one build per method
 while we chase the renderer. Unknown VP reads, meaningful non-VP MMIO, guest faults, ABI boundaries,
 missing translated bodies and unresolved support remain hard stops. Hardware-proven
-kernel timing ordinal 151 is bridged with maintained busy-wait semantics. R16's\nhardware-proven DSOUND poison-dispatch site 002A41F7 is quarantined without\nwidening ordinary guest-memory fault handling.
+kernel timing ordinal 151 is bridged with maintained busy-wait semantics. R16's
+hardware-proven DSOUND poison-dispatch site 002A41F7 is quarantined without
+widening ordinary guest-memory fault handling.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R17"
+EMITTER_REVISION = "6DQ-R18"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -1094,7 +1096,7 @@ def patch_dsound_poison_slot_dispatch(text: str) -> str:
         )
 
     after = tail[m.end(): m.end() + 700]
-    if "RECOMP_ICALL_SAFE(eax" not in after:
+    if not re.search(r"RECOMP_ICALL_SAFE\s*\(\s*eax\b", after):
         print("[Phase6DQ] 002A41F7 post-load source window:")
         for line in after.splitlines()[:20]:
             print("[Phase6DQ]   " + line)
@@ -1105,11 +1107,11 @@ def patch_dsound_poison_slot_dispatch(text: str) -> str:
     indent = m.group("indent")
     original = m.group(0)
     replacement = (
-        f"{indent}eax = phase6dq_dsound_poison_dispatch_target(\\n"
-        f"{indent}    eax,\\n"
-        f"{indent}    ecx,\\n"
-        f"{indent}    esi);\\n"
-        f"{indent}if (eax != 0xF6DCCCD0u)\\n"
+        f"{indent}eax = phase6dq_dsound_poison_dispatch_target(\n"
+        f"{indent}    eax,\n"
+        f"{indent}    ecx,\n"
+        f"{indent}    esi);\n"
+        f"{indent}if (eax != 0xF6DCCCD0u)\n"
         f"{indent}    eax = GUEST_READ32(eax + 4);"
     )
     local_start = tick_pos + m.start()
@@ -1584,6 +1586,8 @@ def main() -> int:
             "historical_fault_address": "0xCCCCCCD0",
             "synthetic_noop_target": "0xF6DCCCD0",
             "scope": "exact hardware-proven DSOUND dispatch site only",
+            "emitter_source_shape_guard": True,
+            "whitespace_tolerant_icall_guard": True,
             "result": "DS_OK",
             "saved_esp_restored": True,
             "ordinary_guest_faults_bypassed": False,
