@@ -34,11 +34,15 @@ BASE_TAG = "P6DD-XACT-280C39-ARG1-INTERNAL-20261026-A"
 BUILD_TAG = "P6DE-XACT-GLOBAL-0028836C-PROVENANCE-20261026-A"
 COOKIE_OLD = "phase6dd_env_build_cookie"
 COOKIE_NEW = "phase6de_env_build_cookie"
-EMITTER_REVISION = "6DE-R3"
+EMITTER_REVISION = "6DE-R4"
 
 GLOBAL_VA = 0x0028836C
 READ_BLOCK_VA = 0x00280CD2
 NULL_BLOCK_VA = 0x00280CF5
+
+WRITE32_DEF_RE = re.compile(
+    r"(?m)^void\s+recomp_guest_write32\(uint32_t address, uint32_t value\)\s*\{"
+)
 
 
 def load(path: Path, name: str):
@@ -83,10 +87,7 @@ def install_state(text: str) -> str:
     # The WRITE32 signature can also appear as a forward declaration. Anchor
     # on the actual central function definition only, matching the same shape
     # used by install_write32_watch().
-    definition_re = re.compile(
-        r"(?m)^void\\s+recomp_guest_write32\\(uint32_t address, uint32_t value\\)\\s*\\{"
-    )
-    matches = list(definition_re.finditer(text))
+    matches = list(WRITE32_DEF_RE.finditer(text))
     if len(matches) != 1:
         raise SystemExit(
             f"[Phase6DE] expected one central WRITE32 definition for state placement, found {len(matches)}"
@@ -104,10 +105,7 @@ static DWORD s_phase6deGlobalLastEsp = 0u;
 
 def install_write32_watch(text: str) -> str:
     signature = "void recomp_guest_write32(uint32_t address, uint32_t value)"
-    definition_re = re.compile(
-        r"(?m)^void\s+recomp_guest_write32\(uint32_t address, uint32_t value\)\s*\{"
-    )
-    matches = list(definition_re.finditer(text))
+    matches = list(WRITE32_DEF_RE.finditer(text))
     if len(matches) != 1:
         raise SystemExit(
             f"[Phase6DE] expected one central WRITE32 definition, found {len(matches)}"
@@ -322,6 +320,16 @@ def main() -> int:
     base = load(args.base_emitter, "phase6de_base")
     p6bl = load(args.phase6bl_emitter, "phase6de_p6bl")
 
+    # Regex semantic self-test.  py_compile catches syntax only; this catches
+    # accidental over-escaping of the definition matcher before touching the
+    # generated source.
+    _write32_fixture = (
+        "void recomp_guest_write32(uint32_t address, uint32_t value)\n"
+        "{\n"
+    )
+    if WRITE32_DEF_RE.search(_write32_fixture) is None:
+        raise SystemExit("[Phase6DE] internal WRITE32 definition regex self-test failed")
+
     main_path = args.base_dir / "main_monolithic.cpp"
     env_path = args.base_dir / "phase5_env.cpp"
     manifest_path = args.base_dir / "phase6dd-manifest.json"
@@ -461,6 +469,7 @@ def main() -> int:
     )
 
     print(f"[Phase6DE] emitter revision: {EMITTER_REVISION}")
+    print("[Phase6DE] WRITE32 definition regex self-test: PASS")
     print("[Phase6DE] WRITE32 telemetry compile-order gate: PASS")
     print(
         "[Phase6DE] 6DD hardware chain: "
