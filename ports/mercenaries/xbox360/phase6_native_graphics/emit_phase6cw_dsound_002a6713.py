@@ -33,7 +33,7 @@ BASE_TAG = "P6CV-SHADOW-RAM-F0000000-20261025-A"
 BUILD_TAG = "P6CW-DSOUND-SWEEP-002A6713-20261026-A"
 COOKIE_OLD = "phase6cv_env_build_cookie"
 COOKIE_NEW = "phase6cw_env_build_cookie"
-EMITTER_REVISION = "6CW-R1"
+EMITTER_REVISION = "6CW-R2"
 
 ROOT = 0x002A6713
 CALLER = 0x0023A3CE
@@ -313,7 +313,7 @@ def main() -> int:
         "seh_terminator_semantics_changed": False,
         "hard_fences_weakened": False,
         "source_layout": layout,
-    })
+    }
     manifest["phase6cw_candidate_new_members"] = [
         f"0x{x:08X}" for x in candidate_new
     ]
