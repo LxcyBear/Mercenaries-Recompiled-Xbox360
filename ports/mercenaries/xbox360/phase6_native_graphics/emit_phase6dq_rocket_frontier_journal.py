@@ -45,7 +45,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R27"
+EMITTER_REVISION = "6DQ-R28"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -62,6 +62,19 @@ MAINTAINED_KERNEL_TARGETS = {
     0x8000008E,  # KeSaveFloatingPointState
     0x80000097,  # KeStallExecutionProcessor
 }
+
+GRAPHICS_SURFACE_BASE = 0x024FC000
+GRAPHICS_SURFACE_END = 0x02628000
+GRAPHICS_DEVICE_BASE = 0x00299380
+GRAPHICS_DEVICE_END = 0x0029B000
+GRAPHICS_STATIC_ANCHORS = (
+    0x00299380,
+    0x0029AFA0,
+    0x0029AFA8,
+    0x024FC000,
+    0x024FC003,
+    0x02627FFF,
+)
 
 SECTIONS = (
     ("D3D", 0x00288640, 0x0029B874, 0x0028E700),
@@ -216,12 +229,20 @@ def predictive_seed_vas(generated: dict) -> list[int]:
     seeds = []
     for va, row in generated.items():
         source = row["source"]
+        source_lower = source.lower()
         if "sub_002A41EE();" in source:
             seeds.append(va)
             continue
         if any(
             call["target"] == PREDICTIVE_DISPLAY_ORDINAL
             for call in _literal_icall_occurrences(source)
+        ):
+            seeds.append(va)
+            continue
+        if any(
+            (f"0x{anchor:x}" in source_lower) or
+            (f"0x{anchor:08x}" in source_lower)
+            for anchor in GRAPHICS_STATIC_ANCHORS
         ):
             seeds.append(va)
 
