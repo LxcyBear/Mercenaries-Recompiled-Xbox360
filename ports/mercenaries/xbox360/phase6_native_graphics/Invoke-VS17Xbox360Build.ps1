@@ -210,6 +210,35 @@ function Assert-FileHashMatch {
     }
 }
 
+function Sync-FileIfChanged {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $sourceHash = (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash
+    if (Test-Path -LiteralPath $Destination -PathType Leaf) {
+        $destinationHash = (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash
+        if ($sourceHash -eq $destinationHash) {
+            return $false
+        }
+    }
+
+    $destinationParent = Split-Path -Parent $Destination
+    if (-not (Test-Path -LiteralPath $destinationParent -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
+    }
+
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force
+    $copiedHash = (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash
+    if ($copiedHash -ne $sourceHash) {
+        throw "$Label content-addressed sync verification failed"
+    }
+
+    return $true
+}
+
 foreach ($required in @($GeneratedMain, $GeneratedEnv, $GeneratedShardDir)) {
     if (-not (Test-Path -LiteralPath $required)) {
         throw "Generated build input missing: $required"
@@ -233,20 +262,45 @@ Write-Host "[XDK-BUILD] main.cpp       : $mainPath"
 Write-Host "[XDK-BUILD] env source     : $envPath"
 Write-Host "[XDK-BUILD] Configuration  : $solutionConfiguration"
 
-Copy-Item -LiteralPath $GeneratedMain -Destination $mainPath -Force
-Copy-Item -LiteralPath $GeneratedEnv -Destination $envPath -Force
+$syncStart = Get-Date
+$mainChanged = Sync-FileIfChanged -Source $GeneratedMain -Destination $mainPath -Label "main.cpp"
+$envChanged = Sync-FileIfChanged -Source $GeneratedEnv -Destination $envPath -Label "env CPP"
 
 $destinationShards = Join-Path $mainDir "translated_shards"
-if (Test-Path -LiteralPath $destinationShards) {
-    Remove-Item -LiteralPath $destinationShards -Recurse -Force
+if (-not (Test-Path -LiteralPath $destinationShards -PathType Container)) {
+    New-Item -ItemType Directory -Force -Path $destinationShards | Out-Null
 }
-New-Item -ItemType Directory -Force -Path $destinationShards | Out-Null
-Copy-Item -Path (Join-Path $GeneratedShardDir "*") -Destination $destinationShards -Recurse -Force
+
+$sourceShards = @(Get-ChildItem -LiteralPath $GeneratedShardDir -Filter "*.inl" -File | Sort-Object Name)
+$sourceShardNames = @{}
+foreach ($sourceShard in $sourceShards) {
+    $sourceShardNames[$sourceShard.Name.ToLowerInvariant()] = $true
+}
+
+$staleShards = @(
+    Get-ChildItem -LiteralPath $destinationShards -Filter "*.inl" -File -ErrorAction SilentlyContinue |
+        Where-Object { -not $sourceShardNames.ContainsKey($_.Name.ToLowerInvariant()) }
+)
+foreach ($staleShard in $staleShards) {
+    Remove-Item -LiteralPath $staleShard.FullName -Force
+}
+
+$changedShardCount = 0
+$unchangedShardCount = 0
+foreach ($sourceShard in $sourceShards) {
+    $destinationShard = Join-Path $destinationShards $sourceShard.Name
+    $changed = Sync-FileIfChanged -Source $sourceShard.FullName -Destination $destinationShard -Label $sourceShard.Name
+    if ($changed) {
+        ++$changedShardCount
+    }
+    else {
+        ++$unchangedShardCount
+    }
+}
 
 Assert-FileHashMatch -Expected $GeneratedMain -Actual $mainPath -Label "main.cpp"
 Assert-FileHashMatch -Expected $GeneratedEnv -Actual $envPath -Label "env CPP"
 
-$sourceShards = @(Get-ChildItem -LiteralPath $GeneratedShardDir -Filter "*.inl" -File | Sort-Object Name)
 $destShards = @(Get-ChildItem -LiteralPath $destinationShards -Filter "*.inl" -File | Sort-Object Name)
 if (@($sourceShards).Count -ne @($destShards).Count) {
     throw "translated_shards count mismatch: generated=$(@($sourceShards).Count), solution=$(@($destShards).Count)"
@@ -257,6 +311,11 @@ for ($i = 0; $i -lt @($sourceShards).Count; $i++) {
     }
     Assert-FileHashMatch -Expected $sourceShards[$i].FullName -Actual $destShards[$i].FullName -Label $sourceShards[$i].Name
 }
+
+$syncElapsed = (Get-Date) - $syncStart
+$mainSyncState = if ($mainChanged) { "CHANGED" } else { "UNCHANGED" }
+$envSyncState = if ($envChanged) { "CHANGED" } else { "UNCHANGED" }
+Write-Host ("[XDK-BUILD] Content sync    : main={0} env={1} shards_changed={2} shards_unchanged={3} stale_removed={4} elapsed={5:N2}s" -f $mainSyncState, $envSyncState, $changedShardCount, $unchangedShardCount, @($staleShards).Count, $syncElapsed.TotalSeconds)
 
 $solutionMainText = Get-Content -LiteralPath $mainPath -Raw
 $solutionEnvText = Get-Content -LiteralPath $envPath -Raw
@@ -311,6 +370,7 @@ $buildStart = Get-Date
 Write-Host "[XDK-BUILD] BUILD: $solutionConfiguration"
 & $devenv $solutionPath /Build $solutionConfiguration /Out $BuildLog
 $buildRc = $LASTEXITCODE
+$buildElapsed = (Get-Date) - $buildStart
 if ($buildRc -ne 0) {
     if (Test-Path -LiteralPath $BuildLog) {
         Write-Host "[XDK-BUILD] COMPILER/LINKER ERRORS:"
@@ -351,6 +411,7 @@ $xexCandidates = @(
 )
 
 Write-Host "[XDK-BUILD] BUILD: PASS"
+Write-Host ("[XDK-BUILD] Build elapsed  : {0:N2}s" -f $buildElapsed.TotalSeconds)
 Write-Host "[XDK-BUILD] Clean log      : $CleanLog"
 Write-Host "[XDK-BUILD] Build log      : $BuildLog"
 
