@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R40"
+EMITTER_REVISION = "6DQ-R41"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -243,10 +243,30 @@ static uint32_t s_phase6dqVpUnknownReadCount = 0u;
 static uint32_t s_phase6dqIoapicDefaultReadCount = 0u;
 static uint32_t s_phase6dqIoapicDefaultWriteCount = 0u;
 static uint32_t s_phase6dqIoapicSpecialFenceCount = 0u;
+typedef struct Phase6DQAc97OutputBusMaster
+{
+    uint32_t bdbar;
+    uint8_t civ;
+    uint8_t lvi;
+    uint16_t sr;
+    uint16_t picb;
+    uint8_t piv;
+    uint8_t cr;
+} Phase6DQAc97OutputBusMaster;
+
 static uint32_t s_phase6dqAc97GlobCnt = 0u;
 static uint32_t s_phase6dqAc97GlobSta = 0x00000100u;
 static uint32_t s_phase6dqAc97ReadCount = 0u;
 static uint32_t s_phase6dqAc97WriteCount = 0u;
+static Phase6DQAc97OutputBusMaster s_phase6dqAc97PcmOut =
+    { 0u, 0u, 0u, 1u, 0u, 0u, 0u };
+static Phase6DQAc97OutputBusMaster s_phase6dqAc97SpdifOut =
+    { 0u, 0u, 0u, 1u, 0u, 0u, 0u };
+static uint32_t s_phase6dqAc97OutputReadCount = 0u;
+static uint32_t s_phase6dqAc97OutputWriteCount = 0u;
+static uint32_t s_phase6dqAc97DescriptorLatchCount = 0u;
+static uint32_t s_phase6dqAc97LastDescriptorAddress = 0u;
+static uint32_t s_phase6dqAc97LastDescriptorControl = 0u;
 static uint32_t s_phase6dqHalGetVector44Count = 0u;
 static uint32_t s_phase6dqHalGetVector44LastBus = 0u;
 static uint32_t s_phase6dqHalGetVector44LastVector = 0u;
@@ -531,6 +551,224 @@ static void phase6dq_note_vp_write(
 static int phase6dq_ioapic_is_page(uint32_t address)
 {
     return address >= 0xFEC00000u && address < 0xFEC01000u;
+}
+
+static int phase6dq_ac97_is_output_busmaster(uint32_t address)
+{
+    return
+        (address >= 0xFEC00110u && address <= 0xFEC0011Bu) ||
+        (address >= 0xFEC00170u && address <= 0xFEC0017Bu);
+}
+
+static Phase6DQAc97OutputBusMaster* phase6dq_ac97_output_busmaster(
+    uint32_t address,
+    uint32_t* streamBase,
+    const char** streamName)
+{
+    if (address >= 0xFEC00170u && address <= 0xFEC0017Bu)
+    {
+        if (streamBase != 0) *streamBase = 0xFEC00170u;
+        if (streamName != 0) *streamName = "SPDIF";
+        return &s_phase6dqAc97SpdifOut;
+    }
+
+    if (streamBase != 0) *streamBase = 0xFEC00110u;
+    if (streamName != 0) *streamName = "PCM";
+    return &s_phase6dqAc97PcmOut;
+}
+
+static void phase6dq_ac97_latch_descriptor(
+    Phase6DQAc97OutputBusMaster* bm)
+{
+    uint32_t descriptorVa;
+
+    if (bm == 0 || bm->bdbar == 0u)
+        return;
+
+    descriptorVa = bm->bdbar + ((uint32_t)bm->civ * 8u);
+    s_phase6dqAc97LastDescriptorAddress = GUEST_READ32(descriptorVa) & ~3u;
+    s_phase6dqAc97LastDescriptorControl = GUEST_READ32(descriptorVa + 4u);
+    bm->picb = (uint16_t)(s_phase6dqAc97LastDescriptorControl & 0xFFFFu);
+    ++s_phase6dqAc97DescriptorLatchCount;
+}
+
+static uint32_t phase6dq_ac97_output_read(
+    uint32_t address,
+    uint32_t width)
+{
+    uint32_t base = 0u;
+    uint32_t offset;
+    uint32_t value = 0u;
+    const char* name = "PCM";
+    Phase6DQAc97OutputBusMaster* bm =
+        phase6dq_ac97_output_busmaster(address, &base, &name);
+    char line[448];
+
+    offset = address - base;
+    ++s_phase6dqAc97OutputReadCount;
+
+    if (width == 1u)
+    {
+        switch (offset)
+        {
+        case 4u: value = (uint32_t)bm->civ; break;
+        case 5u: value = (uint32_t)bm->lvi; break;
+        case 6u: value = (uint32_t)(bm->sr & 0xFFu); break;
+        case 7u: value = (uint32_t)((bm->sr >> 8) & 0xFFu); break;
+        case 8u: value = (uint32_t)(bm->picb & 0xFFu); break;
+        case 9u: value = (uint32_t)((bm->picb >> 8) & 0xFFu); break;
+        case 10u: value = (uint32_t)bm->piv; break;
+        case 11u: value = (uint32_t)bm->cr; break;
+        default: value = 0u; break;
+        }
+    }
+    else if (width == 2u)
+    {
+        if (offset == 6u)
+            value = (uint32_t)bm->sr;
+        else if (offset == 8u)
+            value = (uint32_t)bm->picb;
+    }
+    else if (width == 4u)
+    {
+        if (offset == 0u)
+            value = bm->bdbar;
+        else if (offset == 4u)
+            value =
+                (uint32_t)bm->civ |
+                ((uint32_t)bm->lvi << 8) |
+                ((uint32_t)bm->sr << 16);
+        else if (offset == 8u)
+            value =
+                (uint32_t)bm->picb |
+                ((uint32_t)bm->piv << 16) |
+                ((uint32_t)bm->cr << 24);
+    }
+
+    if (s_phase6dqAc97OutputReadCount <= 32u)
+    {
+        sprintf(
+            line,
+            "P6DQ AC97 OUT READ stream=%s width=%u addr=%08X off=%02X value=%08X bdbar=%08X civ=%u lvi=%u sr=%04X picb=%u piv=%u cr=%02X caller=%08X reads=%u",
+            name,
+            (unsigned int)width,
+            (unsigned int)address,
+            (unsigned int)offset,
+            (unsigned int)value,
+            (unsigned int)bm->bdbar,
+            (unsigned int)bm->civ,
+            (unsigned int)bm->lvi,
+            (unsigned int)bm->sr,
+            (unsigned int)bm->picb,
+            (unsigned int)bm->piv,
+            (unsigned int)bm->cr,
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)s_phase6dqAc97OutputReadCount);
+        trace(line);
+    }
+
+    return value;
+}
+
+static void phase6dq_ac97_output_write(
+    uint32_t address,
+    uint32_t width,
+    uint32_t value)
+{
+    uint32_t base = 0u;
+    uint32_t offset;
+    const char* name = "PCM";
+    Phase6DQAc97OutputBusMaster* bm =
+        phase6dq_ac97_output_busmaster(address, &base, &name);
+    char line[512];
+
+    offset = address - base;
+    ++s_phase6dqAc97OutputWriteCount;
+
+    if (width == 4u && offset == 0u)
+    {
+        /* AC'97 BDBAR is dword aligned. */
+        bm->bdbar = value & ~3u;
+    }
+    else if (width == 1u && offset == 5u)
+    {
+        bm->lvi = (uint8_t)(value & 31u);
+
+        /*
+         * Match AC'97 restart semantics closely enough for initialization:
+         * if RUN was already requested while halted, publishing a new LVI
+         * restarts descriptor consumption at PIV.
+         */
+        if ((bm->cr & 1u) != 0u && (bm->sr & 1u) != 0u)
+        {
+            bm->sr = (uint16_t)(bm->sr & ~3u);
+            bm->civ = bm->piv;
+            bm->piv = (uint8_t)((bm->piv + 1u) & 31u);
+            phase6dq_ac97_latch_descriptor(bm);
+        }
+    }
+    else if ((width == 1u || width == 2u) && offset == 6u)
+    {
+        /*
+         * SR bits 2/3/4 are write-one-to-clear. DCH/CELV (bits 0/1)
+         * are read-only state.
+         */
+        bm->sr = (uint16_t)(bm->sr & ~(value & 0x1Cu));
+    }
+    else if (width == 1u && offset == 11u)
+    {
+        if ((value & 2u) != 0u)
+        {
+            /* Reset bus-master engine; preserve interrupt-enable class. */
+            bm->bdbar = 0u;
+            bm->civ = 0u;
+            bm->lvi = 0u;
+            bm->sr = 1u;
+            bm->picb = 0u;
+            bm->piv = 0u;
+            bm->cr = (uint8_t)(bm->cr & 0x1Cu);
+        }
+        else
+        {
+            bm->cr = (uint8_t)(value & 0x1Fu);
+
+            if ((bm->cr & 1u) == 0u)
+            {
+                bm->sr = (uint16_t)(bm->sr | 1u);
+            }
+            else
+            {
+                bm->civ = bm->piv;
+                bm->piv = (uint8_t)((bm->piv + 1u) & 31u);
+                phase6dq_ac97_latch_descriptor(bm);
+                bm->sr = (uint16_t)(bm->sr & ~1u);
+            }
+        }
+    }
+
+    if (s_phase6dqAc97OutputWriteCount <= 32u)
+    {
+        sprintf(
+            line,
+            "P6DQ AC97 OUT WRITE stream=%s width=%u addr=%08X off=%02X value=%08X bdbar=%08X civ=%u lvi=%u sr=%04X picb=%u piv=%u cr=%02X desc_addr=%08X desc_ctl=%08X caller=%08X writes=%u",
+            name,
+            (unsigned int)width,
+            (unsigned int)address,
+            (unsigned int)offset,
+            (unsigned int)value,
+            (unsigned int)bm->bdbar,
+            (unsigned int)bm->civ,
+            (unsigned int)bm->lvi,
+            (unsigned int)bm->sr,
+            (unsigned int)bm->picb,
+            (unsigned int)bm->piv,
+            (unsigned int)bm->cr,
+            (unsigned int)s_phase6dqAc97LastDescriptorAddress,
+            (unsigned int)s_phase6dqAc97LastDescriptorControl,
+            (unsigned int)phase4c_current_caller(),
+            (unsigned int)s_phase6dqAc97OutputWriteCount);
+        trace(line);
+    }
 }
 
 static int phase6dq_ac97_is_global32(uint32_t address)
@@ -1148,6 +1386,30 @@ static void phase6dq_dump_journals(void)
 
     sprintf(
         line,
+        "P6DQ AC97 OUTPUT: reads=%u writes=%u pcm_bdbar=%08X pcm_civ=%u pcm_lvi=%u pcm_sr=%04X pcm_picb=%u pcm_piv=%u pcm_cr=%02X spdif_bdbar=%08X spdif_civ=%u spdif_lvi=%u spdif_sr=%04X spdif_picb=%u spdif_piv=%u spdif_cr=%02X desc_latches=%u last_desc_addr=%08X last_desc_ctl=%08X",
+        (unsigned int)s_phase6dqAc97OutputReadCount,
+        (unsigned int)s_phase6dqAc97OutputWriteCount,
+        (unsigned int)s_phase6dqAc97PcmOut.bdbar,
+        (unsigned int)s_phase6dqAc97PcmOut.civ,
+        (unsigned int)s_phase6dqAc97PcmOut.lvi,
+        (unsigned int)s_phase6dqAc97PcmOut.sr,
+        (unsigned int)s_phase6dqAc97PcmOut.picb,
+        (unsigned int)s_phase6dqAc97PcmOut.piv,
+        (unsigned int)s_phase6dqAc97PcmOut.cr,
+        (unsigned int)s_phase6dqAc97SpdifOut.bdbar,
+        (unsigned int)s_phase6dqAc97SpdifOut.civ,
+        (unsigned int)s_phase6dqAc97SpdifOut.lvi,
+        (unsigned int)s_phase6dqAc97SpdifOut.sr,
+        (unsigned int)s_phase6dqAc97SpdifOut.picb,
+        (unsigned int)s_phase6dqAc97SpdifOut.piv,
+        (unsigned int)s_phase6dqAc97SpdifOut.cr,
+        (unsigned int)s_phase6dqAc97DescriptorLatchCount,
+        (unsigned int)s_phase6dqAc97LastDescriptorAddress,
+        (unsigned int)s_phase6dqAc97LastDescriptorControl);
+    trace(line);
+
+    sprintf(
+        line,
         "P6DQ IRQ SETUP: hal44=%u bus=%u vector=%08X irql=%u init109=%u object=%08X routine=%08X context=%08X connect98=%u successes=%u",
         (unsigned int)s_phase6dqHalGetVector44Count,
         (unsigned int)s_phase6dqHalGetVector44LastBus,
@@ -1542,9 +1804,12 @@ def patch_vp_accesses(text: str) -> str:
     ):
         start, end = function_span(text, sig)
         body = text[start:end]
-        ac97_patch = ""
+        ac97_patch = f"""    if (phase6dq_ac97_is_output_busmaster(address))
+        return ({'uint8_t' if width == 1 else 'uint16_t' if width == 2 else 'uint32_t'})phase6dq_ac97_output_read(address, {width}u);
+
+"""
         if width == 4:
-            ac97_patch = """    if (phase6dq_ac97_is_global32(address))
+            ac97_patch += """    if (phase6dq_ac97_is_global32(address))
         return phase6dq_ac97_global_read32(address);
 
 """
@@ -1595,7 +1860,13 @@ def patch_vp_accesses(text: str) -> str:
 
     # Batch the xemu/QEMU default IOAPIC write class. Special offsets remain
     # hard-fenced and are journaled before the checked router reports them.
-    ioapic_write_patch = r'''    if (phase6dq_ac97_is_global32(address))
+    ioapic_write_patch = r'''    if (phase6dq_ac97_is_output_busmaster(address))
+    {
+        phase6dq_ac97_output_write(address, 4u, value);
+        return;
+    }
+
+    if (phase6dq_ac97_is_global32(address))
     {
         phase6dq_ac97_global_write32(address, value);
         return;
@@ -1634,7 +1905,13 @@ def patch_vp_accesses(text: str) -> str:
     ):
         start, end = function_span(text, sig)
         body = text[start:end]
-        probe = f"""    if (phase6dq_ioapic_is_default_offset(address))
+        probe = f"""    if (phase6dq_ac97_is_output_busmaster(address))
+    {{
+        phase6dq_ac97_output_write(address, {width}u, (uint32_t)value);
+        return;
+    }}
+
+    if (phase6dq_ioapic_is_default_offset(address))
     {{
         phase6dq_ioapic_default_write(address, {width}u, (uint32_t)value);
         return;
@@ -1796,7 +2073,7 @@ def instrument_f78f_origin_probe(text: str, base) -> tuple[str, list[dict]]:
     start = matches[0].start()
     brace = masked.find("{", matches[0].start(), matches[0].end() + 1)
     if brace < 0:
-        raise SystemExit("[Phase6DQ] R40 F78F body brace missing")
+        raise SystemExit("[Phase6DQ] R41 F78F body brace missing")
     end = base.closing_brace(masked, brace)
     body = text[start:end]
     body_masked = base.mask_noncode(body)
@@ -2543,6 +2820,12 @@ def main() -> int:
         "P6DQ ROCKET IOAPIC DEFAULT READ width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC DEFAULT WRITE width=%u addr=%08X",
         "P6DQ ROCKET IOAPIC SPECIAL HARD %s width=%u addr=%08X",
+        "P6DQ AC97 OUT READ stream=%s width=%u addr=%08X",
+        "P6DQ AC97 OUT WRITE stream=%s width=%u addr=%08X",
+        "P6DQ AC97 OUTPUT: reads=%u writes=%u pcm_bdbar=%08X",
+        "address >= 0xFEC00110u && address <= 0xFEC0011Bu",
+        "address >= 0xFEC00170u && address <= 0xFEC0017Bu",
+        "bm->bdbar = value & ~3u;",
         "P6DQ AC97 GLOBAL READ addr=%08X value=%08X",
         "P6DQ AC97 GLOBAL WRITE addr=%08X value=%08X",
         "P6DQ AC97 GLOBAL: reads=%u writes=%u glob_cnt=%08X glob_sta=%08X codec_ready=%u",
@@ -2730,6 +3013,32 @@ def main() -> int:
             "ordinary_guest_faults_bypassed": False,
             "unrelated_poison_values_bypassed": False,
         },
+        "ac97_output_busmaster_bridge": {
+            "hardware_proof": "R40",
+            "pcm_out_base": "0xFEC00110",
+            "spdif_out_base": "0xFEC00170",
+            "register_layout": [
+                "BDBAR+0 dword",
+                "CIV+4 byte",
+                "LVI+5 byte",
+                "SR+6 word",
+                "PICB+8 word",
+                "PIV+10 byte",
+                "CR+11 byte",
+            ],
+            "pcm_descriptor_base_hardware_value": "0x0248F000",
+            "reference_models": [
+                "QEMU AC97 native-audio bus-master",
+                "XboxDev nxdk lib/hal/audio.c",
+            ],
+            "bdbars_are_dword_aligned": True,
+            "status_w1c_semantics": True,
+            "control_reset_semantics": True,
+            "descriptor_header_latched_on_run": True,
+            "native_audio_samples_emitted": False,
+            "host_isr_fabricated": False,
+            "scope": "PCM-out + Xbox SPDIF output bus-master register state only",
+        },
         "ac97_codec_ready_bridge": {
             "hardware_proof": "R36/R38",
             "glob_cnt_address": "0xFEC0012C",
@@ -2838,18 +3147,20 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print(f"[Phase6DQ] R40 A41EE site tags: {len(a41ee_site_tags)}")
-    print(f"[Phase6DQ] R40 A4622 upstream site tags: {len(a4622_site_tags)}")
-    print(f"[Phase6DQ] R40 A52AD upstream site tags: {len(a52ad_site_tags)}")
-    print(f"[Phase6DQ] R40 F78F targeted READ32 sites: {len(f78f_read_sites)}")
+    print(f"[Phase6DQ] R41 A41EE site tags: {len(a41ee_site_tags)}")
+    print(f"[Phase6DQ] R41 A4622 upstream site tags: {len(a4622_site_tags)}")
+    print(f"[Phase6DQ] R41 A52AD upstream site tags: {len(a52ad_site_tags)}")
+    print(f"[Phase6DQ] R41 F78F targeted READ32 sites: {len(f78f_read_sites)}")
     for site in f78f_read_sites:
-        print(f"[Phase6DQ] R40 F78F READ[{site['site_id']}] expr={site['address_expr']}")
-    print("[Phase6DQ] R40 AC97 CODEC READY: R39 hardware-proven semantics retained")
-    print("[Phase6DQ] R40 AUDIO IRQ SETUP: ordinals 44/109/98 HalGetInterruptVector + KeInitializeInterrupt + KeConnectInterrupt")
-    print("[Phase6DQ] R40 XACT INIT PROBE: inherited 29FDF0 + 28345A + event-array results")
-    print("[Phase6DQ] R40 ORIGIN TRAP: inherited F78F provenance")
-    print("[Phase6DQ] R40 pack/runtime: serialized IRQ registration only; no fabricated ISR delivery")
-    print("[Phase6DQ] R40 debugger safety: bounded runtime DebugStrings retained")
+        print(f"[Phase6DQ] R41 F78F READ[{site['site_id']}] expr={site['address_expr']}")
+    print("[Phase6DQ] R41 AC97 CODEC READY: R39 hardware-proven semantics retained")
+    print("[Phase6DQ] R41 AUDIO IRQ SETUP: R40 hardware-proven ordinals 44/109/98 retained")
+    print("[Phase6DQ] R41 AC97 OUTPUT BUSMASTER: PCM 0x110 + SPDIF 0x170 descriptor/control blocks modeled")
+    print("[Phase6DQ] R41 BDBAR: R40 hardware-proven PCM descriptor base write 0248F000 accepted + journaled")
+    print("[Phase6DQ] R41 XACT INIT PROBE: inherited 29FDF0 + 28345A + event-array results")
+    print("[Phase6DQ] R41 ORIGIN TRAP: inherited F78F provenance")
+    print("[Phase6DQ] R41 pack/runtime: bus-master register state only; no native sample output or fabricated ISR")
+    print("[Phase6DQ] R41 debugger safety: bounded runtime DebugStrings retained")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
