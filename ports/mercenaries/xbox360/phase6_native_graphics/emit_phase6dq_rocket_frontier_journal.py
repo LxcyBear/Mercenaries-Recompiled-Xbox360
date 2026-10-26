@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R35"
+EMITTER_REVISION = "6DQ-R36"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -297,6 +297,13 @@ static uint32_t s_phase6dqF78fCallEdx = 0u;
 static uint32_t s_phase6dqF78fCallEbx = 0u;
 static uint32_t s_phase6dqF78fCallEsi = 0u;
 static uint32_t s_phase6dqF78fCallEdi = 0u;
+static uint32_t s_phase6dqXactInitEntries = 0u;
+static uint32_t s_phase6dqXactInitStage1Result = 0u;
+static uint32_t s_phase6dqXactInitStage2Result = 0u;
+static uint32_t s_phase6dqXactInitEventCount = 0u;
+static uint32_t s_phase6dqXactInitEventBytes = 0u;
+static uint32_t s_phase6dqXactInitAllocResult = 0u;
+static uint32_t s_phase6dqXactInitFinalResult = 0u;
 static const char* phase6dq_f78f_site_expr(uint32_t site);
 
 '''
@@ -915,6 +922,18 @@ static void phase6dq_dump_journals(void)
         (unsigned int)s_phase6dqF78fPoisonEsp);
     trace(line);
 
+    sprintf(
+        line,
+        "P6DQ XACT INIT: entries=%u stage1_29FDF0=%08X stage2_28345A=%08X event_count=%u event_bytes=%u alloc=%08X final=%08X",
+        (unsigned int)s_phase6dqXactInitEntries,
+        (unsigned int)s_phase6dqXactInitStage1Result,
+        (unsigned int)s_phase6dqXactInitStage2Result,
+        (unsigned int)s_phase6dqXactInitEventCount,
+        (unsigned int)s_phase6dqXactInitEventBytes,
+        (unsigned int)s_phase6dqXactInitAllocResult,
+        (unsigned int)s_phase6dqXactInitFinalResult);
+    trace(line);
+
     {
         uint32_t phase6dqF78fCount =
             s_phase6dqF78fReadCount < PHASE6DQ_F78F_READ_CAP
@@ -1446,7 +1465,7 @@ def instrument_f78f_origin_probe(text: str, base) -> tuple[str, list[dict]]:
     start = matches[0].start()
     brace = masked.find("{", matches[0].start(), matches[0].end() + 1)
     if brace < 0:
-        raise SystemExit("[Phase6DQ] R35 F78F body brace missing")
+        raise SystemExit("[Phase6DQ] R36 F78F body brace missing")
     end = base.closing_brace(masked, brace)
     body = text[start:end]
     body_masked = base.mask_noncode(body)
@@ -1556,6 +1575,98 @@ static uint32_t phase6dq_f78f_read32(uint32_t site, uint32_t address)
 
 """
     return text[:pos] + block + text[pos:]
+
+
+def instrument_xact_init_probe(text: str, base) -> str:
+    """
+    R36 targeted provenance for sub_0027DC5B. Capture only return values and
+    computed event-array count/size. No control-flow or allocator semantics change.
+    """
+    masked = base.mask_noncode(text)
+    m = re.search(r"(?m)^\s*(?:static\s+)?void\s+sub_0027DC5B\(void\)\s*\{", masked)
+    if m is None:
+        raise SystemExit("[Phase6DQ] R36 sub_0027DC5B body missing")
+    brace = masked.find("{", m.start(), m.end())
+    end = base.closing_brace(masked, brace)
+    body = text[m.start():end]
+
+    replacements = [
+        (
+            "    PUSH32(esp, 0); sub_0027D5C0(); /* call 0x0027D5C0 */",
+            "    ++s_phase6dqXactInitEntries;\n"
+            "    PUSH32(esp, 0); sub_0027D5C0(); /* call 0x0027D5C0 */",
+        ),
+        (
+            "    esi = eax;\n    if (TEST_S(esi, esi)) goto loc_0027DD2C; /* jl: less (signed <) */",
+            "    esi = eax;\n"
+            "    s_phase6dqXactInitStage1Result = esi;\n"
+            "    if (TEST_S(esi, esi)) goto loc_0027DD2C; /* jl: less (signed <) */",
+        ),
+        (
+            "    esi = eax;\n    if (TEST_S(esi, esi)) goto loc_0027DD2C; /* jl: less (signed <) */",
+            "    esi = eax;\n"
+            "    s_phase6dqXactInitStage2Result = esi;\n"
+            "    if (TEST_S(esi, esi)) goto loc_0027DD2C; /* jl: less (signed <) */",
+        ),
+    ]
+
+    # First two identical post-call shapes must be replaced in order, once each.
+    old = replacements[0][0]
+    if body.count(old) != 1:
+        raise SystemExit(f"[Phase6DQ] R36 expected one XACT entry call, found {body.count(old)}")
+    body = body.replace(old, replacements[0][1], 1)
+
+    post = replacements[1][0]
+    if body.count(post) != 2:
+        raise SystemExit(f"[Phase6DQ] R36 expected two XACT status gates, found {body.count(post)}")
+    body = body.replace(post, replacements[1][1], 1)
+    body = body.replace(post, replacements[2][1], 1)
+
+    count_anchor = "    GUEST_WRITE32(ebx + 0x8C, eax);\n    eax = eax + eax * 2;"
+    if body.count(count_anchor) != 1:
+        raise SystemExit("[Phase6DQ] R36 event-count anchor drift")
+    body = body.replace(
+        count_anchor,
+        "    GUEST_WRITE32(ebx + 0x8C, eax);\n"
+        "    s_phase6dqXactInitEventCount = eax;\n"
+        "    eax = eax + eax * 2;",
+        1,
+    )
+
+    alloc_anchor = "    PUSH32(esp, eax);\n    PUSH32(esp, 0); sub_001787C0(); /* call 0x001787C0 */"
+    if body.count(alloc_anchor) != 1:
+        raise SystemExit("[Phase6DQ] R36 allocation-call anchor drift")
+    body = body.replace(
+        alloc_anchor,
+        "    s_phase6dqXactInitEventBytes = eax;\n"
+        "    PUSH32(esp, eax);\n"
+        "    PUSH32(esp, 0); sub_001787C0(); /* call 0x001787C0 */",
+        1,
+    )
+
+    alloc_result_anchor = "    esi = eax;\n    { uint32_t _neg_value = (uint32_t)(esi);"
+    if body.count(alloc_result_anchor) != 1:
+        raise SystemExit("[Phase6DQ] R36 allocation-result anchor drift")
+    body = body.replace(
+        alloc_result_anchor,
+        "    esi = eax;\n"
+        "    s_phase6dqXactInitAllocResult = esi;\n"
+        "    { uint32_t _neg_value = (uint32_t)(esi);",
+        1,
+    )
+
+    final_anchor = "    eax = esi;\n    POP32(esp, esi);"
+    if body.count(final_anchor) != 1:
+        raise SystemExit("[Phase6DQ] R36 final-result anchor drift")
+    body = body.replace(
+        final_anchor,
+        "    eax = esi;\n"
+        "    s_phase6dqXactInitFinalResult = eax;\n"
+        "    POP32(esp, esi);",
+        1,
+    )
+
+    return text[:m.start()] + body + text[end:]
 
 
 def instrument_a41ee_site_tags(text: str, base) -> tuple[str, list[dict]]:
@@ -2036,6 +2147,7 @@ def main() -> int:
     main_text = patch_quiet_logging(main_text)
     main_text = patch_vp_accesses(main_text)
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
+    main_text = instrument_xact_init_probe(main_text, base)
     main_text, f78f_read_sites = instrument_f78f_origin_probe(main_text, base)
     main_text = install_f78f_origin_support(main_text, f78f_read_sites)
     main_text, a41ee_site_tags = instrument_a41ee_site_tags(main_text, base)
@@ -2122,6 +2234,10 @@ def main() -> int:
         "a4622_site=%u a4622_owner=%08X a4622_writes=%u",
         "a52ad_site=%u a52ad_owner=%08X a52ad_writes=%u",
         "P6DQ F78F ORIGIN:",
+        "P6DQ XACT INIT: entries=%u stage1_29FDF0=%08X stage2_28345A=%08X event_count=%u event_bytes=%u alloc=%08X final=%08X",
+        "s_phase6dqXactInitStage1Result = esi;",
+        "s_phase6dqXactInitStage2Result = esi;",
+        "s_phase6dqXactInitAllocResult = esi;",
         "P6DQ F78F READ seq=%u site=%u addr=%08X value=%08X expr=%s",
         "phase6dq_f78f_read32(",
         "s_phase6dqF78fA52adArg1 = recomp_guest_read32(esp);",
@@ -2345,15 +2461,16 @@ def main() -> int:
     print("[Phase6DQ] Dispatch progress logging: first 8 + every 65536")
     print("[Phase6DQ] Runtime unique frontier/hard-stop/VP journals: ARMED")
     print("[Phase6DQ] 64M execution budget + C4146 scope: INHERITED")
-    print(f"[Phase6DQ] R35 A41EE site tags: {len(a41ee_site_tags)}")
-    print(f"[Phase6DQ] R35 A4622 upstream site tags: {len(a4622_site_tags)}")
-    print(f"[Phase6DQ] R35 A52AD upstream site tags: {len(a52ad_site_tags)}")
-    print(f"[Phase6DQ] R35 F78F targeted READ32 sites: {len(f78f_read_sites)}")
+    print(f"[Phase6DQ] R36 A41EE site tags: {len(a41ee_site_tags)}")
+    print(f"[Phase6DQ] R36 A4622 upstream site tags: {len(a4622_site_tags)}")
+    print(f"[Phase6DQ] R36 A52AD upstream site tags: {len(a52ad_site_tags)}")
+    print(f"[Phase6DQ] R36 F78F targeted READ32 sites: {len(f78f_read_sites)}")
     for site in f78f_read_sites:
-        print(f"[Phase6DQ] R35 F78F READ[{site['site_id']}] expr={site['address_expr']}")
-    print("[Phase6DQ] R35 ORIGIN TRAP: 24-read ring + EC83F0E4 producer + A52AD arg/register capture")
-    print("[Phase6DQ] R35 pack/runtime: EXACT R25 order; no read value or fault-policy changes")
-    print("[Phase6DQ] R35 debugger safety: bounded runtime DebugStrings retained")
+        print(f"[Phase6DQ] R36 F78F READ[{site['site_id']}] expr={site['address_expr']}")
+    print("[Phase6DQ] R36 XACT INIT PROBE: 29FDF0 + 28345A + event-array allocation results captured")
+    print("[Phase6DQ] R36 ORIGIN TRAP: inherited 24-read F78F ring + EC83F0E4 provenance")
+    print("[Phase6DQ] R36 pack/runtime: EXACT R25 order; no control-flow/allocator/fault-policy changes")
+    print("[Phase6DQ] R36 debugger safety: bounded runtime DebugStrings retained")
     print("[Phase6DQ] Pixel chase/present proximity instrumentation: INHERITED")
     print("[Phase6DQ] EMIT RESULT: PASS")
     return 0
