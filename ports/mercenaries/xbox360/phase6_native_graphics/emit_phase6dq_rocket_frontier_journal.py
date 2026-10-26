@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R19"
+EMITTER_REVISION = "6DQ-R20"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -1113,10 +1113,14 @@ def patch_dsound_poison_slot_dispatch(text: str) -> str:
     )
     body = body[:m.start()] + replacement + body[m.end():]
 
+    guarded = (
+        f"{indent}if (eax != 0xF6DCCCD0u)\n"
+        f"{indent}    eax = GUEST_READ32(eax + 4);"
+    )
     if body.count("phase6dq_dsound_poison_dispatch_target(") != 1:
         raise SystemExit("[Phase6DQ] DSOUND poison-site rewrite count mismatch")
-    if original.strip() in body:
-        raise SystemExit("[Phase6DQ] stale unguarded DSOUND poison dereference remains")
+    if body.count(guarded) != 1:
+        raise SystemExit("[Phase6DQ] DSOUND poison guarded dereference count mismatch")
 
     return text[:start] + body + text[end:]
 
@@ -1583,6 +1587,7 @@ def main() -> int:
             "scope": "exact hardware-proven DSOUND dispatch site only",
             "emitter_source_shape_guard": True,
             "function_local_unique_dispatch_pair_guard": True,
+            "guarded_dereference_postcheck": True,
             "whitespace_tolerant_icall_guard": True,
             "result": "DS_OK",
             "saved_esp_restored": True,
