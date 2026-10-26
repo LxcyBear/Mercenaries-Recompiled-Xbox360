@@ -38,7 +38,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R7"
+EMITTER_REVISION = "6DQ-R8"
 
 CANDIDATE_CAP = 4096
 DSOUND_START = 0x0029CB80
@@ -541,17 +541,17 @@ def patch_escape_journal(text: str) -> str:
     brace = body.find("{")
     if brace < 0:
         raise SystemExit("[Phase6DQ] phase4c escape opening brace missing")
-    line_end = body.find("\n", brace)
-    if line_end < 0:
-        raise SystemExit("[Phase6DQ] phase4c escape body line ending missing")
 
-    hook = """    phase6dq_note_hard_stop(
+    # Insert immediately after the opening brace. Do not assume any particular
+    # whitespace/newline layout in the inherited generated function.
+    hook = """
+    phase6dq_note_hard_stop(
         kind,
         target,
         phase4c_current_caller(),
         savedEsp);
 """
-    body = body[: line_end + 1] + hook + body[line_end + 1 :]
+    body = body[: brace + 1] + hook + body[brace + 1 :]
 
     if body.count("phase6dq_note_hard_stop(") != 1:
         raise SystemExit("[Phase6DQ] phase4c escape journal hook count mismatch")
