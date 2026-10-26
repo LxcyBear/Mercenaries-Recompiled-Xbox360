@@ -41,7 +41,7 @@ BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
 BUILD_TAG = "P6DQ-ROCKET-FRONTIER-JOURNAL-20261026-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R18"
+EMITTER_REVISION = "6DQ-R19"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -1074,36 +1074,33 @@ def patch_dsound_poison_slot_dispatch(text: str) -> str:
     start, end = function_span(text, sig)
     body = text[start:end]
 
-    tick = "PHASE4C_BUDGET_TICK(0x002A41F7u);"
-    tick_pos = body.find(tick)
-    if tick_pos < 0:
-        raise SystemExit("[Phase6DQ] DSOUND poison site 002A41F7 tick marker missing")
-
-    # R16 register proof: eax becomes CCCCCCCC immediately before the +4
-    # dispatch-slot dereference. Rewrite only that exact load. If generated
-    # source shape changes, fail before build instead of guessing.
-    tail = body[tick_pos: tick_pos + 900]
+    # R16 runtime VA ring proved the faulting instruction is 002A41F7 inside
+    # sub_002A41EE. The generated source does not retain a literal per-VA tick
+    # marker, so anchor on the exact instruction pair instead:
+    #   eax = GUEST_READ32(eax + 4);
+    #   ... RECOMP_ICALL_SAFE(eax ...)
+    # Require exactly one such pair inside this exact function or refuse to emit.
     load_re = re.compile(
         r"(?m)^(?P<indent>[ \t]*)eax\s*=\s*GUEST_READ32\(\s*eax\s*\+\s*(?:4|0x4|0x04)\s*\)\s*;\s*$"
     )
-    m = load_re.search(tail)
-    if not m:
-        print("[Phase6DQ] 002A41F7 local source window:")
-        for line in tail.splitlines()[:24]:
+    candidates = []
+    for m in load_re.finditer(body):
+        after = body[m.end(): m.end() + 700]
+        if re.search(r"RECOMP_ICALL_SAFE\s*\(\s*eax\b", after):
+            candidates.append(m)
+
+    if len(candidates) != 1:
+        print(
+            f"[Phase6DQ] sub_002A41EE poison-dispatch candidate count={len(candidates)}"
+        )
+        print("[Phase6DQ] sub_002A41EE source head:")
+        for line in body.splitlines()[:80]:
             print("[Phase6DQ]   " + line)
         raise SystemExit(
-            "[Phase6DQ] hardware-proven DSOUND poison dereference source shape changed"
+            "[Phase6DQ] expected exactly one DSOUND eax+4 dispatch pair in sub_002A41EE"
         )
 
-    after = tail[m.end(): m.end() + 700]
-    if not re.search(r"RECOMP_ICALL_SAFE\s*\(\s*eax\b", after):
-        print("[Phase6DQ] 002A41F7 post-load source window:")
-        for line in after.splitlines()[:20]:
-            print("[Phase6DQ]   " + line)
-        raise SystemExit(
-            "[Phase6DQ] DSOUND poison load is not followed by expected safe ICALL; refusing to guess"
-        )
-
+    m = candidates[0]
     indent = m.group("indent")
     original = m.group(0)
     replacement = (
@@ -1114,9 +1111,7 @@ def patch_dsound_poison_slot_dispatch(text: str) -> str:
         f"{indent}if (eax != 0xF6DCCCD0u)\n"
         f"{indent}    eax = GUEST_READ32(eax + 4);"
     )
-    local_start = tick_pos + m.start()
-    local_end = tick_pos + m.end()
-    body = body[:local_start] + replacement + body[local_end:]
+    body = body[:m.start()] + replacement + body[m.end():]
 
     if body.count("phase6dq_dsound_poison_dispatch_target(") != 1:
         raise SystemExit("[Phase6DQ] DSOUND poison-site rewrite count mismatch")
@@ -1488,7 +1483,7 @@ def main() -> int:
         "target == 0x80000097u",
         "P6DQ KESTALL151: calls=%u us=%u",
         "microSeconds > 1000000u",
-        "PHASE4C_BUDGET_TICK(0x002A41F7u);",
+        "static void sub_002A41EE(void)",
         "phase6dq_dsound_poison_dispatch_target(",
         "target == 0xF6DCCCD0u",
         "P6DQ DSOUND POISON SLOT:",
@@ -1587,6 +1582,7 @@ def main() -> int:
             "synthetic_noop_target": "0xF6DCCCD0",
             "scope": "exact hardware-proven DSOUND dispatch site only",
             "emitter_source_shape_guard": True,
+            "function_local_unique_dispatch_pair_guard": True,
             "whitespace_tolerant_icall_guard": True,
             "result": "DS_OK",
             "saved_esp_restored": True,
