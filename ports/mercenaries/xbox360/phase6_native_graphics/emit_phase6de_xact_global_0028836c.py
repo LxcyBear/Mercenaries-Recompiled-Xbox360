@@ -34,7 +34,7 @@ BASE_TAG = "P6DD-XACT-280C39-ARG1-INTERNAL-20261026-A"
 BUILD_TAG = "P6DE-XACT-GLOBAL-0028836C-PROVENANCE-20261026-A"
 COOKIE_OLD = "phase6dd_env_build_cookie"
 COOKIE_NEW = "phase6de_env_build_cookie"
-EMITTER_REVISION = "6DE-R4"
+EMITTER_REVISION = "6DE-R5"
 
 GLOBAL_VA = 0x0028836C
 READ_BLOCK_VA = 0x00280CD2
@@ -392,10 +392,7 @@ def main() -> int:
     # Compile-order gate: the early WRITE32 wrapper must never precede the
     # telemetry declarations it consumes.
     state_pos = main_text.find("static DWORD s_phase6deGlobalWriteReports = 0u;")
-    wrapper_match = re.search(
-        r"(?m)^void\\s+recomp_guest_write32\\(uint32_t address, uint32_t value\\)\\s*\\{",
-        main_text,
-    )
+    wrapper_match = WRITE32_DEF_RE.search(main_text)
     wrapper_pos = wrapper_match.start() if wrapper_match else -1
     if state_pos < 0 or wrapper_pos < 0 or state_pos > wrapper_pos:
         raise SystemExit("[Phase6DE] WRITE32 telemetry compile-order gate failed")
@@ -470,6 +467,7 @@ def main() -> int:
 
     print(f"[Phase6DE] emitter revision: {EMITTER_REVISION}")
     print("[Phase6DE] WRITE32 definition regex self-test: PASS")
+    print("[Phase6DE] shared WRITE32 matcher used for placement/wrap/order: PASS")
     print("[Phase6DE] WRITE32 telemetry compile-order gate: PASS")
     print(
         "[Phase6DE] 6DD hardware chain: "
