@@ -33,7 +33,7 @@ BASE_TAG = "P6CV-SHADOW-RAM-F0000000-20261025-A"
 BUILD_TAG = "P6CW-DSOUND-SWEEP-002A6713-20261026-A"
 COOKIE_OLD = "phase6cv_env_build_cookie"
 COOKIE_NEW = "phase6cw_env_build_cookie"
-EMITTER_REVISION = "6CW-R4"
+EMITTER_REVISION = "6CW-R5"
 
 ROOT = 0x002A6713
 CALLER = 0x0023A3CE
@@ -375,6 +375,11 @@ def main() -> int:
     # The mandatory root is maintained manual support, not a generated member.
     # Sweep generated siblings independently; then install the exact root body
     # and dispatch case from recomp_manual.c semantics.
+    # Install maintained manual support first so the support-clean scanner
+    # treats calls to sub_002A6713 as resolved dependencies of generated
+    # DSOUND siblings rather than pruning those callers.
+    main_text = install_manual_dsound_root(main_text)
+
     p5bc.SWEEP_ROOT = ROOT
     p5bc.instrument_root_entry = instrument_root
     main_text, rendered, frontiers, pruned = p5bc.insert_pack_members(
@@ -386,7 +391,6 @@ def main() -> int:
         expanded,
         require_sweep_root=False,
     )
-    main_text = install_manual_dsound_root(main_text)
 
     # p5bc may prune candidates in place; recompute the authoritative generated
     # pack. The manual root is tracked separately in the manifest.
