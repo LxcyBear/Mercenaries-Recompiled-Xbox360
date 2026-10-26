@@ -128,10 +128,6 @@ def install_state(text: str) -> str:
     state = """static DWORD s_phase6czTranslatedPrefaultReports = 0u;
 static DWORD s_phase6czTranslatedPrefaultFunction = 0u;
 static DWORD s_phase6czTranslatedPrefaultLine = 0u;
-static DWORD s_phase6czRouterPrefaultReports = 0u;
-static DWORD s_phase6czRouterPrefaultAddress = 0u;
-static DWORD s_phase6czRouterPrefaultCaller = 0u;
-
 """
     return text.replace(anchor, anchor + state, 1)
 
@@ -203,17 +199,32 @@ def install_router_prefault(text: str) -> str:
         raise SystemExit("[Phase6CZ] router rename failed")
 
     wrapper = r'''
+static DWORD s_phase6czRouterPrefaultReports = 0u;
+static DWORD s_phase6czRouterPrefaultAddress = 0u;
+static DWORD s_phase6czRouterPrefaultCaller = 0u;
+
 uint32_t recomp_guest_read32(uint32_t address)
 {
     if (address == 0xCCCCCCD0u)
     {
+        DWORD index = 0u;
         char line[512];
+
         ++s_phase6czRouterPrefaultReports;
         s_phase6czRouterPrefaultAddress = address;
-        s_phase6czRouterPrefaultCaller = phase4c_current_caller();
+        s_phase6czRouterPrefaultCaller = 0u;
+
+        if (s_traceCount != 0u)
+        {
+            index = s_traceCount - 1u;
+            if (index >= TRACE_CAPACITY)
+                index = TRACE_CAPACITY - 1u;
+            s_phase6czRouterPrefaultCaller = s_trace[index];
+        }
+
         sprintf(
             line,
-            "P6CZ PREFAULT ROUTER READ32: caller=%08X address=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X ticks=%u trace=%u reports=%u",
+            "P6CZ PREFAULT ROUTER READ32: caller=%08X address=%08X eax=%08X ecx=%08X edx=%08X ebx=%08X esi=%08X edi=%08X esp=%08X trace=%u reports=%u",
             (unsigned int)s_phase6czRouterPrefaultCaller,
             (unsigned int)address,
             (unsigned int)eax,
@@ -223,7 +234,6 @@ uint32_t recomp_guest_read32(uint32_t address)
             (unsigned int)esi,
             (unsigned int)edi,
             (unsigned int)esp,
-            (unsigned int)s_phase4cBlockTicks,
             (unsigned int)s_traceCount,
             (unsigned int)s_phase6czRouterPrefaultReports);
         trace(line);
