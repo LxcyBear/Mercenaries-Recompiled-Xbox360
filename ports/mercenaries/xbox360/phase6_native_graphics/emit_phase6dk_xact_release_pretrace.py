@@ -29,7 +29,7 @@ BASE_TAG = "P6DJ-XACT-INDIRECT-RELEASE-CALLER-20261026-A"
 BUILD_TAG = "P6DK-XACT-RELEASE-PRETRACE-20261026-A"
 COOKIE_OLD = "phase6dj_env_build_cookie"
 COOKIE_NEW = "phase6dk_env_build_cookie"
-EMITTER_REVISION = "6DK-R1"
+EMITTER_REVISION = "6DK-R2"
 TARGET_NAME = "sub_0027F2C2"
 TARGET_VA = 0x0027F2C2
 
@@ -110,10 +110,13 @@ def function_span(text: str, name: str) -> tuple[int, int]:
 
 
 def install_state(text: str) -> str:
-    anchor = "static DWORD s_phase6djIndirectReleaseReports = 0u;\n"
+    # These globals are consumed by phase4c_lookup_pack_func itself, so they
+    # must be declared before that function definition. The inherited 6DJ
+    # state block lives too late in the file for that use.
+    anchor = "typedef void (*recomp_func_t)(void);\n"
     if text.count(anchor) != 1:
         raise SystemExit(
-            f"[Phase6DK] expected one 6DJ state anchor, found {text.count(anchor)}"
+            f"[Phase6DK] expected one recomp_func_t typedef anchor, found {text.count(anchor)}"
         )
     state = """static DWORD s_phase6dkPretraceReports = 0u;
 static DWORD s_phase6dkPretracePrevious = 0u;
@@ -303,6 +306,16 @@ def main() -> int:
     main_text = install_state(main_text)
     main_text = instrument_target_pretrace(main_text)
     main_text = instrument_pack_lookup(main_text)
+
+    state_pos = main_text.find("static DWORD s_phase6dkLookupReports = 0u;")
+    lookup_pos = main_text.find(
+        "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    )
+    if state_pos < 0 or lookup_pos < 0 or state_pos > lookup_pos:
+        raise SystemExit(
+            "[Phase6DK] compile-order gate failed: 6DK lookup state must precede pack lookup"
+        )
+
     main_text = insert_summary(main_text)
     main_text = relabel_main(main_text)
     env_text = relabel_env(env_text)
