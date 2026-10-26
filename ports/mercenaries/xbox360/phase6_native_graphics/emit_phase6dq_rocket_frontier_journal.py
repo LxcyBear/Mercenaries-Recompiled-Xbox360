@@ -549,6 +549,20 @@ static void phase6dq_ke_stall_execution_processor(uint32_t savedEsp)
         s_phase6dqKeStall151MaxUs = microSeconds;
 
     /*
+     * A real stall is expected to be short. Refuse a corrupted/unbounded
+     * duration rather than pinning the Xenon CPU for an arbitrarily long time.
+     * The hardware-proven call is 1000 us, far below this guard.
+     */
+    if (microSeconds > 1000000u)
+    {
+        phase4c_escape(
+            PHASE4C_BOUNDARY_ICALL_SAFE,
+            0x80000097u,
+            savedEsp);
+        return;
+    }
+
+    /*
      * Xbox ordinal 151 is VOID KeStallExecutionProcessor(ULONG MicroSeconds).
      * Preserve its busy-wait contract using the native high-resolution
      * counter. The guest frame is stdcall: return slot + one dword argument.
@@ -1339,6 +1353,7 @@ def main() -> int:
         "P6DQ ROCKET IOAPIC SPECIAL HARD %s width=%u addr=%08X",
         "target == 0x80000097u",
         "P6DQ KESTALL151: calls=%u us=%u",
+        "microSeconds > 1000000u",
         "#define PHASE4C_EXEC_BUDGET 64000000u",
         "#pragma warning(disable:4146)",
     )
@@ -1409,6 +1424,18 @@ def main() -> int:
             "final_aggregate_dump": True,
             "register_context_on_hard_stop": True,
             "dispatch_log_stride": 65536,
+        },
+        "kernel_timing_bridge": {
+            "target": "0x80000097",
+            "ordinal": 151,
+            "name": "KeStallExecutionProcessor",
+            "argument": "ULONG MicroSeconds",
+            "calling_convention": "stdcall",
+            "implementation": "QPC-backed busy-wait",
+            "hardware_seed_ticks": 26712270,
+            "hardware_seed_microseconds": 1000,
+            "max_safe_microseconds": 1000000,
+            "unreasonable_duration_fenced": True,
         },
         "vp_diagnostic_continue": {
             "aligned_write32_continue": True,
