@@ -721,22 +721,20 @@ def externalize_named_forward_declarations(
     text: str,
     names: set[str],
 ) -> str:
-    """Remove static from forward declarations for body support definitions."""
+    """Remove static from forward declarations for preserved body support."""
     out = text
     for name in sorted(names):
         pat = re.compile(
             rf"(?m)^(?P<indent>[ \t]*)static\s+"
-            rf"(?P<ret>(?:__forceinline\s+)?[A-Za-z_]\w*(?:\s*[*&])?)\s+"
-            rf"{re.escape(name)}\s*(?P<args>\([^;{{}}]*\))\s*;"
+            rf"(?P<decl>[^;\n{{}}]*\b{re.escape(name)}\s*"
+            rf"\([^;{{}}]*\)\s*;)"
         )
         out = pat.sub(
-            lambda m: (
-                f"{m.group('indent')}{m.group('ret')} "
-                f"{name}{m.group('args')};"
-            ),
+            lambda m: f"{m.group('indent')}{m.group('decl')}",
             out,
         )
     return out
+
 
 
 def parse_translated_functions(body: str) -> list[dict]:
@@ -867,6 +865,19 @@ def main() -> int:
     )
     assert_no_internal_sub_linkage(runtime_main, "runtime main")
 
+    runtime_masked = mask_noncode(runtime_main)
+    for support_name in sorted(body_support_names):
+        stale_static_decl = re.search(
+            rf"(?m)^[ \t]*static\s+[^;\n{{}}]*\b"
+            rf"{re.escape(support_name)}\s*\([^;{{}}]*\)\s*;",
+            runtime_masked,
+        )
+        if stale_static_decl:
+            raise SystemExit(
+                "[Phase6TU] preserved body support still has static forward "
+                f"declaration: {support_name}"
+            )
+
     header_parts = [
         "#pragma once\n",
         "/* AUTO-GENERATED Phase6 true-TU runtime declarations. */\n",
@@ -901,6 +912,17 @@ def main() -> int:
         seen_proto.add(normalized)
         header_parts.append(proto + "\n")
     header = "".join(header_parts)
+
+    if "XBOX_REP_MOVS(" in mask_noncode(body):
+        if not re.search(
+            r"(?m)^\s*static\s+__forceinline\s+void\s+"
+            r"XBOX_REP_MOVS\s*\(",
+            mask_noncode(header),
+        ):
+            raise SystemExit(
+                "[Phase6TU] XBOX_REP_MOVS is used by translated code but its "
+                "inline definition is missing from translated_runtime.h"
+            )
 
     malformed_externs = re.findall(
         r"(?m)^\s*extern\s+[gs]_[A-Za-z_]\w*\s*;\s*$",
