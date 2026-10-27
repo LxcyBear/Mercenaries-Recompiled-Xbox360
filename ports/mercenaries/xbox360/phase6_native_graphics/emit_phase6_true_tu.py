@@ -445,8 +445,10 @@ def collect_runtime_globals(
 
     True-TU splits expose all state that used to be visible simply because every
     translated function lived in one giant C++ file.  Collect every g_*/s_*
-    top-level variable that translated code or copied macro bodies reference,
-    while keeping the core architecture symbols fail-closed.
+    top-level variable that translated code or copied macro bodies reference.
+    Any unresolved g_*/s_* token that is not syntactically used as a function
+    call is treated as required shared state and fails emission before VS can
+    multiply one missing declaration across all 64 shards.
     """
     spans = function_spans(prefix)
     no_funcs = remove_spans(prefix, spans)
@@ -481,7 +483,11 @@ def collect_runtime_globals(
             )
             if macro_pat.search(preprocessor):
                 continue
-            if name in required_arch:
+            used_as_call = re.search(
+                rf"\b{re.escape(name)}\s*\(",
+                mask_noncode(body + "\n" + preprocessor),
+            ) is not None
+            if name in required_arch or not used_as_call:
                 required_missing.append(name)
             else:
                 optional_unresolved.append(name)
