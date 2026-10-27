@@ -350,6 +350,33 @@ def collect_runtime_globals(prefix: str, body: str, preprocessor: str) -> tuple[
     return found, missing
 
 
+def externalize_remaining_sub_symbols(text: str) -> tuple[str, int]:
+    """Remove internal linkage from real remaining sub_XXXXXXXX declarations/defs.
+
+    The translated body itself is emitted into shards, but a small number of
+    manually supplied/runtime support sub_* symbols can legally live outside
+    that pragma-bounded body.  They must still be externally visible to shard
+    TUs.  Match only line-start C/C++ declarations/definitions, not comments or
+    string literals.
+    """
+    pattern = re.compile(
+        r"(?m)^(?P<indent>\s*)static\s+void\s+"
+        r"(?P<name>sub_[0-9A-Fa-f]{8})\s*"
+        r"(?P<args>\([^;{}]*\))\s*(?P<tail>[;{])"
+    )
+    count = 0
+
+    def repl(match: re.Match[str]) -> str:
+        nonlocal count
+        count += 1
+        return (
+            f"{match.group('indent')}void {match.group('name')}"
+            f"{match.group('args')}{match.group('tail')}"
+        )
+
+    return pattern.sub(repl, text), count
+
+
 def externalize_runtime_globals(runtime_prefix: str, declarations: list[tuple[int,int,str,str]]) -> str:
     # Match exact original statements in the runtime prefix.  They survived
     # function externalization byte-for-byte.
@@ -475,6 +502,19 @@ def main() -> int:
     # main.cpp keeps exactly one definition of runtime/support state. No translated
     # bodies remain here; linker resolves them from translated_###.cpp.
     runtime_main = runtime_prefix + suffix
+    runtime_main, remaining_subs_externalized = externalize_remaining_sub_symbols(
+        runtime_main
+    )
+
+    # Fail closed on actual internal-linkage sub declarations/definitions. Ignore
+    # harmless appearances inside comments/strings by checking masked source.
+    if re.search(
+        r"(?m)^\s*static\s+void\s+sub_[0-9A-Fa-f]{8}\s*\(",
+        mask_noncode(runtime_main),
+    ):
+        raise SystemExit(
+            "[Phase6TU] internal-linkage sub_XXXXXXXX symbol remains in runtime main"
+        )
 
     header_parts = [
         "#pragma once\n",
@@ -574,6 +614,7 @@ def main() -> int:
         "translated_functions": len(funcs),
         "runtime_helpers_externalized": len(helper_prototypes),
         "runtime_globals_externalized": len(globals_found),
+        "remaining_runtime_sub_symbols_externalized": remaining_subs_externalized,
         "local_architecture_registers": sorted(LOCAL_TRANSLATED_ARCH_REGS),
         "local_architecture_stats": local_arch_stats,
         "stable_assignment": "multiplicative guest-VA hash",
@@ -592,6 +633,7 @@ def main() -> int:
     print(f"[Phase6TU] shard_functions_min={min(counts)} max={max(counts)}")
     print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
+    print(f"[Phase6TU] remaining_runtime_sub_symbols_externalized={remaining_subs_externalized}")
     print("[Phase6TU] local_architecture_registers=" + ",".join(sorted(LOCAL_TRANSLATED_ARCH_REGS)))
     print(
         "[Phase6TU] local_ebp_users="
