@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R6-HEADER-ORDER-SUFFIX-SUPPORT-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R7-SHARED-PROTOTYPE-LINKAGE-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -842,6 +842,83 @@ def externalize_called_suffix_support(
     return "".join(pieces), prototypes, externalized_names
 
 
+
+def externalize_header_static_function_prototypes(
+    header: str,
+) -> tuple[str, list[str]]:
+    """Remove internal linkage from declaration-only functions in the shared header.
+
+    A static function prototype in translated_runtime.h gives every shard its own
+    private function contract and triggers C2129 because the body lives in runtime
+    main. Full static inline/template definitions are intentionally untouched.
+    """
+    masked = mask_noncode(header)
+    pattern = re.compile(
+        r"(?ms)^(?P<indent>[ \t]*)static\s+"
+        r"(?P<decl>[^;{}\n][^;{}]*?\b"
+        r"(?P<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*;)"
+    )
+    matches = list(pattern.finditer(masked))
+    if not matches:
+        return header, []
+
+    out = header
+    names: list[str] = []
+    for match in reversed(matches):
+        static_start = match.start() + len(match.group("indent"))
+        static_end = static_start + len("static ")
+        if out[static_start:static_end] != "static ":
+            raise SystemExit(
+                "[Phase6TU] shared static prototype mask/source mismatch"
+            )
+        out = out[:static_start] + out[static_end:]
+        names.append(match.group("name"))
+
+    names.reverse()
+    return out, names
+
+
+def externalize_named_runtime_definitions(
+    text: str,
+    names: set[str],
+) -> tuple[str, list[str]]:
+    """Externalize matching runtime definitions for shared header prototypes."""
+    if not names:
+        return text, []
+
+    masked = mask_noncode(text)
+    matches: list[tuple[int, int, str]] = []
+    for name in sorted(names):
+        pattern = re.compile(
+            rf"(?ms)^(?P<indent>[ \t]*)static\s+"
+            rf"(?P<sig>[^;{{}}\n][^;{{}}]*?\b{re.escape(name)}\s*"
+            rf"\([^;{{}}]*\)\s*)\{{"
+        )
+        found = list(pattern.finditer(masked))
+        if len(found) != 1:
+            raise SystemExit(
+                f"[Phase6TU] shared prototype {name} expected exactly one "
+                f"static runtime definition, found {len(found)}"
+            )
+        m = found[0]
+        static_start = m.start() + len(m.group("indent"))
+        static_end = static_start + len("static ")
+        matches.append((static_start, static_end, name))
+
+    out = text
+    externalized: list[str] = []
+    for start, end, name in sorted(matches, reverse=True):
+        if out[start:end] != "static ":
+            raise SystemExit(
+                f"[Phase6TU] runtime definition linkage position mismatch: {name}"
+            )
+        out = out[:start] + out[end:]
+        externalized.append(name)
+
+    externalized.reverse()
+    return out, externalized
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", type=Path, required=True)
@@ -965,6 +1042,29 @@ def main() -> int:
             header_parts.append(inline_definition + "\n")
 
     header = "".join(header_parts)
+
+    header, shared_static_prototype_names = (
+        externalize_header_static_function_prototypes(header)
+    )
+    runtime_main, shared_runtime_definitions_externalized = (
+        externalize_named_runtime_definitions(
+            runtime_main,
+            set(shared_static_prototype_names),
+        )
+    )
+
+    header_masked = mask_noncode(header)
+    stale_static_prototype = re.search(
+        r"(?ms)^[ \t]*static\s+[^;{}\n][^;{}]*?"
+        r"\b[A-Za-z_]\w*\s*\([^;{}]*\)\s*;",
+        header_masked,
+    )
+    if stale_static_prototype:
+        line = header_masked.count("\n", 0, stale_static_prototype.start()) + 1
+        raise SystemExit(
+            "[Phase6TU] shared header retains a static function prototype "
+            f"at line {line}"
+        )
 
     # Any inline body dependency must be declared before the inline section.
     inline_marker = header.find("/* shared template/inline support */")
@@ -1104,6 +1204,8 @@ def main() -> int:
         "runtime_inline_definitions_shared": len(inline_definitions),
         "body_support_functions_preserved": [row["name"] for row in body_support_rows],
         "suffix_support_functions_externalized": suffix_support_names,
+        "shared_static_prototypes_externalized": shared_static_prototype_names,
+        "shared_runtime_definitions_externalized": shared_runtime_definitions_externalized,
         "runtime_globals_externalized": len(globals_found),
         "runtime_global_names_externalized": sum(
             len(declaration_statement_names(stmt))
@@ -1151,6 +1253,15 @@ def main() -> int:
         print(
             "[Phase6TU] suffix_support_names="
             + ",".join(suffix_support_names)
+        )
+    print(
+        "[Phase6TU] shared_static_prototypes_externalized="
+        f"{len(shared_static_prototype_names)}"
+    )
+    if shared_static_prototype_names:
+        print(
+            "[Phase6TU] shared_static_prototype_names="
+            + ",".join(shared_static_prototype_names)
         )
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
     print(
