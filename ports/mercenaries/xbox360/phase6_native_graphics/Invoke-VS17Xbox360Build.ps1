@@ -124,13 +124,52 @@ function Sync-SolutionShadow {
         "*.xex",
         "*.log",
         "*.suo",
-        "*.user"
+        "*.user",
+        "*.vcxproj"
     )
 
     & $robocopy @args | Out-Null
     $rc = $LASTEXITCODE
     if ($rc -ge 8) {
         throw "Fast local shadow sync failed (robocopy exit $rc)"
+    }
+
+    # Keep generated True-TU project injection persistent in the local shadow.
+    # Robocopy intentionally excludes *.vcxproj; sync the underlying source
+    # project only when its base content changed. This prevents every build
+    # from erasing/re-inserting the same 64 ClCompile items and touching the
+    # project timestamp.
+    $markerPattern = '(?s)\r?\n\s*<!-- BEGIN PHASE6 TRUE TU SHARDS -->.*?<!-- END PHASE6 TRUE TU SHARDS -->\s*'
+    $sourceProjects = @(Get-ChildItem -LiteralPath $SourceRoot -Filter "*.vcxproj" -File -Recurse)
+    foreach ($sourceProject in $sourceProjects) {
+        $relativeProject = $sourceProject.FullName.Substring($SourceRoot.Length).TrimStart('\')
+        $destProject = Join-Path $DestinationRoot $relativeProject
+        $destParent = Split-Path -Parent $destProject
+        if (-not (Test-Path -LiteralPath $destParent -PathType Container)) {
+            New-Item -ItemType Directory -Force -Path $destParent | Out-Null
+        }
+
+        $sourceProjectText = Get-Content -LiteralPath $sourceProject.FullName -Raw
+        $sourceBase = [regex]::Replace($sourceProjectText, $markerPattern, [Environment]::NewLine)
+
+        if (-not (Test-Path -LiteralPath $destProject -PathType Leaf)) {
+            [System.IO.File]::WriteAllText(
+                $destProject,
+                $sourceBase,
+                (New-Object System.Text.UTF8Encoding($false))
+            )
+            continue
+        }
+
+        $destProjectText = Get-Content -LiteralPath $destProject -Raw
+        $destBase = [regex]::Replace($destProjectText, $markerPattern, [Environment]::NewLine)
+        if ($destBase -cne $sourceBase) {
+            [System.IO.File]::WriteAllText(
+                $destProject,
+                $sourceBase,
+                (New-Object System.Text.UTF8Encoding($false))
+            )
+        }
     }
 
     $elapsed = (Get-Date) - $started
