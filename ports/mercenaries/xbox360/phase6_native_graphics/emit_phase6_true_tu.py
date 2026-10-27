@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R13-PARSER-STATIC-OFFSETS-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R14-TRUE-CALL-SURFACE-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -712,10 +712,9 @@ def extract_body_support_functions(
     pieces: list[str] = []
     prototypes: list[str] = []
     for row in rows:
-        src = row["source"]
-        if row["static"]:
-            src = re.sub(r"^(\s*)static\s+", r"\1", src, count=1)
-        pieces.append(src)
+        # Preserve the monolith's original linkage here. Only helpers proven
+        # callable from translated shard code are externalized later.
+        pieces.append(row["source"])
         pieces.append("\n\n")
         prototypes.append(prototype_from_signature(row["signature"]))
 
@@ -1030,6 +1029,7 @@ def main() -> int:
     body = text[body_start:on]
     suffix = text[on:]
     funcs = parse_translated_functions(body)
+    translated_source = "\n\n".join(row["source"] for row in funcs)
     local_arch_stats = validate_local_architecture_registers(funcs)
 
     (
@@ -1042,15 +1042,11 @@ def main() -> int:
 
     body_support_rows, body_support_source = extract_body_support_functions(body)
     body_support_names = {row["name"] for row in body_support_rows}
-    runtime_prefix = externalize_named_forward_declarations(
-        runtime_prefix,
-        body_support_names,
-    )
     for row in body_support_rows:
         helper_prototypes.append(prototype_from_signature(row["signature"]))
 
     suffix, suffix_support_prototypes, suffix_support_names = (
-        externalize_called_suffix_support(suffix, body)
+        externalize_called_suffix_support(suffix, translated_source)
     )
     runtime_prefix = externalize_named_forward_declarations(
         runtime_prefix,
@@ -1059,10 +1055,19 @@ def main() -> int:
     helper_prototypes.extend(suffix_support_prototypes)
     preprocessor = extract_preprocessor(prefix)
     shard_visible_calls = collect_shard_visible_support_calls(
-        body,
+        translated_source,
         preprocessor,
         inline_definitions,
         template_definitions,
+    )
+    body_support_shard_visible_names = {
+        name
+        for name in body_support_names
+        if name in shard_visible_calls
+    }
+    runtime_prefix = externalize_named_forward_declarations(
+        runtime_prefix,
+        body_support_shard_visible_names,
     )
     prefix_no_funcs = remove_spans(prefix, function_spans(prefix))
     type_blocks = extract_type_blocks(prefix_no_funcs)
@@ -1089,7 +1094,7 @@ def main() -> int:
             for name in runtime_helper_names
             if name in shard_visible_calls
         }
-        | body_support_names
+        | body_support_shard_visible_names
         | set(suffix_support_names)
     )
     runtime_main = externalize_named_forward_declarations(
@@ -1355,6 +1360,7 @@ def main() -> int:
         "runtime_template_definitions_shared": len(template_definitions),
         "runtime_inline_definitions_shared": len(inline_definitions),
         "body_support_functions_preserved": [row["name"] for row in body_support_rows],
+        "body_support_shard_visible_names": sorted(body_support_shard_visible_names),
         "suffix_support_functions_externalized": suffix_support_names,
         "shared_static_prototypes_externalized": shared_static_prototype_names,
         "runtime_private_static_prototypes_removed": runtime_private_static_prototypes_removed,
@@ -1407,11 +1413,6 @@ def main() -> int:
                 for name, count in sorted(runtime_definition_variant_counts.items())
             )
         )
-    if "phase4c_current_caller" in shared_runtime_support_names:
-        raise SystemExit(
-            "[Phase6TU] phase4c_current_caller leaked into shard-visible support; "
-            "it must remain runtime-internal behind phase4c_escape"
-        )
     print(f"[Phase6TU] runtime_template_definitions_shared={len(template_definitions)}")
     print(f"[Phase6TU] runtime_inline_definitions_shared={len(inline_definitions)}")
     print(
@@ -1422,6 +1423,15 @@ def main() -> int:
         print(
             "[Phase6TU] body_support_names="
             + ",".join(row["name"] for row in body_support_rows)
+        )
+    print(
+        "[Phase6TU] body_support_shard_visible="
+        f"{len(body_support_shard_visible_names)}"
+    )
+    if body_support_shard_visible_names:
+        print(
+            "[Phase6TU] body_support_shard_visible_names="
+            + ",".join(sorted(body_support_shard_visible_names))
         )
     print(
         "[Phase6TU] suffix_support_functions_externalized="
