@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R11-CONDITIONAL-RUNTIME-DEFS-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R12-SPAN-BASED-RUNTIME-LINKAGE-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -909,39 +909,46 @@ def externalize_named_runtime_definitions(
     text: str,
     names: set[str],
 ) -> tuple[str, list[str]]:
-    """Ensure shard-visible helpers have external linkage in every source branch.
+    """Ensure shard-visible runtime helper definitions have external linkage.
 
-    Generated runtime support can contain multiple parser-visible definitions of
-    the same helper under mutually exclusive preprocessor branches. The C++
-    compiler sees only the active branch, while this source-level scanner sees
-    all of them. Therefore require at least one definition and externalize every
-    static variant instead of incorrectly requiring exactly one textual match.
+    Use the same brace-aware function parser that discovers runtime helpers,
+    rather than a second signature regex. Multiple textual definitions are
+    allowed because generated source can contain mutually exclusive #if branches.
     """
     if not names:
         return text, []
 
-    masked = mask_noncode(text)
+    rows = function_spans(text)
+    rows_by_name: dict[str, list[dict]] = {}
+    for row in rows:
+        rows_by_name.setdefault(row["name"], []).append(row)
+
     edits: list[tuple[int, int, str]] = []
     confirmed: list[str] = []
 
     for name in sorted(names):
-        any_pattern = re.compile(
-            rf"(?ms)^(?P<indent>[ \t]*)(?P<static>static\s+)?"
-            rf"(?P<sig>[^;{{}}\n][^;{{}}]*?\b{re.escape(name)}\s*"
-            rf"\([^;{{}}]*\)(?:\s*\([^;{{}}]*\))*\s*)\{{"
-        )
-        found = list(any_pattern.finditer(masked))
+        found = rows_by_name.get(name, [])
         if not found:
             raise SystemExit(
                 f"[Phase6TU] shard-visible runtime helper {name} has no "
-                "runtime definition"
+                "brace-aware runtime definition"
             )
 
-        for m in found:
-            if m.group("static"):
-                static_start = m.start() + len(m.group("indent"))
-                static_end = static_start + len("static ")
-                edits.append((static_start, static_end, name))
+        for row in found:
+            if not row["static"]:
+                continue
+
+            src = text[row["start"]:row["brace"]]
+            m = re.match(r"(?s)^(\s*)static\s+", src)
+            if m is None:
+                raise SystemExit(
+                    "[Phase6TU] brace-aware static linkage position mismatch: "
+                    f"{name}"
+                )
+
+            static_start = row["start"] + len(m.group(1))
+            static_end = static_start + len("static ")
+            edits.append((static_start, static_end, name))
 
         confirmed.append(name)
 
@@ -949,9 +956,18 @@ def externalize_named_runtime_definitions(
     for start_pos, end_pos, name in sorted(edits, reverse=True):
         if out[start_pos:end_pos] != "static ":
             raise SystemExit(
-                f"[Phase6TU] runtime definition linkage position mismatch: {name}"
+                f"[Phase6TU] runtime definition linkage edit mismatch: {name}"
             )
         out = out[:start_pos] + out[end_pos:]
+
+    # Reparse the result and prove every matching runtime body is now external.
+    remaining = function_spans(out)
+    for row in remaining:
+        if row["name"] in names and row["static"]:
+            raise SystemExit(
+                "[Phase6TU] brace-aware runtime linkage proof failed: "
+                f"{row['name']}"
+            )
 
     return out, confirmed
 
@@ -1159,30 +1175,30 @@ def main() -> int:
     )
 
     runtime_definition_variant_counts = {}
-    runtime_mask_for_variants = mask_noncode(runtime_main)
+    runtime_rows_for_variants = function_spans(runtime_main)
     for support_name in sorted(shared_runtime_support_names):
-        variant_pattern = re.compile(
-            rf"(?ms)^[ \t]*(?:static\s+)?[^;{{}}\n][^;{{}}]*?"
-            rf"\b{re.escape(support_name)}\s*"
-            rf"\([^;{{}}]*\)(?:\s*\([^;{{}}]*\))*\s*\{{"
+        count = sum(
+            1
+            for row in runtime_rows_for_variants
+            if row["name"] == support_name
         )
-        count = len(list(variant_pattern.finditer(runtime_mask_for_variants)))
         if count > 1:
             runtime_definition_variant_counts[support_name] = count
 
-    runtime_masked = mask_noncode(runtime_main)
-    for support_name in sorted(shared_runtime_support_names):
-        stale_static_def = re.search(
-            rf"(?ms)^[ \t]*static\s+[^;{{}}\n]*"
-            rf"\b{re.escape(support_name)}\s*"
-            rf"\([^;{{}}]*\)(?:\s*\([^;{{}}]*\))*\s*\{{",
-            runtime_masked,
+    runtime_rows_after_linkage = function_spans(runtime_main)
+    stale_static_support = sorted(
+        {
+            row["name"]
+            for row in runtime_rows_after_linkage
+            if row["name"] in shared_runtime_support_names and row["static"]
+        }
+    )
+    if stale_static_support:
+        raise SystemExit(
+            "[Phase6TU] shard-visible runtime support still has static "
+            "brace-aware definitions: "
+            + ", ".join(stale_static_support)
         )
-        if stale_static_def:
-            raise SystemExit(
-                "[Phase6TU] shard-visible runtime support still has static "
-                f"definition: {support_name}"
-            )
 
     header_masked = mask_noncode(header)
     stale_static_prototype = re.search(
