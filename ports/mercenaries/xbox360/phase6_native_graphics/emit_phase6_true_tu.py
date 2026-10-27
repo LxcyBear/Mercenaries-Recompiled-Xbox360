@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R9-LIVE-SHARD-SUPPORT-SURFACE-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R10-PRUNED-SHARD-HEADER-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -845,14 +845,16 @@ def externalize_called_suffix_support(
 
 
 
-def externalize_header_static_function_prototypes(
+def normalize_header_static_function_prototypes(
     header: str,
-) -> tuple[str, list[str]]:
-    """Remove internal linkage from declaration-only functions in the shared header.
+    shard_visible_names: set[str],
+) -> tuple[str, list[str], list[str]]:
+    """Normalize declaration-only static functions in the shared shard header.
 
-    A static function prototype in translated_runtime.h gives every shard its own
-    private function contract and triggers C2129 because the body lives in runtime
-    main. Full static inline/template definitions are intentionally untouched.
+    If a static prototype is actually callable by shard code, promote it to
+    external linkage. Otherwise remove it entirely: runtime-private declarations
+    such as phase4c_current_caller have no business in translated_runtime.h.
+    Full static inline/template definitions are intentionally untouched.
     """
     masked = mask_noncode(header)
     pattern = re.compile(
@@ -862,22 +864,45 @@ def externalize_header_static_function_prototypes(
     )
     matches = list(pattern.finditer(masked))
     if not matches:
-        return header, []
+        return header, [], []
 
     out = header
-    names: list[str] = []
-    for match in reversed(matches):
-        static_start = match.start() + len(match.group("indent"))
-        static_end = static_start + len("static ")
-        if out[static_start:static_end] != "static ":
-            raise SystemExit(
-                "[Phase6TU] shared static prototype mask/source mismatch"
-            )
-        out = out[:static_start] + out[static_end:]
-        names.append(match.group("name"))
+    externalized: list[str] = []
+    removed: list[str] = []
 
-    names.reverse()
-    return out, names
+    for match in reversed(matches):
+        name = match.group("name")
+        if name in shard_visible_names:
+            static_start = match.start() + len(match.group("indent"))
+            static_end = static_start + len("static ")
+            if out[static_start:static_end] != "static ":
+                raise SystemExit(
+                    "[Phase6TU] shared static prototype mask/source mismatch"
+                )
+            out = out[:static_start] + out[static_end:]
+            externalized.append(name)
+        else:
+            start = match.start()
+            end = match.end()
+            if end < len(out) and out[end:end + 1] == "\n":
+                end += 1
+            out = out[:start] + out[end:]
+            removed.append(name)
+
+    externalized.reverse()
+    removed.reverse()
+    return out, externalized, removed
+
+
+def prototype_function_name(proto: str) -> str | None:
+    """Extract an ordinary function name from a declaration prototype."""
+    masked = mask_noncode(proto)
+    m = re.search(
+        r"\b([A-Za-z_]\w*)\s*\([^;{}]*\)\s*;\s*$",
+        masked,
+    )
+    return m.group(1) if m else None
+
 
 
 def externalize_named_runtime_definitions(
@@ -1073,6 +1098,12 @@ def main() -> int:
     header_parts.append("\n/* runtime/support entry points */\n")
     seen_proto = set()
     for proto in helper_prototypes:
+        proto_name = prototype_function_name(proto)
+        if (
+            proto_name is not None
+            and proto_name not in shared_runtime_support_names
+        ):
+            continue
         if re.search(r"\bT\b", proto):
             raise SystemExit(
                 "[Phase6TU] template parameter leaked into ordinary helper prototype: "
@@ -1098,8 +1129,13 @@ def main() -> int:
 
     header = "".join(header_parts)
 
-    header, shared_static_prototype_names = (
-        externalize_header_static_function_prototypes(header)
+    (
+        header,
+        shared_static_prototype_names,
+        runtime_private_static_prototypes_removed,
+    ) = normalize_header_static_function_prototypes(
+        header,
+        shared_runtime_support_names,
     )
     runtime_main, shared_runtime_definitions_externalized = (
         externalize_named_runtime_definitions(
@@ -1281,6 +1317,7 @@ def main() -> int:
         "body_support_functions_preserved": [row["name"] for row in body_support_rows],
         "suffix_support_functions_externalized": suffix_support_names,
         "shared_static_prototypes_externalized": shared_static_prototype_names,
+        "runtime_private_static_prototypes_removed": runtime_private_static_prototypes_removed,
         "shared_runtime_definitions_externalized": shared_runtime_definitions_externalized,
         "shard_visible_runtime_support_names": sorted(shared_runtime_support_names),
         "shard_visible_call_tokens": sorted(shard_visible_calls),
@@ -1354,6 +1391,15 @@ def main() -> int:
         print(
             "[Phase6TU] shared_static_prototype_names="
             + ",".join(shared_static_prototype_names)
+        )
+    print(
+        "[Phase6TU] runtime_private_static_prototypes_removed="
+        f"{len(runtime_private_static_prototypes_removed)}"
+    )
+    if runtime_private_static_prototypes_removed:
+        print(
+            "[Phase6TU] runtime_private_static_prototype_names="
+            + ",".join(runtime_private_static_prototypes_removed)
         )
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
     print(
