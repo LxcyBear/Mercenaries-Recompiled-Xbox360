@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R5-SHARD-CALLS-INLINE-SUPPORT-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R6-HEADER-ORDER-SUFFIX-SUPPORT-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -804,6 +804,44 @@ def validate_local_architecture_registers(funcs: list[dict]) -> dict[str, int]:
     }
 
 
+def externalize_called_suffix_support(
+    suffix: str,
+    body: str,
+) -> tuple[str, list[str], list[str]]:
+    """Expose suffix-defined helpers that translated shards call directly.
+
+    The monolithic file may define late support functions after the translated
+    pragma region. They were naturally visible in the old one-TU layout only
+    when declared earlier. For true TUs, add prototypes and external linkage
+    only for suffix functions actually referenced by translated code.
+    """
+    called_names = set(
+        re.findall(
+            r"\b([A-Za-z_]\w*)\s*\(",
+            mask_noncode(body),
+        )
+    )
+    rows = function_spans(suffix)
+    prototypes: list[str] = []
+    externalized_names: list[str] = []
+    pieces: list[str] = []
+    pos = 0
+
+    for row in rows:
+        pieces.append(suffix[pos:row["start"]])
+        src = row["source"]
+        if row["name"] in called_names:
+            if row["static"]:
+                src = re.sub(r"^(\s*)static\s+", r"\1", src, count=1)
+            prototypes.append(prototype_from_signature(row["signature"]))
+            externalized_names.append(row["name"])
+        pieces.append(src)
+        pos = row["end"]
+
+    pieces.append(suffix[pos:])
+    return "".join(pieces), prototypes, externalized_names
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", type=Path, required=True)
@@ -844,6 +882,11 @@ def main() -> int:
     )
     for row in body_support_rows:
         helper_prototypes.append(prototype_from_signature(row["signature"]))
+
+    suffix, suffix_support_prototypes, suffix_support_names = (
+        externalize_called_suffix_support(suffix, body)
+    )
+    helper_prototypes.extend(suffix_support_prototypes)
     preprocessor = extract_preprocessor(prefix)
     prefix_no_funcs = remove_spans(prefix, function_spans(prefix))
     type_blocks = extract_type_blocks(prefix_no_funcs)
@@ -886,12 +929,6 @@ def main() -> int:
     ]
     for block in type_blocks:
         header_parts.append(block + "\n")
-    if template_definitions or inline_definitions:
-        header_parts.append("\n/* shared template/inline support */\n")
-        for template_definition in template_definitions:
-            header_parts.append(template_definition + "\n")
-        for inline_definition in inline_definitions:
-            header_parts.append(inline_definition + "\n")
     header_parts.append("\n/* shared runtime storage */\n")
     for _, _, _, decl in globals_found:
         header_parts.append(decl + "\n")
@@ -911,7 +948,38 @@ def main() -> int:
             continue
         seen_proto.add(normalized)
         header_parts.append(proto + "\n")
+
+    # Inline/template definitions come last because they may reference shared
+    # globals and ordinary runtime helpers declared above.
+    if template_definitions or inline_definitions:
+        header_parts.append("\n/* shared template/inline support */\n")
+        for template_definition in template_definitions:
+            header_parts.append(template_definition + "\n")
+        for inline_definition in inline_definitions:
+            header_parts.append(inline_definition + "\n")
+
     header = "".join(header_parts)
+
+    # Any inline body dependency must be declared before the inline section.
+    inline_marker = header.find("/* shared template/inline support */")
+    if inline_marker >= 0:
+        before_inline = mask_noncode(header[:inline_marker])
+        for dependency in (
+            "recomp_guest_read64",
+            "recomp_guest_read32",
+            "recomp_guest_read16",
+            "recomp_guest_read8",
+            "recomp_guest_write32",
+            "recomp_guest_write16",
+            "recomp_guest_write8",
+            "g_x87_status_word",
+        ):
+            if dependency in mask_noncode("".join(inline_definitions)):
+                if re.search(rf"\b{re.escape(dependency)}\b", before_inline) is None:
+                    raise SystemExit(
+                        "[Phase6TU] inline dependency not declared before shared "
+                        f"inline bodies: {dependency}"
+                    )
 
     if "XBOX_REP_MOVS(" in mask_noncode(body):
         if not re.search(
@@ -1029,6 +1097,7 @@ def main() -> int:
         "runtime_template_definitions_shared": len(template_definitions),
         "runtime_inline_definitions_shared": len(inline_definitions),
         "body_support_functions_preserved": [row["name"] for row in body_support_rows],
+        "suffix_support_functions_externalized": suffix_support_names,
         "runtime_globals_externalized": len(globals_found),
         "runtime_global_names_externalized": sum(
             len(declaration_statement_names(stmt))
@@ -1067,6 +1136,15 @@ def main() -> int:
         print(
             "[Phase6TU] body_support_names="
             + ",".join(row["name"] for row in body_support_rows)
+        )
+    print(
+        "[Phase6TU] suffix_support_functions_externalized="
+        f"{len(suffix_support_names)}"
+    )
+    if suffix_support_names:
+        print(
+            "[Phase6TU] suffix_support_names="
+            + ",".join(suffix_support_names)
         )
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
     print(
