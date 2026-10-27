@@ -123,8 +123,8 @@ foreach($shard in $cppShards){
   if(-not$st.Contains('#include "translated_runtime.h"')){
     throw "TrueTU shard missing runtime header: $($shard.Name)"
   }
-  if($st.Contains("static void sub_")){
-    throw "TrueTU shard still contains static translated definition: $($shard.Name)"
+  if([regex]::IsMatch($st,'(?m)^\s*static\s+void\s+sub_[0-9A-Fa-f]{8}\s*\(')){
+    throw "TrueTU shard still contains a real static translated definition: $($shard.Name)"
   }
 }
 
