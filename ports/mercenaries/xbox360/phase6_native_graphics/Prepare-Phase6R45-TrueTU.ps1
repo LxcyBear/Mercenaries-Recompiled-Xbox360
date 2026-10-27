@@ -3,7 +3,8 @@ param(
   [string]$SolutionRoot="C:\Users\jorda\OneDrive\Desktop\My Xbox\My Projects\Mercenaries - Xbox 360\Mercenaries-PPC-Port",
   [string]$FastBuildRoot="C:\Merc360Build\Mercenaries-PPC-Port",
   [switch]$SkipSolutionBuild,
-  [switch]$FullClean
+  [switch]$FullClean,
+  [switch]$RefreshRocket
 )
 
 $ErrorActionPreference="Stop"
@@ -37,18 +38,48 @@ Write-Host "[Phase6R45] R45: NO channel-index clamp; NO AC97 table rewrite"
 Write-Host "[Phase6R45] TU : 64 real compiled translated_###.cpp units"
 Write-Host "[Phase6R45] TU : stable guest-VA ownership + content-stable writes"
 Write-Host "[Phase6R45] TU : persistent output directory (timestamps preserved)"
+Write-Host "[Phase6R45] Rocket: validated cache reused by default; -RefreshRocket forces regeneration"
 Write-Host "[Phase6R45] Build: local shadow required for generated project items"
 Write-Host "[Phase6R45] Build mode: $(if($FullClean){'FULL CLEAN'}else{'INCREMENTAL'})"
 
-# Always regenerate the R45 monolithic truth source, but do not build it.
-& $rocket -SolutionRoot $SolutionRoot -FastBuildRoot $FastBuildRoot -SkipSolutionBuild
-if($LASTEXITCODE-ne0){throw "Phase 6R45 Rocket emission failed"}
-
+# Reuse a validated R45 Rocket output by default. Rocket generation is the
+# expensive closure/pruning/monolithic stage and should not rerun while we are
+# iterating only on the True-TU splitter/build plumbing.
 $mono=Join-Path $rocketOut "main_monolithic.cpp"
 $env=Join-Path $rocketOut "phase5_env.cpp"
 $rocketManifest=Join-Path $rocketOut "phase6dq-manifest.json"
-foreach($f in @($mono,$env,$rocketManifest)){
-  if(-not(Test-Path -LiteralPath $f)){throw "Missing R45 Rocket output: $f"}
+
+function Test-R45RocketCache {
+  if(-not(Test-Path -LiteralPath $mono -PathType Leaf)){return $false}
+  if(-not(Test-Path -LiteralPath $env -PathType Leaf)){return $false}
+  if(-not(Test-Path -LiteralPath $rocketManifest -PathType Leaf)){return $false}
+  try{
+    $cached=Get-Content -LiteralPath $rocketManifest -Raw|ConvertFrom-Json
+    if($cached.phase-ne"6DQ"){return $false}
+    if($cached.build_tag-ne"P6DQ-R45-AUDIO-PROVENANCE-20261026-A"){return $false}
+    if($cached.phase6dq_rocket_frontier_journal.emitter_revision-ne"6DQ-R45"){return $false}
+    if($null-eq$cached.phase6dq_rocket_frontier_journal.r45_bad_audio_object_provenance){return $false}
+    return $true
+  }catch{
+    return $false
+  }
+}
+
+$rocketCacheValid=Test-R45RocketCache
+if($RefreshRocket-or(-not$rocketCacheValid)){
+  Write-Host ("[Phase6R45] Rocket cache: {0}" -f $(if($RefreshRocket){"REFRESH REQUESTED"}else{"MISS/INVALID"}))
+  $rocketStart=Get-Date
+  & $rocket -SolutionRoot $SolutionRoot -FastBuildRoot $FastBuildRoot -SkipSolutionBuild
+  if($LASTEXITCODE-ne0){throw "Phase 6R45 Rocket emission failed"}
+  $rocketElapsed=(Get-Date)-$rocketStart
+  Write-Host ("[Phase6R45] Rocket generation elapsed: {0}" -f $rocketElapsed)
+
+  if(-not(Test-R45RocketCache)){
+    throw "Phase 6R45 Rocket output failed cache identity validation"
+  }
+}else{
+  Write-Host "[Phase6R45] Rocket cache: HIT -- expensive Rocket regeneration skipped"
+  Write-Host "[Phase6R45] Rocket cache policy: use -RefreshRocket after changing Rocket/audio pack inputs"
 }
 
 $rm=Get-Content -LiteralPath $rocketManifest -Raw|ConvertFrom-Json
@@ -68,6 +99,7 @@ if($LASTEXITCODE-ne0){throw "Phase 6 TrueTU emitter syntax check failed"}
 # writes so unchanged shards keep their mtimes across runs.
 New-Item -ItemType Directory -Force -Path $tuOut|Out-Null
 
+$tuStart=Get-Date
 $oldErrorActionPreference=$ErrorActionPreference
 $ErrorActionPreference="Continue"
 try{
@@ -83,6 +115,8 @@ if($tuEmitRc-ne0){
   $phase6tuEmitOutput|ForEach-Object{Write-Host $_}
   throw "Phase 6 TrueTU emission failed (exit $tuEmitRc)"
 }
+$tuElapsed=(Get-Date)-$tuStart
+Write-Host ("[Phase6R45] TrueTU emission elapsed: {0}" -f $tuElapsed)
 
 $main=Join-Path $tuOut "main.cpp"
 $shards=Join-Path $tuOut "translated_shards"
