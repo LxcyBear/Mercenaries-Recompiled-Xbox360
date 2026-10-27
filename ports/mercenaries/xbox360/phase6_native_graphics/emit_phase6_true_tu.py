@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R4-MMX-GROUP-FALLBACK-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R5-SHARD-CALLS-INLINE-SUPPORT-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -221,15 +221,19 @@ def prototype_from_signature(signature: str) -> str:
     return sig.strip() + ";"
 
 
-def externalize_prefix_functions(prefix: str) -> tuple[str, list[str], list[str]]:
-    """Externalize ordinary support functions and preserve template definitions.
+def externalize_prefix_functions(
+    prefix: str,
+) -> tuple[str, list[str], list[str], list[str]]:
+    """Externalize ordinary support functions and share inline/template bodies.
 
-    A C++ template cannot be represented by a bare prototype that mentions T;
-    its template declaration and definition must be visible in each shard TU.
+    Ordinary support functions live once in runtime main and receive prototypes
+    in the shard header. __forceinline/template helpers need their full
+    definitions visible in every shard TU.
     """
     spans = function_spans(prefix)
     prototypes: list[str] = []
     template_definitions: list[str] = []
+    inline_definitions: list[str] = []
     pieces = []
     pos = 0
 
@@ -242,14 +246,17 @@ def externalize_prefix_functions(prefix: str) -> tuple[str, list[str], list[str]
             before,
         )
         is_template = template_match is not None
+        is_forceinline = "__forceinline" in row["signature"]
 
         src = row["source"]
         if is_template:
-            # Keep the runtime copy exactly as generated.  Also provide the full
-            # template declaration+definition in the shared shard header.
-            template_definitions.append(
-                template_match.group(1) + src
-            )
+            template_definitions.append(template_match.group(1) + src)
+            # Keep the original runtime copy unchanged.
+        elif is_forceinline:
+            # Keep the original runtime copy and put the full body in the shard
+            # header. A prototype alone is insufficient for force-inline helpers
+            # such as XBOX_REP_MOVS under the VS2017 Xbox 360 compiler.
+            inline_definitions.append(src)
         else:
             if row["static"]:
                 src = re.sub(r"^(\s*)static\s+", r"\1", src, count=1)
@@ -264,7 +271,7 @@ def externalize_prefix_functions(prefix: str) -> tuple[str, list[str], list[str]
         lambda m: f"{m.group(1)}void {m.group(2)}(void);",
         runtime,
     )
-    return runtime, prototypes, template_definitions
+    return runtime, prototypes, template_definitions, inline_definitions
 
 
 
@@ -683,6 +690,55 @@ def shard_index_for_va(va: int) -> int:
     return ((va * 2654435761) & 0xFFFFFFFF) >> 26
 
 
+def extract_body_support_functions(
+    body: str,
+) -> tuple[list[dict], str]:
+    """Preserve non-translated support functions inside the optimize-off region.
+
+    The monolithic layout can contain helper/root functions next to translated
+    sub_XXXXXXXX bodies. Dropping the entire region after extracting only
+    translated bodies strands declarations such as xbe_entry_point.
+    """
+    rows = [
+        row
+        for row in function_spans(body)
+        if re.fullmatch(r"sub_[0-9A-Fa-f]{8}", row["name"]) is None
+    ]
+    pieces: list[str] = []
+    prototypes: list[str] = []
+    for row in rows:
+        src = row["source"]
+        if row["static"]:
+            src = re.sub(r"^(\s*)static\s+", r"\1", src, count=1)
+        pieces.append(src)
+        pieces.append("\n\n")
+        prototypes.append(prototype_from_signature(row["signature"]))
+
+    return rows, "".join(pieces)
+
+
+def externalize_named_forward_declarations(
+    text: str,
+    names: set[str],
+) -> str:
+    """Remove static from forward declarations for body support definitions."""
+    out = text
+    for name in sorted(names):
+        pat = re.compile(
+            rf"(?m)^(?P<indent>[ \t]*)static\s+"
+            rf"(?P<ret>(?:__forceinline\s+)?[A-Za-z_]\w*(?:\s*[*&])?)\s+"
+            rf"{re.escape(name)}\s*(?P<args>\([^;{{}}]*\))\s*;"
+        )
+        out = pat.sub(
+            lambda m: (
+                f"{m.group('indent')}{m.group('ret')} "
+                f"{name}{m.group('args')};"
+            ),
+            out,
+        )
+    return out
+
+
 def parse_translated_functions(body: str) -> list[dict]:
     masked = mask_noncode(body)
     rows = []
@@ -775,9 +831,21 @@ def main() -> int:
     funcs = parse_translated_functions(body)
     local_arch_stats = validate_local_architecture_registers(funcs)
 
-    runtime_prefix, helper_prototypes, template_definitions = (
-        externalize_prefix_functions(prefix)
+    (
+        runtime_prefix,
+        helper_prototypes,
+        template_definitions,
+        inline_definitions,
+    ) = externalize_prefix_functions(prefix)
+
+    body_support_rows, body_support_source = extract_body_support_functions(body)
+    body_support_names = {row["name"] for row in body_support_rows}
+    runtime_prefix = externalize_named_forward_declarations(
+        runtime_prefix,
+        body_support_names,
     )
+    for row in body_support_rows:
+        helper_prototypes.append(prototype_from_signature(row["signature"]))
     preprocessor = extract_preprocessor(prefix)
     prefix_no_funcs = remove_spans(prefix, function_spans(prefix))
     type_blocks = extract_type_blocks(prefix_no_funcs)
@@ -793,7 +861,7 @@ def main() -> int:
 
     # main.cpp keeps exactly one definition of runtime/support state. No translated
     # bodies remain here; linker resolves them from translated_###.cpp.
-    runtime_main = runtime_prefix + suffix
+    runtime_main = runtime_prefix + body_support_source + suffix
     runtime_main, remaining_subs_externalized = externalize_remaining_sub_symbols(
         runtime_main
     )
@@ -807,10 +875,12 @@ def main() -> int:
     ]
     for block in type_blocks:
         header_parts.append(block + "\n")
-    if template_definitions:
+    if template_definitions or inline_definitions:
         header_parts.append("\n/* shared template/inline support */\n")
         for template_definition in template_definitions:
             header_parts.append(template_definition + "\n")
+        for inline_definition in inline_definitions:
+            header_parts.append(inline_definition + "\n")
     header_parts.append("\n/* shared runtime storage */\n")
     for _, _, _, decl in globals_found:
         header_parts.append(decl + "\n")
@@ -873,8 +943,7 @@ def main() -> int:
             {
                 callee
                 for row in bucket
-                for callee in SUB_CALL_RE.findall(row["source"])
-                if callee not in {x["name"] for x in bucket}
+                for callee in SUB_CALL_RE.findall(mask_noncode(row["source"]))
             }
         )
         payload = [
@@ -882,7 +951,7 @@ def main() -> int:
             '#pragma optimize("", off)\n',
         ]
         if callees:
-            payload.append("\n/* cross-TU translated callees used by this shard */\n")
+            payload.append("\n/* translated callees used by this shard */\n")
             payload.extend(f"void {name_}(void);\n" for name_ in callees)
         payload.append("\n")
         for row in bucket:
@@ -922,6 +991,8 @@ def main() -> int:
         "translated_functions": len(funcs),
         "runtime_helpers_externalized": len(helper_prototypes),
         "runtime_template_definitions_shared": len(template_definitions),
+        "runtime_inline_definitions_shared": len(inline_definitions),
+        "body_support_functions_preserved": [row["name"] for row in body_support_rows],
         "runtime_globals_externalized": len(globals_found),
         "runtime_global_names_externalized": sum(
             len(declaration_statement_names(stmt))
@@ -951,6 +1022,16 @@ def main() -> int:
     print(f"[Phase6TU] shard_functions_min={min(counts)} max={max(counts)}")
     print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
     print(f"[Phase6TU] runtime_template_definitions_shared={len(template_definitions)}")
+    print(f"[Phase6TU] runtime_inline_definitions_shared={len(inline_definitions)}")
+    print(
+        "[Phase6TU] body_support_functions_preserved="
+        f"{len(body_support_rows)}"
+    )
+    if body_support_rows:
+        print(
+            "[Phase6TU] body_support_names="
+            + ",".join(row["name"] for row in body_support_rows)
+        )
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
     print(
         "[Phase6TU] runtime_global_names_externalized="
