@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R12-SPAN-BASED-RUNTIME-LINKAGE-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R13-PARSER-STATIC-OFFSETS-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -129,6 +129,9 @@ def function_spans(text: str) -> list[dict]:
                 "source": text[m.start():end],
                 "signature": text[m.start():brace].rstrip(),
                 "static": bool(m.group("static")),
+                "static_start": (
+                    m.start("static") if m.group("static") is not None else None
+                ),
             }
         )
     # Reject nested false positives by retaining only non-overlapping top-level defs.
@@ -938,23 +941,25 @@ def externalize_named_runtime_definitions(
             if not row["static"]:
                 continue
 
-            src = text[row["start"]:row["brace"]]
-            m = re.match(r"(?s)^(\s*)static\s+", src)
-            if m is None:
+            static_start = row.get("static_start")
+            if static_start is None:
                 raise SystemExit(
-                    "[Phase6TU] brace-aware static linkage position mismatch: "
+                    "[Phase6TU] brace-aware parser lost static token offset: "
                     f"{name}"
                 )
-
-            static_start = row["start"] + len(m.group(1))
-            static_end = static_start + len("static ")
+            static_end = static_start + len("static")
+            if text[static_start:static_end] != "static":
+                raise SystemExit(
+                    "[Phase6TU] parser/source static token mismatch: "
+                    f"{name}"
+                )
             edits.append((static_start, static_end, name))
 
         confirmed.append(name)
 
     out = text
     for start_pos, end_pos, name in sorted(edits, reverse=True):
-        if out[start_pos:end_pos] != "static ":
+        if out[start_pos:end_pos] != "static":
             raise SystemExit(
                 f"[Phase6TU] runtime definition linkage edit mismatch: {name}"
             )
