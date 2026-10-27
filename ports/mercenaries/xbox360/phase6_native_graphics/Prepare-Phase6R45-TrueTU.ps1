@@ -186,7 +186,10 @@ $buildArgs=@{
 }
 if(-not$FullClean){$buildArgs["SkipClean"]=$true}
 
+$buildStart=Get-Date
 & $builder @buildArgs
+$buildElapsed=(Get-Date)-$buildStart
+Write-Host ("[Phase6R45] VS/XDK build elapsed: {0}" -f $buildElapsed)
 if($LASTEXITCODE-ne0){throw "Phase 6R45 TrueTU Xbox 360 build failed"}
 
 Write-Host ""
