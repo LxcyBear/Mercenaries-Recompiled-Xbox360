@@ -96,7 +96,7 @@ if($null-eq$rm.phase6dq_rocket_frontier_journal.r45_bad_audio_object_provenance)
 if($LASTEXITCODE-ne0){throw "Phase 6 TrueTU emitter syntax check failed"}
 
 $tuEmitterText=Get-Content -LiteralPath $tuEmitter -Raw
-$expectedTuRevision='6TU-R10-PRUNED-SHARD-HEADER-20261027'
+$expectedTuRevision='6TU-R11-CONDITIONAL-RUNTIME-DEFS-20261027'
 if(-not$tuEmitterText.Contains('TRUE_TU_EMITTER_REVISION = "'+$expectedTuRevision+'"')){
   throw "Stale TrueTU emitter detected; expected $expectedTuRevision"
 }
@@ -162,7 +162,8 @@ if(-not[string]::IsNullOrWhiteSpace($stderr)){
 if($tuEmitRc-ne0){
   Write-Host "[Phase6R45] TRUE TU EMITTER OUTPUT:"
   $phase6tuEmitOutput|ForEach-Object{Write-Host $_}
-  throw "Phase 6 TrueTU emission failed (exit $tuEmitRc)"
+  Write-Host ("[Phase6R45] STOP: TrueTU emission failed (exit {0})" -f $tuEmitRc)
+  exit $tuEmitRc
 }
 $tuElapsed=(Get-Date)-$tuStart
 Write-Host ("[Phase6R45] TrueTU emission elapsed: {0}" -f $tuElapsed)
