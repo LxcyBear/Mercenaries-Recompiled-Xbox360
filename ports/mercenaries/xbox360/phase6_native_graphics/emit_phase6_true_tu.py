@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R7-SHARED-PROTOTYPE-LINKAGE-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R8-RUNTIME-FORWARD-LINKAGE-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -223,7 +223,7 @@ def prototype_from_signature(signature: str) -> str:
 
 def externalize_prefix_functions(
     prefix: str,
-) -> tuple[str, list[str], list[str], list[str]]:
+) -> tuple[str, list[str], list[str], list[str], list[str]]:
     """Externalize ordinary support functions and share inline/template bodies.
 
     Ordinary support functions live once in runtime main and receive prototypes
@@ -234,6 +234,7 @@ def externalize_prefix_functions(
     prototypes: list[str] = []
     template_definitions: list[str] = []
     inline_definitions: list[str] = []
+    helper_names: list[str] = []
     pieces = []
     pos = 0
 
@@ -261,6 +262,7 @@ def externalize_prefix_functions(
             if row["static"]:
                 src = re.sub(r"^(\s*)static\s+", r"\1", src, count=1)
             prototypes.append(prototype_from_signature(row["signature"]))
+            helper_names.append(row["name"])
 
         pieces.append(src)
         pos = row["end"]
@@ -271,7 +273,7 @@ def externalize_prefix_functions(
         lambda m: f"{m.group(1)}void {m.group(2)}(void);",
         runtime,
     )
-    return runtime, prototypes, template_definitions, inline_definitions
+    return runtime, prototypes, template_definitions, inline_definitions, helper_names
 
 
 
@@ -721,13 +723,13 @@ def externalize_named_forward_declarations(
     text: str,
     names: set[str],
 ) -> str:
-    """Remove static from forward declarations for preserved body support."""
+    """Remove static from forward declarations for shard-visible support."""
     out = text
     for name in sorted(names):
         pat = re.compile(
-            rf"(?m)^(?P<indent>[ \t]*)static\s+"
-            rf"(?P<decl>[^;\n{{}}]*\b{re.escape(name)}\s*"
-            rf"\([^;{{}}]*\)\s*;)"
+            rf"(?ms)^(?P<indent>[ \t]*)static\s+"
+            rf"(?P<decl>[^;{{}}\n]*\b{re.escape(name)}\s*"
+            rf"\([^;{{}}]*\)(?:\s*\([^;{{}}]*\))*\s*;)"
         )
         out = pat.sub(
             lambda m: f"{m.group('indent')}{m.group('decl')}",
@@ -952,6 +954,7 @@ def main() -> int:
         helper_prototypes,
         template_definitions,
         inline_definitions,
+        runtime_helper_names,
     ) = externalize_prefix_functions(prefix)
 
     body_support_rows, body_support_source = extract_body_support_functions(body)
@@ -990,12 +993,21 @@ def main() -> int:
     runtime_main, remaining_subs_externalized = externalize_remaining_sub_symbols(
         runtime_main
     )
+
+    shared_runtime_support_names = (
+        set(runtime_helper_names)
+        | body_support_names
+        | set(suffix_support_names)
+    )
+    runtime_main = externalize_named_forward_declarations(
+        runtime_main,
+        shared_runtime_support_names,
+    )
+
     assert_no_internal_sub_linkage(runtime_main, "runtime main")
 
     runtime_masked = mask_noncode(runtime_main)
-    for support_name in sorted(
-        body_support_names | set(suffix_support_names)
-    ):
+    for support_name in sorted(shared_runtime_support_names):
         stale_static_decl = re.search(
             rf"(?m)^[ \t]*static\s+[^;\n{{}}]*\b"
             rf"{re.escape(support_name)}\s*\([^;{{}}]*\)\s*;",
@@ -1003,7 +1015,7 @@ def main() -> int:
         )
         if stale_static_decl:
             raise SystemExit(
-                "[Phase6TU] externally visible support still has static "
+                "[Phase6TU] shard-visible runtime support still has static "
                 f"forward declaration: {support_name}"
             )
 
@@ -1055,6 +1067,27 @@ def main() -> int:
             set(shared_static_prototype_names),
         )
     )
+
+    runtime_main, shard_visible_runtime_definitions = (
+        externalize_named_runtime_definitions(
+            runtime_main,
+            shared_runtime_support_names,
+        )
+    )
+
+    runtime_masked = mask_noncode(runtime_main)
+    for support_name in sorted(shared_runtime_support_names):
+        stale_static_def = re.search(
+            rf"(?ms)^[ \t]*static\s+[^;{{}}\n]*"
+            rf"\b{re.escape(support_name)}\s*"
+            rf"\([^;{{}}]*\)(?:\s*\([^;{{}}]*\))*\s*\{{",
+            runtime_masked,
+        )
+        if stale_static_def:
+            raise SystemExit(
+                "[Phase6TU] shard-visible runtime support still has static "
+                f"definition: {support_name}"
+            )
 
     header_masked = mask_noncode(header)
     stale_static_prototype = re.search(
@@ -1209,6 +1242,8 @@ def main() -> int:
         "suffix_support_functions_externalized": suffix_support_names,
         "shared_static_prototypes_externalized": shared_static_prototype_names,
         "shared_runtime_definitions_externalized": shared_runtime_definitions_externalized,
+        "shard_visible_runtime_support_names": sorted(shared_runtime_support_names),
+        "shard_visible_runtime_definitions": shard_visible_runtime_definitions,
         "runtime_globals_externalized": len(globals_found),
         "runtime_global_names_externalized": sum(
             len(declaration_statement_names(stmt))
@@ -1237,6 +1272,10 @@ def main() -> int:
     print(f"[Phase6TU] translated_functions={len(funcs)} shards={args.shards}")
     print(f"[Phase6TU] shard_functions_min={min(counts)} max={max(counts)}")
     print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
+    print(
+        "[Phase6TU] shard_visible_runtime_support="
+        f"{len(shared_runtime_support_names)}"
+    )
     print(f"[Phase6TU] runtime_template_definitions_shared={len(template_definitions)}")
     print(f"[Phase6TU] runtime_inline_definitions_shared={len(inline_definitions)}")
     print(
