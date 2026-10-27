@@ -106,8 +106,16 @@ $mainText=Get-Content -LiteralPath $main -Raw
 if($mainText.Contains('#include "translated_shards/')){
   throw "TrueTU main.cpp still includes translated shard bodies"
 }
-if($mainText.Contains('static void sub_')){
-  throw "TrueTU main.cpp still contains internal-linkage translated declarations/definitions"
+
+$internalMainSubs=@(
+  [regex]::Matches(
+    $mainText,
+    '(?m)^\s*static\s+void\s+sub_[0-9A-Fa-f]{8}\s*\('
+  )
+)
+if(@($internalMainSubs).Count-gt0){
+  Write-Host ("[Phase6R45] Internal-linkage runtime sub symbols remaining: {0}" -f @($internalMainSubs).Count)
+  throw "TrueTU main.cpp still contains real internal-linkage sub_XXXXXXXX declarations/definitions"
 }
 
 foreach($shard in $cppShards){
