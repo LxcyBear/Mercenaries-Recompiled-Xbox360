@@ -551,6 +551,22 @@ if ($buildRc -ne 0) {
             ) -CaseSensitive:$false -ErrorAction SilentlyContinue
         )
         if ($errorLines.Count -gt 0) {
+            Write-Host "[XDK-BUILD] ERROR FAMILY SUMMARY:"
+            $errorLines |
+                ForEach-Object {
+                    $line = $_.Line
+                    $line = $line -replace '^.*?\):\s*', ''
+                    $line = $line -replace '^.*?:\s*(?=(?:fatal )?error\s)', ''
+                    $line
+                } |
+                Group-Object |
+                Sort-Object Count -Descending |
+                Select-Object -First 30 |
+                ForEach-Object {
+                    Write-Host ("[XDK-BUILD] x{0} {1}" -f $_.Count, $_.Name)
+                }
+
+            Write-Host "[XDK-BUILD] LAST COMPILER/LINKER ERRORS:"
             $errorLines | Select-Object -Last 80 | ForEach-Object {
                 Write-Host $_.Line
             }
