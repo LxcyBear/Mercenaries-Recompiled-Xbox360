@@ -289,24 +289,61 @@ def looks_like_variable_declaration(stmt: str, name: str) -> bool:
     return True
 
 
-def line_statement_for_name(prefix_no_funcs: str, name: str) -> tuple[int, int, str] | None:
-    """Find a simple top-level variable declaration containing name.
+def declaration_statement_names(stmt: str) -> set[str]:
+    """Return g_*/s_* identifiers declared by a simple variable statement.
 
-    Generated register/runtime state is deliberately simple C-style storage.
-    We fail closed rather than guessing if the declaration is not semicolon
-    terminated in a bounded window.
+    This intentionally supports comma declarations such as:
+        uint64_t g_mm0 = 0, g_mm1 = 0, g_mm2 = 0, g_mm3 = 0;
+    where only the first declarator is preceded by the type.
     """
-    pattern = re.compile(rf"(?m)^[ \t]*(?:static\s+)?(?:extern\s+)?(?:const\s+)?[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*(?:\s*[*&]\s*)?[A-Za-z_]\w*[^;\n]*\b{re.escape(name)}\b[^;]*;")
-    candidates = []
-    for m in pattern.finditer(prefix_no_funcs):
+    masked = mask_noncode(stmt)
+    head = masked.strip()
+    if not head.endswith(";"):
+        return set()
+    if head.startswith(("#", "typedef", "return", "if", "while", "for", "switch")):
+        return set()
+
+    # Function prototypes/calls are not storage declarations.
+    before_equals = head.split("=", 1)[0]
+    if "(" in before_equals or ")" in before_equals:
+        return set()
+
+    # A declaration must start with at least one plausible type/qualifier token
+    # before the first g_*/s_* declarator.
+    first = re.search(r"\b[gs]_[A-Za-z_]\w*\b", head)
+    if first is None:
+        return set()
+    prefix = head[:first.start()]
+    if "=" in prefix or ";" in prefix or "{" in prefix or "}" in prefix:
+        return set()
+    type_tokens = re.findall(r"\b[A-Za-z_]\w*\b", prefix)
+    if not type_tokens:
+        return set()
+
+    return set(re.findall(r"\b[gs]_[A-Za-z_]\w*\b", head))
+
+
+def line_statement_for_name(
+    prefix_no_funcs: str,
+    name: str,
+) -> tuple[int, int, str] | None:
+    """Find a top-level variable declaration containing name.
+
+    Handles both ordinary one-variable declarations and grouped comma
+    declarations where only the first variable is adjacent to the type.
+    """
+    candidates: list[tuple[int, int, str]] = []
+
+    # Generated runtime globals are overwhelmingly one-line declarations.
+    for m in re.finditer(r"(?m)^[ \t]*[^\n;]+;[ \t]*$", prefix_no_funcs):
         stmt = m.group(0)
-        if "(" in stmt and ")" in stmt:
-            continue
-        if not looks_like_variable_declaration(stmt, name):
-            continue
-        candidates.append((m.start(), m.end(), stmt))
+        if name in declaration_statement_names(stmt):
+            candidates.append((m.start(), m.end(), stmt))
+
     if len(candidates) == 1:
         return candidates[0]
+    if len(candidates) > 1:
+        return None
 
     # Multiline array/object declaration fallback, bounded to 4 KiB.
     idx = 0
@@ -315,29 +352,41 @@ def line_statement_for_name(prefix_no_funcs: str, name: str) -> tuple[int, int, 
         idx = prefix_no_funcs.find(name, idx)
         if idx < 0:
             break
-        if (idx > 0 and (prefix_no_funcs[idx - 1].isalnum() or prefix_no_funcs[idx - 1] == "_")):
+        if idx > 0 and (
+            prefix_no_funcs[idx - 1].isalnum()
+            or prefix_no_funcs[idx - 1] == "_"
+        ):
             idx += len(name)
             continue
         after = idx + len(name)
-        if after < len(prefix_no_funcs) and (prefix_no_funcs[after].isalnum() or prefix_no_funcs[after] == "_"):
+        if after < len(prefix_no_funcs) and (
+            prefix_no_funcs[after].isalnum()
+            or prefix_no_funcs[after] == "_"
+        ):
             idx = after
             continue
-        start = prefix_no_funcs.rfind("\n", 0, idx) + 1
-        end = prefix_no_funcs.find(";", idx, min(len(prefix_no_funcs), idx + 4096))
+
+        # Walk backward to the previous statement boundary/newline and forward
+        # to a bounded semicolon; then validate as a declaration as a whole.
+        prev_semicolon = prefix_no_funcs.rfind(";", 0, idx)
+        prev_newline = prefix_no_funcs.rfind("\n", 0, idx)
+        start = max(prev_semicolon + 1, prev_newline + 1)
+        end = prefix_no_funcs.find(
+            ";",
+            idx,
+            min(len(prefix_no_funcs), idx + 4096),
+        )
         if end >= 0:
             stmt = prefix_no_funcs[start:end + 1]
-            head = stmt.lstrip()
-            if (
-                not head.startswith(("#", "typedef"))
-                and "(" not in head.split("=", 1)[0]
-                and looks_like_variable_declaration(stmt, name)
-            ):
+            if name in declaration_statement_names(stmt):
                 hits.append((start, end + 1, stmt))
         idx = after
-    uniq = {(a, b): (a, b, c) for a, b, c in hits}
+
+    uniq = {(x, y): (x, y, z) for x, y, z in hits}
     if len(uniq) == 1:
         return next(iter(uniq.values()))
     return None
+
 
 
 def strip_initializer(stmt: str) -> str:
@@ -474,8 +523,12 @@ def collect_runtime_globals(
     required_missing = []
     optional_unresolved = []
     seen_spans = set()
+    satisfied_names: set[str] = set()
 
     for name in names:
+        if name in satisfied_names:
+            continue
+
         row = line_statement_for_name(no_funcs, name)
         if row is None:
             macro_pat = re.compile(
@@ -495,6 +548,9 @@ def collect_runtime_globals(
 
         a, b, stmt = row
         key = (a, b)
+        declared_here = declaration_statement_names(stmt)
+        satisfied_names.update(declared_here)
+
         if key in seen_spans:
             continue
         seen_spans.add(key)
@@ -816,6 +872,10 @@ def main() -> int:
         "runtime_helpers_externalized": len(helper_prototypes),
         "runtime_template_definitions_shared": len(template_definitions),
         "runtime_globals_externalized": len(globals_found),
+        "runtime_global_names_externalized": sum(
+            len(declaration_statement_names(stmt))
+            for _, _, stmt, _ in globals_found
+        ),
         "runtime_globals_optional_unresolved": globals_optional_unresolved,
         "remaining_runtime_sub_symbols_externalized": remaining_subs_externalized,
         "shard_sub_symbols_externalized": sum(
@@ -840,6 +900,10 @@ def main() -> int:
     print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
     print(f"[Phase6TU] runtime_template_definitions_shared={len(template_definitions)}")
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
+    print(
+        "[Phase6TU] runtime_global_names_externalized="
+        f"{sum(len(declaration_statement_names(stmt)) for _, _, stmt, _ in globals_found)}"
+    )
     print(
         "[Phase6TU] runtime_globals_optional_unresolved="
         f"{len(globals_optional_unresolved)}"
