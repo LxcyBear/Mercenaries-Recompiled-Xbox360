@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R10-PRUNED-SHARD-HEADER-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R11-CONDITIONAL-RUNTIME-DEFS-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -909,7 +909,14 @@ def externalize_named_runtime_definitions(
     text: str,
     names: set[str],
 ) -> tuple[str, list[str]]:
-    """Ensure shared-header prototype names have one external runtime body."""
+    """Ensure shard-visible helpers have external linkage in every source branch.
+
+    Generated runtime support can contain multiple parser-visible definitions of
+    the same helper under mutually exclusive preprocessor branches. The C++
+    compiler sees only the active branch, while this source-level scanner sees
+    all of them. Therefore require at least one definition and externalize every
+    static variant instead of incorrectly requiring exactly one textual match.
+    """
     if not names:
         return text, []
 
@@ -921,20 +928,21 @@ def externalize_named_runtime_definitions(
         any_pattern = re.compile(
             rf"(?ms)^(?P<indent>[ \t]*)(?P<static>static\s+)?"
             rf"(?P<sig>[^;{{}}\n][^;{{}}]*?\b{re.escape(name)}\s*"
-            rf"\([^;{{}}]*\)\s*)\{{"
+            rf"\([^;{{}}]*\)(?:\s*\([^;{{}}]*\))*\s*)\{{"
         )
         found = list(any_pattern.finditer(masked))
-        if len(found) != 1:
+        if not found:
             raise SystemExit(
-                f"[Phase6TU] shared prototype {name} expected exactly one "
-                f"runtime definition, found {len(found)}"
+                f"[Phase6TU] shard-visible runtime helper {name} has no "
+                "runtime definition"
             )
 
-        m = found[0]
-        if m.group("static"):
-            static_start = m.start() + len(m.group("indent"))
-            static_end = static_start + len("static ")
-            edits.append((static_start, static_end, name))
+        for m in found:
+            if m.group("static"):
+                static_start = m.start() + len(m.group("indent"))
+                static_end = static_start + len("static ")
+                edits.append((static_start, static_end, name))
+
         confirmed.append(name)
 
     out = text
@@ -946,7 +954,6 @@ def externalize_named_runtime_definitions(
         out = out[:start_pos] + out[end_pos:]
 
     return out, confirmed
-
 
 
 
@@ -1151,6 +1158,18 @@ def main() -> int:
         )
     )
 
+    runtime_definition_variant_counts = {}
+    runtime_mask_for_variants = mask_noncode(runtime_main)
+    for support_name in sorted(shared_runtime_support_names):
+        variant_pattern = re.compile(
+            rf"(?ms)^[ \t]*(?:static\s+)?[^;{{}}\n][^;{{}}]*?"
+            rf"\b{re.escape(support_name)}\s*"
+            rf"\([^;{{}}]*\)(?:\s*\([^;{{}}]*\))*\s*\{{"
+        )
+        count = len(list(variant_pattern.finditer(runtime_mask_for_variants)))
+        if count > 1:
+            runtime_definition_variant_counts[support_name] = count
+
     runtime_masked = mask_noncode(runtime_main)
     for support_name in sorted(shared_runtime_support_names):
         stale_static_def = re.search(
@@ -1322,6 +1341,7 @@ def main() -> int:
         "shard_visible_runtime_support_names": sorted(shared_runtime_support_names),
         "shard_visible_call_tokens": sorted(shard_visible_calls),
         "shard_visible_runtime_definitions": shard_visible_runtime_definitions,
+        "runtime_definition_variant_counts": runtime_definition_variant_counts,
         "runtime_globals_externalized": len(globals_found),
         "runtime_global_names_externalized": sum(
             len(declaration_statement_names(stmt))
@@ -1358,6 +1378,14 @@ def main() -> int:
         "[Phase6TU] shard_visible_call_tokens="
         f"{len(shard_visible_calls)}"
     )
+    if runtime_definition_variant_counts:
+        print(
+            "[Phase6TU] conditional_runtime_definition_variants="
+            + ",".join(
+                f"{name}:{count}"
+                for name, count in sorted(runtime_definition_variant_counts.items())
+            )
+        )
     if "phase4c_current_caller" in shared_runtime_support_names:
         raise SystemExit(
             "[Phase6TU] phase4c_current_caller leaked into shard-visible support; "
