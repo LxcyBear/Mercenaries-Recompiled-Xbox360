@@ -126,17 +126,12 @@ $psi.UseShellExecute=$false
 $psi.CreateNoWindow=$true
 $psi.RedirectStandardOutput=$true
 $psi.RedirectStandardError=$true
-foreach($arg in $tuArgs){
-  if($psi.ArgumentList){
-    $psi.ArgumentList.Add([string]$arg)
-  }
-}
-if(-not $psi.ArgumentList){
-  $escaped=@($tuArgs|ForEach-Object{
-    '"' + ([string]$_).Replace('"','\"') + '"'
-  })
-  $psi.Arguments=$escaped -join ' '
-}
+# VS2017/XDK hosts Windows PowerShell on .NET Framework, where
+# ProcessStartInfo.ArgumentList is not available. Build one quoted command line.
+$escaped=@($tuArgs|ForEach-Object{
+  '"' + ([string]$_).Replace('"','\"') + '"'
+})
+$psi.Arguments=$escaped -join ' '
 
 $proc=New-Object System.Diagnostics.Process
 $proc.StartInfo=$psi
