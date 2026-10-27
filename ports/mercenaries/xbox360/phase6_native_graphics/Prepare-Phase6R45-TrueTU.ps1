@@ -96,7 +96,7 @@ if($null-eq$rm.phase6dq_rocket_frontier_journal.r45_bad_audio_object_provenance)
 if($LASTEXITCODE-ne0){throw "Phase 6 TrueTU emitter syntax check failed"}
 
 $tuEmitterText=Get-Content -LiteralPath $tuEmitter -Raw
-$expectedTuRevision='6TU-R11-CONDITIONAL-RUNTIME-DEFS-20261027'
+$expectedTuRevision='6TU-R12-SPAN-BASED-RUNTIME-LINKAGE-20261027'
 if(-not$tuEmitterText.Contains('TRUE_TU_EMITTER_REVISION = "'+$expectedTuRevision+'"')){
   throw "Stale TrueTU emitter detected; expected $expectedTuRevision"
 }
