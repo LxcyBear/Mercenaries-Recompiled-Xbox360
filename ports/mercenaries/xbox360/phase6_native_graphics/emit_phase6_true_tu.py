@@ -220,23 +220,73 @@ def prototype_from_signature(signature: str) -> str:
     return sig.strip() + ";"
 
 
-def externalize_prefix_functions(prefix: str) -> tuple[str, list[str]]:
+def externalize_prefix_functions(prefix: str) -> tuple[str, list[str], list[str]]:
+    """Externalize ordinary support functions and preserve template definitions.
+
+    A C++ template cannot be represented by a bare prototype that mentions T;
+    its template declaration and definition must be visible in each shard TU.
+    """
     spans = function_spans(prefix)
-    prototypes = []
+    prototypes: list[str] = []
+    template_definitions: list[str] = []
     pieces = []
     pos = 0
+
     for row in spans:
         pieces.append(prefix[pos:row["start"]])
+
+        before = prefix[:row["start"]]
+        template_match = re.search(
+            r"(?ms)(^[ \t]*template\s*<[^;{}]+>\s*)$",
+            before,
+        )
+        is_template = template_match is not None
+
         src = row["source"]
-        if row["static"]:
-            src = re.sub(r"^(\s*)static\s+", r"\1", src, count=1)
+        if is_template:
+            # Keep the runtime copy exactly as generated.  Also provide the full
+            # template declaration+definition in the shared shard header.
+            template_definitions.append(
+                template_match.group(1) + src
+            )
+        else:
+            if row["static"]:
+                src = re.sub(r"^(\s*)static\s+", r"\1", src, count=1)
+            prototypes.append(prototype_from_signature(row["signature"]))
+
         pieces.append(src)
-        prototypes.append(prototype_from_signature(row["signature"]))
         pos = row["end"]
+
     pieces.append(prefix[pos:])
     runtime = "".join(pieces)
-    runtime = SUB_DECL_RE.sub(lambda m: f"{m.group(1)}void {m.group(2)}(void);", runtime)
-    return runtime, prototypes
+    runtime = SUB_DECL_RE.sub(
+        lambda m: f"{m.group(1)}void {m.group(2)}(void);",
+        runtime,
+    )
+    return runtime, prototypes, template_definitions
+
+
+
+def looks_like_variable_declaration(stmt: str, name: str) -> bool:
+    """Reject assignments/statements that merely mention a runtime symbol."""
+    match = re.search(rf"\b{re.escape(name)}\b", stmt)
+    if match is None:
+        return False
+
+    before = stmt[:match.start()].strip()
+    if not before:
+        return False
+    if any(ch in before for ch in "=(){};"):
+        return False
+
+    head_tokens = re.findall(r"\b[A-Za-z_]\w*\b", before)
+    if not head_tokens:
+        return False
+    if head_tokens[0] in {
+        "return", "if", "while", "for", "switch", "case", "goto",
+    }:
+        return False
+    return True
 
 
 def line_statement_for_name(prefix_no_funcs: str, name: str) -> tuple[int, int, str] | None:
@@ -251,6 +301,8 @@ def line_statement_for_name(prefix_no_funcs: str, name: str) -> tuple[int, int, 
     for m in pattern.finditer(prefix_no_funcs):
         stmt = m.group(0)
         if "(" in stmt and ")" in stmt:
+            continue
+        if not looks_like_variable_declaration(stmt, name):
             continue
         candidates.append((m.start(), m.end(), stmt))
     if len(candidates) == 1:
@@ -275,7 +327,11 @@ def line_statement_for_name(prefix_no_funcs: str, name: str) -> tuple[int, int, 
         if end >= 0:
             stmt = prefix_no_funcs[start:end + 1]
             head = stmt.lstrip()
-            if not head.startswith(("#", "typedef")) and "(" not in head.split("=", 1)[0]:
+            if (
+                not head.startswith(("#", "typedef"))
+                and "(" not in head.split("=", 1)[0]
+                and looks_like_variable_declaration(stmt, name)
+            ):
                 hits.append((start, end + 1, stmt))
         idx = after
     uniq = {(a, b): (a, b, c) for a, b, c in hits}
@@ -313,41 +369,73 @@ def externize_statement(stmt: str) -> str:
     return "extern " + x
 
 
-def collect_runtime_globals(prefix: str, body: str, preprocessor: str) -> tuple[list[tuple[int,int,str,str]], list[str]]:
+def collect_runtime_globals(
+    prefix: str,
+    body: str,
+    preprocessor: str,
+) -> tuple[list[tuple[int, int, str, str]], list[str], list[str]]:
+    """Find shared state referenced directly or through generated macros.
+
+    True-TU splits expose all state that used to be visible simply because every
+    translated function lived in one giant C++ file.  Collect every g_*/s_*
+    top-level variable that translated code or copied macro bodies reference,
+    while keeping the core architecture symbols fail-closed.
+    """
     spans = function_spans(prefix)
     no_funcs = remove_spans(prefix, spans)
-    tokens = set(ID_RE.findall(body + "\n" + preprocessor))
+    tokens = set(ID_RE.findall(mask_noncode(body + "\n" + preprocessor)))
+
+    required_arch = {
+        "eax", "ecx", "edx", "ebx", "esi", "edi", "esp",
+        "g_eax", "g_ecx", "g_edx", "g_ebx", "g_esi", "g_edi",
+        "g_ebp", "g_esp", "g_eflags", "g_seh_ebp", "g_ram",
+    }
     names = sorted(
-        n for n in tokens
-        if (
-            n not in LOCAL_TRANSLATED_ARCH_REGS
-            and (
-                n in {"eax","ecx","edx","ebx","esi","edi","esp",
-                      "g_eax","g_ecx","g_edx","g_ebx","g_esi","g_edi","g_ebp","g_esp",
-                      "g_eflags","g_seh_ebp","g_ram"}
-                or n.startswith("g_xmm") or n.startswith("g_mm")
-            )
+        n
+        for n in tokens
+        if n not in LOCAL_TRANSLATED_ARCH_REGS
+        and (
+            n in required_arch
+            or n.startswith("g_")
+            or n.startswith("s_")
         )
     )
+
     found = []
-    missing = []
+    required_missing = []
+    optional_unresolved = []
     seen_spans = set()
+
     for name in names:
         row = line_statement_for_name(no_funcs, name)
         if row is None:
-            # Some register aliases are macros; those are already in preprocessor.
-            macro_pat = re.compile(rf"(?m)^\s*#define\s+{re.escape(name)}\b")
+            macro_pat = re.compile(
+                rf"(?m)^\s*#define\s+{re.escape(name)}\b"
+            )
             if macro_pat.search(preprocessor):
                 continue
-            missing.append(name)
+            if name in required_arch:
+                required_missing.append(name)
+            else:
+                optional_unresolved.append(name)
             continue
+
         a, b, stmt = row
         key = (a, b)
         if key in seen_spans:
             continue
         seen_spans.add(key)
-        found.append((a, b, stmt, externize_statement(stmt)))
-    return found, missing
+
+        decl = externize_statement(stmt)
+        if re.match(r"^extern\s+[gs]_[A-Za-z_]\w*\s*;$", decl.strip()):
+            raise SystemExit(
+                "[Phase6TU] refused malformed type-less extern generated from "
+                f"{name}: {decl!r}"
+            )
+        found.append((a, b, stmt, decl))
+
+    return found, required_missing, optional_unresolved
+
 
 
 def externalize_remaining_sub_symbols(text: str) -> tuple[str, int]:
@@ -507,14 +595,18 @@ def main() -> int:
     funcs = parse_translated_functions(body)
     local_arch_stats = validate_local_architecture_registers(funcs)
 
-    runtime_prefix, helper_prototypes = externalize_prefix_functions(prefix)
+    runtime_prefix, helper_prototypes, template_definitions = (
+        externalize_prefix_functions(prefix)
+    )
     preprocessor = extract_preprocessor(prefix)
     prefix_no_funcs = remove_spans(prefix, function_spans(prefix))
     type_blocks = extract_type_blocks(prefix_no_funcs)
-    globals_found, globals_missing = collect_runtime_globals(prefix, body, preprocessor)
+    globals_found, globals_missing, globals_optional_unresolved = (
+        collect_runtime_globals(prefix, body, preprocessor)
+    )
     if globals_missing:
         raise SystemExit(
-            "[Phase6TU] could not safely declarationize runtime globals: "
+            "[Phase6TU] could not safely declarationize required runtime globals: "
             + ", ".join(globals_missing)
         )
     runtime_prefix = externalize_runtime_globals(runtime_prefix, globals_found)
@@ -535,6 +627,10 @@ def main() -> int:
     ]
     for block in type_blocks:
         header_parts.append(block + "\n")
+    if template_definitions:
+        header_parts.append("\n/* shared template/inline support */\n")
+        for template_definition in template_definitions:
+            header_parts.append(template_definition + "\n")
     header_parts.append("\n/* shared runtime storage */\n")
     for _, _, _, decl in globals_found:
         header_parts.append(decl + "\n")
@@ -550,6 +646,26 @@ def main() -> int:
         seen_proto.add(normalized)
         header_parts.append(proto + "\n")
     header = "".join(header_parts)
+
+    malformed_externs = re.findall(
+        r"(?m)^\s*extern\s+[gs]_[A-Za-z_]\w*\s*;\s*$",
+        mask_noncode(header),
+    )
+    if malformed_externs:
+        raise SystemExit(
+            "[Phase6TU] generated runtime header contains type-less externs: "
+            + ", ".join(x.strip() for x in malformed_externs[:8])
+        )
+
+    bare_template_t = re.findall(
+        r"(?m)^[^#\n]*\bT\b[^;\n]*;\s*$",
+        mask_noncode(header),
+    )
+    if bare_template_t and "template" not in header:
+        raise SystemExit(
+            "[Phase6TU] generated runtime header contains bare template T "
+            "without a template declaration"
+        )
 
     buckets: list[list[dict]] = [[] for _ in range(args.shards)]
     for row in funcs:
@@ -630,7 +746,9 @@ def main() -> int:
         "shard_count": args.shards,
         "translated_functions": len(funcs),
         "runtime_helpers_externalized": len(helper_prototypes),
+        "runtime_template_definitions_shared": len(template_definitions),
         "runtime_globals_externalized": len(globals_found),
+        "runtime_globals_optional_unresolved": globals_optional_unresolved,
         "remaining_runtime_sub_symbols_externalized": remaining_subs_externalized,
         "shard_sub_symbols_externalized": sum(
             row["sub_symbols_externalized"] for row in shard_rows
@@ -652,7 +770,12 @@ def main() -> int:
     print(f"[Phase6TU] translated_functions={len(funcs)} shards={args.shards}")
     print(f"[Phase6TU] shard_functions_min={min(counts)} max={max(counts)}")
     print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
+    print(f"[Phase6TU] runtime_template_definitions_shared={len(template_definitions)}")
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
+    print(
+        "[Phase6TU] runtime_globals_optional_unresolved="
+        f"{len(globals_optional_unresolved)}"
+    )
     print(f"[Phase6TU] remaining_runtime_sub_symbols_externalized={remaining_subs_externalized}")
     print(
         "[Phase6TU] shard_sub_symbols_externalized="
