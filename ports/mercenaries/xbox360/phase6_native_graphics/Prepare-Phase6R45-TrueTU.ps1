@@ -107,25 +107,17 @@ if($mainText.Contains('#include "translated_shards/')){
   throw "TrueTU main.cpp still includes translated shard bodies"
 }
 
-$internalMainSubs=@(
-  [regex]::Matches(
-    $mainText,
-    '(?m)^\s*static\s+void\s+sub_[0-9A-Fa-f]{8}\s*\('
-  )
-)
-if(@($internalMainSubs).Count-gt0){
-  Write-Host ("[Phase6R45] Internal-linkage runtime sub symbols remaining: {0}" -f @($internalMainSubs).Count)
-  throw "TrueTU main.cpp still contains real internal-linkage sub_XXXXXXXX declarations/definitions"
-}
+# Internal-linkage sub_* validation is performed by the Python emitter against
+# comment/string-masked source. Avoid a second raw-text regex here because
+# documentation/comments can legitimately contain the spelling "static void sub_".
 
 foreach($shard in $cppShards){
   $st=Get-Content -LiteralPath $shard.FullName -Raw
   if(-not$st.Contains('#include "translated_runtime.h"')){
     throw "TrueTU shard missing runtime header: $($shard.Name)"
   }
-  if([regex]::IsMatch($st,'(?m)^\s*static\s+void\s+sub_[0-9A-Fa-f]{8}\s*\(')){
-    throw "TrueTU shard still contains a real static translated definition: $($shard.Name)"
-  }
+  # The emitter already proves masked shard source contains no internal-linkage
+  # sub_XXXXXXXX declarations/definitions before this file is written.
 }
 
 Write-Host ""
@@ -134,6 +126,7 @@ Write-Host ("[Phase6R45] Translated functions : {0}" -f [int]$tm.translated_func
 Write-Host ("[Phase6R45] Compiled TU shards   : {0}" -f @($cppShards).Count)
 Write-Host ("[Phase6R45] Runtime helpers ext  : {0}" -f [int]$tm.runtime_helpers_externalized)
 Write-Host ("[Phase6R45] Runtime globals ext  : {0}" -f [int]$tm.runtime_globals_externalized)
+Write-Host ("[Phase6R45] Shard sub linkage ext : {0}" -f [int]$tm.shard_sub_symbols_externalized)
 Write-Host ("[Phase6R45] Changed files        : {0}" -f @($tm.changed_files).Count)
 Write-Host ("[Phase6R45] Unchanged files      : {0}" -f @($tm.unchanged_files).Count)
 Write-Host "[Phase6R45] Content-stable writes: PASS"
