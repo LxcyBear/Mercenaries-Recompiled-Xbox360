@@ -237,7 +237,7 @@ def externalize_prefix_functions(prefix: str) -> tuple[str, list[str], list[str]
 
         before = prefix[:row["start"]]
         template_match = re.search(
-            r"(?ms)(^[ \t]*template\s*<[^;{}]+>\s*)$",
+            r"(?s)([ \t]*template\s*<[^;{}]+>\s*)\Z",
             before,
         )
         is_template = template_match is not None
@@ -341,24 +341,91 @@ def line_statement_for_name(prefix_no_funcs: str, name: str) -> tuple[int, int, 
 
 
 def strip_initializer(stmt: str) -> str:
-    # Remove a top-level initializer while preserving array suffixes.
+    """Remove every top-level declarator initializer, preserving comma lists."""
+    out: list[str] = []
+    i = 0
     depth_p = depth_b = depth_s = 0
-    for i, c in enumerate(stmt):
+
+    while i < len(stmt):
+        c = stmt[i]
         if c == "(":
             depth_p += 1
-        elif c == ")":
+            out.append(c)
+            i += 1
+            continue
+        if c == ")":
             depth_p -= 1
-        elif c == "{":
+            out.append(c)
+            i += 1
+            continue
+        if c == "{":
             depth_b += 1
-        elif c == "}":
+            out.append(c)
+            i += 1
+            continue
+        if c == "}":
             depth_b -= 1
-        elif c == "[":
+            out.append(c)
+            i += 1
+            continue
+        if c == "[":
             depth_s += 1
-        elif c == "]":
+            out.append(c)
+            i += 1
+            continue
+        if c == "]":
             depth_s -= 1
-        elif c == "=" and depth_p == depth_b == depth_s == 0:
-            return stmt[:i].rstrip() + ";"
-    return stmt
+            out.append(c)
+            i += 1
+            continue
+
+        if c == "=" and depth_p == depth_b == depth_s == 0:
+            # Skip this initializer until the next top-level comma/semicolon.
+            i += 1
+            init_p = init_b = init_s = 0
+            in_string = False
+            quote = ""
+            escape = False
+            while i < len(stmt):
+                d = stmt[i]
+                if in_string:
+                    if escape:
+                        escape = False
+                    elif d == "\\":
+                        escape = True
+                    elif d == quote:
+                        in_string = False
+                    i += 1
+                    continue
+                if d in ("'", '"'):
+                    in_string = True
+                    quote = d
+                    i += 1
+                    continue
+                if d == "(":
+                    init_p += 1
+                elif d == ")":
+                    init_p -= 1
+                elif d == "{":
+                    init_b += 1
+                elif d == "}":
+                    init_b -= 1
+                elif d == "[":
+                    init_s += 1
+                elif d == "]":
+                    init_s -= 1
+                elif d in ",;" and init_p == init_b == init_s == 0:
+                    out.append(d)
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        out.append(c)
+        i += 1
+
+    return "".join(out)
+
 
 
 def externize_statement(stmt: str) -> str:
@@ -637,6 +704,11 @@ def main() -> int:
     header_parts.append("\n/* runtime/support entry points */\n")
     seen_proto = set()
     for proto in helper_prototypes:
+        if re.search(r"\bT\b", proto):
+            raise SystemExit(
+                "[Phase6TU] template parameter leaked into ordinary helper prototype: "
+                + proto
+            )
         # Translated sub_* declarations are emitted per shard instead.
         if re.search(r"\bsub_[0-9A-Fa-f]{8}\s*\(", proto):
             continue
@@ -655,16 +727,6 @@ def main() -> int:
         raise SystemExit(
             "[Phase6TU] generated runtime header contains type-less externs: "
             + ", ".join(x.strip() for x in malformed_externs[:8])
-        )
-
-    bare_template_t = re.findall(
-        r"(?m)^[^#\n]*\bT\b[^;\n]*;\s*$",
-        mask_noncode(header),
-    )
-    if bare_template_t and "template" not in header:
-        raise SystemExit(
-            "[Phase6TU] generated runtime header contains bare template T "
-            "without a template declaration"
         )
 
     buckets: list[list[dict]] = [[] for _ in range(args.shards)]
