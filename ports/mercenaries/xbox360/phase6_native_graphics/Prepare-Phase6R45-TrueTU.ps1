@@ -96,7 +96,7 @@ if($null-eq$rm.phase6dq_rocket_frontier_journal.r45_bad_audio_object_provenance)
 if($LASTEXITCODE-ne0){throw "Phase 6 TrueTU emitter syntax check failed"}
 
 $tuEmitterText=Get-Content -LiteralPath $tuEmitter -Raw
-$expectedTuRevision='6TU-R9-LIVE-SHARD-SUPPORT-SURFACE-20261027'
+$expectedTuRevision='6TU-R10-PRUNED-SHARD-HEADER-20261027'
 if(-not$tuEmitterText.Contains('TRUE_TU_EMITTER_REVISION = "'+$expectedTuRevision+'"')){
   throw "Stale TrueTU emitter detected; expected $expectedTuRevision"
 }
@@ -107,16 +107,63 @@ Write-Host ("[Phase6R45] TrueTU emitter revision: {0}" -f $expectedTuRevision)
 New-Item -ItemType Directory -Force -Path $tuOut|Out-Null
 
 $tuStart=Get-Date
-$oldErrorActionPreference=$ErrorActionPreference
-$ErrorActionPreference="Continue"
-try{
-  & $python $tuEmitter "--source" $mono "--out-dir" $tuOut "--shards" "64" 2>&1 |
-    Tee-Object -Variable phase6tuEmitOutput
-  $tuEmitRc=$LASTEXITCODE
-}finally{
-  $ErrorActionPreference=$oldErrorActionPreference
+$phase6tuStdout=Join-Path $tuOut "phase6tu-emitter.stdout.log"
+$phase6tuStderr=Join-Path $tuOut "phase6tu-emitter.stderr.log"
+foreach($p in @($phase6tuStdout,$phase6tuStderr)){
+  if(Test-Path -LiteralPath $p){Remove-Item -LiteralPath $p -Force}
 }
 
+$tuArgs=@(
+  $tuEmitter,
+  "--source",$mono,
+  "--out-dir",$tuOut,
+  "--shards","64"
+)
+
+$psi=New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName=$python
+$psi.UseShellExecute=$false
+$psi.CreateNoWindow=$true
+$psi.RedirectStandardOutput=$true
+$psi.RedirectStandardError=$true
+foreach($arg in $tuArgs){
+  if($psi.ArgumentList){
+    $psi.ArgumentList.Add([string]$arg)
+  }
+}
+if(-not $psi.ArgumentList){
+  $escaped=@($tuArgs|ForEach-Object{
+    '"' + ([string]$_).Replace('"','\"') + '"'
+  })
+  $psi.Arguments=$escaped -join ' '
+}
+
+$proc=New-Object System.Diagnostics.Process
+$proc.StartInfo=$psi
+$null=$proc.Start()
+$stdout=$proc.StandardOutput.ReadToEnd()
+$stderr=$proc.StandardError.ReadToEnd()
+$proc.WaitForExit()
+$tuEmitRc=$proc.ExitCode
+
+[System.IO.File]::WriteAllText(
+  $phase6tuStdout,
+  $stdout,
+  (New-Object System.Text.UTF8Encoding($false))
+)
+[System.IO.File]::WriteAllText(
+  $phase6tuStderr,
+  $stderr,
+  (New-Object System.Text.UTF8Encoding($false))
+)
+
+$phase6tuEmitOutput=@()
+if(-not[string]::IsNullOrWhiteSpace($stdout)){
+  $phase6tuEmitOutput+=@($stdout -split "\r?\n"|Where-Object{$_ -ne ''})
+}
+if(-not[string]::IsNullOrWhiteSpace($stderr)){
+  $phase6tuEmitOutput+=@($stderr -split "\r?\n"|Where-Object{$_ -ne ''})
+}
 if($tuEmitRc-ne0){
   Write-Host "[Phase6R45] TRUE TU EMITTER OUTPUT:"
   $phase6tuEmitOutput|ForEach-Object{Write-Host $_}
