@@ -95,6 +95,13 @@ if($null-eq$rm.phase6dq_rocket_frontier_journal.r45_bad_audio_object_provenance)
 & $python -m py_compile $tuEmitter
 if($LASTEXITCODE-ne0){throw "Phase 6 TrueTU emitter syntax check failed"}
 
+$tuEmitterText=Get-Content -LiteralPath $tuEmitter -Raw
+$expectedTuRevision='6TU-R4-MMX-GROUP-FALLBACK-20261027'
+if(-not$tuEmitterText.Contains('TRUE_TU_EMITTER_REVISION = "'+$expectedTuRevision+'"')){
+  throw "Stale TrueTU emitter detected; expected $expectedTuRevision"
+}
+Write-Host ("[Phase6R45] TrueTU emitter revision: {0}" -f $expectedTuRevision)
+
 # IMPORTANT: do not delete $tuOut. emit_phase6_true_tu.py performs content-stable
 # writes so unchanged shards keep their mtimes across runs.
 New-Item -ItemType Directory -Force -Path $tuOut|Out-Null
