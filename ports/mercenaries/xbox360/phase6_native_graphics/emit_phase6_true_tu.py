@@ -24,6 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
+TRUE_TU_EMITTER_REVISION = "6TU-R3-GROUPED-GLOBALS-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -563,6 +564,30 @@ def collect_runtime_globals(
             )
         found.append((a, b, stmt, decl))
 
+    if required_missing:
+        print("[Phase6TU] REQUIRED GLOBAL DIAGNOSTICS:")
+        for missing_name in required_missing:
+            print(f"[Phase6TU]   missing={missing_name}")
+            # Print nearby source statements from the function-free prefix so
+            # declaration-shape mismatches can be fixed from one run.
+            hit_positions = [
+                m.start()
+                for m in re.finditer(
+                    rf"\b{re.escape(missing_name)}\b",
+                    no_funcs,
+                )
+            ][:6]
+            if not hit_positions:
+                print("[Phase6TU]     source_hits=0")
+                continue
+            for pos in hit_positions:
+                line_start = no_funcs.rfind("\n", 0, pos) + 1
+                line_end = no_funcs.find("\n", pos)
+                if line_end < 0:
+                    line_end = len(no_funcs)
+                line = no_funcs[line_start:line_end].strip()
+                print(f"[Phase6TU]     source={line[:300]}")
+
     return found, required_missing, optional_unresolved
 
 
@@ -895,6 +920,7 @@ def main() -> int:
 
     counts = [len(x) for x in buckets]
     print("[Phase6TU] TRUE TRANSLATION-UNIT EMISSION: PASS")
+    print(f"[Phase6TU] emitter_revision={TRUE_TU_EMITTER_REVISION}")
     print(f"[Phase6TU] translated_functions={len(funcs)} shards={args.shards}")
     print(f"[Phase6TU] shard_functions_min={min(counts)} max={max(counts)}")
     print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
