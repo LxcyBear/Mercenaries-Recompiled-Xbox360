@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R14-TRUE-CALL-SURFACE-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R15-UNIFIED-SHARD-CALL-SURFACE-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -810,21 +810,14 @@ def validate_local_architecture_registers(funcs: list[dict]) -> dict[str, int]:
 
 def externalize_called_suffix_support(
     suffix: str,
-    body: str,
+    called_names: set[str],
 ) -> tuple[str, list[str], list[str]]:
     """Expose suffix-defined helpers that translated shards call directly.
 
     The monolithic file may define late support functions after the translated
-    pragma region. They were naturally visible in the old one-TU layout only
-    when declared earlier. For true TUs, add prototypes and external linkage
-    only for suffix functions actually referenced by translated code.
+    pragma region. For true TUs, add prototypes and external linkage only for
+    suffix functions present in the already-computed shard call surface.
     """
-    called_names = set(
-        re.findall(
-            r"\b([A-Za-z_]\w*)\s*\(",
-            mask_noncode(body),
-        )
-    )
     rows = function_spans(suffix)
     prototypes: list[str] = []
     externalized_names: list[str] = []
@@ -1045,14 +1038,6 @@ def main() -> int:
     for row in body_support_rows:
         helper_prototypes.append(prototype_from_signature(row["signature"]))
 
-    suffix, suffix_support_prototypes, suffix_support_names = (
-        externalize_called_suffix_support(suffix, translated_source)
-    )
-    runtime_prefix = externalize_named_forward_declarations(
-        runtime_prefix,
-        set(suffix_support_names),
-    )
-    helper_prototypes.extend(suffix_support_prototypes)
     preprocessor = extract_preprocessor(prefix)
     shard_visible_calls = collect_shard_visible_support_calls(
         translated_source,
@@ -1060,11 +1045,28 @@ def main() -> int:
         inline_definitions,
         template_definitions,
     )
+
+    suffix, suffix_support_prototypes, suffix_support_names = (
+        externalize_called_suffix_support(suffix, shard_visible_calls)
+    )
+    runtime_prefix = externalize_named_forward_declarations(
+        runtime_prefix,
+        set(suffix_support_names),
+    )
+    helper_prototypes.extend(suffix_support_prototypes)
     body_support_shard_visible_names = {
         name
         for name in body_support_names
         if name in shard_visible_calls
     }
+    unexpected_body_exports = sorted(
+        body_support_shard_visible_names - shard_visible_calls
+    )
+    if unexpected_body_exports:
+        raise SystemExit(
+            "[Phase6TU] body support escaped true shard call surface: "
+            + ", ".join(unexpected_body_exports)
+        )
     runtime_prefix = externalize_named_forward_declarations(
         runtime_prefix,
         body_support_shard_visible_names,
