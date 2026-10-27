@@ -976,6 +976,20 @@ def main() -> int:
             payload.append("\n/* translated callees used by this shard */\n")
             payload.extend(f"void {name_}(void);\n" for name_ in callees)
         payload.append("\n")
+
+        declared_callees = set(callees)
+        used_callees = {
+            callee
+            for row in bucket
+            for callee in SUB_CALL_RE.findall(mask_noncode(row["source"]))
+        }
+        missing_callee_decls = sorted(used_callees - declared_callees)
+        if missing_callee_decls:
+            raise SystemExit(
+                f"[Phase6TU] {name} missing translated callee declarations: "
+                + ", ".join(missing_callee_decls[:16])
+            )
+
         for row in bucket:
             payload.append(row["source"])
             payload.append("\n\n")
