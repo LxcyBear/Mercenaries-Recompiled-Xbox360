@@ -351,30 +351,50 @@ def collect_runtime_globals(prefix: str, body: str, preprocessor: str) -> tuple[
 
 
 def externalize_remaining_sub_symbols(text: str) -> tuple[str, int]:
-    """Remove internal linkage from real remaining sub_XXXXXXXX declarations/defs.
+    """Remove internal linkage from real sub_XXXXXXXX declarations/definitions.
 
-    The translated body itself is emitted into shards, but a small number of
-    manually supplied/runtime support sub_* symbols can legally live outside
-    that pragma-bounded body.  They must still be externally visible to shard
-    TUs.  Match only line-start C/C++ declarations/definitions, not comments or
-    string literals.
+    Search a comment/string-masked copy so text inside diagnostics, comments, or
+    raw documentation cannot trigger a mutation. mask_noncode() preserves byte
+    positions, so replacements can be applied safely to the original source.
     """
+    masked = mask_noncode(text)
     pattern = re.compile(
-        r"(?m)^(?P<indent>\s*)static\s+void\s+"
+        r"(?m)^(?P<indent>[ \t]*)static\s+void\s+"
         r"(?P<name>sub_[0-9A-Fa-f]{8})\s*"
         r"(?P<args>\([^;{}]*\))\s*(?P<tail>[;{])"
     )
-    count = 0
+    matches = list(pattern.finditer(masked))
+    if not matches:
+        return text, 0
 
-    def repl(match: re.Match[str]) -> str:
-        nonlocal count
-        count += 1
-        return (
-            f"{match.group('indent')}void {match.group('name')}"
-            f"{match.group('args')}{match.group('tail')}"
+    out = text
+    for match in reversed(matches):
+        line_start = match.start()
+        static_start = line_start + len(match.group("indent"))
+        static_end = static_start + len("static ")
+        if out[static_start:static_end] != "static ":
+            raise SystemExit(
+                "[Phase6TU] internal-linkage sub symbol mask/source position mismatch"
+            )
+        out = out[:static_start] + out[static_end:]
+
+    return out, len(matches)
+
+
+def assert_no_internal_sub_linkage(text: str, label: str) -> None:
+    masked = mask_noncode(text)
+    match = re.search(
+        r"(?m)^[ \t]*static\s+void\s+sub_[0-9A-Fa-f]{8}\s*\(",
+        masked,
+    )
+    if match:
+        line = masked.count("\n", 0, match.start()) + 1
+        snippet = text[match.start(): text.find("\n", match.start()) if "\n" in text[match.start():] else len(text)]
+        raise SystemExit(
+            f"[Phase6TU] internal-linkage sub symbol remains in {label} "
+            f"at line {line}: {snippet.strip()}"
         )
 
-    return pattern.sub(repl, text), count
 
 
 def externalize_runtime_globals(runtime_prefix: str, declarations: list[tuple[int,int,str,str]]) -> str:
@@ -505,16 +525,7 @@ def main() -> int:
     runtime_main, remaining_subs_externalized = externalize_remaining_sub_symbols(
         runtime_main
     )
-
-    # Fail closed on actual internal-linkage sub declarations/definitions. Ignore
-    # harmless appearances inside comments/strings by checking masked source.
-    if re.search(
-        r"(?m)^\s*static\s+void\s+sub_[0-9A-Fa-f]{8}\s*\(",
-        mask_noncode(runtime_main),
-    ):
-        raise SystemExit(
-            "[Phase6TU] internal-linkage sub_XXXXXXXX symbol remains in runtime main"
-        )
+    assert_no_internal_sub_linkage(runtime_main, "runtime main")
 
     header_parts = [
         "#pragma once\n",
@@ -588,12 +599,18 @@ def main() -> int:
             payload.append("\n\n")
         payload.append('#pragma optimize("", on)\n')
         shard_text = "".join(payload)
+        shard_text, shard_subs_externalized = externalize_remaining_sub_symbols(
+            shard_text
+        )
+        assert_no_internal_sub_linkage(shard_text, name)
+
         shard_path = shard_dir / name
         (changed if write_if_changed(shard_path, shard_text) else unchanged).append(name)
         shard_rows.append(
             {
                 "name": name,
                 "functions": len(bucket),
+                "sub_symbols_externalized": shard_subs_externalized,
                 "chars": len(shard_text),
                 "min_va": f"0x{bucket[0]['va']:08X}" if bucket else None,
                 "max_va": f"0x{bucket[-1]['va']:08X}" if bucket else None,
@@ -615,6 +632,9 @@ def main() -> int:
         "runtime_helpers_externalized": len(helper_prototypes),
         "runtime_globals_externalized": len(globals_found),
         "remaining_runtime_sub_symbols_externalized": remaining_subs_externalized,
+        "shard_sub_symbols_externalized": sum(
+            row["sub_symbols_externalized"] for row in shard_rows
+        ),
         "local_architecture_registers": sorted(LOCAL_TRANSLATED_ARCH_REGS),
         "local_architecture_stats": local_arch_stats,
         "stable_assignment": "multiplicative guest-VA hash",
@@ -634,6 +654,10 @@ def main() -> int:
     print(f"[Phase6TU] runtime_helpers_externalized={len(helper_prototypes)}")
     print(f"[Phase6TU] runtime_globals_externalized={len(globals_found)}")
     print(f"[Phase6TU] remaining_runtime_sub_symbols_externalized={remaining_subs_externalized}")
+    print(
+        "[Phase6TU] shard_sub_symbols_externalized="
+        f"{sum(row['sub_symbols_externalized'] for row in shard_rows)}"
+    )
     print("[Phase6TU] local_architecture_registers=" + ",".join(sorted(LOCAL_TRANSLATED_ARCH_REGS)))
     print(
         "[Phase6TU] local_ebp_users="
