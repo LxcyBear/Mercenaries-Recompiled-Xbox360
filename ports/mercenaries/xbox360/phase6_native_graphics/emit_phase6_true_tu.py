@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R3-GROUPED-GLOBALS-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R4-MMX-GROUP-FALLBACK-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -486,6 +486,29 @@ def externize_statement(stmt: str) -> str:
     return "extern " + x
 
 
+def grouped_architecture_declaration_fallback(
+    prefix_no_funcs: str,
+    name: str,
+) -> tuple[int, int, str] | None:
+    """Resolve known architecture register groups stored in one declaration."""
+    mmx_groups = {
+        "g_mm0": "g_mm0", "g_mm1": "g_mm0", "g_mm2": "g_mm0", "g_mm3": "g_mm0",
+        "g_mm4": "g_mm4", "g_mm5": "g_mm4", "g_mm6": "g_mm4", "g_mm7": "g_mm4",
+    }
+    anchor_name = mmx_groups.get(name)
+    if anchor_name is None or anchor_name == name:
+        return None
+
+    row = line_statement_for_name(prefix_no_funcs, anchor_name)
+    if row is None:
+        return None
+
+    # The source statement must actually mention the requested sibling.
+    if re.search(rf"\b{re.escape(name)}\b", row[2]) is None:
+        return None
+    return row
+
+
 def collect_runtime_globals(
     prefix: str,
     body: str,
@@ -531,6 +554,9 @@ def collect_runtime_globals(
             continue
 
         row = line_statement_for_name(no_funcs, name)
+        if row is None:
+            row = grouped_architecture_declaration_fallback(no_funcs, name)
+
         if row is None:
             macro_pat = re.compile(
                 rf"(?m)^\s*#define\s+{re.escape(name)}\b"
