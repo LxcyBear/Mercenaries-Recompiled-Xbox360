@@ -886,6 +886,10 @@ def main() -> int:
     suffix, suffix_support_prototypes, suffix_support_names = (
         externalize_called_suffix_support(suffix, body)
     )
+    runtime_prefix = externalize_named_forward_declarations(
+        runtime_prefix,
+        set(suffix_support_names),
+    )
     helper_prototypes.extend(suffix_support_prototypes)
     preprocessor = extract_preprocessor(prefix)
     prefix_no_funcs = remove_spans(prefix, function_spans(prefix))
@@ -909,7 +913,9 @@ def main() -> int:
     assert_no_internal_sub_linkage(runtime_main, "runtime main")
 
     runtime_masked = mask_noncode(runtime_main)
-    for support_name in sorted(body_support_names):
+    for support_name in sorted(
+        body_support_names | set(suffix_support_names)
+    ):
         stale_static_decl = re.search(
             rf"(?m)^[ \t]*static\s+[^;\n{{}}]*\b"
             rf"{re.escape(support_name)}\s*\([^;{{}}]*\)\s*;",
@@ -917,8 +923,8 @@ def main() -> int:
         )
         if stale_static_decl:
             raise SystemExit(
-                "[Phase6TU] preserved body support still has static forward "
-                f"declaration: {support_name}"
+                "[Phase6TU] externally visible support still has static "
+                f"forward declaration: {support_name}"
             )
 
     header_parts = [
