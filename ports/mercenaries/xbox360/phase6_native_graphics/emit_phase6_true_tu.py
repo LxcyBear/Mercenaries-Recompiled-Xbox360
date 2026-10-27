@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 SHARD_COUNT = 64
-TRUE_TU_EMITTER_REVISION = "6TU-R8-RUNTIME-FORWARD-LINKAGE-20261027"
+TRUE_TU_EMITTER_REVISION = "6TU-R9-LIVE-SHARD-SUPPORT-SURFACE-20261027"
 OFF_MARKER = '#pragma optimize("", off)\n'
 ON_MARKER = '\n#pragma optimize("", on)'
 
@@ -924,6 +924,36 @@ def externalize_named_runtime_definitions(
 
 
 
+
+def collect_shard_visible_support_calls(
+    body: str,
+    preprocessor: str,
+    inline_definitions: list[str],
+    template_definitions: list[str],
+) -> set[str]:
+    """Return helper names that shard code can actually call.
+
+    Only direct calls present in translated bodies or code copied into the shard
+    header (macros, inline helpers, templates) require cross-TU linkage. Runtime-
+    internal helpers reached only from main.cpp support functions remain private.
+    """
+    surface = (
+        body
+        + "\n"
+        + preprocessor
+        + "\n"
+        + "\n".join(inline_definitions)
+        + "\n"
+        + "\n".join(template_definitions)
+    )
+    return set(
+        re.findall(
+            r"\b([A-Za-z_]\w*)\s*\(",
+            mask_noncode(surface),
+        )
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", type=Path, required=True)
@@ -975,6 +1005,12 @@ def main() -> int:
     )
     helper_prototypes.extend(suffix_support_prototypes)
     preprocessor = extract_preprocessor(prefix)
+    shard_visible_calls = collect_shard_visible_support_calls(
+        body,
+        preprocessor,
+        inline_definitions,
+        template_definitions,
+    )
     prefix_no_funcs = remove_spans(prefix, function_spans(prefix))
     type_blocks = extract_type_blocks(prefix_no_funcs)
     globals_found, globals_missing, globals_optional_unresolved = (
@@ -995,7 +1031,11 @@ def main() -> int:
     )
 
     shared_runtime_support_names = (
-        set(runtime_helper_names)
+        {
+            name
+            for name in runtime_helper_names
+            if name in shard_visible_calls
+        }
         | body_support_names
         | set(suffix_support_names)
     )
@@ -1243,6 +1283,7 @@ def main() -> int:
         "shared_static_prototypes_externalized": shared_static_prototype_names,
         "shared_runtime_definitions_externalized": shared_runtime_definitions_externalized,
         "shard_visible_runtime_support_names": sorted(shared_runtime_support_names),
+        "shard_visible_call_tokens": sorted(shard_visible_calls),
         "shard_visible_runtime_definitions": shard_visible_runtime_definitions,
         "runtime_globals_externalized": len(globals_found),
         "runtime_global_names_externalized": sum(
@@ -1276,6 +1317,15 @@ def main() -> int:
         "[Phase6TU] shard_visible_runtime_support="
         f"{len(shared_runtime_support_names)}"
     )
+    print(
+        "[Phase6TU] shard_visible_call_tokens="
+        f"{len(shard_visible_calls)}"
+    )
+    if "phase4c_current_caller" in shared_runtime_support_names:
+        raise SystemExit(
+            "[Phase6TU] phase4c_current_caller leaked into shard-visible support; "
+            "it must remain runtime-internal behind phase4c_escape"
+        )
     print(f"[Phase6TU] runtime_template_definitions_shared={len(template_definitions)}")
     print(f"[Phase6TU] runtime_inline_definitions_shared={len(inline_definitions)}")
     print(
