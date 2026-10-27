@@ -882,41 +882,44 @@ def externalize_named_runtime_definitions(
     text: str,
     names: set[str],
 ) -> tuple[str, list[str]]:
-    """Externalize matching runtime definitions for shared header prototypes."""
+    """Ensure shared-header prototype names have one external runtime body."""
     if not names:
         return text, []
 
     masked = mask_noncode(text)
-    matches: list[tuple[int, int, str]] = []
+    edits: list[tuple[int, int, str]] = []
+    confirmed: list[str] = []
+
     for name in sorted(names):
-        pattern = re.compile(
-            rf"(?ms)^(?P<indent>[ \t]*)static\s+"
+        any_pattern = re.compile(
+            rf"(?ms)^(?P<indent>[ \t]*)(?P<static>static\s+)?"
             rf"(?P<sig>[^;{{}}\n][^;{{}}]*?\b{re.escape(name)}\s*"
             rf"\([^;{{}}]*\)\s*)\{{"
         )
-        found = list(pattern.finditer(masked))
+        found = list(any_pattern.finditer(masked))
         if len(found) != 1:
             raise SystemExit(
                 f"[Phase6TU] shared prototype {name} expected exactly one "
-                f"static runtime definition, found {len(found)}"
+                f"runtime definition, found {len(found)}"
             )
+
         m = found[0]
-        static_start = m.start() + len(m.group("indent"))
-        static_end = static_start + len("static ")
-        matches.append((static_start, static_end, name))
+        if m.group("static"):
+            static_start = m.start() + len(m.group("indent"))
+            static_end = static_start + len("static ")
+            edits.append((static_start, static_end, name))
+        confirmed.append(name)
 
     out = text
-    externalized: list[str] = []
-    for start, end, name in sorted(matches, reverse=True):
-        if out[start:end] != "static ":
+    for start_pos, end_pos, name in sorted(edits, reverse=True):
+        if out[start_pos:end_pos] != "static ":
             raise SystemExit(
                 f"[Phase6TU] runtime definition linkage position mismatch: {name}"
             )
-        out = out[:start] + out[end:]
-        externalized.append(name)
+        out = out[:start_pos] + out[end_pos:]
 
-    externalized.reverse()
-    return out, externalized
+    return out, confirmed
+
 
 
 def main() -> int:
