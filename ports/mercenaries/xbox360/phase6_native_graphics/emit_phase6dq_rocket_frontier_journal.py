@@ -38,10 +38,10 @@ import re
 from pathlib import Path
 
 BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
-BUILD_TAG = "P6DQ-R45-AUDIO-PROVENANCE-20261026-A"
+BUILD_TAG = "P6DQ-R47-AUDIO-PROVENANCE-20261027-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R45"
+EMITTER_REVISION = "6DQ-R47"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -2838,6 +2838,84 @@ def instrument_r45_audio_object_provenance(text: str) -> str:
 
     return text
 
+
+def instrument_r47_audio_producer_and_cleanup(text: str) -> str:
+    """Trace the second-channel object origin and balance R45's exact early exit.
+
+    No pointer fabrication, channel-index clamp, AC97 table mutation, or general
+    memory/MMIO fault bypass.  The bad signature still terminates the individual
+    channel operation early, but the matching 0029CBD2 scope cleanup now executes.
+    """
+    # R46 proved the existing 0029CBB0/0029CBD2 pairing.  R45 contained
+    # the bad lookup by jumping to the epilogue rather than the cleanup label.
+    begin = text.find("loc_002A7712: ;")
+    finish = text.find("loc_002A7734: ;", begin + 1)
+    if begin < 0 or finish < 0:
+        raise SystemExit("[Phase6DQ] R47 exact 002A7712 containment window missing")
+    window = text[begin:finish]
+    old = (
+        "if (phase6dq_r45_bad_audio_object(0x002A7712u, esi, eax)) "
+        "goto loc_002A776D;"
+    )
+    new = (
+        "if (phase6dq_r45_bad_audio_object(0x002A7712u, esi, eax)) "
+        "goto loc_002A7765;"
+    )
+    if window.count(old) != 1:
+        raise SystemExit("[Phase6DQ] R47 expected one inherited R45 containment branch")
+    if "loc_002A7765: ;" not in text or "loc_002A776D: ;" not in text:
+        raise SystemExit("[Phase6DQ] R47 missing cleanup/epilogue labels")
+    cleanup_start = text.find("loc_002A7765: ;", finish)
+    epilogue_start = text.find("loc_002A776D: ;", cleanup_start)
+    if cleanup_start < 0 or epilogue_start < cleanup_start:
+        raise SystemExit("[Phase6DQ] R47 cleanup structure missing")
+    if "sub_0029CBD2();" not in text[cleanup_start:epilogue_start]:
+        raise SystemExit("[Phase6DQ] R47 cleanup helper missing between labels")
+    text = text[:begin] + window.replace(old, new, 1) + text[finish:]
+
+    # The second channel pointer is not invented by 002A7818: R46 proves
+    # 002A7605 stores each allocated object into the parent channel slots.
+    # Probe the store and both loads; use the existing bounded R45 logger.
+    probes = (
+        (
+            "loc_002A763E: ;",
+            "loc_002A7655: ;",
+            "phase6ch_apu_write32(esi + ecx * 4, eax);",
+            "phase6ch_apu_write32(esi + ecx * 4, eax);\n    "
+            "phase6dq_r45_note_audio_object_call(0x002A763Eu, eax);",
+            "002A763E channel object allocation slot write",
+        ),
+        (
+            "loc_002A6BCD: ;",
+            "loc_002A6BD7: ;",
+            "ecx = phase6ch_apu_read32(esi);",
+            "ecx = phase6ch_apu_read32(esi);\n    "
+            "phase6dq_r45_note_audio_object_call(0x002A6BCDu, ecx);",
+            "002A6BCD first channel pointer load",
+        ),
+        (
+            "loc_002A6BFD: ;",
+            "loc_002A6C08: ;",
+            "ecx = phase6ch_apu_read32(ebx + 0x18);",
+            "ecx = phase6ch_apu_read32(ebx + 0x18);\n    "
+            "phase6dq_r45_note_audio_object_call(0x002A6BFDu, ecx);",
+            "002A6BFD second channel pointer load",
+        ),
+    )
+    for start_label, end_label, old_line, new_line, label in probes:
+        start = text.find(start_label)
+        stop = text.find(end_label, start + 1)
+        if start < 0 or stop < 0:
+            raise SystemExit(f"[Phase6DQ] R47 missing source labels: {label}")
+        scoped = text[start:stop]
+        if scoped.count(old_line) != 1:
+            raise SystemExit(
+                f"[Phase6DQ] R47 expected exactly one source expression for {label}, "
+                f"found {scoped.count(old_line)}"
+            )
+        text = text[:start] + scoped.replace(old_line, new_line, 1) + text[stop:]
+    return text
+
 def route_all_dsound_accesses(text: str, base) -> tuple[str, dict[str, int]]:
     """Route raw guest accesses in every translated DSOUND sub_* through APU wrappers."""
     masked = base.mask_noncode(text)
@@ -3142,6 +3220,7 @@ def main() -> int:
     main_text, dsound_route_counts = route_all_dsound_accesses(main_text, base)
     main_text = instrument_r43_ac97_channel_writes(main_text)
     main_text = instrument_r45_audio_object_provenance(main_text)
+    main_text = instrument_r47_audio_producer_and_cleanup(main_text)
     main_text = instrument_xact_init_probe(main_text, base)
     main_text, f78f_read_sites = instrument_f78f_origin_probe(main_text, base)
     main_text = install_f78f_origin_support(main_text, f78f_read_sites)
@@ -3457,6 +3536,20 @@ def main() -> int:
             "table_rewritten": False,
             "ordinary_audio_objects_bypassed": False,
             "diagnostic_only": True,
+        },
+        "r47_audio_producer_and_cleanup": {
+            "hardware_seed": "R45",
+            "static_audit": "R46",
+            "channel_store_site": "0x002A763E",
+            "first_channel_load": "0x002A6BCD",
+            "second_channel_load": "0x002A6BFD",
+            "bad_signature_only": ["0x00040000", "0x00000400"],
+            "contained_branch_cleanup": "0x002A7765",
+            "cleanup_helper": "0x0029CBD2",
+            "no_index_clamp": True,
+            "no_table_mutation": True,
+            "ordinary_guest_memory_fences_unchanged": True,
+            "diag_only": True,
         },
         "ac97_output_busmaster_bridge": {
             "hardware_proof": "R40",
