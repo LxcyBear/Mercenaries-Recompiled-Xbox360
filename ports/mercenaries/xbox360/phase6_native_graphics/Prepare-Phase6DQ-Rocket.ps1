@@ -107,10 +107,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R45"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R45"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R47"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R47"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R45"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R47"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -154,12 +154,16 @@ foreach($f in @($main,$mono,$env,$manifest,$shards)){
 }
 
 $r=Get-Content $manifest -Raw|ConvertFrom-Json
-if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-R45-AUDIO-PROVENANCE-20261026-A"){
+if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-R47-AUDIO-PROVENANCE-20261027-A"){
   throw "Phase 6DQ manifest identity mismatch"
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R45"-or
+if($q.emitter_revision-ne"6DQ-R47"-or
+   $null-eq$q.r47_audio_producer_and_cleanup-or
+   $q.r47_audio_producer_and_cleanup.contained_branch_cleanup-ne"0x002A7765"-or
+   $q.r47_audio_producer_and_cleanup.no_index_clamp-ne$true-or
+   $q.r47_audio_producer_and_cleanup.no_table_mutation-ne$true-or
    $q.phase6dp_hardware.vp_free_read_passed-ne$true-or
    $q.phase6dp_hardware.new_boundary_target-ne"0xFE8202A4"-or
    $q.phase6dp_hardware.new_boundary_ticks-ne26712259-or
@@ -210,7 +214,7 @@ if($q.emitter_revision-ne"6DQ-R45"-or
 
 $text=Get-Content $mono -Raw
 foreach($marker in @(
-  "P6DQ-R45-AUDIO-PROVENANCE-20261026-A",
+  "P6DQ-R47-AUDIO-PROVENANCE-20261027-A",
   "phase6dq_env_build_cookie",
   "P6DQ ROCKET DISPATCH FIRST",
   "P6DQ ROCKET HARD STOP",
@@ -226,6 +230,10 @@ foreach($marker in @(
   "P6DQ KESAVEFP142:",
   "P6DQ KERESTOREFP139:",
   "P6DQ DSOUND POISON SLOT:",
+  "phase6dq_r45_note_audio_object_call(0x002A763Eu, eax);",
+  "phase6dq_r45_note_audio_object_call(0x002A6BCDu, ecx);",
+  "phase6dq_r45_note_audio_object_call(0x002A6BFDu, ecx);",
+  "goto loc_002A7765;",
   "P6DQ DSOUND POISON NOOP:",
   "target == 0xF6DCCCD0u",
   "#define PHASE4C_EXEC_BUDGET 64000000u",
@@ -278,14 +286,14 @@ if(-not$SkipSolutionBuild){
     GeneratedMain=$main
     GeneratedEnv=$env
     GeneratedShardDir=$shards
-    ExpectedBuildTag="P6DQ-R45-AUDIO-PROVENANCE-20261026-A"
+    ExpectedBuildTag="P6DQ-R47-AUDIO-PROVENANCE-20261027-A"
     ExpectedEnvCookie="phase6dq_env_build_cookie"
     SolutionRoot=$SolutionRoot
     Configuration="Release"
     Platform="Xbox 360"
     CleanLog=(Join-Path $root "build\phase6_native_graphics\phase6dq-vs2017-clean.log")
     BuildLog=(Join-Path $root "build\phase6_native_graphics\phase6dq-vs2017-build.log")
-    PublishedXex=(Join-Path $out "Mercenaries-PPC-Port-P6DQ-ROCKET-A.xex")
+    PublishedXex=(Join-Path $out "Merc.xex")
     ShadowBuildRoot=$FastBuildRoot
   }
 
@@ -300,6 +308,6 @@ if(-not$SkipSolutionBuild){
   & $builder @buildArgs
 
   Write-Host "[Phase6DQ] BUILD PASS"
-  Write-Host ("[Phase6DQ] COPY THIS XEX: {0}" -f (Join-Path $out "Mercenaries-PPC-Port-P6DQ-ROCKET-A.xex"))
+  Write-Host ("[Phase6DQ] COPY THIS XEX: {0}" -f (Join-Path $out "Merc.xex"))
   Write-Host "[Phase6DQ] R45 audio-object provenance build complete. Fast local shadow/incremental build is the default."
 }
