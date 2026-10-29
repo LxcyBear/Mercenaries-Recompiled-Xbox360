@@ -54,7 +54,7 @@ def kernel_rows(rows):
         if n==128:priority="P0_ACTIVE_HARDWARE_STOP"
         elif imported and not isdata and not routed:priority="P1_VERIFIED_MISSING_ROUTE"
         elif imported and not isdata and routed:priority="P2_TEST_SEMANTICS_ABI"
-        elif isdata:priority="P2_DATA_RELOCATION"
+        elif imported and isdata:priority="P2_DATA_RELOCATION"
         else:priority="P3_STATIC_TRIAGE"
         out.append({
             "ordinal":n,"name":r["name"],
@@ -67,12 +67,12 @@ def kernel_rows(rows):
             "next_step":(
                 "Verify ordinal-128 guest stack frame, 8-byte output pointer, and 100ns clock"
                 if n==128 else
+                "Confirm presence in exact 111-slot import table before assigning data or callable status"
+                if not imported else
                 "Verify data relocation and readback; not a callable kernel API"
                 if isdata else
                 "Validate call ABI, guest side effects, error codes and return value"
-                if imported and routed else
-                "Confirm presence in exact 111-slot import table before labeling missing"
-                if not imported else
+                if routed else
                 "Implement typed bridge with offline fixture; preserve unknown dispatch fence")
         })
     def rank(r):
@@ -152,8 +152,8 @@ def main():
         "",
         f"- Exact owned retail XBE import table: {'VERIFIED (111 slots)' if imports_verified else 'NOT PROVIDED'}",
         f"- Kernel static candidates requiring import reconciliation: {static}",
-        f"- Verified callable imports with no matching explicit dispatch route: {missing}",
-        f"- Verified routed callable imports requiring semantic/ABI testing: {routed}",
+        f"- Verified callable imports with no matching explicit dispatch route: {missing if imports_verified else 'NOT ASSESSED (retail XBE needed)'}",
+        f"- Verified routed callable imports requiring semantic/ABI testing: {routed if imports_verified else 'NOT ASSESSED (retail XBE needed)'}",
         f"- Guest ABI graph: {len(csv_read(out/'guest-call-edges.csv')):,} unique static edges across {abi_nodes:,} nodes",
         f"- Distinct hardware fault signatures imported: {len(faults)}",
         "",
@@ -203,7 +203,7 @@ def main():
     (out/"BATCH_PLAN.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
     print("[BatchPlan] PASS: prioritized kernel/ABI/MMIO/fault backlog produced")
     print(f"[BatchPlan] kernel_candidates={len(kernel)} retail_imports={'VERIFIED' if imports_verified else 'NOT_PROVIDED'}")
-    print(f"[BatchPlan] imported_callable_no_route={missing} candidates_needing_reconciliation={static}")
+    print(f"[BatchPlan] imported_callable_no_route={missing if imports_verified else 'NOT_ASSESSED'} candidates_needing_reconciliation={static}")
     print(f"[BatchPlan] guest_abi_hotspot_nodes={abi_nodes} grouped_mmio_families={len(mmio)}")
     print(f"[BatchPlan] evidence_hardware_faults={len(faults)}")
     print("[BatchPlan] hardware_next=kernel_ordinal_128_KeQuerySystemTime (not yet implemented)")
