@@ -17,7 +17,7 @@ foreach($file in @($script,$source)){
         throw "R64 source audit prerequisite missing: $file"
     }
 }
-Write-Host "[Phase6R64] ZERO BUILD — A545F DIRECTSOUND HRESULT PROVENANCE"
+Write-Host "[Phase6R64] ZERO BUILD - A545F DIRECTSOUND HRESULT PROVENANCE"
 & $python -m py_compile $script
 if($LASTEXITCODE-ne0){throw "R64 Python preflight failed"}
 & $python $script --source $source 2>&1 | Tee-Object -FilePath $report
