@@ -1,0 +1,1456 @@
+{
+  "schema": 1,
+  "reference": "https://github.com/XboxDev/OpenXDK/blob/master/src/xboxkrnl/xboxkrnl.exe.def",
+  "source_commit": "master at retrieval 2026-10-29",
+  "note": "Original Xbox kernel export ordinal/name reference facts. Decorated stack byte counts are hints only and must not be treated as ABI verification. 362 entries; gaps in export numbering are normal.",
+  "entries": {
+    "1": {
+      "name": "AvGetSavedDataAddress",
+      "stdcall_stack_hint": 0
+    },
+    "2": {
+      "name": "AvSendTVEncoderOption",
+      "stdcall_stack_hint": 16
+    },
+    "3": {
+      "name": "AvSetDisplayMode",
+      "stdcall_stack_hint": 24
+    },
+    "4": {
+      "name": "AvSetSavedDataAddress",
+      "stdcall_stack_hint": 4
+    },
+    "5": {
+      "name": "DbgBreakPoint",
+      "stdcall_stack_hint": null
+    },
+    "6": {
+      "name": "DbgBreakPointWithStatus",
+      "stdcall_stack_hint": null
+    },
+    "7": {
+      "name": "DbgLoadImageSymbols",
+      "stdcall_stack_hint": null
+    },
+    "8": {
+      "name": "DbgPrint",
+      "stdcall_stack_hint": null
+    },
+    "9": {
+      "name": "HalReadSMCTrayState",
+      "stdcall_stack_hint": 8
+    },
+    "10": {
+      "name": "DbgPrompt",
+      "stdcall_stack_hint": null
+    },
+    "11": {
+      "name": "DbgUnLoadImageSymbols",
+      "stdcall_stack_hint": null
+    },
+    "12": {
+      "name": "ExAcquireReadWriteLockExclusive",
+      "stdcall_stack_hint": null
+    },
+    "13": {
+      "name": "ExAcquireReadWriteLockShared",
+      "stdcall_stack_hint": null
+    },
+    "14": {
+      "name": "ExAllocatePool",
+      "stdcall_stack_hint": 4
+    },
+    "15": {
+      "name": "ExAllocatePoolWithTag",
+      "stdcall_stack_hint": null
+    },
+    "16": {
+      "name": "ExEventObjectType",
+      "stdcall_stack_hint": null
+    },
+    "17": {
+      "name": "ExFreePool",
+      "stdcall_stack_hint": 4
+    },
+    "18": {
+      "name": "ExInitializeReadWriteLock",
+      "stdcall_stack_hint": null
+    },
+    "19": {
+      "name": "ExInterlockedAddLargeInteger",
+      "stdcall_stack_hint": null
+    },
+    "20": {
+      "name": "ExInterlockedAddLargeStatistic",
+      "stdcall_stack_hint": null
+    },
+    "21": {
+      "name": "ExInterlockedCompareExchange64",
+      "stdcall_stack_hint": null
+    },
+    "22": {
+      "name": "ExMutantObjectType",
+      "stdcall_stack_hint": null
+    },
+    "23": {
+      "name": "ExQueryPoolBlockSize",
+      "stdcall_stack_hint": null
+    },
+    "24": {
+      "name": "ExQueryNonVolatileSetting",
+      "stdcall_stack_hint": 20
+    },
+    "25": {
+      "name": "ExReadWriteRefurbInfo",
+      "stdcall_stack_hint": null
+    },
+    "26": {
+      "name": "ExRaiseException",
+      "stdcall_stack_hint": null
+    },
+    "27": {
+      "name": "ExRaiseStatus",
+      "stdcall_stack_hint": null
+    },
+    "28": {
+      "name": "ExReleaseReadWriteLock",
+      "stdcall_stack_hint": null
+    },
+    "29": {
+      "name": "ExSaveNonVolatileSetting",
+      "stdcall_stack_hint": 16
+    },
+    "30": {
+      "name": "ExSemaphoreObjectType",
+      "stdcall_stack_hint": null
+    },
+    "31": {
+      "name": "ExTimerObjectType",
+      "stdcall_stack_hint": null
+    },
+    "32": {
+      "name": "ExfInterlockedInsertHeadList",
+      "stdcall_stack_hint": null
+    },
+    "33": {
+      "name": "ExfInterlockedInsertTailList",
+      "stdcall_stack_hint": null
+    },
+    "34": {
+      "name": "ExfInterlockedRemoveHeadList",
+      "stdcall_stack_hint": null
+    },
+    "35": {
+      "name": "FscGetCacheSize",
+      "stdcall_stack_hint": null
+    },
+    "36": {
+      "name": "FscInvalidateIdleBlocks",
+      "stdcall_stack_hint": null
+    },
+    "37": {
+      "name": "FscSetCacheSize",
+      "stdcall_stack_hint": 4
+    },
+    "38": {
+      "name": "HalClearSoftwareInterrupt",
+      "stdcall_stack_hint": null
+    },
+    "39": {
+      "name": "HalDisableSystemInterrupt",
+      "stdcall_stack_hint": null
+    },
+    "40": {
+      "name": "HalDiskCachePartitionCount",
+      "stdcall_stack_hint": null
+    },
+    "41": {
+      "name": "HalDiskModelNumber",
+      "stdcall_stack_hint": null
+    },
+    "42": {
+      "name": "HalDiskSerialNumber",
+      "stdcall_stack_hint": null
+    },
+    "43": {
+      "name": "HalEnableSystemInterrupt",
+      "stdcall_stack_hint": null
+    },
+    "44": {
+      "name": "HalGetInterruptVector",
+      "stdcall_stack_hint": 8
+    },
+    "45": {
+      "name": "HalReadSMBusValue",
+      "stdcall_stack_hint": 16
+    },
+    "46": {
+      "name": "HalReadWritePCISpace",
+      "stdcall_stack_hint": 24
+    },
+    "47": {
+      "name": "HalRegisterShutdownNotification",
+      "stdcall_stack_hint": null
+    },
+    "48": {
+      "name": "HalRequestSoftwareInterrupt",
+      "stdcall_stack_hint": null
+    },
+    "49": {
+      "name": "HalReturnToFirmware",
+      "stdcall_stack_hint": 4
+    },
+    "50": {
+      "name": "HalWriteSMBusValue",
+      "stdcall_stack_hint": 16
+    },
+    "51": {
+      "name": "InterlockedCompareExchange",
+      "stdcall_stack_hint": null
+    },
+    "52": {
+      "name": "InterlockedDecrement",
+      "stdcall_stack_hint": null
+    },
+    "53": {
+      "name": "InterlockedIncrement",
+      "stdcall_stack_hint": null
+    },
+    "54": {
+      "name": "InterlockedExchange",
+      "stdcall_stack_hint": null
+    },
+    "55": {
+      "name": "InterlockedExchangeAdd",
+      "stdcall_stack_hint": null
+    },
+    "56": {
+      "name": "InterlockedFlushSList",
+      "stdcall_stack_hint": null
+    },
+    "57": {
+      "name": "InterlockedPopEntrySList",
+      "stdcall_stack_hint": null
+    },
+    "58": {
+      "name": "InterlockedPushEntrySList",
+      "stdcall_stack_hint": null
+    },
+    "59": {
+      "name": "IoAllocateIrp",
+      "stdcall_stack_hint": null
+    },
+    "60": {
+      "name": "IoBuildAsynchronousFsdRequest",
+      "stdcall_stack_hint": null
+    },
+    "61": {
+      "name": "IoBuildDeviceIoControlRequest",
+      "stdcall_stack_hint": null
+    },
+    "62": {
+      "name": "IoBuildSynchronousFsdRequest",
+      "stdcall_stack_hint": null
+    },
+    "63": {
+      "name": "IoCheckShareAccess",
+      "stdcall_stack_hint": null
+    },
+    "64": {
+      "name": "IoCompletionObjectType",
+      "stdcall_stack_hint": null
+    },
+    "65": {
+      "name": "IoCreateDevice",
+      "stdcall_stack_hint": null
+    },
+    "66": {
+      "name": "IoCreateFile",
+      "stdcall_stack_hint": 40
+    },
+    "67": {
+      "name": "IoCreateSymbolicLink",
+      "stdcall_stack_hint": 8
+    },
+    "68": {
+      "name": "IoDeleteDevice",
+      "stdcall_stack_hint": null
+    },
+    "69": {
+      "name": "IoDeleteSymbolicLink",
+      "stdcall_stack_hint": 4
+    },
+    "70": {
+      "name": "IoDeviceObjectType",
+      "stdcall_stack_hint": null
+    },
+    "71": {
+      "name": "IoFileObjectType",
+      "stdcall_stack_hint": null
+    },
+    "72": {
+      "name": "IoFreeIrp",
+      "stdcall_stack_hint": null
+    },
+    "73": {
+      "name": "IoInitializeIrp",
+      "stdcall_stack_hint": null
+    },
+    "74": {
+      "name": "IoInvalidDeviceRequest",
+      "stdcall_stack_hint": null
+    },
+    "75": {
+      "name": "IoQueryFileInformation",
+      "stdcall_stack_hint": null
+    },
+    "76": {
+      "name": "IoQueryVolumeInformation",
+      "stdcall_stack_hint": null
+    },
+    "77": {
+      "name": "IoQueueThreadIrp",
+      "stdcall_stack_hint": null
+    },
+    "78": {
+      "name": "IoRemoveShareAccess",
+      "stdcall_stack_hint": null
+    },
+    "79": {
+      "name": "IoSetIoCompletion",
+      "stdcall_stack_hint": null
+    },
+    "80": {
+      "name": "IoSetShareAccess",
+      "stdcall_stack_hint": null
+    },
+    "81": {
+      "name": "IoStartNextPacket",
+      "stdcall_stack_hint": null
+    },
+    "82": {
+      "name": "IoStartNextPacketByKey",
+      "stdcall_stack_hint": null
+    },
+    "83": {
+      "name": "IoStartPacket",
+      "stdcall_stack_hint": null
+    },
+    "84": {
+      "name": "IoSynchronousDeviceIoControlRequest",
+      "stdcall_stack_hint": null
+    },
+    "85": {
+      "name": "IoSynchronousFsdRequest",
+      "stdcall_stack_hint": null
+    },
+    "86": {
+      "name": "IofCallDriver",
+      "stdcall_stack_hint": null
+    },
+    "87": {
+      "name": "IofCompleteRequest",
+      "stdcall_stack_hint": null
+    },
+    "88": {
+      "name": "KdDebuggerEnabled",
+      "stdcall_stack_hint": null
+    },
+    "89": {
+      "name": "KdDebuggerNotPresent",
+      "stdcall_stack_hint": null
+    },
+    "90": {
+      "name": "IoDismountVolume",
+      "stdcall_stack_hint": null
+    },
+    "91": {
+      "name": "IoDismountVolumeByName",
+      "stdcall_stack_hint": null
+    },
+    "92": {
+      "name": "KeAlertResumeThread",
+      "stdcall_stack_hint": null
+    },
+    "93": {
+      "name": "KeAlertThread",
+      "stdcall_stack_hint": null
+    },
+    "94": {
+      "name": "KeBoostPriorityThread",
+      "stdcall_stack_hint": null
+    },
+    "95": {
+      "name": "KeBugCheck",
+      "stdcall_stack_hint": null
+    },
+    "96": {
+      "name": "KeBugCheckEx",
+      "stdcall_stack_hint": null
+    },
+    "97": {
+      "name": "KeCancelTimer",
+      "stdcall_stack_hint": null
+    },
+    "98": {
+      "name": "KeConnectInterrupt",
+      "stdcall_stack_hint": 4
+    },
+    "99": {
+      "name": "KeDelayExecutionThread",
+      "stdcall_stack_hint": 12
+    },
+    "100": {
+      "name": "KeDisconnectInterrupt",
+      "stdcall_stack_hint": 4
+    },
+    "101": {
+      "name": "KeEnterCriticalRegion",
+      "stdcall_stack_hint": null
+    },
+    "102": {
+      "name": "MmGlobalData",
+      "stdcall_stack_hint": null
+    },
+    "103": {
+      "name": "KeGetCurrentIrql",
+      "stdcall_stack_hint": null
+    },
+    "104": {
+      "name": "KeGetCurrentThread",
+      "stdcall_stack_hint": 0
+    },
+    "105": {
+      "name": "KeInitializeApc",
+      "stdcall_stack_hint": null
+    },
+    "106": {
+      "name": "KeInitializeDeviceQueue",
+      "stdcall_stack_hint": null
+    },
+    "107": {
+      "name": "KeInitializeDpc",
+      "stdcall_stack_hint": 12
+    },
+    "108": {
+      "name": "KeInitializeEvent",
+      "stdcall_stack_hint": null
+    },
+    "109": {
+      "name": "KeInitializeInterrupt",
+      "stdcall_stack_hint": 28
+    },
+    "110": {
+      "name": "KeInitializeMutant",
+      "stdcall_stack_hint": null
+    },
+    "111": {
+      "name": "KeInitializeQueue",
+      "stdcall_stack_hint": null
+    },
+    "112": {
+      "name": "KeInitializeSemaphore",
+      "stdcall_stack_hint": null
+    },
+    "113": {
+      "name": "KeInitializeTimerEx",
+      "stdcall_stack_hint": 8
+    },
+    "114": {
+      "name": "KeInsertByKeyDeviceQueue",
+      "stdcall_stack_hint": null
+    },
+    "115": {
+      "name": "KeInsertDeviceQueue",
+      "stdcall_stack_hint": null
+    },
+    "116": {
+      "name": "KeInsertHeadQueue",
+      "stdcall_stack_hint": null
+    },
+    "117": {
+      "name": "KeInsertQueue",
+      "stdcall_stack_hint": null
+    },
+    "118": {
+      "name": "KeInsertQueueApc",
+      "stdcall_stack_hint": null
+    },
+    "119": {
+      "name": "KeInsertQueueDpc",
+      "stdcall_stack_hint": 12
+    },
+    "120": {
+      "name": "KeInterruptTime",
+      "stdcall_stack_hint": null
+    },
+    "121": {
+      "name": "KeIsExecutingDpc",
+      "stdcall_stack_hint": null
+    },
+    "122": {
+      "name": "KeLeaveCriticalRegion",
+      "stdcall_stack_hint": null
+    },
+    "123": {
+      "name": "KePulseEvent",
+      "stdcall_stack_hint": null
+    },
+    "124": {
+      "name": "KeQueryBasePriorityThread",
+      "stdcall_stack_hint": null
+    },
+    "125": {
+      "name": "KeQueryInterruptTime",
+      "stdcall_stack_hint": null
+    },
+    "126": {
+      "name": "KeQueryPerformanceCounter",
+      "stdcall_stack_hint": 0
+    },
+    "127": {
+      "name": "KeQueryPerformanceFrequency",
+      "stdcall_stack_hint": 0
+    },
+    "128": {
+      "name": "KeQuerySystemTime",
+      "stdcall_stack_hint": 4
+    },
+    "129": {
+      "name": "KeRaiseIrqlToDpcLevel",
+      "stdcall_stack_hint": null
+    },
+    "130": {
+      "name": "KeRaiseIrqlToSynchLevel",
+      "stdcall_stack_hint": null
+    },
+    "131": {
+      "name": "KeReleaseMutant",
+      "stdcall_stack_hint": null
+    },
+    "132": {
+      "name": "KeReleaseSemaphore",
+      "stdcall_stack_hint": null
+    },
+    "133": {
+      "name": "KeRemoveByKeyDeviceQueue",
+      "stdcall_stack_hint": null
+    },
+    "134": {
+      "name": "KeRemoveDeviceQueue",
+      "stdcall_stack_hint": null
+    },
+    "135": {
+      "name": "KeRemoveEntryDeviceQueue",
+      "stdcall_stack_hint": null
+    },
+    "136": {
+      "name": "KeRemoveQueue",
+      "stdcall_stack_hint": null
+    },
+    "137": {
+      "name": "KeRemoveQueueDpc",
+      "stdcall_stack_hint": null
+    },
+    "138": {
+      "name": "KeResetEvent",
+      "stdcall_stack_hint": null
+    },
+    "139": {
+      "name": "KeRestoreFloatingPointState",
+      "stdcall_stack_hint": null
+    },
+    "140": {
+      "name": "KeResumeThread",
+      "stdcall_stack_hint": null
+    },
+    "141": {
+      "name": "KeRundownQueue",
+      "stdcall_stack_hint": null
+    },
+    "142": {
+      "name": "KeSaveFloatingPointState",
+      "stdcall_stack_hint": null
+    },
+    "143": {
+      "name": "KeSetBasePriorityThread",
+      "stdcall_stack_hint": 8
+    },
+    "144": {
+      "name": "KeSetDisableBoostThread",
+      "stdcall_stack_hint": null
+    },
+    "145": {
+      "name": "KeSetEvent",
+      "stdcall_stack_hint": null
+    },
+    "146": {
+      "name": "KeSetEventBoostPriority",
+      "stdcall_stack_hint": null
+    },
+    "147": {
+      "name": "KeSetPriorityProcess",
+      "stdcall_stack_hint": null
+    },
+    "148": {
+      "name": "KeSetPriorityThread",
+      "stdcall_stack_hint": 8
+    },
+    "149": {
+      "name": "KeSetTimer",
+      "stdcall_stack_hint": 16
+    },
+    "150": {
+      "name": "KeSetTimerEx",
+      "stdcall_stack_hint": null
+    },
+    "151": {
+      "name": "KeStallExecutionProcessor",
+      "stdcall_stack_hint": 4
+    },
+    "152": {
+      "name": "KeSuspendThread",
+      "stdcall_stack_hint": null
+    },
+    "153": {
+      "name": "KeSynchronizeExecution",
+      "stdcall_stack_hint": null
+    },
+    "154": {
+      "name": "KeSystemTime",
+      "stdcall_stack_hint": null
+    },
+    "155": {
+      "name": "KeTestAlertThread",
+      "stdcall_stack_hint": null
+    },
+    "156": {
+      "name": "KeTickCount",
+      "stdcall_stack_hint": null
+    },
+    "157": {
+      "name": "KeTimeIncrement",
+      "stdcall_stack_hint": null
+    },
+    "158": {
+      "name": "KeWaitForMultipleObjects",
+      "stdcall_stack_hint": null
+    },
+    "159": {
+      "name": "KeWaitForSingleObject",
+      "stdcall_stack_hint": null
+    },
+    "160": {
+      "name": "KfRaiseIrql",
+      "stdcall_stack_hint": null
+    },
+    "161": {
+      "name": "KfLowerIrql",
+      "stdcall_stack_hint": null
+    },
+    "162": {
+      "name": "KiBugCheckData",
+      "stdcall_stack_hint": null
+    },
+    "163": {
+      "name": "KiUnlockDispatcherDatabase",
+      "stdcall_stack_hint": null
+    },
+    "164": {
+      "name": "LaunchDataPage",
+      "stdcall_stack_hint": null
+    },
+    "165": {
+      "name": "MmAllocateContiguousMemory",
+      "stdcall_stack_hint": 4
+    },
+    "166": {
+      "name": "MmAllocateContiguousMemoryEx",
+      "stdcall_stack_hint": 20
+    },
+    "167": {
+      "name": "MmAllocateSystemMemory",
+      "stdcall_stack_hint": 8
+    },
+    "168": {
+      "name": "MmClaimGpuInstanceMemory",
+      "stdcall_stack_hint": 8
+    },
+    "169": {
+      "name": "MmCreateKernelStack",
+      "stdcall_stack_hint": null
+    },
+    "170": {
+      "name": "MmDeleteKernelStack",
+      "stdcall_stack_hint": null
+    },
+    "171": {
+      "name": "MmFreeContiguousMemory",
+      "stdcall_stack_hint": 4
+    },
+    "172": {
+      "name": "MmFreeSystemMemory",
+      "stdcall_stack_hint": 8
+    },
+    "173": {
+      "name": "MmGetPhysicalAddress",
+      "stdcall_stack_hint": 4
+    },
+    "174": {
+      "name": "MmIsAddressValid",
+      "stdcall_stack_hint": null
+    },
+    "175": {
+      "name": "MmLockUnlockBufferPages",
+      "stdcall_stack_hint": 12
+    },
+    "176": {
+      "name": "MmLockUnlockPhysicalPage",
+      "stdcall_stack_hint": null
+    },
+    "177": {
+      "name": "MmMapIoSpace",
+      "stdcall_stack_hint": 12
+    },
+    "178": {
+      "name": "MmPersistContiguousMemory",
+      "stdcall_stack_hint": 12
+    },
+    "179": {
+      "name": "MmQueryAddressProtect",
+      "stdcall_stack_hint": null
+    },
+    "180": {
+      "name": "MmQueryAllocationSize",
+      "stdcall_stack_hint": 4
+    },
+    "181": {
+      "name": "MmQueryStatistics",
+      "stdcall_stack_hint": 4
+    },
+    "182": {
+      "name": "MmSetAddressProtect",
+      "stdcall_stack_hint": 12
+    },
+    "183": {
+      "name": "MmUnmapIoSpace",
+      "stdcall_stack_hint": null
+    },
+    "184": {
+      "name": "NtAllocateVirtualMemory",
+      "stdcall_stack_hint": 20
+    },
+    "185": {
+      "name": "NtCancelTimer",
+      "stdcall_stack_hint": null
+    },
+    "186": {
+      "name": "NtClearEvent",
+      "stdcall_stack_hint": 4
+    },
+    "187": {
+      "name": "NtClose",
+      "stdcall_stack_hint": 4
+    },
+    "188": {
+      "name": "NtCreateDirectoryObject",
+      "stdcall_stack_hint": null
+    },
+    "189": {
+      "name": "NtCreateEvent",
+      "stdcall_stack_hint": 16
+    },
+    "190": {
+      "name": "NtCreateFile",
+      "stdcall_stack_hint": 36
+    },
+    "191": {
+      "name": "NtCreateIoCompletion",
+      "stdcall_stack_hint": null
+    },
+    "192": {
+      "name": "NtCreateMutant",
+      "stdcall_stack_hint": 12
+    },
+    "193": {
+      "name": "NtCreateSemaphore",
+      "stdcall_stack_hint": 16
+    },
+    "194": {
+      "name": "NtCreateTimer",
+      "stdcall_stack_hint": null
+    },
+    "195": {
+      "name": "NtDeleteFile",
+      "stdcall_stack_hint": null
+    },
+    "196": {
+      "name": "NtDeviceIoControlFile",
+      "stdcall_stack_hint": null
+    },
+    "197": {
+      "name": "NtDuplicateObject",
+      "stdcall_stack_hint": 12
+    },
+    "198": {
+      "name": "NtFlushBuffersFile",
+      "stdcall_stack_hint": 8
+    },
+    "199": {
+      "name": "NtFreeVirtualMemory",
+      "stdcall_stack_hint": 12
+    },
+    "200": {
+      "name": "NtFsControlFile",
+      "stdcall_stack_hint": null
+    },
+    "201": {
+      "name": "NtOpenDirectoryObject",
+      "stdcall_stack_hint": null
+    },
+    "202": {
+      "name": "NtOpenFile",
+      "stdcall_stack_hint": 24
+    },
+    "203": {
+      "name": "NtOpenSymbolicLinkObject",
+      "stdcall_stack_hint": null
+    },
+    "204": {
+      "name": "NtProtectVirtualMemory",
+      "stdcall_stack_hint": null
+    },
+    "205": {
+      "name": "NtPulseEvent",
+      "stdcall_stack_hint": 8
+    },
+    "206": {
+      "name": "NtQueueApcThread",
+      "stdcall_stack_hint": null
+    },
+    "207": {
+      "name": "NtQueryDirectoryFile",
+      "stdcall_stack_hint": 40
+    },
+    "208": {
+      "name": "NtQueryDirectoryObject",
+      "stdcall_stack_hint": null
+    },
+    "209": {
+      "name": "NtQueryEvent",
+      "stdcall_stack_hint": null
+    },
+    "210": {
+      "name": "NtQueryFullAttributesFile",
+      "stdcall_stack_hint": 8
+    },
+    "211": {
+      "name": "NtQueryInformationFile",
+      "stdcall_stack_hint": 20
+    },
+    "212": {
+      "name": "NtQueryIoCompletion",
+      "stdcall_stack_hint": null
+    },
+    "213": {
+      "name": "NtQueryMutant",
+      "stdcall_stack_hint": null
+    },
+    "214": {
+      "name": "NtQuerySemaphore",
+      "stdcall_stack_hint": null
+    },
+    "215": {
+      "name": "NtQuerySymbolicLinkObject",
+      "stdcall_stack_hint": null
+    },
+    "216": {
+      "name": "NtQueryTimer",
+      "stdcall_stack_hint": null
+    },
+    "217": {
+      "name": "NtQueryVirtualMemory",
+      "stdcall_stack_hint": 8
+    },
+    "218": {
+      "name": "NtQueryVolumeInformationFile",
+      "stdcall_stack_hint": 20
+    },
+    "219": {
+      "name": "NtReadFile",
+      "stdcall_stack_hint": 32
+    },
+    "220": {
+      "name": "NtReadFileScatter",
+      "stdcall_stack_hint": null
+    },
+    "221": {
+      "name": "NtReleaseMutant",
+      "stdcall_stack_hint": 8
+    },
+    "222": {
+      "name": "NtReleaseSemaphore",
+      "stdcall_stack_hint": 12
+    },
+    "223": {
+      "name": "NtRemoveIoCompletion",
+      "stdcall_stack_hint": null
+    },
+    "224": {
+      "name": "NtResumeThread",
+      "stdcall_stack_hint": 8
+    },
+    "225": {
+      "name": "NtSetEvent",
+      "stdcall_stack_hint": 8
+    },
+    "226": {
+      "name": "NtSetInformationFile",
+      "stdcall_stack_hint": 20
+    },
+    "227": {
+      "name": "NtSetIoCompletion",
+      "stdcall_stack_hint": null
+    },
+    "228": {
+      "name": "NtSetSystemTime",
+      "stdcall_stack_hint": null
+    },
+    "229": {
+      "name": "NtSetTimerEx",
+      "stdcall_stack_hint": null
+    },
+    "230": {
+      "name": "NtSignalAndWaitForSingleObjectEx",
+      "stdcall_stack_hint": null
+    },
+    "231": {
+      "name": "NtSuspendThread",
+      "stdcall_stack_hint": 8
+    },
+    "232": {
+      "name": "NtUserIoApcDispatcher",
+      "stdcall_stack_hint": 12
+    },
+    "233": {
+      "name": "NtWaitForSingleObject",
+      "stdcall_stack_hint": 12
+    },
+    "234": {
+      "name": "NtWaitForSingleObjectEx",
+      "stdcall_stack_hint": 16
+    },
+    "235": {
+      "name": "NtWaitForMultipleObjectsEx",
+      "stdcall_stack_hint": 24
+    },
+    "236": {
+      "name": "NtWriteFile",
+      "stdcall_stack_hint": 32
+    },
+    "237": {
+      "name": "NtWriteFileGather",
+      "stdcall_stack_hint": null
+    },
+    "238": {
+      "name": "NtYieldExecution",
+      "stdcall_stack_hint": 0
+    },
+    "239": {
+      "name": "ObCreateObject",
+      "stdcall_stack_hint": null
+    },
+    "240": {
+      "name": "ObDirectoryObjectType",
+      "stdcall_stack_hint": null
+    },
+    "241": {
+      "name": "ObInsertObject",
+      "stdcall_stack_hint": null
+    },
+    "242": {
+      "name": "ObMakeTemporaryObject",
+      "stdcall_stack_hint": null
+    },
+    "243": {
+      "name": "ObOpenObjectByName",
+      "stdcall_stack_hint": null
+    },
+    "244": {
+      "name": "ObOpenObjectByPointer",
+      "stdcall_stack_hint": null
+    },
+    "245": {
+      "name": "ObpObjectHandleTable",
+      "stdcall_stack_hint": null
+    },
+    "246": {
+      "name": "ObReferenceObjectByHandle",
+      "stdcall_stack_hint": 12
+    },
+    "247": {
+      "name": "ObReferenceObjectByName",
+      "stdcall_stack_hint": null
+    },
+    "248": {
+      "name": "ObReferenceObjectByPointer",
+      "stdcall_stack_hint": null
+    },
+    "249": {
+      "name": "ObSymbolicLinkObjectType",
+      "stdcall_stack_hint": null
+    },
+    "250": {
+      "name": "ObfDereferenceObject",
+      "stdcall_stack_hint": null
+    },
+    "251": {
+      "name": "ObfReferenceObject",
+      "stdcall_stack_hint": null
+    },
+    "252": {
+      "name": "PhyGetLinkState",
+      "stdcall_stack_hint": 4
+    },
+    "253": {
+      "name": "PhyInitialize",
+      "stdcall_stack_hint": 8
+    },
+    "254": {
+      "name": "PsCreateSystemThread",
+      "stdcall_stack_hint": 24
+    },
+    "255": {
+      "name": "PsCreateSystemThreadEx",
+      "stdcall_stack_hint": 40
+    },
+    "256": {
+      "name": "PsQueryStatistics",
+      "stdcall_stack_hint": null
+    },
+    "257": {
+      "name": "PsSetCreateThreadNotifyRoutine",
+      "stdcall_stack_hint": null
+    },
+    "258": {
+      "name": "PsTerminateSystemThread",
+      "stdcall_stack_hint": 4
+    },
+    "259": {
+      "name": "PsThreadObjectType",
+      "stdcall_stack_hint": null
+    },
+    "260": {
+      "name": "RtlAnsiStringToUnicodeString",
+      "stdcall_stack_hint": 12
+    },
+    "261": {
+      "name": "RtlAppendStringToString",
+      "stdcall_stack_hint": 8
+    },
+    "262": {
+      "name": "RtlAppendUnicodeStringToString",
+      "stdcall_stack_hint": null
+    },
+    "263": {
+      "name": "RtlAppendUnicodeToString",
+      "stdcall_stack_hint": null
+    },
+    "264": {
+      "name": "RtlAssert",
+      "stdcall_stack_hint": null
+    },
+    "265": {
+      "name": "RtlCaptureContext",
+      "stdcall_stack_hint": null
+    },
+    "266": {
+      "name": "RtlCaptureStackBackTrace",
+      "stdcall_stack_hint": null
+    },
+    "267": {
+      "name": "RtlCharToInteger",
+      "stdcall_stack_hint": null
+    },
+    "268": {
+      "name": "RtlCompareMemory",
+      "stdcall_stack_hint": 12
+    },
+    "269": {
+      "name": "RtlCompareMemoryUlong",
+      "stdcall_stack_hint": null
+    },
+    "270": {
+      "name": "RtlCompareString",
+      "stdcall_stack_hint": null
+    },
+    "271": {
+      "name": "RtlCompareUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "272": {
+      "name": "RtlCopyString",
+      "stdcall_stack_hint": 8
+    },
+    "273": {
+      "name": "RtlCopyUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "274": {
+      "name": "RtlCreateUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "275": {
+      "name": "RtlDowncaseUnicodeChar",
+      "stdcall_stack_hint": null
+    },
+    "276": {
+      "name": "RtlDowncaseUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "277": {
+      "name": "RtlEnterCriticalSection",
+      "stdcall_stack_hint": 4
+    },
+    "278": {
+      "name": "RtlEnterCriticalSectionAndRegion",
+      "stdcall_stack_hint": null
+    },
+    "279": {
+      "name": "RtlEqualString",
+      "stdcall_stack_hint": null
+    },
+    "280": {
+      "name": "RtlEqualUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "281": {
+      "name": "RtlExtendedIntegerMultiply",
+      "stdcall_stack_hint": null
+    },
+    "282": {
+      "name": "RtlExtendedLargeIntegerDivide",
+      "stdcall_stack_hint": null
+    },
+    "283": {
+      "name": "RtlExtendedMagicDivide",
+      "stdcall_stack_hint": null
+    },
+    "284": {
+      "name": "RtlFillMemory",
+      "stdcall_stack_hint": null
+    },
+    "285": {
+      "name": "RtlFillMemoryUlong",
+      "stdcall_stack_hint": null
+    },
+    "286": {
+      "name": "RtlFreeAnsiString",
+      "stdcall_stack_hint": null
+    },
+    "287": {
+      "name": "RtlFreeUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "288": {
+      "name": "RtlGetCallersAddress",
+      "stdcall_stack_hint": null
+    },
+    "289": {
+      "name": "RtlInitAnsiString",
+      "stdcall_stack_hint": 8
+    },
+    "290": {
+      "name": "RtlInitUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "291": {
+      "name": "RtlInitializeCriticalSection",
+      "stdcall_stack_hint": 4
+    },
+    "292": {
+      "name": "RtlIntegerToChar",
+      "stdcall_stack_hint": null
+    },
+    "293": {
+      "name": "RtlIntegerToUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "294": {
+      "name": "RtlLeaveCriticalSection",
+      "stdcall_stack_hint": 4
+    },
+    "295": {
+      "name": "RtlLeaveCriticalSectionAndRegion",
+      "stdcall_stack_hint": null
+    },
+    "296": {
+      "name": "RtlLowerChar",
+      "stdcall_stack_hint": 4
+    },
+    "297": {
+      "name": "RtlMapGenericMask",
+      "stdcall_stack_hint": null
+    },
+    "298": {
+      "name": "RtlMoveMemory",
+      "stdcall_stack_hint": 12
+    },
+    "299": {
+      "name": "RtlMultiByteToUnicodeN",
+      "stdcall_stack_hint": null
+    },
+    "300": {
+      "name": "RtlMultiByteToUnicodeSize",
+      "stdcall_stack_hint": null
+    },
+    "301": {
+      "name": "RtlNtStatusToDosError",
+      "stdcall_stack_hint": 4
+    },
+    "302": {
+      "name": "RtlRaiseException",
+      "stdcall_stack_hint": null
+    },
+    "303": {
+      "name": "RtlRaiseStatus",
+      "stdcall_stack_hint": null
+    },
+    "304": {
+      "name": "RtlTimeFieldsToTime",
+      "stdcall_stack_hint": 8
+    },
+    "305": {
+      "name": "RtlTimeToTimeFields",
+      "stdcall_stack_hint": 8
+    },
+    "306": {
+      "name": "RtlTryEnterCriticalSection",
+      "stdcall_stack_hint": 4
+    },
+    "307": {
+      "name": "RtlUlongByteSwap",
+      "stdcall_stack_hint": null
+    },
+    "308": {
+      "name": "RtlUnicodeStringToAnsiString",
+      "stdcall_stack_hint": 12
+    },
+    "309": {
+      "name": "RtlUnicodeStringToInteger",
+      "stdcall_stack_hint": null
+    },
+    "310": {
+      "name": "RtlUnicodeToMultiByteN",
+      "stdcall_stack_hint": null
+    },
+    "311": {
+      "name": "RtlUnicodeToMultiByteSize",
+      "stdcall_stack_hint": null
+    },
+    "312": {
+      "name": "RtlUnwind",
+      "stdcall_stack_hint": null
+    },
+    "313": {
+      "name": "RtlUpcaseUnicodeChar",
+      "stdcall_stack_hint": null
+    },
+    "314": {
+      "name": "RtlUpcaseUnicodeString",
+      "stdcall_stack_hint": null
+    },
+    "315": {
+      "name": "RtlUpcaseUnicodeToMultiByteN",
+      "stdcall_stack_hint": null
+    },
+    "316": {
+      "name": "RtlUpperChar",
+      "stdcall_stack_hint": null
+    },
+    "317": {
+      "name": "RtlUpperString",
+      "stdcall_stack_hint": null
+    },
+    "318": {
+      "name": "RtlUshortByteSwap",
+      "stdcall_stack_hint": null
+    },
+    "319": {
+      "name": "RtlWalkFrameChain",
+      "stdcall_stack_hint": null
+    },
+    "320": {
+      "name": "RtlZeroMemory",
+      "stdcall_stack_hint": 8
+    },
+    "321": {
+      "name": "XboxEEPROMKey",
+      "stdcall_stack_hint": null
+    },
+    "322": {
+      "name": "XboxHardwareInfo",
+      "stdcall_stack_hint": null
+    },
+    "323": {
+      "name": "XboxHDKey",
+      "stdcall_stack_hint": null
+    },
+    "324": {
+      "name": "XboxKrnlVersion",
+      "stdcall_stack_hint": null
+    },
+    "325": {
+      "name": "XboxSignatureKey",
+      "stdcall_stack_hint": null
+    },
+    "326": {
+      "name": "XeImageFileName",
+      "stdcall_stack_hint": null
+    },
+    "327": {
+      "name": "XeLoadSection",
+      "stdcall_stack_hint": null
+    },
+    "328": {
+      "name": "XeUnloadSection",
+      "stdcall_stack_hint": null
+    },
+    "329": {
+      "name": "READ_PORT_BUFFER_UCHAR",
+      "stdcall_stack_hint": 12
+    },
+    "330": {
+      "name": "READ_PORT_BUFFER_USHORT",
+      "stdcall_stack_hint": 12
+    },
+    "331": {
+      "name": "READ_PORT_BUFFER_ULONG",
+      "stdcall_stack_hint": 12
+    },
+    "332": {
+      "name": "WRITE_PORT_BUFFER_UCHAR",
+      "stdcall_stack_hint": 12
+    },
+    "333": {
+      "name": "WRITE_PORT_BUFFER_USHORT",
+      "stdcall_stack_hint": 12
+    },
+    "334": {
+      "name": "WRITE_PORT_BUFFER_ULONG",
+      "stdcall_stack_hint": 12
+    },
+    "335": {
+      "name": "XcSHAInit",
+      "stdcall_stack_hint": 4
+    },
+    "336": {
+      "name": "XcSHAUpdate",
+      "stdcall_stack_hint": 12
+    },
+    "337": {
+      "name": "XcSHAFinal",
+      "stdcall_stack_hint": 8
+    },
+    "338": {
+      "name": "XcRC4Key",
+      "stdcall_stack_hint": null
+    },
+    "339": {
+      "name": "XcRC4Crypt",
+      "stdcall_stack_hint": null
+    },
+    "340": {
+      "name": "XcHMAC",
+      "stdcall_stack_hint": null
+    },
+    "341": {
+      "name": "XcPKEncPublic",
+      "stdcall_stack_hint": null
+    },
+    "342": {
+      "name": "XcPKDecPrivate",
+      "stdcall_stack_hint": null
+    },
+    "343": {
+      "name": "XcPKGetKeyLen",
+      "stdcall_stack_hint": null
+    },
+    "344": {
+      "name": "XcVerifyPKCS1Signature",
+      "stdcall_stack_hint": null
+    },
+    "345": {
+      "name": "XcModExp",
+      "stdcall_stack_hint": null
+    },
+    "346": {
+      "name": "XcDESKeyParity",
+      "stdcall_stack_hint": null
+    },
+    "347": {
+      "name": "XcKeyTable",
+      "stdcall_stack_hint": null
+    },
+    "348": {
+      "name": "XcBlockCrypt",
+      "stdcall_stack_hint": null
+    },
+    "349": {
+      "name": "XcBlockCryptCBC",
+      "stdcall_stack_hint": null
+    },
+    "350": {
+      "name": "XcCryptService",
+      "stdcall_stack_hint": null
+    },
+    "351": {
+      "name": "XcUpdateCrypto",
+      "stdcall_stack_hint": null
+    },
+    "352": {
+      "name": "RtlRip",
+      "stdcall_stack_hint": null
+    },
+    "353": {
+      "name": "XboxLANKey",
+      "stdcall_stack_hint": null
+    },
+    "354": {
+      "name": "XboxAlternateSignatureKeys",
+      "stdcall_stack_hint": null
+    },
+    "355": {
+      "name": "XePublicKeyData",
+      "stdcall_stack_hint": null
+    },
+    "356": {
+      "name": "HalBootSMCVideoMode",
+      "stdcall_stack_hint": null
+    },
+    "357": {
+      "name": "IdexChannelObject",
+      "stdcall_stack_hint": null
+    },
+    "358": {
+      "name": "HalIsResetOrShutdownPending",
+      "stdcall_stack_hint": null
+    },
+    "359": {
+      "name": "IoMarkIrpMustComplete",
+      "stdcall_stack_hint": null
+    },
+    "360": {
+      "name": "HalInitiateShutdown",
+      "stdcall_stack_hint": null
+    },
+    "365": {
+      "name": "HalEnableSecureTrayEject",
+      "stdcall_stack_hint": null
+    },
+    "366": {
+      "name": "HalWriteSMCScratchRegister",
+      "stdcall_stack_hint": null
+    }
+  }
+}
