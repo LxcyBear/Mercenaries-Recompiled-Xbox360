@@ -154,8 +154,8 @@ def patch(text:str,components:str)->str:
     # Checking just the exact signature misses overloads/shadow definitions;
     # those could make insertion target ambiguous or call the wrong function.
     all_dispatchers = re.compile(
-        r'(?m)^[ \\t]*(?:static[ \\t]+)?void[ \\t]+'
-        r'phase5bc_dispatch_packed_icall\\s*\\(')
+        r'(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+'
+        r'phase5bc_dispatch_packed_icall\s*\(')
     found = list(all_dispatchers.finditer(text))
     if len(found)!=1:
         raise ValueError(
