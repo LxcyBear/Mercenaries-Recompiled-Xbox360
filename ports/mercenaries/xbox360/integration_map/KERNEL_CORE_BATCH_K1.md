@@ -17,6 +17,10 @@ without a detected route is NOT automatically a broken runtime service.
   fixtures, including invalid pointers and absolute timestamp anchors.
 - `k1/Audit-K1A-Dispatch.py` and `k1/Test-K1A-Audit.py` committed
   for fail-closed, read-only R76 source/ABI reconciliation.
+- Three-ordinal route injector now committed: `k1/Stage-K1A-ClockBatch.py`.
+  Produces a separate staged `main.cpp` with handlers for 128, 304, 305;
+  `k1/Test-K1A-Stage.py` checks synthetic route/ABI and immutability guards.
+  Local R76 real-source preflight is pending; stage is NOT a hardware result.
 - **NOT YET INTEGRATED** into generated main.cpp, native Xbox XDK executable,
   or the physical Xbox 360. Correct register/stack and real runtime guest
   address validation are acceptance gates; preserve current R76 XEX.
