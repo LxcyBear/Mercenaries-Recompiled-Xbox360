@@ -3298,7 +3298,10 @@ def main() -> int:
         "phase6dq_r45_note_audio_object_call(0x002A78A2u, ecx);",
         "phase6dq_r45_note_audio_object_call(0x002A76FEu, ecx);",
         "phase6dq_r45_note_audio_object_call(0x002A7712u, esi);",
-        "goto loc_002A776D;",
+        "if (phase6dq_r45_bad_audio_object(0x002A7712u, esi, eax)) goto loc_002A7765;",
+        "phase6dq_r45_note_audio_object_call(0x002A763Eu, eax);",
+        "phase6dq_r45_note_audio_object_call(0x002A6BCDu, ecx);",
+        "phase6dq_r45_note_audio_object_call(0x002A6BFDu, ecx);",
         "loc_002A74ED: ;",
         "loc_002A7712: ;",
         "loc_002A77FB: ;",
@@ -3365,6 +3368,14 @@ def main() -> int:
         raise SystemExit("[Phase6DQ] stale 4096 ICALL logging cadence remains")
     if "(s_phase5bcPackedDirectDispatchCount & 0xFFFu) == 0u" in main_text:
         raise SystemExit("[Phase6DQ] stale 4096 DIRECT logging cadence remains")
+
+    # R47 must not silently regress to R45's early-epilogue escape.
+    stale_r45_escape = (
+        "if (phase6dq_r45_bad_audio_object(0x002A7712u, esi, eax)) "
+        "goto loc_002A776D;"
+    )
+    if stale_r45_escape in main_text:
+        raise SystemExit("[Phase6DQ] R47 bad audio containment regressed to early epilogue")
 
     assert_no_newline_in_c_string(main_text)
 
