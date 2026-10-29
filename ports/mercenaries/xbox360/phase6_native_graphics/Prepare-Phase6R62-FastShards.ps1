@@ -34,8 +34,20 @@ Write-Host "[Phase6R62] R59 TrueTU cache reused. No 13,517-function regenerate/r
 Write-Host "[Phase6R62] R59 published XEX preserved. Allocator/status unchanged."
 & $python -m py_compile $patcher
 if($LASTEXITCODE-ne0){throw "R62 Python syntax error"}
-& $python $patcher --tu-dir $tu --out-dir $out
-if($LASTEXITCODE-ne0){throw "R62 quick-shard patch failed"}
+$patchLog=Join-Path $out "r62-quickpatch-preflight.log"
+Write-Host "[Phase6R62] Preflight log: $patchLog"
+$previousPreference=$ErrorActionPreference
+$ErrorActionPreference="Continue"
+try{
+    & $python -u $patcher --tu-dir $tu --out-dir $out 2>&1 | Tee-Object -FilePath $patchLog
+    $patchExit=$LASTEXITCODE
+}finally{
+    $ErrorActionPreference=$previousPreference
+}
+if($patchExit-ne0){
+    $last=@(Get-Content -LiteralPath $patchLog -Tail 15) -join [Environment]::NewLine
+    throw ("R62 quick-shard patch failed (exit={0}). Details:{1}{2}{1}Full log: {3}" -f $patchExit,[Environment]::NewLine,$last,$patchLog)
+}
 if($SkipSolutionBuild){
     Write-Host "[Phase6R62] Probe only applied; skipped XEX build."
     exit 0
