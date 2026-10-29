@@ -27,6 +27,7 @@ def check():
             "  if (_phase4c_target == 0x80000080u) f(); \\\n"
             "  else f();\n"
             "#define RECOMP_ITAIL(xbox_va) if (_phase4c_tail_target == 0x80000018u) f();\n"
+            "#define RECOMP_ITAIL_SAFE(xbox_va, saved_esp) f();\n"
             "void phase5bc_dispatch_packed_icall(uint32_t target) {\n"
             "  if (target == 0x80000097u) { f(); }\n"
             "}\n",encoding="utf-8")
