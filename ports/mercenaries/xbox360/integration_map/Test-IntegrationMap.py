@@ -123,6 +123,9 @@ def check():
         imported_rows=[]
         for n in (16,24,71,128,323):
             row=dict(bynum[n]);row["retail_import_verified"]="True"
+            # The mock source includes a route for 128; override only this
+            # row to emulate the real R76 hard stop's missing explicit path.
+            if n==128:row["route_present"]="False"
             imported_rows.append(row)
         classified={int(x["ordinal"]):x for x in module.kernel_rows(imported_rows,128)}
         for n in (16,71,323):
