@@ -36,7 +36,8 @@ def check():
                       for x in range(13000))
             + "uint32_t test_mmio=0xFE80200Cu;\n" 
             + "uint32_t test_signed=-25157620;\n"
-            + "uint32_t test_import=0x80000080u;\n",encoding="utf-8")
+            + "uint32_t test_import=0x80000080u;\n"
+            + "uint32_t candidate_data=0x80000028u;\n",encoding="utf-8")
         hardware=root/"watson.txt"
         hardware.write_text(
             "P6DQ ROCKET JOURNAL HARD[0] kind=2 caller=002A5293 "
@@ -62,7 +63,7 @@ def check():
             mmio=list(csv.DictReader(f))
         assert mmio==[{"address":"FE80200C","literal_mentions":"2",
                         "subsystem":"APU_CORE","status":"STATIC_CANDIDATE_ONLY"}]
-        assert known=={128,151},coverage
+        assert known=={40,128,151},coverage
         ledger=json.loads((out/"fault-ledger.json").read_text())
         assert len(ledger["faults"])==2
         assert sum(v["hits"] for v in ledger["faults"].values())==6
@@ -100,6 +101,10 @@ def check():
         assert prioritized[0]["priority"]=="P0_ACTIVE_HARDWARE_STOP"
         assert prioritized[0]["disposition"]=="HARDWARE_OBSERVED_IMPORT_SLOT_UNVERIFIED"
         assert not any(x["priority"]=="P2_DATA_RELOCATION" for x in prioritized)
+        data_candidate=next(x for x in prioritized if x["ordinal"]=="40")
+        assert data_candidate["name"]=="HalDiskCachePartitionCount (DATA)"
+        assert data_candidate["disposition"]=="STATIC_CANDIDATE_ONLY"
+        assert data_candidate["priority"]=="P3_STATIC_TRIAGE"
         assert all(x["disposition"]!="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED"
                    for x in prioritized)
         plan=(out/"BATCH_PLAN.md").read_text(encoding="utf-8")
