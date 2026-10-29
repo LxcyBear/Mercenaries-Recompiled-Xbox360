@@ -12,16 +12,27 @@ from pathlib import Path
 
 EXPECTED_XBE_SHA = 'AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7'
 THUNK_VA, THUNK_COUNT = 0x002DBCE0, 111
-KNOWN = {24:'ExQueryNonVolatileSetting', 44:'HalGetInterruptVector',
+KNOWN = {24:'ExQueryNonVolatileSetting',
+         40:'HalDiskCachePartitionCount (DATA)',
+         41:'HalDiskModelNumber (DATA)',
+         42:'HalDiskSerialNumber (DATA)',
+         44:'HalGetInterruptVector',
          47:'HalRegisterShutdownNotification', 98:'KeConnectInterrupt',
          99:'KeDelayExecutionThread',107:'KeInitializeDpc',109:'KeInitializeInterrupt',
          113:'KeInitializeTimerEx',128:'KeQuerySystemTime',
          139:'KeRestoreFloatingPointState',142:'KeSaveFloatingPointState',
-         151:'KeStallExecutionProcessor',156:'KeTickCount (DATA)',
+         149:'KeSetTimer',151:'KeStallExecutionProcessor',
+         156:'KeTickCount (DATA)',
+         164:'LaunchDataPage (DATA)',
          173:'MmGetPhysicalAddress', 184:'NtAllocateVirtualMemory',
          196:'NtDeviceIoControlFile',202:'NtOpenFile',218:'NtQueryVolumeInformationFile',
          226:'NtSetInformationFile',255:'PsCreateSystemThreadEx',
-         277:'RtlEnterCriticalSection',294:'RtlLeaveCriticalSection'}
+         277:'RtlEnterCriticalSection',294:'RtlLeaveCriticalSection',
+         322:'XboxHardwareInfo (DATA)',
+         324:'XboxKrnlVersion (DATA)',
+         326:'XeImageFileName (DATA)',
+         356:'HalBootSMCVideoMode (DATA)',
+         357:'IdexChannelObject (DATA)'}
 
 
 def sha(data):
