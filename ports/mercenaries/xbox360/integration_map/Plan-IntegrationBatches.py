@@ -12,11 +12,11 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 DATA_EXPORTS={40,41,42,156,164,322,324,326,356,357}
-TIME_FAMILY={99,113,128,139,142,149,151,156}
+TIME_FAMILY={99,113,128,149,151,156}
+FPU_FAMILY={139,142}
 THREAD_SYNC={98,107,109,129,139,142,160,161,255,277,291,294}
 MEMORY={14,15,17,23,173,184,185}
 FILES={187,196,202,218,226,236}
-AUDIO={128,151}
 PRIORITY={128:0,151:1,113:2,149:3}
 
 def csv_read(path:Path):
@@ -30,6 +30,7 @@ def csv_write(path:Path,rows:list[dict],fields:list[str]):
 
 def family(n:int)->str:
     if n in TIME_FAMILY:return "TIME_SCHEDULING"
+    if n in FPU_FAMILY:return "FLOATING_POINT_CONTEXT"
     if n in THREAD_SYNC:return "THREAD_SYNCHRONIZATION"
     if n in MEMORY:return "GUEST_MEMORY"
     if n in FILES:return "STORAGE_IO"
@@ -205,6 +206,7 @@ def main():
     print(f"[BatchPlan] imported_callable_no_route={missing} candidates_needing_reconciliation={static}")
     print(f"[BatchPlan] guest_abi_hotspot_nodes={abi_nodes} grouped_mmio_families={len(mmio)}")
     print(f"[BatchPlan] evidence_hardware_faults={len(faults)}")
+    print("[BatchPlan] hardware_next=kernel_ordinal_128_KeQuerySystemTime (not yet implemented)")
     print(f"[BatchPlan] report={out/'BATCH_PLAN.md'}")
 
 if __name__=="__main__":main()
