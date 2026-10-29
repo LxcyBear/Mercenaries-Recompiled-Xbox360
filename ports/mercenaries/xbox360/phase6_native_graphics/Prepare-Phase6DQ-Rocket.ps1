@@ -107,10 +107,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R49"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R49"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R51"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R51"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R49"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R51"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -154,12 +154,17 @@ foreach($f in @($main,$mono,$env,$manifest,$shards)){
 }
 
 $r=Get-Content $manifest -Raw|ConvertFrom-Json
-if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-R49-ESI-SLOT-20261028-A"){
+if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-R51-MM173-FRAME-20261029-A"){
   throw "Phase 6DQ manifest identity mismatch"
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R49"-or
+if($q.emitter_revision-ne"6DQ-R51"-or
+   $null-eq$q.r51_mm173_frame_capture-or
+   $q.r51_mm173_frame_capture.snapshot_after_caller_ecx_push-ne$true-or
+   [int]$q.r51_mm173_frame_capture.expected_kernel_frame_bytes-ne8-or
+   $q.r51_mm173_frame_capture.kernel_bridge_unchanged-ne$true-or
+   $q.r51_mm173_frame_capture.guest_memory_fences_unchanged-ne$true-or
    $null-eq$q.r49_audio_esi_preservation-or
    $q.r49_audio_esi_preservation.source_from_existing_guest_registers-ne$true-or
    $q.r49_audio_esi_preservation.no_fabricated_audio_object-ne$true-or
@@ -218,7 +223,7 @@ if($q.emitter_revision-ne"6DQ-R49"-or
 
 $text=Get-Content $mono -Raw
 foreach($marker in @(
-  "P6DQ-R49-ESI-SLOT-20261028-A",
+  "P6DQ-R51-MM173-FRAME-20261029-A",
   "phase6dq_env_build_cookie",
   "P6DQ ROCKET DISPATCH FIRST",
   "P6DQ ROCKET HARD STOP",
@@ -241,6 +246,8 @@ foreach($marker in @(
   "P6DQ R49 ESI REPAIR: site=002A6BB0",
   "P6DQ R49 ESI REPAIR: site=002A763E",
   "r49_saved_slot_base = esi;",
+  "P6DQ R51 MM173 FRAME: site=002A6D7C",
+  "snapshot after caller-only ECX",
   "P6DQ DSOUND POISON NOOP:",
   "target == 0xF6DCCCD0u",
   "#define PHASE4C_EXEC_BUDGET 64000000u",
@@ -287,13 +294,14 @@ Write-Host "[Phase6DQ] DSOUND CCCCCCCC poison-slot quarantine: ARMED at exact si
 Write-Host "[Phase6DQ] Pixel/present instrumentation: INHERITED"
 Write-Host "[Phase6DQ] C4146 generated-code suppression: INHERITED"
 Write-Host "[Phase6DQ] R45 SOURCE: R43 bad-object proof + exact caller/entry/lookup provenance"
+Write-Host "[Phase6DQ] R51 MM173: extra caller ECX word retained; 8-byte callee frame required; kernel bridge unchanged"
 
 if(-not$SkipSolutionBuild){
   $buildArgs=@{
     GeneratedMain=$main
     GeneratedEnv=$env
     GeneratedShardDir=$shards
-    ExpectedBuildTag="P6DQ-R49-ESI-SLOT-20261028-A"
+    ExpectedBuildTag="P6DQ-R51-MM173-FRAME-20261029-A"
     ExpectedEnvCookie="phase6dq_env_build_cookie"
     SolutionRoot=$SolutionRoot
     Configuration="Release"
