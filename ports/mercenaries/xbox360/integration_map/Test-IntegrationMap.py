@@ -2,6 +2,7 @@
 """Source-free, retail-free, XDK-free integration-map regression tests."""
 from __future__ import annotations
 import csv
+import importlib.util
 import json
 import subprocess
 import sys
@@ -25,7 +26,7 @@ def check():
             "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) \\\n"
             "  if (_phase4c_target == 0x80000080u) f(); \\\n"
             "  else f();\n"
-            "#define RECOMP_ITAIL(xbox_va) f();\n"
+            "#define RECOMP_ITAIL(xbox_va) if (_phase4c_tail_target == 0x80000018u) f();\n"
             "void phase5bc_dispatch_packed_icall(uint32_t target) {\n"
             "  if (target == 0x80000097u) { f(); }\n"
             "}\n",encoding="utf-8")
@@ -37,7 +38,10 @@ def check():
             + "uint32_t test_mmio=0xFE80200Cu;\n" 
             + "uint32_t test_signed=-25157620;\n"
             + "uint32_t test_import=0x80000080u;\n"
-            + "uint32_t candidate_data=0x80000028u;\n",encoding="utf-8")
+            + "uint32_t candidate_data=0x80000028u;\n"
+            + "uint32_t data_event=0x80000010u;\n"
+            + "uint32_t data_file=0x80000047u;\n"
+            + "uint32_t data_hdkey=0x80000143u;\n",encoding="utf-8")
         hardware=root/"watson.txt"
         hardware.write_text(
             "P6DQ ROCKET JOURNAL HARD[0] kind=2 caller=002A5293 "
@@ -51,7 +55,7 @@ def check():
         assert first.returncode==0,first.stdout
         report=json.loads((out/"phase6-integration-map.json").read_text())
         assert report["counts"]["guest_functions"]==13000
-        assert report["counts"]["explicit_kernel_routes"]==2
+        assert report["counts"]["explicit_kernel_routes"]==3
         assert report["counts"]["literal_mmio_addresses"]==1
         assert report["counts"]["guest_call_edges"]==13000
         assert not report["import_inventory"]["verified"]
@@ -63,7 +67,14 @@ def check():
             mmio=list(csv.DictReader(f))
         assert mmio==[{"address":"FE80200C","literal_mentions":"2",
                         "subsystem":"APU_CORE","status":"STATIC_CANDIDATE_ONLY"}]
-        assert known=={40,128,151},coverage
+        assert known=={16,24,40,71,128,151,323},coverage
+        bynum={int(r["ordinal"]):r for r in coverage}
+        assert bynum[16]["name"]=="ExEventObjectType"
+        assert bynum[71]["name"]=="IoFileObjectType"
+        assert bynum[323]["name"]=="XboxHDKey"
+        assert all(bynum[n]["export_kind"]=="DATA" for n in (16,40,71,323))
+        assert bynum[24]["route_present"]=="True"
+        assert "RECOMP_ITAIL" in bynum[24]["route_sources"]
         ledger=json.loads((out/"fault-ledger.json").read_text())
         assert len(ledger["faults"])==2
         assert sum(v["hits"] for v in ledger["faults"].values())==6
@@ -105,11 +116,27 @@ def check():
         assert data_candidate["name"]=="HalDiskCachePartitionCount (DATA)"
         assert data_candidate["disposition"]=="STATIC_CANDIDATE_ONLY"
         assert data_candidate["priority"]=="P3_STATIC_TRIAGE"
+        # Test the planner against synthetic imported evidence without a real XBE.
+        spec=importlib.util.spec_from_file_location("integration_plan",planner)
+        module=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        imported_rows=[]
+        for n in (16,24,71,128,323):
+            row=dict(bynum[n]);row["retail_import_verified"]="True"
+            imported_rows.append(row)
+        classified={int(x["ordinal"]):x for x in module.kernel_rows(imported_rows,128)}
+        for n in (16,71,323):
+            assert classified[n]["disposition"]=="IMPORTED_DATA_EXPORT_NEEDS_AUDIT"
+            assert classified[n]["priority"]=="P2_DATA_SEMANTICS_AUDIT"
+        assert classified[24]["disposition"]=="IMPORTED_ROUTED_SEMANTICS_UNVERIFIED"
+        assert classified[128]["disposition"]=="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED"
+        assert classified[128]["priority"]=="P0_ACTIVE_HARDWARE_STOP"
         assert all(x["disposition"]!="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED"
                    for x in prioritized)
         plan=(out/"BATCH_PLAN.md").read_text(encoding="utf-8")
         assert "NOT ASSESSED (retail XBE needed)" in plan
         assert "Hardware-observed kernel targets with unverified import slot: 1" in plan
+        print("[IntegrationMapTest] PASS: Xbox kernel names, data exports and ITAIL routing")
         print("[IntegrationMapTest] PASS: hardware observations separate from retail import guesses")
         print("[IntegrationMapTest] PASS: batch planning does not mistake static references for missing imports")
         print("[IntegrationMapTest] PASS: route extraction, 13000 mock ABI edges, signed MMIO")
