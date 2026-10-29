@@ -69,7 +69,7 @@ if($planCode -ne 0){
   throw ("Integration batch planner exited {0}{1}{2}{1}Report: {3}" -f $planCode,[Environment]::NewLine,$tail,(Join-Path $out "batch-plan.log"))
 }
 if($CopySummary){
-  Get-Content -LiteralPath (Join-Path $out "BATCH_PLAN.md") -Raw | Set-Clipboard
+  Get-Content -LiteralPath (Join-Path $out "BATCH_PLAN.md") -Raw -Encoding UTF8 | Set-Clipboard
   Write-Host "[IntegrationMap] BATCH_PLAN.md copied to clipboard"
 }
 Write-Host "[IntegrationMap] OUTPUT: $out"
