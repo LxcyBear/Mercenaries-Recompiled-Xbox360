@@ -5,7 +5,7 @@ p=Path(__file__).with_name('Audit-K1A-Dispatch.py')
 spec=importlib.util.spec_from_file_location('merc_k1_audit',p)
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 main='''P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029
-#define RECOMP_ICALL_SAFE(a, b) \
+#define RECOMP_ICALL_SAFE(a, b) \\
   do { phase4c_escape(PHASE4C_BOUNDARY_ICALL_SAFE, a, b); } while(0)
 #define RECOMP_ITAIL(a) do { } while(0)
 static uint64_t phase4c_system_time_100ns(void) { return 0; }
