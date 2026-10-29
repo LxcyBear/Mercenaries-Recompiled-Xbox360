@@ -15,7 +15,8 @@ from pathlib import Path
 from inspect_phase6r44_bad_audio_object import closing_brace
 
 TAG="P6DQ R69 DSOUND SEED:"
-REV="R69-CACHED-TU-SEED-LINEAGE-20261029"
+REV="R69-CACHED-TU-SEED-LINEAGE-SAFE-20261029"
+OLD_REV="R69-CACHED-TU-SEED-LINEAGE-20261029"
 ROOTS=(0x002A19FC,0x002A2A16)
 RX=re.compile(r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+sub_([0-9A-Fa-f]{8})\(void\)\s*\{")
 REV_CHAIN=(
@@ -63,8 +64,10 @@ ANCHORS={
          "phase6ch_apu_read32(esi + 0x18u)","phase6ch_apu_read32(esi + 0x14u)"),
     post("    phase6ch_apu_write32(esi + 0x18, eax);","A2A16_STORED_HEAD",
          "phase6ch_apu_read32(esi + 0x18u)","phase6ch_apu_read32(esi + 0x14u)"),
-    post("    eax = ebx;","A2A16_FINAL_STATUS",
-         "phase6ch_apu_read32(esi + 0x18u)","phase6ch_apu_read32(esi + 0x14u)"),
+    # At this point POP32(esp, esi) has restored caller ESI, so a read
+    # through esi+0x18 is NOT a read of this pool. The earlier STORED_HEAD
+    # and parent AFTER_A2A16 markers already capture the correct field.
+    post("    eax = ebx;","A2A16_FINAL_STATUS"),
   ],
 }
 
@@ -94,6 +97,37 @@ def read_record(folder:Path,rev:str):
     if len({r["name"] for r in rows})!=len(rows):
         raise RuntimeError(f"duplicate patched shard in {path}")
     return rows
+
+def upgrade_v1_final_trace(raw:bytes)->bytes:
+    """Replace only the V1 post-POP ESI reads in A2A16_FINAL_STATUS.
+
+    The other R69 head probes continue to report the live pool state.
+    The caller ESI is restored before this final return path, so this
+    late trace must be register-only. Must match one exact generated block.
+    """
+    source=raw.decode("utf-8")
+    marker=TAG+" A2A16_FINAL_STATUS"
+    if source.count(marker)!=1:
+        raise RuntimeError("R69 V1 final-status marker missing/duplicated")
+    pos=source.index(marker)
+    start=source.rfind("\n    {\n",0,pos)
+    end=source.find("\n    }\n",pos)
+    if start<0 or end<0:
+        raise RuntimeError("R69 V1 final trace block not found")
+    end+=len("\n    }\n")
+    block=source[start:end]
+    original_head="const unsigned int r69_head = (unsigned int)(phase6ch_apu_read32(esi + 0x18u));"
+    original_backing="const unsigned int r69_backing = (unsigned int)(phase6ch_apu_read32(esi + 0x14u));"
+    if block.count(original_head)!=1 or block.count(original_backing)!=1:
+        raise RuntimeError("R69 V1 expected ESI dereference does not match")
+    block=block.replace(original_head,
+        "const unsigned int r69_head = (unsigned int)(0u);")
+    block=block.replace(original_backing,
+        "const unsigned int r69_backing = (unsigned int)(0u);")
+    result=source[:start]+block+source[end:]
+    if result.count(TAG)!=source.count(TAG):
+        raise RuntimeError("R69 marker count changed unexpectedly")
+    return result.encode("utf-8")
 
 def main()->int:
     p=argparse.ArgumentParser()
@@ -133,7 +167,10 @@ def main()->int:
     backup_dir=out/"original_r66_shards"
     prior=None
     if overlay_path.exists():
-        prior=read_record(out,REV)
+        existing_revision=json.loads(overlay_path.read_text(encoding="utf-8")).get("revision")
+        if existing_revision not in (REV,OLD_REV):
+            raise RuntimeError(f"R69 unexpected overlay version: {existing_revision}")
+        prior=read_record(out,existing_revision)
         if {r["name"] for r in prior}!={"translated_008.cpp","translated_042.cpp"}:
             raise RuntimeError("R69 overlay owner mismatch")
         for row in prior:
@@ -149,6 +186,26 @@ def main()->int:
             raise RuntimeError(f"R69 64-shard source drift: {f.name} expected={expected[f.name]} actual={sha(raw)}")
         current[f.name]=raw
     if prior is not None:
+        if existing_revision==OLD_REV:
+            target="translated_042.cpp"
+            original=current[target]
+            repaired=upgrade_v1_final_trace(original)
+            if repaired==original:
+                raise RuntimeError("R69 V1 upgrade produced no change")
+            record=json.loads(overlay_path.read_text(encoding="utf-8"))
+            matches=[item for item in record["patched"] if item["name"]==target]
+            if len(matches)!=1 or matches[0]["modified_sha256"]!=sha(original):
+                raise RuntimeError("R69 V1 overlay record disagrees with current shard")
+            matches[0]["modified_sha256"]=sha(repaired)
+            record["revision"]=REV
+            # We have checked ALL 64 hashes and untouched backups above.
+            # Keep R66 baseline backup untouched; modify only this trace.
+            (shards/target).write_bytes(repaired)
+            overlay_path.write_text(json.dumps(record,indent=2)+"\n",encoding="utf-8")
+            print("[Phase6R69] SAFE TRACE UPGRADE PASS: final A2A16 status no longer reads restored ESI")
+            print("[Phase6R69] Existing R69 pool-head and R66 pool diagnostics preserved")
+            print("[Phase6R69] patched_shards=2 untouched_shards=62")
+            return 0
         print("[Phase6R69] REUSE PASS: 64/64 baseline/overlay hashes and backups verified")
         print("[Phase6R69] patched_shards=2 untouched_shards=62")
         return 0
