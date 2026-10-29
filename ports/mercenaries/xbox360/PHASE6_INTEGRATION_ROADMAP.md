@@ -58,13 +58,18 @@ The new read-only integration mapper lives at:
 - ports/mercenaries/xbox360/integration_map/Build-IntegrationMap.ps1
 - ports/mercenaries/xbox360/integration_map/Build-IntegrationMap.py
 - ports/mercenaries/xbox360/integration_map/Test-IntegrationMap.py
+- ports/mercenaries/xbox360/integration_map/Plan-IntegrationBatches.py
 - ports/mercenaries/xbox360/integration_map/phase6_baseline_20261029.json
 
 It runs no retail game, XDK build or guest code. It generates
 build/phase6_integration_map/PHASE6_MAP.md, kernel-coverage.csv,
 guest-call-edges.csv (static caller/callee ABI map), mmio-literals.csv
 (including signed-negative MMIO immediates such as -25157620),
-phase6-integration-map.json and fault-ledger.json. Repeating the same
+phase6-integration-map.json and fault-ledger.json. The chained batch
+planner also produces BATCH_PLAN.md, kernel-batch-priorities.csv,
+guest-abi-hotspots.csv and mmio-batch-families.csv. It prioritizes confirmed
+hardware blockers ahead of static guesses but never equates a route with
+correct semantics. Repeating the same
 hardware log does not duplicate its fault counts.
 
 The runner executes offline synthetic fixture tests first. For a true
