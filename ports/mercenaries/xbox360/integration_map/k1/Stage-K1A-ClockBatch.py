@@ -150,9 +150,20 @@ def patch(text:str,components:str)->str:
         r'(?m)^[ 	]*(?:static[ 	]+)?void[ 	]+'
         r'phase5bc_dispatch_packed_icall\s*\(\s*'
         r'uint32_t\s+target\s*,\s*uint32_t\s+savedEsp\s*\)\s*\{')
+    # Reject an additional dispatcher with a DIFFERENT argument list, too.
+    # Checking just the exact signature misses overloads/shadow definitions;
+    # those could make insertion target ambiguous or call the wrong function.
+    all_dispatchers = re.compile(
+        r'(?m)^[ \\t]*(?:static[ \\t]+)?void[ \\t]+'
+        r'phase5bc_dispatch_packed_icall\\s*\\(')
+    found = list(all_dispatchers.finditer(text))
+    if len(found)!=1:
+        raise ValueError(
+            f'packed dispatcher declarations/definitions count={len(found)}; expected 1')
     matches = list(definition.finditer(text))
-    if len(matches)!=1:
-        raise ValueError(f'exact R76 packed dispatcher definition count={len(matches)}')
+    if len(matches)!=1 or found[0].start()!=matches[0].start():
+        raise ValueError(
+            f'exact R76 packed dispatcher definition count={len(matches)}')
     for x in ('GUEST_READ16','GUEST_WRITE16','GUEST_READ32','GUEST_WRITE32',
               'phase4c_escape','PHASE4C_BOUNDARY_ICALL_SAFE'):
         if x not in text:raise ValueError('missing guest runtime primitive '+x)
