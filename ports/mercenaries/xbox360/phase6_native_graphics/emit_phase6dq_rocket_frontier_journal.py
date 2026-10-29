@@ -2919,7 +2919,7 @@ def instrument_r47_audio_producer_and_cleanup(text: str) -> str:
 
 def instrument_r49_audio_esi_preservation(text: str) -> str:
     """Restore original computed ESI only across specific x86 call boundaries."""
-    beg, end = function_span(text, "static void sub_002A6B98(void)")
+    beg, end = function_span(text, "static void sub_002A6B98(void)\n{")
     body = text[beg:end]
     for proof in ("esi = ebx + 0x14;", "sub_002A7B73();", "sub_002A7605();"):
         if proof not in body:
@@ -2936,7 +2936,7 @@ def instrument_r49_audio_esi_preservation(text: str) -> str:
         esi = ebx + 0x14u;
     }""", "R49 post-setup ESI restoration")
     text = text[:beg] + body + text[end:]
-    beg, end = function_span(text, "static void sub_002A7605(void)")
+    beg, end = function_span(text, "static void sub_002A7605(void)\n{")
     body = text[beg:end]
     body = replace_once(body, "    uint32_t ebp;\n",
         "    uint32_t ebp;\n    uint32_t r49_saved_slot_base = 0u;\n",
@@ -3350,6 +3350,9 @@ def main() -> int:
         "phase6dq_r45_note_audio_object_call(0x002A763Eu, eax);",
         "phase6dq_r45_note_audio_object_call(0x002A6BCDu, ecx);",
         "phase6dq_r45_note_audio_object_call(0x002A6BFDu, ecx);",
+        "P6DQ R49 ESI REPAIR: site=002A6BB0",
+        "P6DQ R49 ESI REPAIR: site=002A763E",
+        "r49_saved_slot_base = esi;",
         "loc_002A74ED: ;",
         "loc_002A7712: ;",
         "loc_002A77FB: ;",
