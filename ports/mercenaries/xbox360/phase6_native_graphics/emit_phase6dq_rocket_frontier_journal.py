@@ -38,10 +38,10 @@ import re
 from pathlib import Path
 
 BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
-BUILD_TAG = "P6DQ-R49-ESI-SLOT-20261028-A"
+BUILD_TAG = "P6DQ-R51-MM173-FRAME-20261029-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R49"
+EMITTER_REVISION = "6DQ-R51"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -2963,6 +2963,60 @@ def instrument_r49_audio_esi_preservation(text: str) -> str:
     text = text[:beg] + body + text[end:]
     return text
 
+
+def instrument_r51_mm173_frame_capture(text: str) -> str:
+    """Repair only proven 002A6D7C ordinal-173 call-frame snapshot timing.
+
+    R49 hardware: savedEsp=008BF820 and callEsp=008BF814 (12 bytes);
+    ordinal 173 requires an 8-byte callee frame.
+    R50 source: ECX is preserved on the caller's stack *before* the one
+    argument and synthetic return are pushed. Snapshot after that temporary
+    PUSH32 rather than before it. Leave the preserved ECX word live until
+    the enclosing translated function discards it via its existing epilogue.
+    No MmGetPhysicalAddress bridge change, no ABI bypass, no guest memory
+    fence relaxation, and no changes to any other indirect call.
+    """
+    begin, end = function_span(text, "static void sub_002A6D7C(void)\n{")
+    body = text[begin:end]
+    old = (
+        "    { uint32_t _icall_esp = g_esp;\n"
+        "    PUSH32(esp, ecx);\n"
+        "    PUSH32(esp, phase6ch_apu_read32(ebp + 8));\n"
+        "    PUSH32(esp, 0); PHASE6DJ_ICALL_SAFE(phase6df_function_va, "
+        "phase6ch_apu_read32(0x2DBE5C), _icall_esp); /* indirect call */\n"
+        "    }"
+    )
+    new = (
+        "    { PUSH32(esp, ecx);\n"
+        "    uint32_t _icall_esp = g_esp; /* R51: snapshot after caller-only ECX */\n"
+        "    PUSH32(esp, phase6ch_apu_read32(ebp + 8));\n"
+        "    PUSH32(esp, 0);\n"
+        "    if (phase6ch_apu_read32(0x2DBE5C) == 0x800000ADu)\n"
+        "    {\n"
+        "        char r51line[224];\n"
+        '        sprintf(r51line, "P6DQ R51 MM173 FRAME: site=002A6D7C saved=%08X current=%08X delta=%u preserved_ecx=%08X",\n'
+        "            (unsigned int)_icall_esp, (unsigned int)g_esp,\n"
+        "            (unsigned int)(_icall_esp - g_esp), (unsigned int)ecx);\n"
+        "        trace(r51line);\n"
+        "    }\n"
+        "    PHASE6DJ_ICALL_SAFE(phase6df_function_va, "
+        "phase6ch_apu_read32(0x2DBE5C), _icall_esp); /* indirect call */\n"
+        "    }"
+    )
+    body = replace_once(body, old, new, "R51 exact 002A6D7C saved-ESP placement")
+    # A second ordinal-173 call in this function already has the correct
+    # 8-byte snapshot shape and must remain untouched.
+    second = (
+        "    { uint32_t _icall_esp = g_esp;\n"
+        "    PUSH32(esp, eax);\n"
+        "    PUSH32(esp, 0); PHASE6DJ_ICALL_SAFE(phase6df_function_va, "
+        "phase6ch_apu_read32(0x2DBE5C), _icall_esp); /* indirect call */"
+    )
+    if body.count(second) != 1:
+        raise SystemExit("[Phase6DQ] R51 second MM173 callsite changed; refuse patch")
+    text = text[:begin] + body + text[end:]
+    return text
+
 def route_all_dsound_accesses(text: str, base) -> tuple[str, dict[str, int]]:
     """Route raw guest accesses in every translated DSOUND sub_* through APU wrappers."""
     masked = base.mask_noncode(text)
@@ -3269,6 +3323,7 @@ def main() -> int:
     main_text = instrument_r45_audio_object_provenance(main_text)
     main_text = instrument_r47_audio_producer_and_cleanup(main_text)
     main_text = instrument_r49_audio_esi_preservation(main_text)
+    main_text = instrument_r51_mm173_frame_capture(main_text)
     main_text = instrument_xact_init_probe(main_text, base)
     main_text, f78f_read_sites = instrument_f78f_origin_probe(main_text, base)
     main_text = install_f78f_origin_support(main_text, f78f_read_sites)
@@ -3353,6 +3408,8 @@ def main() -> int:
         "P6DQ R49 ESI REPAIR: site=002A6BB0",
         "P6DQ R49 ESI REPAIR: site=002A763E",
         "r49_saved_slot_base = esi;",
+        "P6DQ R51 MM173 FRAME: site=002A6D7C",
+        "snapshot after caller-only ECX",
         "loc_002A74ED: ;",
         "loc_002A7712: ;",
         "loc_002A77FB: ;",
@@ -3622,6 +3679,20 @@ def main() -> int:
             "no_fabricated_audio_object": True,
             "no_channel_index_clamp": True,
             "ordinary_guest_faults_unchanged": True,
+            "hardware_validation_pending": True,
+        },
+        "r51_mm173_frame_capture": {
+            "hardware_seed": "R49",
+            "static_audit": "R50",
+            "translated_owner": "0x002A6D7C",
+            "ordinal": 173,
+            "thunk": "0x800000AD",
+            "snapshot_after_caller_ecx_push": True,
+            "expected_kernel_frame_bytes": 8,
+            "preserves_caller_ecx_stack_word": True,
+            "other_ordinal_173_calls_untouched": True,
+            "kernel_bridge_unchanged": True,
+            "guest_memory_fences_unchanged": True,
             "hardware_validation_pending": True,
         },
         "ac97_output_busmaster_bridge": {
