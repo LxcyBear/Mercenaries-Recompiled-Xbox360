@@ -16,6 +16,7 @@ spec.loader.exec_module(module)
 
 SYNTHETIC_MAIN='''\
 /* P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029 */
+/* PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF START | P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029 */
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 #define GUEST_READ16(a) fake_read16(a)
@@ -52,6 +53,8 @@ def check():
         modified=target.read_text(encoding='utf-8')
         assert modified.startswith(SYNTHETIC_MAIN[:45])
         assert modified.count(module.PATCH_MARKER)==2
+        assert modified.count(module.BOOT_MARKER)==1
+        assert result["boot_marker"]==module.BOOT_MARKER
         assert modified.count('phase6k1a_ke_query_system_time(savedEsp)')==1
         assert modified.count('phase6k1a_rtl_time_fields_to_time(savedEsp)')==1
         assert modified.count('phase6k1a_rtl_time_to_time_fields(savedEsp)')==1
