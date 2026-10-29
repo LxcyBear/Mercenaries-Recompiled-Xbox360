@@ -107,10 +107,10 @@ if($LASTEXITCODE-ne0){
 }
 
 $emitterText=Get-Content $emitter -Raw
-if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R47"')){
-  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R47"
+if(-not$emitterText.Contains('EMITTER_REVISION = "6DQ-R49"')){
+  throw "Phase 6DQ stale emitter detected; expected revision 6DQ-R49"
 }
-Write-Host "[Phase6DQ] Emitter revision: 6DQ-R47"
+Write-Host "[Phase6DQ] Emitter revision: 6DQ-R49"
 
 if(Test-Path $out){Remove-Item $out -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $out|Out-Null
@@ -154,12 +154,16 @@ foreach($f in @($main,$mono,$env,$manifest,$shards)){
 }
 
 $r=Get-Content $manifest -Raw|ConvertFrom-Json
-if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-R47-AUDIO-PROVENANCE-20261027-A"){
+if($r.phase-ne"6DQ"-or$r.build_tag-ne"P6DQ-R49-ESI-SLOT-20261028-A"){
   throw "Phase 6DQ manifest identity mismatch"
 }
 
 $q=$r.phase6dq_rocket_frontier_journal
-if($q.emitter_revision-ne"6DQ-R47"-or
+if($q.emitter_revision-ne"6DQ-R49"-or
+   $null-eq$q.r49_audio_esi_preservation-or
+   $q.r49_audio_esi_preservation.source_from_existing_guest_registers-ne$true-or
+   $q.r49_audio_esi_preservation.no_fabricated_audio_object-ne$true-or
+   $q.r49_audio_esi_preservation.ordinary_guest_faults_unchanged-ne$true-or
    $null-eq$q.r47_audio_producer_and_cleanup-or
    $q.r47_audio_producer_and_cleanup.contained_branch_cleanup-ne"0x002A7765"-or
    $q.r47_audio_producer_and_cleanup.no_index_clamp-ne$true-or
@@ -214,7 +218,7 @@ if($q.emitter_revision-ne"6DQ-R47"-or
 
 $text=Get-Content $mono -Raw
 foreach($marker in @(
-  "P6DQ-R47-AUDIO-PROVENANCE-20261027-A",
+  "P6DQ-R49-ESI-SLOT-20261028-A",
   "phase6dq_env_build_cookie",
   "P6DQ ROCKET DISPATCH FIRST",
   "P6DQ ROCKET HARD STOP",
@@ -234,6 +238,9 @@ foreach($marker in @(
   "phase6dq_r45_note_audio_object_call(0x002A6BCDu, ecx);",
   "phase6dq_r45_note_audio_object_call(0x002A6BFDu, ecx);",
   "goto loc_002A7765;",
+  "P6DQ R49 ESI REPAIR: site=002A6BB0",
+  "P6DQ R49 ESI REPAIR: site=002A763E",
+  "r49_saved_slot_base = esi;",
   "P6DQ DSOUND POISON NOOP:",
   "target == 0xF6DCCCD0u",
   "#define PHASE4C_EXEC_BUDGET 64000000u",
@@ -286,7 +293,7 @@ if(-not$SkipSolutionBuild){
     GeneratedMain=$main
     GeneratedEnv=$env
     GeneratedShardDir=$shards
-    ExpectedBuildTag="P6DQ-R47-AUDIO-PROVENANCE-20261027-A"
+    ExpectedBuildTag="P6DQ-R49-ESI-SLOT-20261028-A"
     ExpectedEnvCookie="phase6dq_env_build_cookie"
     SolutionRoot=$SolutionRoot
     Configuration="Release"
