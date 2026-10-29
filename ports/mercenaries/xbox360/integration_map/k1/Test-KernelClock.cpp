@@ -18,6 +18,9 @@ int main() {
     TimeFields first={};assert(merc360_k1::from_ticks(0,&first));
     assert(first.weekday==1);
     assert(encode(1970,1,1)==UINT64_C(116444736000000000));
+    assert(encode(2000,1,1)==UINT64_C(125911584000000000));
+    assert(encode(2024,2,29)==UINT64_C(133536384000000000));
+    assert(encode(9999,12,31,23,59,59,999)==UINT64_C(2650467743999990000));
     assert(encode(2000,2,29)>encode(2000,2,28));
     assert(encode(2024,2,29)+merc360_k1::TICKS_DAY==encode(2024,3,1));
     assert(encode(9999,12,31,23,59,59,999)>0u);
