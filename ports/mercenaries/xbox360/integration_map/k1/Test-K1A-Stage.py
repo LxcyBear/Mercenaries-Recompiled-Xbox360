@@ -82,6 +82,19 @@ def check():
             'void phase5bc_dispatch_packed_icall('+
             'uint32_t x) {}\nvoid phase5bc_dispatch_packed_icall('),
             'multiple packed dispatchers')
+        # Fail on a second function of the SAME signature as well.
+        expect_rejected(SYNTHETIC_MAIN.replace(
+            'void phase5bc_dispatch_packed_icall(',
+            'void phase5bc_dispatch_packed_icall('+
+            'uint32_t target, uint32_t savedEsp) {}\n'
+            'void phase5bc_dispatch_packed_icall('), 'duplicate exact dispatcher')
+        # A stray prototype must also trigger a fail-closed review rather than
+        # silently broadening the supported integration surface.
+        expect_rejected(SYNTHETIC_MAIN.replace(
+            'void phase5bc_dispatch_packed_icall(',
+            'void phase5bc_dispatch_packed_icall('+
+            'uint32_t target, uint32_t savedEsp);\n'
+            'void phase5bc_dispatch_packed_icall('), 'extra dispatcher declaration')
         try:module.stage(source,source,here)
         except ValueError:pass
         else:raise AssertionError('In-place R76 mutation was not rejected')
