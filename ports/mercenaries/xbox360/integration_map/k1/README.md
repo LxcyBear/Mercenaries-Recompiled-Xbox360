@@ -56,6 +56,35 @@ This creates a completely new staged `main.cpp` and an SHA manifest under
 existing R76 XEX remain unchanged. Do **not** send the staged `main.cpp`
 or any retail game file; only send the short manifest/output.
 
+## First incremental VS2017 Xbox 360 build
+
+The new `Build-K1A-ClockBatch.ps1` script runs both Python fixture gates,
+checks the **exact proven R76 main SHA-256**, regenerates staged code,
+verifies all three imported target ordinals and distinct K1A **boot marker**,
+and checks the 64 TrueTU shard inputs. It then invokes the existing
+VS2017 Xbox 360 shadow builder with `SkipClean` and publishes a **separate**
+`build/phase6_integration_map/k1a_clock_build/Merc-K1A-ClockBatch.xex`.
+
+From the Mercenaries repo root:
+
+```powershell
+git pull --ff-only
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Build-K1A-ClockBatch.ps1"
+```
+
+To only rerun the gates and regenerate staged source without compiling:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Build-K1A-ClockBatch.ps1" -PreflightOnly
+```
+
+The K1A runtime startup watermark is
+`P6K1A-BOOT-CLOCK128-304-305-20261029`. It must appear in a **genuine
+Xbox execution log** before any hardware success is attributed to K1A.
+The existing R76 XEX is preserved in its original output directory.
+A successful XDK compilation is not proof of guest ABI, timing, first frame,
+audio or menu operation.
+
 **Not an Xbox-build PASS yet.** Remaining verification: the stage itself
 must pass on the user's exact R76 cached source, the host C++ tests must
 run locally if a compiler is available, and the VS2017/XDK guest
