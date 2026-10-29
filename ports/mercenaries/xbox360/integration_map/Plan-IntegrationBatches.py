@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Convert Phase 6 integration-map outputs into evidence-labelled batch backlog.
+
+NO runtime patches, game data or XDK assets. A static candidate is NOT an
+import; an import is NOT a tested implementation; a route is NOT a PASS.
+"""
+from __future__ import annotations
+import argparse
+import csv
+import json
+from collections import Counter, defaultdict
+from pathlib import Path
+
+DATA_EXPORTS={40,41,42,156,164,322,324,326,356,357}
+TIME_FAMILY={99,113,128,139,142,149,151,156}
+THREAD_SYNC={98,107,109,129,139,142,160,161,255,277,291,294}
+MEMORY={14,15,17,23,173,184,185}
+FILES={187,196,202,218,226,236}
+AUDIO={128,151}
+PRIORITY={128:0,151:1,113:2,149:3}
+
+def csv_read(path:Path):
+    with path.open(newline="",encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+def csv_write(path:Path,rows:list[dict],fields:list[str]):
+    with path.open("w",newline="",encoding="utf-8") as f:
+        w=csv.DictWriter(f,fieldnames=fields,extrasaction="ignore")
+        w.writeheader();w.writerows(rows)
+
+def family(n:int)->str:
+    if n in TIME_FAMILY:return "TIME_SCHEDULING"
+    if n in THREAD_SYNC:return "THREAD_SYNCHRONIZATION"
+    if n in MEMORY:return "GUEST_MEMORY"
+    if n in FILES:return "STORAGE_IO"
+    return "OTHER_KERNEL"
+
+def kernel_rows(rows):
+    out=[]
+    for r in rows:
+        n=int(r["ordinal"])
+        imported=r["retail_import_verified"].strip().lower()=="true"
+        routed=r["route_present"].strip().lower()=="true"
+        isdata=n in DATA_EXPORTS or "DATA" in r["name"].upper()
+        if not imported:
+            disposition="STATIC_CANDIDATE_ONLY"
+        elif isdata:
+            disposition="DATA_EXPORT_VERIFY_RELOCATION"
+        elif not routed:
+            disposition="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED"
+        else:
+            disposition="IMPORTED_ROUTED_SEMANTICS_UNVERIFIED"
+        if n==128:priority="P0_ACTIVE_HARDWARE_STOP"
+        elif imported and not isdata and not routed:priority="P1_VERIFIED_MISSING_ROUTE"
+        elif imported and not isdata and routed:priority="P2_TEST_SEMANTICS_ABI"
+        elif isdata:priority="P2_DATA_RELOCATION"
+        else:priority="P3_STATIC_TRIAGE"
+        out.append({
+            "ordinal":n,"name":r["name"],
+            "family":family(n),"priority":priority,
+            "disposition":disposition,
+            "retail_import_verified":imported,
+            "route_present":routed,
+            "route_sources":r["route_sources"],
+            "static_literal_mentions":r["static_literal_mentions"],
+            "next_step":(
+                "Verify ordinal-128 guest stack frame, 8-byte output pointer, and 100ns clock"
+                if n==128 else
+                "Verify data relocation and readback; not a callable kernel API"
+                if isdata else
+                "Validate call ABI, guest side effects, error codes and return value"
+                if imported and routed else
+                "Confirm presence in exact 111-slot import table before labeling missing"
+                if not imported else
+                "Implement typed bridge with offline fixture; preserve unknown dispatch fence")
+        })
+    def rank(r):
+        p=r["priority"]
+        return (0 if p.startswith("P0") else 1 if p.startswith("P1") else 2 if p.startswith("P2") else 3,
+                PRIORITY.get(r["ordinal"],999),r["ordinal"])
+    return sorted(out,key=rank)
+
+def abi_rows(edges,limit=150):
+    callers=Counter();callees=Counter()
+    for r in edges:
+        n=int(r["static_callsites"])
+        callers[r["caller_va"]]+=n;callees[r["callee_va"]]+=n
+    scores=[]
+    for va in callers.keys()|callees.keys():
+        incoming=callees[va];outgoing=callers[va]
+        scores.append({"guest_va":va,"static_incoming_calls":incoming,
+                       "static_outgoing_calls":outgoing,
+                       "static_degree":incoming+outgoing,
+                       "status":"ABI_RISK_CANDIDATE_NOT_FAULT"})
+    scores.sort(key=lambda x:(-x["static_degree"],x["guest_va"]))
+    return scores[:limit],len(scores)
+
+def hardware_rows(mmio):
+    families=defaultdict(lambda:{"unique_addresses":0,"literal_mentions":0})
+    for r in mmio:
+        addr=r["address"]
+        n=int(r["literal_mentions"])
+        # Distinguish APU central/VP and other FE/FC. Widths/dynamic accesses
+        # remain UNKNOWN until disassembly/runtime has independently proven them.
+        if addr.startswith("FE80"):group="APU_CORE"
+        elif addr.startswith("FE82"):group="APU_VP"
+        elif addr.startswith("FE"):group="OTHER_FE_MMIO"
+        elif addr.startswith("FC"):group="FC_MMIO"
+        else:group="OTHER"
+        families[group]["unique_addresses"]+=1
+        families[group]["literal_mentions"]+=n
+    return [{"family":key,**value,"semantic_status":"STATIC_LITERALS_ONLY"}
+            for key,value in sorted(families.items())]
+
+def main():
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--out",type=Path,required=True)
+    a=ap.parse_args()
+    out=a.out
+    needed=("kernel-coverage.csv","guest-call-edges.csv","mmio-literals.csv",
+            "fault-ledger.json","phase6-integration-map.json")
+    for n in needed:
+        if not (out/n).is_file():raise ValueError(f"Required map input missing: {n}")
+    summary=json.loads((out/"phase6-integration-map.json").read_text(encoding="utf-8"))
+    ledger=json.loads((out/"fault-ledger.json").read_text(encoding="utf-8"))
+    if summary.get("status")!="phase6DQ_diagnostic_baseline_frozen_NOT_gate6":
+        raise ValueError("Wrong integration baseline identity")
+    imports_verified=summary["import_inventory"]["verified"]
+    kernel=kernel_rows(csv_read(out/"kernel-coverage.csv"))
+    if imports_verified and summary["import_inventory"].get("expected")!=111:
+        raise ValueError("Expected exactly 111 retail import slots")
+    abi,abi_nodes=abi_rows(csv_read(out/"guest-call-edges.csv"))
+    mmio=hardware_rows(csv_read(out/"mmio-literals.csv"))
+    faults=sorted(ledger["faults"].values(),key=lambda r:(-r["hits"],r["target"],r["caller"]))
+    csv_write(out/"kernel-batch-priorities.csv",kernel,[
+        "ordinal","name","family","priority","disposition",
+        "retail_import_verified","route_present","route_sources",
+        "static_literal_mentions","next_step"])
+    csv_write(out/"guest-abi-hotspots.csv",abi,[
+        "guest_va","static_incoming_calls","static_outgoing_calls",
+        "static_degree","status"])
+    csv_write(out/"mmio-batch-families.csv",mmio,[
+        "family","unique_addresses","literal_mentions","semantic_status"])
+    missing=sum(x["disposition"]=="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED" for x in kernel)
+    routed=sum(x["disposition"]=="IMPORTED_ROUTED_SEMANTICS_UNVERIFIED" for x in kernel)
+    static=sum(x["disposition"]=="STATIC_CANDIDATE_ONLY" for x in kernel)
+    lines=[
+        "# Phase 6 — batched integration plan","",
+        "**Purpose:** map, log, fix root-cause classes, validate, repeat — no more 6DQ micro-revisions.","",
+        "## Evidence coverage",
+        "",
+        f"- Exact owned retail XBE import table: {'VERIFIED (111 slots)' if imports_verified else 'NOT PROVIDED'}",
+        f"- Kernel static candidates requiring import reconciliation: {static}",
+        f"- Verified callable imports with no matching explicit dispatch route: {missing}",
+        f"- Verified routed callable imports requiring semantic/ABI testing: {routed}",
+        f"- Guest ABI graph: {len(csv_read(out/'guest-call-edges.csv')):,} unique static edges across {abi_nodes:,} nodes",
+        f"- Distinct hardware fault signatures imported: {len(faults)}",
+        "",
+        "Route present means only that a source branch exists. **No route is automatically marked hardware PASS.**",
+        "",
+        "## Priority waves","",
+        "1. **Kernel/clock + synchronization (P0/P1).** Validate all 111 exact imports when XBE",
+        "   is provided. Handle ordinal 128 with real 100ns output and exact guest",
+        "   frame convention, then other imported time/sync functions as a batch.",
+        "2. **Guest ABI (P1).** Differential-test preservation of caller/callee-saved registers,",
+        "   ESP deltas and nested calls. Rank the graph as *candidates*, not bugs.",
+        "3. **Graphics (P1).** Trace real guest D3D -> display mode -> framebuffer -> first present.",
+        "4. **MMIO (P2).** Group APU/AC97/NV2A by exact address and width; keep unknowns fenced.",
+        "5. **Assets and input (P2).** Batch I/O and callback timing contracts.",
+        "",
+        "## First kernel candidates (NOT correctness claims)","",
+        "| Ordinal | Name | Classification | Priority |",
+        "|---|---|---|---|"
+    ]
+    for row in kernel[:20]:
+        lines.append(f"| {row['ordinal']} | {row['name']} | {row['disposition']} | {row['priority']} |")
+    lines.extend(["","## ABI hotspot candidates (NOT proven faults)","",
+                  "| Guest VA | Inbound static calls | Outbound static calls |",
+                  "|---|---:|---:|"])
+    for row in abi[:12]:
+        lines.append(f"| {row['guest_va']} | {row['static_incoming_calls']} | {row['static_outgoing_calls']} |")
+    lines.extend(["","## MMIO static address groups (not all dynamic accesses)","",
+                  "| Family | Unique literals | Occurrences |",
+                  "|---|---:|---:|"])
+    for row in mmio:
+        lines.append(f"| {row['family']} | {row['unique_addresses']} | {row['literal_mentions']} |")
+    lines.extend(["","## Top observed runtime faults",""])
+    if faults:
+        lines.extend(["| Kind | Caller | Target | Hits | Triage |",
+                      "|---|---|---|---:|---|"])
+        for row in faults[:12]:
+            lines.append(f"| {row['kind']} | {row['caller']} | {row['target']} | {row['hits']} | {row.get('triage','unreviewed')} |")
+    else:
+        lines.append("No hardware logs imported yet. This is an **absence of evidence**, not zero faults.")
+    lines.extend(["","## Next batch acceptance gate","",
+                  "Import a genuine xbWatson log and optional verified local retail XBE,",
+                  "then pin exact kernel and ABI failure contracts and implement them",
+                  "as a single reviewed compatibility wave. Do not soften hard stops.",
+                  "",
+                  "Source used: existing Phase6DQ frozen local generated code.",
+                  "No Xbox rebuild, no generated game bytes written or exported."])
+    (out/"BATCH_PLAN.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
+    print("[BatchPlan] PASS: prioritized kernel/ABI/MMIO/fault backlog produced")
+    print(f"[BatchPlan] kernel_candidates={len(kernel)} retail_imports={'VERIFIED' if imports_verified else 'NOT_PROVIDED'}")
+    print(f"[BatchPlan] imported_callable_no_route={missing} candidates_needing_reconciliation={static}")
+    print(f"[BatchPlan] guest_abi_hotspot_nodes={abi_nodes} grouped_mmio_families={len(mmio)}")
+    print(f"[BatchPlan] evidence_hardware_faults={len(faults)}")
+    print(f"[BatchPlan] report={out/'BATCH_PLAN.md'}")
+
+if __name__=="__main__":main()
