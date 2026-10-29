@@ -86,6 +86,21 @@ def check():
         assert wrong_xbe.returncode!=0
         assert "identity mismatch" in wrong_xbe.stdout
         assert (out/"PHASE6_MAP.md").is_file()
+        planner=Path(__file__).resolve().parent/"Plan-IntegrationBatches.py"
+        planned=subprocess.run([sys.executable,str(planner),"--out",str(out)],
+            stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=20)
+        assert planned.returncode==0,planned.stdout
+        assert (out/"BATCH_PLAN.md").is_file()
+        assert (out/"kernel-batch-priorities.csv").is_file()
+        assert (out/"guest-abi-hotspots.csv").is_file()
+        assert (out/"mmio-batch-families.csv").is_file()
+        with (out/"kernel-batch-priorities.csv").open(newline="") as f:
+            prioritized=list(csv.DictReader(f))
+        assert prioritized[0]["ordinal"]=="128"
+        assert prioritized[0]["disposition"]=="STATIC_CANDIDATE_ONLY"
+        assert all(x["disposition"]!="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED"
+                   for x in prioritized)
+        print("[IntegrationMapTest] PASS: batch planning does not mistake static references for missing imports")
         print("[IntegrationMapTest] PASS: route extraction, 13000 mock ABI edges, signed MMIO")
         print("[IntegrationMapTest] PASS: deterministic fault deduplication")
         print("[IntegrationMapTest] PASS: R77 source-audit and unverified XBE rejection")
