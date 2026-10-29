@@ -7,6 +7,20 @@ Phase 6DQ micro-revision. Grounded in the SHA-verified 111-slot original Xbox
 retail import table and the R76 hardware boundary. An imported callable
 without a detected route is NOT automatically a broken runtime service.
 
+## Implemented K1A foundation — source stage (2026-10-29)
+
+- Pure C++ UTC/FILETIME 100ns conversion core written and committed:
+  `k1/KernelClockCore.h`.
+- Guest memory/query bridge for ordinals 128, 304, 305 implemented using
+  a mockable memory adapter: `k1/KernelClockGuestBridge.h`.
+- Native GCC and Clang test runs PASS for calendar and guest-memory
+  fixtures, including invalid pointers and absolute timestamp anchors.
+- `k1/Audit-K1A-Dispatch.py` and `k1/Test-K1A-Audit.py` committed
+  for fail-closed, read-only R76 source/ABI reconciliation.
+- **NOT YET INTEGRATED** into generated main.cpp, native Xbox XDK executable,
+  or the physical Xbox 360. Correct register/stack and real runtime guest
+  address validation are acceptance gates; preserve current R76 XEX.
+- K1B event/synchronization runtime is not implemented yet.
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
