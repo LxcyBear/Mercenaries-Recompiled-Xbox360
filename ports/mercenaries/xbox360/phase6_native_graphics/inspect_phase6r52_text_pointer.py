@@ -94,10 +94,17 @@ def main()->int:
       show_body(row, detailed=(va==0x0029F78F))
   print("="*104)
   print("[Phase6R52] OBJECT-VS-CODE POINTER CROSS-REFERENCES")
+  matches={token:[] for token in GLOBAL_NEEDLES}
+  counts={token:0 for token in GLOBAL_NEEDLES}
+  for i,line in enumerate(data.splitlines(),1):
+    for token in GLOBAL_NEEDLES:
+      if token in line:
+        counts[token]+=1
+        if len(matches[token])<14:
+          matches[token].append((i,line.strip()))
   for token in GLOBAL_NEEDLES:
-    found=[(i+1,line.strip()) for i,line in enumerate(data.splitlines()) if token in line]
-    print(f"[Phase6R52] literal={token} count={len(found)}")
-    for line_no,line in found[:14]:
+    print(f"[Phase6R52] literal={token} count={counts[token]}")
+    for line_no,line in matches[token]:
       print(f"[Phase6R52]   line={line_no}: {line[:240]}")
   # Treat address membership as a clue, not proof of data or code semantics.
   ftext=[r for r in rows if 0x11000 <= r["va"] < 0x25561C]
