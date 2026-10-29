@@ -23,7 +23,7 @@ $tuEmitter=Join-Path $PSScriptRoot "emit_phase6_true_tu.py"
 $builder=Join-Path $PSScriptRoot "Invoke-VS17Xbox360Build.ps1"
 
 $rocketOut=Join-Path $root "build\phase6_native_graphics\rocket_frontier_journal_xdk"
-$tuOut=Join-Path $root "build\phase6_native_graphics\r45_audio_true_tu_xdk"
+$tuOut=Join-Path $root "build\phase6_native_graphics\r47_audio_true_tu_xdk"
 
 foreach($f in @($rocket,$tuEmitter,$builder)){
   if(-not(Test-Path -LiteralPath $f)){throw "Missing Phase 6R47 TrueTU input: $f"}
@@ -32,7 +32,7 @@ foreach($f in @($rocket,$tuEmitter,$builder)){
 Write-Host "[Phase6R47] ========================================================"
 Write-Host "[Phase6R47]            AUDIO PROVENANCE + TRUE TU"
 Write-Host "[Phase6R47] ========================================================"
-Write-Host "[Phase6R47] R47: five 002A76FE callers + target entry + lookup tagged"
+Write-Host "[Phase6R47] R47: R45 caller probes + channel-store/load pointer tracing + balanced cleanup"
 Write-Host "[Phase6R47] R47: exact 00040000/00000400 poison signature contained"
 Write-Host "[Phase6R47] R47: NO channel-index clamp; NO AC97 table rewrite"
 Write-Host "[Phase6R47] TU : 64 real compiled translated_###.cpp units"
@@ -232,8 +232,8 @@ $buildArgs=@{
   SolutionRoot=$SolutionRoot
   Configuration="Release"
   Platform="Xbox 360"
-  CleanLog=(Join-Path $root "build\phase6_native_graphics\phase6r45-tu-vs2017-clean.log")
-  BuildLog=(Join-Path $root "build\phase6_native_graphics\phase6r45-tu-vs2017-build.log")
+  CleanLog=(Join-Path $root "build\phase6_native_graphics\phase6r47-tu-vs2017-clean.log")
+  BuildLog=(Join-Path $root "build\phase6_native_graphics\phase6r47-tu-vs2017-build.log")
   PublishedXex=(Join-Path $tuOut "Merc.xex")
   ShadowBuildRoot=$FastBuildRoot
 }
