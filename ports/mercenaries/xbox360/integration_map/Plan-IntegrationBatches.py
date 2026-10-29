@@ -28,10 +28,32 @@ def csv_write(path:Path,rows:list[dict],fields:list[str]):
         w=csv.DictWriter(f,fieldnames=fields,extrasaction="ignore")
         w.writeheader();w.writerows(rows)
 
-def family(n:int)->str:
+def family(n:int,name:str)->str:
+    if name.startswith("Xc"):return "CRYPTOGRAPHY"
+    if name.startswith("Dbg") or "BugCheck" in name or name in (
+        "RtlRaiseException","RtlRaiseStatus","RtlUnwind","RtlAssert"):
+        return "DEBUG_EXCEPTIONS"
+    if name in ("MmClaimGpuInstanceMemory",):return "GRAPHICS_MEMORY"
+    if name.startswith("Hal") or name.startswith("Av"):return "HARDWARE_PLATFORM"
+    if name in ("ExQueryNonVolatileSetting",):return "CONFIGURATION"
+    if name.startswith(("Io","Iof")):return "IO_MANAGER"
+    if name.startswith("NtWait") or name.startswith("NtUserIoApc"):
+        return "THREAD_SYNCHRONIZATION"
+    if name.startswith("Nt") and ("File" in name or "Directory" in name or
+                                  "Buffers" in name or "Volume" in name or
+                                  "FsControl" in name):return "STORAGE_IO"
+    if name.startswith("Nt") and ("VirtualMemory" in name or "Memory" in name):
+        return "GUEST_MEMORY"
+    if name.startswith("Nt") and "Event" in name:return "THREAD_SYNCHRONIZATION"
+    if name.startswith("Ps"):return "THREAD_LIFECYCLE"
+    if name.startswith("RtlTime"):return "TIME_CONVERSION"
+    if name.startswith("Rtl"):return "RUNTIME_HELPERS"
+    if name.startswith("Mm"):return "GUEST_MEMORY"
+    if name.startswith("Ke") and ("Timer" in name or "Time" in name):
+        return "TIME_SCHEDULING"
     if n in TIME_FAMILY:return "TIME_SCHEDULING"
     if n in FPU_FAMILY:return "FLOATING_POINT_CONTEXT"
-    if n in THREAD_SYNC:return "THREAD_SYNCHRONIZATION"
+    if n in THREAD_SYNC or name.startswith("Ke"):return "THREAD_SYNCHRONIZATION"
     if n in MEMORY:return "GUEST_MEMORY"
     if n in FILES:return "STORAGE_IO"
     return "OTHER_KERNEL"
@@ -42,13 +64,14 @@ def kernel_rows(rows, hardware_ordinal=None):
         n=int(r["ordinal"])
         imported=r["retail_import_verified"].strip().lower()=="true"
         routed=r["route_present"].strip().lower()=="true"
-        isdata=n in DATA_EXPORTS or "DATA" in r["name"].upper()
+        isdata=r.get("export_kind","")=="DATA" or (
+            not r.get("export_kind") and (n in DATA_EXPORTS or "DATA" in r["name"].upper()))
         if not imported and n==hardware_ordinal:
             disposition="HARDWARE_OBSERVED_IMPORT_SLOT_UNVERIFIED"
         elif not imported:
             disposition="STATIC_CANDIDATE_ONLY"
         elif isdata:
-            disposition="DATA_EXPORT_VERIFY_RELOCATION"
+            disposition="IMPORTED_DATA_EXPORT_NEEDS_AUDIT"
         elif not routed:
             disposition="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED"
         else:
@@ -56,11 +79,11 @@ def kernel_rows(rows, hardware_ordinal=None):
         if n==hardware_ordinal:priority="P0_ACTIVE_HARDWARE_STOP"
         elif imported and not isdata and not routed:priority="P1_VERIFIED_MISSING_ROUTE"
         elif imported and not isdata and routed:priority="P2_TEST_SEMANTICS_ABI"
-        elif imported and isdata:priority="P2_DATA_RELOCATION"
+        elif imported and isdata:priority="P2_DATA_SEMANTICS_AUDIT"
         else:priority="P3_STATIC_TRIAGE"
         out.append({
             "ordinal":n,"name":r["name"],
-            "family":family(n),"priority":priority,
+            "family":family(n,r["name"]),"priority":priority,
             "disposition":disposition,
             "retail_import_verified":imported,
             "route_present":routed,
@@ -73,7 +96,7 @@ def kernel_rows(rows, hardware_ordinal=None):
                 if n==hardware_ordinal and not imported else
                 "Confirm presence in exact 111-slot import table before assigning data or callable status"
                 if not imported else
-                "Verify data relocation and readback; not a callable kernel API"
+                "Audit how the guest consumes this imported data value; verify pointer relocation/readback when applicable"
                 if isdata else
                 "Validate call ABI, guest side effects, error codes and return value"
                 if routed else
@@ -159,6 +182,8 @@ def main():
     routed=sum(x["disposition"]=="IMPORTED_ROUTED_SEMANTICS_UNVERIFIED" for x in kernel)
     static=sum(x["disposition"]=="STATIC_CANDIDATE_ONLY" for x in kernel)
     hardware_unverified=sum(x["disposition"]=="HARDWARE_OBSERVED_IMPORT_SLOT_UNVERIFIED" for x in kernel)
+    data_exports=sum(x["disposition"]=="IMPORTED_DATA_EXPORT_NEEDS_AUDIT" for x in kernel)
+    missing_families=Counter(x["family"] for x in kernel if x["disposition"]=="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED")
     lines=[
         "# Phase 6 — batched integration plan","",
         "**Purpose:** map, log, fix root-cause classes, validate, repeat — no more 6DQ micro-revisions.","",
@@ -168,6 +193,7 @@ def main():
         f"- Kernel static candidates requiring import reconciliation: {static}",
         f"- Hardware-observed kernel targets with unverified import slot: {hardware_unverified}",
         f"- Verified callable imports with no matching explicit dispatch route: {missing if imports_verified else 'NOT ASSESSED (retail XBE needed)'}",
+        f"- Imported DATA exports to audit separately: {data_exports if imports_verified else 'NOT ASSESSED'}",
         f"- Verified routed callable imports requiring semantic/ABI testing: {routed if imports_verified else 'NOT ASSESSED (retail XBE needed)'}",
         f"- Guest ABI graph: {len(csv_read(out/'guest-call-edges.csv')):,} unique static edges across {abi_nodes:,} nodes",
         f"- Distinct hardware fault signatures imported: {len(faults)}",
@@ -190,6 +216,11 @@ def main():
     ]
     for row in kernel[:20]:
         lines.append(f"| {row['ordinal']} | {row['name']} | {row['disposition']} | {row['priority']} |")
+    lines.extend(["","## Unresolved callable routes by subsystem","",
+                  "| Subsystem | Imported callable entries without detected route |",
+                  "|---|---:|"])
+    for fam,count in sorted(missing_families.items(),key=lambda x:(-x[1],x[0])):
+        lines.append(f"| {fam} | {count} |")
     lines.extend(["","## ABI hotspot candidates (NOT proven faults)","",
                   "| Guest VA | Inbound static calls | Outbound static calls |",
                   "|---|---:|---:|"])
@@ -218,7 +249,7 @@ def main():
     (out/"BATCH_PLAN.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
     print("[BatchPlan] PASS: prioritized kernel/ABI/MMIO/fault backlog produced")
     print(f"[BatchPlan] kernel_candidates={len(kernel)} retail_imports={'VERIFIED' if imports_verified else 'NOT_PROVIDED'}")
-    print(f"[BatchPlan] imported_callable_no_route={missing if imports_verified else 'NOT_ASSESSED'} candidates_needing_reconciliation={static}")
+    print(f"[BatchPlan] imported_callable_no_route={missing if imports_verified else 'NOT_ASSESSED'} imported_data_exports={data_exports if imports_verified else 'NOT_ASSESSED'} candidates_needing_reconciliation={static}")
     print(f"[BatchPlan] guest_abi_hotspot_nodes={abi_nodes} grouped_mmio_families={len(mmio)}")
     print(f"[BatchPlan] evidence_hardware_faults={len(faults)}")
     print(f"[BatchPlan] observed_hardware_kernel_target={hardware_ordinal if hardware_ordinal is not None else 'NOT_AVAILABLE'}")
