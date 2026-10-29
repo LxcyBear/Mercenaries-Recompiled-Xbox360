@@ -4,9 +4,52 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 21, 2026 · **Current focus:** Phase 6 — Native Xbox 360 graphics (Xenos). Phase 5 is 100% COMPLETE: 5BV passed 3/3 frozen-pack hardware repeatability and the mandatory exit reconnaissance reported `READY / PASS`, classifying `0x0014CD30` as exact generated title code and producing the complete Phase-6 handoff.
+> **Last roadmap review:** October 29, 2026 · **Current focus:** Phase 6 — subsystem integration map, kernel/MMIO/guest ABI batch compatibility and first real Xenos game frame. Phase 6DQ diagnostic micro-revisions are frozen at the R76 hardware baseline and R77 source audit; Phase 6 itself remains **IN PROGRESS**. Phase 5 stays complete/frozen.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
+
+## October 29, 2026 — Phase 6DQ diagnostic freeze and integration pivot
+
+**The goal is to FINISH Mercenaries, not to maximize translated block ticks or
+the number of Phase-6 letter/number revisions.** After hundreds of iterative
+builds, Phase 6DQ is frozen as a diagnostic baseline; subsequent work is grouped
+into kernel-import, guest-ABI, MMIO, graphics and asset/streaming compatibility
+waves. This is **not** a claim that Gate 6 has passed.
+
+The hardware-proven sequence is: R72 repaired the real DirectSound resource
+free-list and XACT initialization; R76 resolved FE80200C (APU XGSCNT) via
+the mapped handler; the next safe indirect-call stop is kernel ordinal
+128 / KeQuerySystemTime, target 80000080 at tick 26,720,251.
+The R77 report is a **source audit** (not a new Xbox run): the source contains
+the existing phase4c_system_time_100ns clock helper and the runtime scans
+111 retail kernel thunk slots, but the current dispatch has no verified
+KeQuerySystemTime bridge. There are still no guest game display calls or
+framebuffer pixels evidenced by the latest Xbox run.
+
+**New standard workflow:** map the whole subsystem, collect/deduplicate
+real hardware faults, batch-fix root causes, validate offline, then build
+incrementally and repeat one real Xbox integration test per wave.
+Do not consider an import supported merely because a dispatcher route
+exists; do not bypass unknown MMIO accesses or invent timing/ABI results.
+
+- [Phase 6 integration roadmap](ports/mercenaries/xbox360/PHASE6_INTEGRATION_ROADMAP.md)
+- [Read-only integration map script](ports/mercenaries/xbox360/integration_map/Build-IntegrationMap.ps1)
+- [Map and hardware fault ledger generator](ports/mercenaries/xbox360/integration_map/Build-IntegrationMap.py)
+
+Run from the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  ".\ports\mercenaries\xbox360\integration_map\Build-IntegrationMap.ps1" `
+  -CopySummary
+```
+
+Reports are local-only under `build\phase6_integration_map`. For exact
+111-slot import identities, provide your own verified retail XBE with
+`-RetailXbe`; for actual xbWatson captures, add `-HardwareLog`.
+The scanner does not commit retail files or copyrighted generated source.
+
+---
 
 ## The mission
 
@@ -57,7 +100,7 @@ Each phase has independently checkable checkpoints below.
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
 | **5 — Subsystem bring-up under native game execution** | **COMPLETE — repeatability 3/3 PASS + exit reconnaissance READY/PASS** | Stable translated/runtime path, classified endpoint, subsystem inventory, first-touch baseline, risk map and ordered Phase-6 handoff |
-| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — inventory complete; backend abstraction cleanup / first Xenos surface next** | Repeatable native Xenos first frame, functional title/menu graphics and reproducible 3D scene |
+| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — 6DQ diagnostic baseline frozen; integration-map and batch-compatibility waves active** | Repeatable native Xenos **game** first frame, functional title/menu graphics and reproducible 3D scene |
 | 7 — Audio, movies, input and streaming integration | Not started | Functional startup media/menu audio/input with stable timing and storage streaming |
 | 8 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
