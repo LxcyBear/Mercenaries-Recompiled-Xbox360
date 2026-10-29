@@ -33,6 +33,32 @@ guest ABI audit and central integration patch. No source mutation or Xbox
 build occurs. `python` can be replaced with `.\.venv\Scripts\python.exe`
 if the system Python is unavailable.
 
+## K1A R76 packed-dispatch staging (three real compatibility handlers)
+
+**Staging is implemented** in `Stage-K1A-ClockBatch.py`. The source-only
+preflight `Test-K1A-Stage.py` checks insertion, source hash preservation,
+all three exact import target routes, guest stack argument offsets, and
+fail-closed behavior for duplicates, wrong R76 identity and in-place writes.
+
+From the Mercenaries repo root, after `git pull --ff-only`:
+
+```powershell
+python ".\ports\mercenaries\xbox360\integration_map\k1\Test-K1A-Stage.py"
+python ".\ports\mercenaries\xbox360\integration_map\k1\Stage-K1A-ClockBatch.py" --main ".\build\phase6_native_graphics\r51_mm173_true_tu_xdk\main.cpp" --out ".\build\phase6_integration_map\k1a_clock_staging\main.cpp"
+Get-Content ".\build\phase6_integration_map\k1a_clock_staging\k1a-stage-manifest.json" -Raw
+```
+
+This creates a completely new staged `main.cpp` and an SHA manifest under
+`build/phase6_integration_map`. The R76 source, 64 TrueTU shards and
+existing R76 XEX remain unchanged. Do **not** send the staged `main.cpp`
+or any retail game file; only send the short manifest/output.
+
+**Not an Xbox-build PASS yet.** Remaining verification: the stage itself
+must pass on the user's exact R76 cached source, the host C++ tests must
+run locally if a compiler is available, and the VS2017/XDK guest
+runtime must compile and preserve its kernel ABI. Hardware test comes
+only after those checks.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
