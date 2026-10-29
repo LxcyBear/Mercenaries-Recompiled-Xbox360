@@ -114,7 +114,9 @@ def check():
         assert prioritized[0]["disposition"]=="HARDWARE_OBSERVED_IMPORT_SLOT_UNVERIFIED"
         assert not any(x["priority"]=="P2_DATA_RELOCATION" for x in prioritized)
         data_candidate=next(x for x in prioritized if x["ordinal"]=="40")
-        assert data_candidate["name"]=="HalDiskCachePartitionCount (DATA)"
+        # Names come from the authoritative export catalog; DATA is a separate field.
+        assert data_candidate["name"]=="HalDiskCachePartitionCount"
+        assert bynum[40]["export_kind"]=="DATA"
         assert data_candidate["disposition"]=="STATIC_CANDIDATE_ONLY"
         assert data_candidate["priority"]=="P3_STATIC_TRIAGE"
         # Test the planner against synthetic imported evidence without a real XBE.
