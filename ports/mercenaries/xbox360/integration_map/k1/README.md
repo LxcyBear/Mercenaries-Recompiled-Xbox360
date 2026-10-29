@@ -38,13 +38,16 @@ if the system Python is unavailable.
 **Staging is implemented** in `Stage-K1A-ClockBatch.py`. The source-only
 preflight `Test-K1A-Stage.py` checks insertion, source hash preservation,
 all three exact import target routes, guest stack argument offsets, and
-fail-closed behavior for duplicates, wrong R76 identity and in-place writes.
+fail-closed behavior for **any extra dispatcher** (including altered signatures),
+wrong R76 identity and in-place writes.
 
 From the Mercenaries repo root, after `git pull --ff-only`:
 
 ```powershell
 python ".\ports\mercenaries\xbox360\integration_map\k1\Test-K1A-Stage.py"
+if ($LASTEXITCODE -ne 0) { throw "K1A stage regression gate FAILED; stop before staging" }
 python ".\ports\mercenaries\xbox360\integration_map\k1\Stage-K1A-ClockBatch.py" --main ".\build\phase6_native_graphics\r51_mm173_true_tu_xdk\main.cpp" --out ".\build\phase6_integration_map\k1a_clock_staging\main.cpp"
+if ($LASTEXITCODE -ne 0) { throw "K1A staged source generation FAILED" }
 Get-Content ".\build\phase6_integration_map\k1a_clock_staging\k1a-stage-manifest.json" -Raw
 ```
 
