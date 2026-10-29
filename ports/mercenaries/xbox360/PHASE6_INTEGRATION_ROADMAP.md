@@ -79,6 +79,29 @@ kernel CSV is marked STATIC CANDIDATE, never an exact import count or
 a verified implementation. Never pass an R77 source audit as a hardware
 run. No source code or raw game bytes are exported by the mapper.
 
+## 2026-10-29 — verified retail import inventory and gap reconciliation
+
+The local user-owned retail XBE passed the expected SHA256 identity check.
+All **111 retail kernel thunk slots** are now available for comparison.
+The initial ICALL-only map reported **43 imported callable entries without
+detected routes**, but that count was **not a validated list of 43 broken
+functions**. Cross-checking the original Xbox export ordinal reference found
+three of those are DATA exports (16, 71 and 323), and the source already
+handles ordinal 24 through a separate RECOMP_ITAIL path.
+
+The integration mapper has been extended to name kernel exports, distinguish
+known data globals and scan both ICALL and ITAIL routes. The reconciliation
+names and categorizes all 43 initial gaps for kernel/time, I/O, storage,
+hardware, memory, crypto, exception and runtime compatibility waves. The
+new classification and final route counts require another offline run.
+
+See: integration_map/IMPORT_RECONCILIATION_20261029.md
+and integration_map/xboxkrnl_ordinals_reference.json.
+
+The original R76 hard stop remains kernel ordinal 128 / KeQuerySystemTime.
+No new title frame and no runtime/hardware compatibility fix is claimed by
+this inventory update.
+
 ## Batch acceptance gates
 
 **Kernel:** account for exactly 111 retail import slots, distinguish
