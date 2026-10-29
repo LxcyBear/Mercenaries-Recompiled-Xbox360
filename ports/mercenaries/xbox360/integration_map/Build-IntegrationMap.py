@@ -12,6 +12,19 @@ from pathlib import Path
 
 EXPECTED_XBE_SHA = 'AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7'
 THUNK_VA, THUNK_COUNT = 0x002DBCE0, 111
+# These are Xbox kernel global/data exports, NOT callable routines. Others
+# are treated as callable candidates until their semantics are checked.
+DATA_EXPORT_ORDINALS = frozenset((16,22,30,31,40,41,42,64,70,71,88,89,
+                                  102,120,154,156,157,162,164,240,245,249,
+                                  259,321,322,323,324,325,326,353,354,355,356,357))
+
+def load_export_names():
+    catalog=Path(__file__).with_name('xboxkrnl_ordinals_reference.json')
+    data=json.loads(catalog.read_text(encoding='utf-8'))
+    if data.get('schema')!=1 or len(data.get('entries',{}))<350:
+        raise ValueError('Xbox kernel ordinal reference missing or incomplete')
+    return {int(k):row['name'] for k,row in data['entries'].items()}
+
 KNOWN = {24:'ExQueryNonVolatileSetting',
          40:'HalDiskCachePartitionCount (DATA)',
          41:'HalDiskModelNumber (DATA)',
@@ -74,29 +87,41 @@ def import_table(xbe):
 
 
 def read_dispatch_routes(main):
-    """Route existence != implemented service or hardware pass."""
-    m=re.search(r'(?s)#define RECOMP_ICALL_SAFE\b(.*?)#define RECOMP_ITAIL\b',main)
-    if not m:raise ValueError('No current RECOMP_ICALL_SAFE macro found')
-    routes={}
-    pattern=r'(?:_phase4c_target|target)\s*==\s*0x8000([0-9a-fA-F]{4})u'
-    for raw in re.findall(pattern,m.group(1)):
-        routes.setdefault(int(raw,16),set()).add('RECOMP_ICALL_SAFE')
-    definition=re.search(
-        r'(?s)\bvoid\s+phase5bc_dispatch_packed_icall\s*\([^)]*\)\s*\{',main)
-    if not definition:raise ValueError('Packed-ICALL dispatcher definition missing')
-    start=definition.start()
-    brace=main.find('{',definition.start(),definition.end())
-    depth=0
-    for j in range(brace,len(main)):
-        if main[j]=='{':depth+=1
-        elif main[j]=='}':
-            depth-=1
-            if depth==0:break
-    if depth:raise ValueError('Dispatcher braces unbalanced')
-    for raw in re.findall(pattern,main[start:j+1]):
-        routes.setdefault(int(raw,16),set()).add('PACKED_ICALL')
-    return routes
+    """Explicit kernel-route checks: ICALL, ITAIL and packed dispatchers.
 
+    A matching route is NOT equivalent to correct emulation or hardware PASS.
+    No automatic inclusion of every supported import from startup/host bridges.
+    """
+    routes={}
+    pattern=r'(?:_phase4c_target|_phase4c_tail_target|target)\s*==\s*0x8000([0-9a-fA-F]{4})u'
+    def add(src,label):
+        for raw in re.findall(pattern,src):
+            routes.setdefault(int(raw,16),set()).add(label)
+    def macro_span(first,last,label):
+        m=re.search(r'(?s)#define '+first+r'\b(.*?)#define '+last+r'\b',main)
+        if not m:raise ValueError(f'Macro section {first} -> {last} missing')
+        add(m.group(1),label)
+    macro_span('RECOMP_ICALL_SAFE','RECOMP_ITAIL','RECOMP_ICALL_SAFE')
+    macro_span('RECOMP_ITAIL','RECOMP_ITAIL_SAFE','RECOMP_ITAIL')
+    def definition_span(name):
+        m=re.search(
+            r'(?s)\bvoid\s+'+re.escape(name)+r'\s*\([^)]*\)\s*\{',main)
+        if not m:return None
+        brace=main.find('{',m.start(),m.end())
+        if brace<0:raise ValueError('Missing function brace: '+name)
+        depth=0
+        for j in range(brace,len(main)):
+            if main[j]=='{':depth+=1
+            elif main[j]=='}':
+                depth-=1
+                if depth==0:return main[m.start():j+1]
+        raise ValueError('Unbalanced dispatch braces: '+name)
+    packed=definition_span('phase5bc_dispatch_packed_icall')
+    if not packed:raise ValueError('Packed ICALL dispatcher missing')
+    add(packed,'PACKED_ICALL')
+    tail=definition_span('phase6cq_dispatch_packed_itail')
+    if tail:add(tail,'PACKED_ITAIL')
+    return routes
 
 def scan_guest(source):
     pattern=r'(?m)^\s*(?:static\s+)?void\s+sub_([0-9a-fA-F]{8})\(void\)\s*\{'
@@ -177,10 +202,12 @@ def main():
     funcs,direct,indirect,literals,mmio,edges=scan_guest(source)
     if funcs<13000:raise ValueError(f'Incomplete guest corpus: only {funcs} functions')
     routes=read_dispatch_routes(maintext)
+    names=load_export_names()
     imports=import_table(a.retail_xbe) if a.retail_xbe else []
     candidates=({e['ordinal'] for e in imports if e['ordinal'] is not None}
                 if imports else set(routes)|set(literals))
-    kernel=[{'ordinal':n,'name':KNOWN.get(n,'UNKNOWN'),
+    kernel=[{'ordinal':n,'name':names.get(n,KNOWN.get(n,'UNKNOWN')),
+             'export_kind':('DATA' if n in DATA_EXPORT_ORDINALS else 'FUNCTION_CANDIDATE'),
              'retail_import_verified':bool(imports),'route_present':bool(routes.get(n)),
              'route_sources':';'.join(sorted(routes.get(n,()))),
              'static_literal_mentions':literals.get(n,0),
@@ -197,7 +224,7 @@ def main():
     ledger=fault_ledger(a.hardware_log,ledger_path)
     ledger_path.write_text(json.dumps(ledger,indent=2)+'\n',encoding='utf-8')
     csv_out(a.out/'kernel-coverage.csv',kernel,[
-        'ordinal','name','retail_import_verified','route_present','route_sources',
+        'ordinal','name','export_kind','retail_import_verified','route_present','route_sources',
         'static_literal_mentions','semantics_tested','confidence'])
     csv_out(a.out/'mmio-literals.csv',mmio_rows,[
         'address','literal_mentions','subsystem','status'])
