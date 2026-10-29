@@ -38,10 +38,10 @@ import re
 from pathlib import Path
 
 BASE_TAG = "P6DP-APU-VP-FREE-20261026-A"
-BUILD_TAG = "P6DQ-R47-AUDIO-PROVENANCE-20261027-A"
+BUILD_TAG = "P6DQ-R49-ESI-SLOT-20261028-A"
 COOKIE_OLD = "phase6dp_env_build_cookie"
 COOKIE_NEW = "phase6dq_env_build_cookie"
-EMITTER_REVISION = "6DQ-R47"
+EMITTER_REVISION = "6DQ-R49"
 
 CANDIDATE_CAP = 4096
 DSOUND_POISON_SITE = 0x002A41F7
@@ -2916,6 +2916,53 @@ def instrument_r47_audio_producer_and_cleanup(text: str) -> str:
         text = text[:start] + scoped.replace(old_line, new_line, 1) + text[stop:]
     return text
 
+
+def instrument_r49_audio_esi_preservation(text: str) -> str:
+    """Restore original computed ESI only across specific x86 call boundaries."""
+    beg, end = function_span(text, "static void sub_002A6B98(void)")
+    body = text[beg:end]
+    for proof in ("esi = ebx + 0x14;", "sub_002A7B73();", "sub_002A7605();"):
+        if proof not in body:
+            raise SystemExit("[Phase6DQ] R49 upstream source proof missing: " + proof)
+    anchor = "loc_002A6BB0: ;\n    PHASE4C_BUDGET_TICK(0x002A6BB0u);"
+    body = replace_once(body, anchor, anchor + """
+    if (esi != ebx + 0x14u)
+    {
+        char r49line[256];
+        sprintf(r49line, "P6DQ R49 ESI REPAIR: site=002A6BB0 before=%08X expected=%08X ebx=%08X esp=%08X",
+            (unsigned int)esi, (unsigned int)(ebx + 0x14u),
+            (unsigned int)ebx, (unsigned int)g_esp);
+        trace(r49line);
+        esi = ebx + 0x14u;
+    }""", "R49 post-setup ESI restoration")
+    text = text[:beg] + body + text[end:]
+    beg, end = function_span(text, "static void sub_002A7605(void)")
+    body = text[beg:end]
+    body = replace_once(body, "    uint32_t ebp;\n",
+        "    uint32_t ebp;\n    uint32_t r49_saved_slot_base = 0u;\n",
+        "R49 slot-base local")
+    body = replace_once(body, "    esi = ecx;\n",
+        "    esi = ecx;\n    r49_saved_slot_base = esi;\n",
+        "R49 slot-base capture")
+    if body.count("phase6ch_apu_write32(esi + ecx * 4, eax);") != 1:
+        raise SystemExit("[Phase6DQ] R49 expected exact pointer-slot write")
+    anchor = "loc_002A763E: ;\n    PHASE4C_BUDGET_TICK(0x002A763Eu);"
+    body = replace_once(body, anchor, anchor + """
+    if (esi != r49_saved_slot_base &&
+        r49_saved_slot_base >= 0x00010000u &&
+        r49_saved_slot_base <= 0x03FFFFF8u &&
+        (r49_saved_slot_base & 3u) == 0u)
+    {
+        char r49line[256];
+        sprintf(r49line, "P6DQ R49 ESI REPAIR: site=002A763E before=%08X expected=%08X index=%08X object=%08X esp=%08X",
+            (unsigned int)esi, (unsigned int)r49_saved_slot_base,
+            (unsigned int)ecx, (unsigned int)eax, (unsigned int)g_esp);
+        trace(r49line);
+        esi = r49_saved_slot_base;
+    }""", "R49 slot-store ESI restoration")
+    text = text[:beg] + body + text[end:]
+    return text
+
 def route_all_dsound_accesses(text: str, base) -> tuple[str, dict[str, int]]:
     """Route raw guest accesses in every translated DSOUND sub_* through APU wrappers."""
     masked = base.mask_noncode(text)
@@ -3221,6 +3268,7 @@ def main() -> int:
     main_text = instrument_r43_ac97_channel_writes(main_text)
     main_text = instrument_r45_audio_object_provenance(main_text)
     main_text = instrument_r47_audio_producer_and_cleanup(main_text)
+    main_text = instrument_r49_audio_esi_preservation(main_text)
     main_text = instrument_xact_init_probe(main_text, base)
     main_text, f78f_read_sites = instrument_f78f_origin_probe(main_text, base)
     main_text = install_f78f_origin_support(main_text, f78f_read_sites)
@@ -3561,6 +3609,17 @@ def main() -> int:
             "no_table_mutation": True,
             "ordinary_guest_memory_fences_unchanged": True,
             "diag_only": True,
+        },
+        "r49_audio_esi_preservation": {
+            "r47_proof": "ESI=0 at 002A763E; second [EBX+18]=00040000",
+            "r48_audit": True,
+            "post_setup_site": "0x002A6BB0",
+            "slot_store_site": "0x002A763E",
+            "source_from_existing_guest_registers": True,
+            "no_fabricated_audio_object": True,
+            "no_channel_index_clamp": True,
+            "ordinary_guest_faults_unchanged": True,
+            "hardware_validation_pending": True,
         },
         "ac97_output_busmaster_bridge": {
             "hardware_proof": "R40",
