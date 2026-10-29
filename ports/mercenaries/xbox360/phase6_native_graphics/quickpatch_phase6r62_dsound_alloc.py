@@ -106,9 +106,19 @@ def main()->int:
     print("[Phase6R62] baseline_manifest_phase="
           + str(m.get("phase")) + " shard_count=" + str(m.get("shard_count"))
           + " translated_functions=" + str(m.get("translated_functions")),flush=True)
-    if m.get("phase")!="6TU" or m.get("shard_count")!=64 or m.get("translated_functions")!=13517:
-        raise SystemExit("[Phase6R62] R59 64-shard baseline manifest mismatch"
-                         " (see actual values above)")
+    # The R59 source-level audit saw 13,517 function bodies. The TrueTU
+    # emitter intentionally produces a smaller *translated* set (13,510 on
+    # the user's validated R59 build), so never equate those two counts.
+    # Validate the manifest against its own 64 per-shard function counts.
+    translated=m.get("translated_functions")
+    rows=m.get("shards")
+    if (m.get("phase")!="6TU" or m.get("shard_count")!=64
+            or not isinstance(translated,int) or not 13000 <= translated <= 14000
+            or not isinstance(rows,list) or len(rows)!=64
+            or any(not isinstance(row.get("functions"),int) for row in rows)
+            or sum(row["functions"] for row in rows)!=translated):
+        raise SystemExit("[Phase6R62] R59 64-shard baseline manifest inconsistent"
+                         " (check phase, count, and sum of shard functions above)")
     expected={row["name"]:row["sha256"] for row in m.get("shards",[])}
     files=sorted(shards.glob("translated_*.cpp"))
     if len(files)!=64 or len(expected)!=64:
@@ -181,7 +191,7 @@ def main()->int:
         path.write_bytes(modified)
         items.append({"name":path.name,"original_sha256":h(raw),"modified_sha256":h(modified)})
         print(f"[Phase6R62] PATCHED SHARD: {path.name}")
-    record={"revision":VERSION,"patched":items,"total_functions":13517,"source":"R59 TrueTU cached","xex":"NOT YET BUILT"}
+    record={"revision":VERSION,"patched":items,"total_functions":translated,"source":"R59 TrueTU cached","xex":"NOT YET BUILT"}
     output.mkdir(parents=True,exist_ok=True)
     records.write_text(json.dumps(record,indent=2)+"\n",encoding="utf-8")
     print(f"[Phase6R62] patched_shards={len(items)} untouched_shards={64-len(items)}")
