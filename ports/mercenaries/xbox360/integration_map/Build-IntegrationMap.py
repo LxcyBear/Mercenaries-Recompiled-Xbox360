@@ -88,15 +88,28 @@ def read_dispatch_routes(main):
 
 
 def scan_guest(source):
-    funcs=len(re.findall(r'(?m)^\s*(?:static\s+)?void\s+sub_[0-9a-fA-F]{8}\(void\)\s*\{',source))
+    pattern=r'(?m)^\s*(?:static\s+)?void\s+sub_([0-9a-fA-F]{8})\(void\)\s*\{'
+    starts=list(re.finditer(pattern,source))
+    funcs=len(starts)
     direct=len(re.findall(r'\bsub_[0-9a-fA-F]{8}\(\);',source))
     indirect=len(re.findall(r'\b(?:PHASE6DJ_ICALL_SAFE|RECOMP_ICALL_SAFE)\s*\(',source))
     ords=Counter(int(x,16) for x in re.findall(r'\b0x8000([0-9a-fA-F]{4})u?\b',source))
     mmio=Counter()
     for value in re.findall(r'\b0x(F[CE][0-9a-fA-F]{6})u?\b',source):
         mmio[value.upper()]+=1
-    return funcs,direct,indirect,ords,mmio
-
+    # The x86 translator also prints 0xFE80200C as signed -25157620.
+    # Only candidate literals: an immediate may also be an offset, not MMIO.
+    for signed in re.findall(r'(?<![\w])-\d{7,10}\b',source):
+        raw=int(signed)&0xFFFFFFFF
+        if (raw>>24) in (0xFC,0xFE):mmio[f'{raw:08X}']+=1
+    # Static guest-to-guest calls for the *systemic* caller/callee ABI audit.
+    edges=Counter()
+    for i,m in enumerate(starts):
+        end=starts[i+1].start() if i+1<len(starts) else len(source)
+        caller=m.group(1).upper()
+        for callee in re.findall(r'\bsub_([0-9a-fA-F]{8})\(\);',source[m.end():end]):
+            edges[(caller,callee.upper())]+=1
+    return funcs,direct,indirect,ords,mmio,edges
 
 def fault_ledger(paths,old):
     if old.is_file():
@@ -150,7 +163,7 @@ def main():
         raise ValueError('R76 frozen source watermark missing')
     if 'P6DQ R59 FC4A ABI RESTORE:' not in source:
         raise ValueError('R59 guest source identity changed')
-    funcs,direct,indirect,literals,mmio=scan_guest(source)
+    funcs,direct,indirect,literals,mmio,edges=scan_guest(source)
     if funcs<13000:raise ValueError(f'Incomplete guest corpus: only {funcs} functions')
     routes=read_dispatch_routes(maintext)
     imports=import_table(a.retail_xbe) if a.retail_xbe else []
@@ -177,6 +190,11 @@ def main():
         'static_literal_mentions','semantics_tested','confidence'])
     csv_out(a.out/'mmio-literals.csv',mmio_rows,[
         'address','literal_mentions','subsystem','status'])
+    csv_out(a.out/'guest-call-edges.csv',
+            [{'caller_va':a,'callee_va':b,'static_callsites':count,
+              'abi_status':'UNTESTED_CANDIDATE'}
+             for (a,b),count in sorted(edges.items())],
+            ['caller_va','callee_va','static_callsites','abi_status'])
     payload={
         'schema':1,'status':'phase6DQ_diagnostic_baseline_frozen_NOT_gate6',
         'last_hardware_boundary':{'kind':'ICALL_SAFE','target':'80000080','ticks':26720251},
@@ -184,7 +202,7 @@ def main():
                         'xact_init':'hardware success','display_calls':0,'framebuffer':'00000000'},
         'counts':{'guest_functions':funcs,'direct_calls':direct,'indirect_markers':indirect,
                   'static_kernel_candidates':len(kernel),'explicit_kernel_routes':len(routes),
-                  'literal_mmio_addresses':len(mmio_rows),'distinct_logged_faults':len(ledger['faults'])},
+                  'literal_mmio_addresses':len(mmio_rows),'guest_call_edges':len(edges),'distinct_logged_faults':len(ledger['faults'])},
         'import_inventory':{'expected':THUNK_COUNT,'verified':bool(imports),'rows':imports},
         'notice':'Route present != behavior verified; literal != runtime hit. No user XBE/log bytes included.',
         'waves':['kernel imports and timing/synchronization',
@@ -195,6 +213,7 @@ def main():
         '**6DQ frozen as diagnostic baseline, NOT graphics completion.**','',
         f'- Guest functions: {funcs:,}; direct calls: {direct:,}; indirect markers: {indirect:,}',
         f'- Kernel route ordinals: {len(routes)}; static candidates: {len(kernel)}',
+        f'- Unique guest direct call edges: {len(edges):,} (ABI untested)',
         f'- 111-slot verified owned retail XBE: {"YES" if imports else "NOT PROVIDED"}',
         f'- Possible MMIO literal addresses: {len(mmio_rows)} (computed accesses excluded)',
         f'- Distinct captured fault signatures: {len(ledger["faults"])}','',
