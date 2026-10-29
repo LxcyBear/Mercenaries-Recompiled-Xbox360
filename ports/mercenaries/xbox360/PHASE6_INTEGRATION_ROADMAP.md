@@ -51,6 +51,29 @@ source-only audit. Do not imply the game is playable or graphics are complete.
 - Subsystem milestone: real game-origin calls and resource state, not a
   diagnostic display. None of these statuses is implied by the prior level.
 
+## Implemented offline map tooling
+
+The new read-only integration mapper lives at:
+
+- ports/mercenaries/xbox360/integration_map/Build-IntegrationMap.ps1
+- ports/mercenaries/xbox360/integration_map/Build-IntegrationMap.py
+- ports/mercenaries/xbox360/integration_map/Test-IntegrationMap.py
+- ports/mercenaries/xbox360/integration_map/phase6_baseline_20261029.json
+
+It runs no retail game, XDK build or guest code. It generates
+build/phase6_integration_map/PHASE6_MAP.md, kernel-coverage.csv,
+guest-call-edges.csv (static caller/callee ABI map), mmio-literals.csv
+(including signed-negative MMIO immediates such as -25157620),
+phase6-integration-map.json and fault-ledger.json. Repeating the same
+hardware log does not duplicate its fault counts.
+
+The runner executes offline synthetic fixture tests first. For a true
+111-slot import inventory it accepts an optional SHA-validated original
+retail XBE supplied locally by its lawful owner. Without that input the
+kernel CSV is marked STATIC CANDIDATE, never an exact import count or
+a verified implementation. Never pass an R77 source audit as a hardware
+run. No source code or raw game bytes are exported by the mapper.
+
 ## Batch acceptance gates
 
 **Kernel:** account for exactly 111 retail import slots, distinguish
