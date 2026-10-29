@@ -24,7 +24,7 @@ NUMERIC_PATTERN=re.compile(
  r"(?i)(0xFE80200C\b|4269809676\b|-25157620\b|"
  r"0xFE802000\b|0x200C\b|0x0200C\b)")
 MEM_PATTERN=re.compile(r"(?i)(GUEST_READ32|recomp_guest_read32|phase6ch_apu_read32|"
- r"PHASE6.*READ32|\bMEM32\s*\\(|0xFE8020|-25157620)")
+ r"PHASE6.*READ32|\bMEM32\s*\(|0xFE8020|-25157620)")
 MAIN_NAMES=(
  "phase6ch_apu_core_range",
  "phase6ch_apu_shadow_read",
@@ -51,8 +51,8 @@ def cached_main(text):
                          if re.search(r"#\s*define\s+GUEST_READ32\b",s)]
         else:
             definitions=[i for i,s in enumerate(lines)
-                         if re.search(r"(?:bool|uint\\d+_t|DWORD|int|void)\s+"+
-                            re.escape(name)+r"\s*\\(",s)]
+                         if re.search(r"(?:bool|uint\d+_t|DWORD|int|void)\s+"+
+                            re.escape(name)+r"\s*\(",s)]
         if definitions:
             for i in definitions[:2]:
                 print(f"[Phase6R74] DEFINITION {name} at line={i+1}")
