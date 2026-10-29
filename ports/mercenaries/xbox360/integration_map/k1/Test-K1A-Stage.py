@@ -15,7 +15,6 @@ assert spec.loader is not None
 spec.loader.exec_module(module)
 
 SYNTHETIC_MAIN='''\
-/* P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029 */
 /* PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF START | P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029 */
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
