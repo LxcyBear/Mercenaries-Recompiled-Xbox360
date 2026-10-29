@@ -70,10 +70,11 @@ def read_dispatch_routes(main):
     pattern=r'(?:_phase4c_target|target)\s*==\s*0x8000([0-9a-fA-F]{4})u'
     for raw in re.findall(pattern,m.group(1)):
         routes.setdefault(int(raw,16),set()).add('RECOMP_ICALL_SAFE')
-    sig='void phase5bc_dispatch_packed_icall('
-    start=main.find(sig)
-    if start<0:raise ValueError('Packed-ICALL dispatcher missing')
-    brace=main.find('{',start)
+    definition=re.search(
+        r'(?s)\bvoid\s+phase5bc_dispatch_packed_icall\s*\([^)]*\)\s*\{',main)
+    if not definition:raise ValueError('Packed-ICALL dispatcher definition missing')
+    start=definition.start()
+    brace=main.find('{',definition.start(),definition.end())
     depth=0
     for j in range(brace,len(main)):
         if main[j]=='{':depth+=1
