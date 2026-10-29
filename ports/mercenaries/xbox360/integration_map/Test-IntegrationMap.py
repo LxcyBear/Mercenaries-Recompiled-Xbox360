@@ -34,7 +34,8 @@ def check():
             "P6DQ R59 FC4A ABI RESTORE:\n"
             + "".join(f"void sub_{x:08X}(void) {{ sub_00000001(); }}\n"
                       for x in range(13000))
-            + "uint32_t test_mmio=0xFE80200Cu;\n"
+            + "uint32_t test_mmio=0xFE80200Cu;\n" 
+            + "uint32_t test_signed=-25157620;\n"
             + "uint32_t test_import=0x80000080u;\n",encoding="utf-8")
         hardware=root/"watson.txt"
         hardware.write_text(
@@ -51,10 +52,16 @@ def check():
         assert report["counts"]["guest_functions"]==13000
         assert report["counts"]["explicit_kernel_routes"]==2
         assert report["counts"]["literal_mmio_addresses"]==1
+        assert report["counts"]["guest_call_edges"]==13000
         assert not report["import_inventory"]["verified"]
         with (out/"kernel-coverage.csv").open(newline="") as f:
             coverage=list(csv.DictReader(f))
         known={int(item["ordinal"]) for item in coverage}
+        assert (out/"guest-call-edges.csv").is_file()
+        with (out/"mmio-literals.csv").open(newline="") as f:
+            mmio=list(csv.DictReader(f))
+        assert mmio==[{"address":"FE80200C","literal_mentions":"2",
+                        "subsystem":"APU_CORE","status":"STATIC_CANDIDATE_ONLY"}]
         assert known=={128,151},coverage
         ledger=json.loads((out/"fault-ledger.json").read_text())
         assert len(ledger["faults"])==2
@@ -79,7 +86,7 @@ def check():
         assert wrong_xbe.returncode!=0
         assert "identity mismatch" in wrong_xbe.stdout
         assert (out/"PHASE6_MAP.md").is_file()
-        print("[IntegrationMapTest] PASS: route extraction, 13000 mock functions, MMIO")
+        print("[IntegrationMapTest] PASS: route extraction, 13000 mock ABI edges, signed MMIO")
         print("[IntegrationMapTest] PASS: deterministic fault deduplication")
         print("[IntegrationMapTest] PASS: R77 source-audit and unverified XBE rejection")
         print("[IntegrationMapTest] NO game code, retail XBE, or XDK data used")
