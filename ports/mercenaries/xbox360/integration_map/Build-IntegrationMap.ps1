@@ -53,9 +53,24 @@ if($code -ne 0){
   $tail=@(Get-Content -LiteralPath (Join-Path $out "run.log") -Tail 30) -join [Environment]::NewLine
   throw ("Integration map exited {0}{1}{2}{1}Report: {3}" -f $code,[Environment]::NewLine,$tail,(Join-Path $out "run.log"))
 }
+$planner=Join-Path $PSScriptRoot "Plan-IntegrationBatches.py"
+if(-not(Test-Path -LiteralPath $planner -PathType Leaf)){throw "Integration planner missing: $planner"}
+& $python -m py_compile $planner
+if($LASTEXITCODE -ne 0){throw "Integration planner Python syntax check failed"}
+$oldPreference=$ErrorActionPreference
+$ErrorActionPreference="Continue"
+try {
+  & $python -u $planner --out $out 2>&1 |
+    Tee-Object -FilePath (Join-Path $out "batch-plan.log")
+  $planCode=$LASTEXITCODE
+} finally {$ErrorActionPreference=$oldPreference}
+if($planCode -ne 0){
+  $tail=@(Get-Content -LiteralPath (Join-Path $out "batch-plan.log") -Tail 30) -join [Environment]::NewLine
+  throw ("Integration batch planner exited {0}{1}{2}{1}Report: {3}" -f $planCode,[Environment]::NewLine,$tail,(Join-Path $out "batch-plan.log"))
+}
 if($CopySummary){
-  Get-Content -LiteralPath (Join-Path $out "PHASE6_MAP.md") -Raw | Set-Clipboard
-  Write-Host "[IntegrationMap] Summary copied to clipboard"
+  Get-Content -LiteralPath (Join-Path $out "BATCH_PLAN.md") -Raw | Set-Clipboard
+  Write-Host "[IntegrationMap] BATCH_PLAN.md copied to clipboard"
 }
 Write-Host "[IntegrationMap] OUTPUT: $out"
 Write-Host "[IntegrationMap] User XBE and raw logs remain private/local"
