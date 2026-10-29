@@ -19,9 +19,23 @@ foreach($f in @($script,$source,$main)){
 Write-Host "[Phase6R74] ZERO-BUILD: FE80200C exact read site and MMIO handler provenance"
 & $python -m py_compile $script
 if($LASTEXITCODE -ne 0){throw "R74 Python preflight failed"}
-& $python -u $script --source $source --cached-main $main 2>&1 |
-  Tee-Object -FilePath $report
-if($LASTEXITCODE -ne 0){throw "R74 audit failed. Report: $report"}
+# Native Python stderr becomes a PowerShell error record under 5.1.
+# Keep it non-terminating during capture so the COMPLETE traceback lands
+# in the report; fail explicitly using the native process exit code.
+$previousErrorActionPreference=$ErrorActionPreference
+$ErrorActionPreference="Continue"
+try {
+  & $python -u $script --source $source --cached-main $main 2>&1 |
+    Tee-Object -FilePath $report
+  $auditExitCode=$LASTEXITCODE
+}
+finally {
+  $ErrorActionPreference=$previousErrorActionPreference
+}
+if($auditExitCode -ne 0){
+  $tail=@(Get-Content -LiteralPath $report -Tail 24) -join [Environment]::NewLine
+  throw ("R74 audit failed (exit {0}).{1}{2}{1}Report: {3}" -f $auditExitCode,[Environment]::NewLine,$tail,$report)
+}
 Write-Host "[Phase6R74] REPORT: $report"
 if($CopyToClipboard){
   Get-Content -LiteralPath $report -Raw | Set-Clipboard
