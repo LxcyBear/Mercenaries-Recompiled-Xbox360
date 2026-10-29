@@ -61,8 +61,30 @@ def focus(label:str, start:int, lines:list[str], max_lines:int=160)->list[str]:
     return output
 
 def guest_function(lines:list[str],name:str)->tuple[int,list[str]]:
-    candidates=[i for i,line in enumerate(lines)
-                if re.match(r'^\s*static void '+re.escape(name)+r'\s*\(void\)\s*
+    target='static void '+name+'(void)'
+    found=[]
+    for i,line in enumerate(lines):
+        stripped=line.strip()
+        if not stripped.startswith(target):continue
+        suffix=stripped[len(target):].strip()
+        if suffix.startswith(';'):continue  # declaration, not definition
+        if suffix and not suffix.startswith('{'):continue
+        j=i+1
+        while j<len(lines) and not lines[j].strip():j+=1
+        if suffix.startswith('{') or (j<len(lines) and lines[j].lstrip().startswith('{')):
+            found.append(i)
+    if len(found)!=1:
+        raise ValueError('exact guest function definition count mismatch: '+name)
+    i=found[0]
+    depth=0
+    entered=False
+    for j in range(i,min(i+2000,len(lines))):
+        depth+=lines[j].count('{')-lines[j].count('}')
+        if '{' in lines[j]:entered=True
+        if entered and depth==0:return i+1,lines[i:j+1]
+    raise ValueError('guest function braces not balanced: '+name)
+
+def audit(main:str,source:str)->str:
     if MARKER not in main:raise ValueError('expected R76 main.cpp watermark missing')
     if 'P6DQ R59 FC4A ABI RESTORE:' not in source:
         raise ValueError('expected R59 source identity missing')
@@ -91,71 +113,6 @@ def guest_function(lines:list[str],name:str)->tuple[int,list[str]]:
     i,body=guest_function(sl,'sub_002A5293')
     parts.extend(focus('R59 exact active caller sub_002A5293',i,body,200))
     parts.append('')
-    for token in ('sub_002A5293','0x80000080','RECOMP_ICALL_SAFE'):
-        positions=[i for i,x in enumerate(sl) if token in x]
-        parts.append(f'{token}: count={len(positions)}')
-        for k in positions[:6]:
-            parts.extend(focus(f'R59 {token}',k+1,sl[k:min(k+8,len(sl))],8))
-    return '\n'.join(parts)+'\n'
-
-def main()->None:
-    p=argparse.ArgumentParser()
-    p.add_argument('--main',type=Path,required=True)
-    p.add_argument('--source',type=Path,required=True)
-    p.add_argument('--out',type=Path,required=True)
-    a=p.parse_args()
-    for path in (a.main,a.source):
-        if not path.is_file():p.error(f'missing file: {path}')
-    report=audit(a.main.read_text(encoding='utf-8',errors='replace'),
-                 a.source.read_text(encoding='utf-8',errors='replace'))
-    a.out.parent.mkdir(parents=True,exist_ok=True)
-    a.out.write_text(report,encoding='utf-8')
-    print('[K1A] ABI AUDIT PASS: true R76 main + R59 translated caller inspected')
-    print('[K1A] No guest source modified; no XDK build')
-    print(f'[K1A] report={a.out}')
-if __name__=='__main__':main()
-,line)]
-    definitions=[]
-    for i in candidates:
-        j=i+1
-        while j<len(lines) and not lines[j].strip():j+=1
-        if j<len(lines) and lines[j].lstrip().startswith('{'):
-            definitions.append(i)
-    if len(definitions)!=1:
-        raise ValueError(f'{name}: expected exactly one generated function definition, got {len(definitions)}')
-    i=definitions[0];depth=0;opened=False
-    for j in range(i,min(i+2000,len(lines))):
-        depth+=lines[j].count('{')-lines[j].count('}')
-        if '{' in lines[j]:opened=True
-        if opened and depth==0:return i+1,lines[i:j+1]
-    raise ValueError(f'{name}: source braces incomplete')
-
-def audit(main:str,source:str)->str:
-    if MARKER not in main:raise ValueError('expected R76 main.cpp watermark missing')
-    if 'P6DQ R59 FC4A ABI RESTORE:' not in source:
-        raise ValueError('expected R59 source identity missing')
-    ml=main.splitlines();sl=source.splitlines()
-    parts=[
-        '# K1A EXACT GUEST CLOCK ABI DISPATCH AUDIT',
-        'This is source evidence, not hardware confirmation or an XDK build.',
-        'Hardware R76 reported target=80000080, 26,720,251 ticks.',
-        'DO NOT treat guessed ABI or a matching route as hardware PASS.',
-        '',
-    ]
-    for n in ('RECOMP_ICALL_SAFE','RECOMP_ITAIL'):
-        i,l=macro(ml,n);parts.extend(focus(n,i,l,180));parts.append('')
-    for n in ('phase4c_system_time_100ns','phase5bc_dispatch_packed_icall'):
-        i,l=function(ml,n);parts.extend(focus(n,i,l,160));parts.append('')
-    symbols=['GUEST_READ16','GUEST_WRITE16','GUEST_READ32','GUEST_WRITE32',
-             'phase4c_system_time_100ns','0x80000080u','KeQuerySystemTime']
-    parts.extend(['## Shared helper / type references'])
-    for s in symbols:
-        positions=[i+1 for i,x in enumerate(ml) if s in x]
-        parts.append(f'{s}: count={len(positions)} first_lines={positions[:16]}')
-    parts.append('')
-    # R59 caller site is known from genuine R76 stop; the exact entry may be
-    # somewhere inside a translated block and not at its start.
-    parts.append('## R59 known caller and ordinal-128 references')
     for token in ('sub_002A5293','0x80000080','RECOMP_ICALL_SAFE'):
         positions=[i for i,x in enumerate(sl) if token in x]
         parts.append(f'{token}: count={len(positions)}')
