@@ -20,8 +20,12 @@ report=module.audit(main,source)
 for token in ('RECOMP_ICALL_SAFE','phase4c_system_time_100ns','phase5bc_dispatch_packed_icall','sub_002A5293'):
     assert token in report,token
 assert 'source line' in report
+assert 'R59 exact active caller sub_002A5293' in report
 for bad_main in (main.replace('P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029',''),main+'\n#define RECOMP_ICALL_SAFE(a) x\n'):
     try:module.audit(bad_main,source)
     except ValueError:pass
     else:raise AssertionError('Audit accepted untrusted source identity/macro')
+try:module.audit(main,source.replace('sub_002A5293','sub_002A9999'))
+except ValueError:pass
+else:raise AssertionError('Missing exact caller was not rejected')
 print('[K1A] PASS: strict R76 identity, macro/function extraction and negative guards')
