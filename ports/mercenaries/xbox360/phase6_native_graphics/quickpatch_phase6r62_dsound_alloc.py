@@ -80,8 +80,12 @@ def patch(text:str,va:int)->str:
             add_after(begin,"FF54_GLOBAL_ALLOCATOR"),
             add_after("    PUSH32(esp, 0); sub_002A2D21(); /* call 0x002A2D21 */","FF54_PRIMARY_ALLOC_RETURN"),
             add_after("    PUSH32(esp, 0); sub_0029FE8E(); /* call 0x0029FE8E */","FF54_FALLBACK_ALLOC_RETURN"),
-            add_after("    eax = edx;\n    POP32(esp, esi);\n    esp += 16; return; /* ret 12 */",
-                      "FF54_FINAL_RETURN"), # this site may be emitted once; fail-closed if not
+            (
+                "    eax = edx;\n    POP32(esp, esi);\n    esp += 16; return; /* ret 12 */",
+                "    eax = edx;\n"
+                + capture("FF54_FINAL_RETURN")
+                + "    POP32(esp, esi);\n    esp += 16; return; /* ret 12 */",
+            ),
         ])
     raise RuntimeError(f"unexpected VA: {va:08X}")
 
@@ -99,8 +103,12 @@ def main()->int:
     if not original_manifest.is_file():
         raise SystemExit("[Phase6R62] R59 TrueTU manifest missing")
     m=json.loads(original_manifest.read_text(encoding="utf-8"))
+    print("[Phase6R62] baseline_manifest_phase="
+          + str(m.get("phase")) + " shard_count=" + str(m.get("shard_count"))
+          + " translated_functions=" + str(m.get("translated_functions")),flush=True)
     if m.get("phase")!="6TU" or m.get("shard_count")!=64 or m.get("translated_functions")!=13517:
-        raise SystemExit("[Phase6R62] R59 64-shard baseline manifest mismatch")
+        raise SystemExit("[Phase6R62] R59 64-shard baseline manifest mismatch"
+                         " (see actual values above)")
     expected={row["name"]:row["sha256"] for row in m.get("shards",[])}
     files=sorted(shards.glob("translated_*.cpp"))
     if len(files)!=64 or len(expected)!=64:
@@ -122,7 +130,7 @@ def main()->int:
     if set(owners)!=set(TARGETS):
         raise SystemExit("[Phase6R62] Not all target translated functions are generated")
     unique=sorted(set(owners.values()),key=lambda x:x.name)
-    print("[Phase6R62] QUICK-SHARD DIRECTSOUND NULL-ALLOC PROBE")
+    print("[Phase6R62] QUICK-SHARD DIRECTSOUND NULL-ALLOC PROBE",flush=True)
     print(f"[Phase6R62] source=R59_TRUE_TU shard_total=64 target_shards={len(unique)}")
     for va in TARGETS:
         print(f"[Phase6R62] probe function sub_{va:08X} owner={owners[va].name}")
@@ -149,7 +157,11 @@ def main()->int:
     for path in unique:
         raw=path.read_bytes()
         if h(raw)!=expected.get(path.name):
-            raise SystemExit(f"[Phase6R62] R59 source drift in {path.name}; run R59 to restore source first")
+            raise SystemExit(
+                f"[Phase6R62] R59 source drift in {path.name}: "
+                f"manifest_sha={expected.get(path.name)} current_sha={h(raw)}. "
+                "Stop before building; obtain the full diagnostic instead of overwriting the shard."
+            )
         text=raw.decode("utf-8")
         for va in TARGETS:
             if owners[va]==path:
@@ -178,4 +190,9 @@ def main()->int:
     return 0
 
 if __name__=="__main__":
-    raise SystemExit(main())
+    import sys
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(f"[Phase6R62] PYTHON ERROR: {type(exc).__name__}: {exc}",file=sys.stderr,flush=True)
+        raise
