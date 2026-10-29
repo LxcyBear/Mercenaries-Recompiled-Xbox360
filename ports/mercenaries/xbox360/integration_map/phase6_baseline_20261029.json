@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "as_of": "2026-10-29",
+  "phase": "6",
+  "phase6DQ_state": "DIAGNOSTIC_FROZEN_NOT_GATE6_PASS",
+  "known_hardware": {
+    "last_tested_xex": "P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029",
+    "last_boundary": {
+      "kind": "ICALL_SAFE",
+      "target": "0x80000080",
+      "ordinal": 128,
+      "name": "KeQuerySystemTime",
+      "translated_ticks": 26720251
+    },
+    "passed": [
+      {
+        "id": "DSOUND_POOL",
+        "proof": "R72 Xbox hardware",
+        "result": "real free-list head nonzero; resource allocator succeeded"
+      },
+      {
+        "id": "XACT_INIT",
+        "proof": "R72 and R76 Xbox hardware",
+        "result": "success status observed"
+      },
+      {
+        "id": "APU_XGSCNT",
+        "proof": "R76 Xbox hardware",
+        "result": "FE80200C read routed through mapped APU core"
+      }
+    ],
+    "not_yet_verified": [
+      "guest display calls",
+      "game framebuffer",
+      "presented game frame",
+      "game audio output"
+    ]
+  },
+  "latest_attached_source_audit": {
+    "type": "SOURCE_AUDIT_NOT_HARDWARE_RUN",
+    "name": "Phase6R77",
+    "lines": 2328,
+    "evidence": [
+      {
+        "name": "kernel_import_slots",
+        "count": 111,
+        "meaning": "number of retail thunk-table entries scanned, not count of unsupported functions"
+      },
+      {
+        "name": "KeQuerySystemTime",
+        "result": "no explicit symbol match or ordinal-128 case in audited cached main"
+      },
+      {
+        "name": "existing_clock_helper",
+        "result": "phase4c_system_time_100ns delegates to GetSystemTimeAsFileTime"
+      },
+      {
+        "name": "guest_literal_80000080",
+        "count": 16,
+        "result": "static source mentions only, not sixteen runtime calls"
+      },
+      {
+        "name": "dispatchers",
+        "result": "RECOMP_ICALL_SAFE plus phase5bc_dispatch_packed_icall require joint coverage audit"
+      }
+    ]
+  },
+  "map_waves": [
+    {
+      "name": "kernel imports and clocks",
+      "priority": 1,
+      "require": "exact 111-import inventory; callable/data separation; ABI+side effects offline and hardware tests"
+    },
+    {
+      "name": "systemic x86 ABI",
+      "priority": 1,
+      "require": "guest caller/callee-save preservation and stack contract; emitter-level regression suite"
+    },
+    {
+      "name": "guest D3D to Xenos",
+      "priority": 1,
+      "require": "real guest display mode, valid surface, framebuffer and first game frame"
+    },
+    {
+      "name": "APU/AC97/NV2A MMIO",
+      "priority": 2,
+      "require": "access width, timing, read/write semantics; no blanket MMIO fallthrough"
+    },
+    {
+      "name": "storage/asset streaming/input",
+      "priority": 2,
+      "require": "real guest asset and controller behavior and fault-ledger grouping"
+    }
+  ],
+  "critical_rule": "No tick-count or blue/orange diagnostic color qualifies as pixel/graphics Gate 6 pass.",
+  "raw_game_files_included": false
+}
