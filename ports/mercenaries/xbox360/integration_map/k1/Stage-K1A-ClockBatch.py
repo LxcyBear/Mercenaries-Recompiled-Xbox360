@@ -144,7 +144,15 @@ def patch(text:str,components:str)->str:
     assert_once(text,MARKER)
     if PATCH_MARKER in text:raise ValueError('K1A bridge already staged: refuse duplicate')
     assert_once(text,'uint64_t phase4c_system_time_100ns(void)')
-    assert_once(text,DISPATCH)
+    # The exact R76 packed dispatcher signature was captured by the user's
+    # local K1A audit; distinguish actual definitions from forward declarations.
+    definition = re.compile(
+        r'(?m)^[ 	]*(?:static[ 	]+)?void[ 	]+'
+        r'phase5bc_dispatch_packed_icall\s*\(\s*'
+        r'uint32_t\s+target\s*,\s*uint32_t\s+savedEsp\s*\)\s*\{')
+    matches = list(definition.finditer(text))
+    if len(matches)!=1:
+        raise ValueError(f'exact R76 packed dispatcher definition count={len(matches)}')
     for x in ('GUEST_READ16','GUEST_WRITE16','GUEST_READ32','GUEST_WRITE32',
               'phase4c_escape','PHASE4C_BOUNDARY_ICALL_SAFE'):
         if x not in text:raise ValueError('missing guest runtime primitive '+x)
@@ -152,14 +160,16 @@ def patch(text:str,components:str)->str:
     for n in (0x80000080,0x80000130,0x80000131):
         if re.search(r'(?i)(?:_phase4c_target|_phase4c_tail_target|target)\s*==\s*0x'+f'{n:08X}'+r'u\b',text):
             raise ValueError(f'already routed ordinal {n&0xFFFF}; refusing duplicate')
-    i=text.index(DISPATCH)
+    i=matches[0].start()
     # Inject immediately before dispatcher definition, AFTER the existing clock
     # helper and guest read/write wrappers are defined in this R76 source.
     if text.index('uint64_t phase4c_system_time_100ns(void)')>i:
         raise ValueError('clock helper appears after dispatcher; cannot stage')
     changed=text[:i]+components+text[i:]
-    at=changed.index(DISPATCH)
+    at=i+len(components)
     brace=changed.find('{',at)
+    if brace<0 or brace>at+180:
+        raise ValueError('packed dispatcher definition brace missing or distant')
     if brace<0:raise ValueError('dispatcher opening brace missing')
     changed=changed[:brace+1]+'\n'+ROUTES+changed[brace+1:]
     for n in ('phase6k1a_ke_query_system_time(savedEsp)',
