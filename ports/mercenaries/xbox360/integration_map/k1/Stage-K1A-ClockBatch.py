@@ -13,6 +13,9 @@ from pathlib import Path
 
 MARKER = "P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029"
 PATCH_MARKER = "P6K1A-CLOCK-DISPATCH-BATCH-20261029"
+BOOT_MARKER = "P6K1A-BOOT-CLOCK128-304-305-20261029"
+BOOT_ANCHOR = ("PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF START | "
+               "P6DQ-R76-XGSCNT-CENTRAL-ROUTE-20261029")
 CLOCK_NAME = "phase4c_system_time_100ns"
 DISPATCH = "void phase5bc_dispatch_packed_icall("
 ORDS = (128,304,305)
@@ -142,7 +145,8 @@ def inline_components(folder:Path)->str:
 
 def patch(text:str,components:str)->str:
     assert_once(text,MARKER)
-    if PATCH_MARKER in text:raise ValueError('K1A bridge already staged: refuse duplicate')
+    assert_once(text,BOOT_ANCHOR)
+    if PATCH_MARKER in text or BOOT_MARKER in text:raise ValueError('K1A bridge already staged: refuse duplicate')
     assert_once(text,'uint64_t phase4c_system_time_100ns(void)')
     # The exact R76 packed dispatcher signature was captured by the user's
     # local K1A audit; distinguish actual definitions from forward declarations.
@@ -177,6 +181,9 @@ def patch(text:str,components:str)->str:
     if text.index('uint64_t phase4c_system_time_100ns(void)')>i:
         raise ValueError('clock helper appears after dispatcher; cannot stage')
     changed=text[:i]+components+text[i:]
+    # Distinct *runtime* startup watermark proves K1A was actually deployed.
+    # Keep the original R76 watermark intact for inherited regression checks.
+    changed=changed.replace(BOOT_ANCHOR,BOOT_ANCHOR+" | "+BOOT_MARKER,1)
     at=i+len(components)
     brace=changed.find('{',at)
     if brace<0 or brace>at+180:
@@ -203,6 +210,7 @@ def stage(main:Path,out:Path,component_root:Path)->dict:
         raise RuntimeError('R76 input changed while staging')
     metadata={'phase':'K1A','status':'STAGED_NOT_BUILT',
               'patch_marker':PATCH_MARKER,
+              'boot_marker':BOOT_MARKER,
               'import_ordinals':list(ORDS),
               'original_main_sha256':sha(data),'staged_main_sha256':sha(staged),
               'original_bytes':len(data),'staged_bytes':len(staged),
