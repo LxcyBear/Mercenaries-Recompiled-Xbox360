@@ -97,9 +97,15 @@ def check():
         with (out/"kernel-batch-priorities.csv").open(newline="") as f:
             prioritized=list(csv.DictReader(f))
         assert prioritized[0]["ordinal"]=="128"
-        assert prioritized[0]["disposition"]=="STATIC_CANDIDATE_ONLY"
+        assert prioritized[0]["priority"]=="P0_ACTIVE_HARDWARE_STOP"
+        assert prioritized[0]["disposition"]=="HARDWARE_OBSERVED_IMPORT_SLOT_UNVERIFIED"
+        assert not any(x["priority"]=="P2_DATA_RELOCATION" for x in prioritized)
         assert all(x["disposition"]!="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED"
                    for x in prioritized)
+        plan=(out/"BATCH_PLAN.md").read_text(encoding="utf-8")
+        assert "NOT ASSESSED (retail XBE needed)" in plan
+        assert "Hardware-observed kernel targets with unverified import slot: 1" in plan
+        print("[IntegrationMapTest] PASS: hardware observations separate from retail import guesses")
         print("[IntegrationMapTest] PASS: batch planning does not mistake static references for missing imports")
         print("[IntegrationMapTest] PASS: route extraction, 13000 mock ABI edges, signed MMIO")
         print("[IntegrationMapTest] PASS: deterministic fault deduplication")
