@@ -25,6 +25,12 @@ foreach($path in @($script,$main,$source)){
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 & $python -m py_compile $script
 if($LASTEXITCODE -ne 0){throw "Integration map Python syntax check failed"}
+$tests=Join-Path $PSScriptRoot "Test-IntegrationMap.py"
+if(-not(Test-Path -LiteralPath $tests -PathType Leaf)){
+  throw "Integration map fixture test missing: $tests"
+}
+& $python -u $tests
+if($LASTEXITCODE -ne 0){throw "Integration map offline fixture gate FAILED"}
 $scanArgs=@("--main",$main,"--source",$source,"--out",$out)
 if($RetailXbe){
   if(-not(Test-Path -LiteralPath $RetailXbe -PathType Leaf)){throw "Retail XBE file missing: $RetailXbe"}
