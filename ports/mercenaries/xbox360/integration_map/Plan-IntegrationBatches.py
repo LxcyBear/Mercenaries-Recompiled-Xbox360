@@ -36,14 +36,16 @@ def family(n:int)->str:
     if n in FILES:return "STORAGE_IO"
     return "OTHER_KERNEL"
 
-def kernel_rows(rows):
+def kernel_rows(rows, hardware_ordinal=None):
     out=[]
     for r in rows:
         n=int(r["ordinal"])
         imported=r["retail_import_verified"].strip().lower()=="true"
         routed=r["route_present"].strip().lower()=="true"
         isdata=n in DATA_EXPORTS or "DATA" in r["name"].upper()
-        if not imported:
+        if not imported and n==hardware_ordinal:
+            disposition="HARDWARE_OBSERVED_IMPORT_SLOT_UNVERIFIED"
+        elif not imported:
             disposition="STATIC_CANDIDATE_ONLY"
         elif isdata:
             disposition="DATA_EXPORT_VERIFY_RELOCATION"
@@ -51,7 +53,7 @@ def kernel_rows(rows):
             disposition="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED"
         else:
             disposition="IMPORTED_ROUTED_SEMANTICS_UNVERIFIED"
-        if n==128:priority="P0_ACTIVE_HARDWARE_STOP"
+        if n==hardware_ordinal:priority="P0_ACTIVE_HARDWARE_STOP"
         elif imported and not isdata and not routed:priority="P1_VERIFIED_MISSING_ROUTE"
         elif imported and not isdata and routed:priority="P2_TEST_SEMANTICS_ABI"
         elif imported and isdata:priority="P2_DATA_RELOCATION"
@@ -67,6 +69,8 @@ def kernel_rows(rows):
             "next_step":(
                 "Verify ordinal-128 guest stack frame, 8-byte output pointer, and 100ns clock"
                 if n==128 else
+                "Confirm observed kernel target call frame and typed side effects; verify import slot separately"
+                if n==hardware_ordinal and not imported else
                 "Confirm presence in exact 111-slot import table before assigning data or callable status"
                 if not imported else
                 "Verify data relocation and readback; not a callable kernel API"
@@ -127,7 +131,16 @@ def main():
     if summary.get("status")!="phase6DQ_diagnostic_baseline_frozen_NOT_gate6":
         raise ValueError("Wrong integration baseline identity")
     imports_verified=summary["import_inventory"]["verified"]
-    kernel=kernel_rows(csv_read(out/"kernel-coverage.csv"))
+    raw_hardware_target=summary.get("last_hardware_boundary",{}).get("target","")
+    hardware_ordinal=None
+    if isinstance(raw_hardware_target,str) and len(raw_hardware_target)==8:
+        try:
+            raw=int(raw_hardware_target,16)
+            if (raw&0x80000000) and (raw&0x7FFFFFFF)<1024:
+                hardware_ordinal=raw&0x7FFFFFFF
+        except ValueError:
+            pass
+    kernel=kernel_rows(csv_read(out/"kernel-coverage.csv"),hardware_ordinal)
     if imports_verified and summary["import_inventory"].get("expected")!=111:
         raise ValueError("Expected exactly 111 retail import slots")
     abi,abi_nodes=abi_rows(csv_read(out/"guest-call-edges.csv"))
@@ -145,6 +158,7 @@ def main():
     missing=sum(x["disposition"]=="IMPORTED_CALLABLE_NO_ROUTE_IDENTIFIED" for x in kernel)
     routed=sum(x["disposition"]=="IMPORTED_ROUTED_SEMANTICS_UNVERIFIED" for x in kernel)
     static=sum(x["disposition"]=="STATIC_CANDIDATE_ONLY" for x in kernel)
+    hardware_unverified=sum(x["disposition"]=="HARDWARE_OBSERVED_IMPORT_SLOT_UNVERIFIED" for x in kernel)
     lines=[
         "# Phase 6 — batched integration plan","",
         "**Purpose:** map, log, fix root-cause classes, validate, repeat — no more 6DQ micro-revisions.","",
@@ -152,6 +166,7 @@ def main():
         "",
         f"- Exact owned retail XBE import table: {'VERIFIED (111 slots)' if imports_verified else 'NOT PROVIDED'}",
         f"- Kernel static candidates requiring import reconciliation: {static}",
+        f"- Hardware-observed kernel targets with unverified import slot: {hardware_unverified}",
         f"- Verified callable imports with no matching explicit dispatch route: {missing if imports_verified else 'NOT ASSESSED (retail XBE needed)'}",
         f"- Verified routed callable imports requiring semantic/ABI testing: {routed if imports_verified else 'NOT ASSESSED (retail XBE needed)'}",
         f"- Guest ABI graph: {len(csv_read(out/'guest-call-edges.csv')):,} unique static edges across {abi_nodes:,} nodes",
@@ -206,7 +221,7 @@ def main():
     print(f"[BatchPlan] imported_callable_no_route={missing if imports_verified else 'NOT_ASSESSED'} candidates_needing_reconciliation={static}")
     print(f"[BatchPlan] guest_abi_hotspot_nodes={abi_nodes} grouped_mmio_families={len(mmio)}")
     print(f"[BatchPlan] evidence_hardware_faults={len(faults)}")
-    print("[BatchPlan] hardware_next=kernel_ordinal_128_KeQuerySystemTime (not yet implemented)")
+    print(f"[BatchPlan] observed_hardware_kernel_target={hardware_ordinal if hardware_ordinal is not None else 'NOT_AVAILABLE'}")
     print(f"[BatchPlan] report={out/'BATCH_PLAN.md'}")
 
 if __name__=="__main__":main()
