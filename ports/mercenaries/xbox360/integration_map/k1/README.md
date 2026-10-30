@@ -1052,3 +1052,52 @@ On Xbox, collect *all* `K1P STACK EDGE` lines plus the original
 and hard-stop context. Look for the **first** `delta != expected`.
 That edge determines the next local source contract investigation.
 Do not build/deploy the withdrawn K1L late-FC4A repair.
+
+## K1P HARDWARE: exactly one bad stack edge -> K1Q no-build audit (2026-10-30)
+
+The K1P Xbox run reached all **15/15** inserted call-edge
+checkpoints and **only one** differed from expected cleanup.
+At `sub_002A739F -> sub_002A6B98`: `esp_before=008BF8A8`,
+`esp_after=008BF8AC`, `delta=+4`, `expected=0`.
+Prior A739F edges A7322/A70AA/A6FDD/A67E2 were all
+zero; A6EE9 was zero, A6D1A and both A77BE calls all had
+the expected +4 (one argument); all A7322 subcalls and tail
+also matched their expected deltas. Thus A6B98 is the first
+observed faulty **immediate** A739F child return.
+
+A6B98 (`translated_005.cpp:16208..16347`) already contains
+R49's `ESI REPAIR` check immediately after calling A7B73.
+On hardware at `002A6BB0`, raw `ESI=00000000`, expected
+`008BFFA0` and EBX `008BFF8C`: strong indication of an
+even earlier child register/stack issue, but not yet a proved
+culprit inside A7B73. A6B98 saves EBX/EBP/ESI/EDI and
+restores all four with POP32 before its plain `ret`.
+
+Do not patch A739F, A19FC, or FC4A return ESP: that
+would mask corrupted register restores already performed
+inside the deeper callee. Next investigate only A6B98's
+five nested direct callee types (nine callsites) using K1Q.
+
+`Audit-K1Q-A6B98NestedStack.py` is READ ONLY; it verifies
+64 TrueTUs/K1E and K1N provenance, prints exact source
+and caller/callee ret-width contracts, and checks the
+especially suspicious A6B98->A7B73 edge. There is no XDK.
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+python '.\ports\mercenaries\xbox360\integration_map\k1\Audit-K1Q-A6B98NestedStack.py' `
+  --original-shards '.\build\phase6_integration_map\k1a_dsobject_writer_watch\translated_shards' `
+  --k1e-manifest '.\build\phase6_integration_map\k1e_xact_list_tail\k1e-xact-tail-manifest.json' `
+  --k1n-report '.\build\phase6_integration_map\k1n_a739f_return_contracts.txt' `
+  --out '.\build\phase6_integration_map\k1q_a6b98_nested_stack.txt'
+if ($LASTEXITCODE -ne 0) { throw 'K1Q source audit failed' }
+Get-Content '.\build\phase6_integration_map\k1q_a6b98_nested_stack.txt' -TotalCount 65
+```
+
+If all nested return widths match, prepare **one** K1R
+ESP/EBX/ESI edge witness inside A6B98, particularly
+the A7B73 return site. If a width mismatch is proven,
+inspect it against actual runtime branch before correction.
+The old crash remained tick 27,029,593, `READ32 EFEE0EC4`,
+`display_calls=0` in K1P. No production correction proven.
