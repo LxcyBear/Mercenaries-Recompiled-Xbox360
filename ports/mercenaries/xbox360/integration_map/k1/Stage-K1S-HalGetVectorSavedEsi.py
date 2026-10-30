@@ -96,8 +96,8 @@ def modify(source:str)->str:
         "phase6ch_apu_read32(0x2DBE20)",
         "PHASE6DJ_ICALL_SAFE(",
         "K1R ICALL A7B73_ICALL_2",
-        "k1r_A7B73_ICALL_2_before",
-        "k1r_A7B73_ICALL_2_after",
+        "const uint32_t k1r_A7B73_ICALL_2_before=esp;",
+        "const uint32_t k1r_A7B73_ICALL_2_after=esp;",
     )
     if any(region.count(item)!=1 for item in required):
         raise ValueError("K1S ordinal 44 / K1R witness contract differs")
