@@ -223,6 +223,50 @@ ENTRY/LEA/PRE173/POST173 markers and verifying the original R76
 and K1A behavior. If the trace fails to compile, keep the known-good
 K1A XEX. Never whitelist `EFEE0EC4` or remove any hard fences.
 
+## Actual K1A DSINDEX Xbox hardware proof (2026-10-30)
+
+**The four checkpoints executed on the real Xbox**, not just in synthetic tests:
+
+- `ENTRY`: object=`00041D70`, first=`01B672D8`, second=`04020100`,
+  difference=`FDB471D8`, table=`024A8000`.
+- `LEA`: computed ESI=`EFEE0EC0`, `local_delta=FDB471D8`,
+  `loop_count=96` (exactly 393216 bytes / 4096).
+- `PRE173` and `POST173`: EBX=`00041D70`, ESI=`EFEE0EC0`,
+  ESP=`008BF8B4` unchanged across ordinal-173 MmGetPhysicalAddress.
+- The actual hard-fenced `READ32 EFEE0EC4` remains at tick 27,029,593;
+  `display_calls=0`, framebuffer=`00000000`.
+- Retail initial XBE dwords at `00041D70` were `00041D59` and
+  `04020100`. In live guest RAM, the first dword has become
+  `01B672D8`; the second remains `04020100`. The altered first dword
+  is sufficient to reproduce the invalid index before any ordinal-173
+  call, but it is **not yet proven** whether the write is intentional,
+  guest-translated, or native host memory copying.
+
+**Next experiment: watch WHO writes that exact first dword.**
+
+`Stage-K1A-DsoundWriterWatch.py` inserts strictly observational
+overlap checks into translated guest write8/write16/write32 wrappers.
+`Test-K1A-DsoundWriterWatch.py` validates the stage. The guarded
+`Build-K1A-DsoundWriterWatch.ps1` reuses the 64 existing TrueTU files
+(only the already-instrumented DSINDEX shard differs), all generated
+headers, and the three clock handlers in a separate `main.cpp`.
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1A-DsoundWriterWatch.ps1'
+```
+
+Output on successful XDK build:
+
+`build\phase6_integration_map\k1a_dsobject_writer_watch\xdk\Merc-K1A-DSObjectWriter.xex`
+
+On Xbox, filter for `K1A DSOBJECT WRITE` alongside `K1A DSINDEX`.
+An absent write record doesn't prove the bytes never changed: host/native
+bulk copies and unwatched guest-write paths remain possible.
+Nothing in this stage bypasses the `EFEE0EC4` hard fence.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
