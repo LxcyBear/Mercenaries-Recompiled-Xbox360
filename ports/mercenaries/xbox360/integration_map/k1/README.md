@@ -342,6 +342,55 @@ This inspector copies no files, does not write guest memory, does not
 alter any of the 64 TrueTU sources and triggers **no XDK build**.
 Send the report to determine the next minimal writer instrumentation.
 
+## 2026-10-30 K1B: target the generic guest writes, not APU-only writes
+
+The latest source report gives the exact original TrueTU writer roots:
+
+- `main.cpp:942` `recomp_guest_write8`
+- `main.cpp:956` `recomp_guest_write16`
+- `main.cpp:1059` `recomp_guest_write32`
+- `main.cpp:1101` `recomp_guest_write64`
+- `main.cpp:1195` `recomp_guest_write128`
+
+`translated_runtime.h` routes `GUEST_WRITE8/16/32/64` to the
+corresponding central `recomp_guest_write*` functions.
+The two lexical `0x41D70` references are **not direct writes**
+to this address: `translated_004.cpp:21670` stores the POINTER
+`0x41D70` at `[EAX+8]`, while `translated_026.cpp:1261` reads
+a dispatch lookup byte from `[ECX+0x41D74]`, then branches through
+a table rooted at `0x41D60`. This ties the address to code-side
+jump-table data, not a demonstrated DSOUND object structure.
+
+New stage: `Stage-K1A-CentralGuestWriteWatch.py` instruments the five
+central store widths, checks overlap **only** for
+`0x00041D70..0x00041D77`, and includes a unique runtime boot marker:
+
+`P6K1B-CENTRAL-GUEST-WRITE-WATCH-20261030`
+
+This mark should appear in the original `PHASE 6DQ REAL TRANSLATED
+STARTUP BOUNDARY PROOF START` line of the new XEX, **even when no
+write is observed**. The patch does not change the guest-write body
+or the hard fence. The stage points the incremental VS17 builder at
+the unchanged 64 TrueTU files from the previous K1A DSINDEX probe;
+only the host `main.cpp` is patched.
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1B-CentralGuestWriteWatch.ps1'
+```
+
+Use `-PreflightOnly` to run the Python fixture and stage without XDK.
+After a successful build, the independent diagnostic executable is:
+
+`build\phase6_integration_map\k1b_central_write_watch\xdk\Merc-K1B-CentralWriter.xex`
+
+On Xbox, obtain the boot line and `K1B CENTRAL WRITE` records, if any.
+Zero writer records **with a verified K1B boot tag** directs the next
+investigation to host bulk-copy, direct guest pointers, or the earlier
+wrong-object/ABI source. It does **not** permit bypassing EFEE0EC4.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
