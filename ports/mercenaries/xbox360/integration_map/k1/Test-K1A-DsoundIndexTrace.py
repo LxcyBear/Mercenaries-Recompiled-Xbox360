@@ -81,7 +81,11 @@ def test():
         manifest=json.loads((root/"k1a-dsound-index-trace-manifest.json").read_text())
         assert manifest==m
         expect_rejected(lambda:module.stage(base,base),"in-place")
-        expect_rejected(lambda:module.stage(base,staged),"reuse nonempty output")
+        reused=module.stage(base,staged)
+        assert reused==m,"preflight stage reuse changed manifest"
+        (staged/"translated_010.cpp").write_text("/* corrupted synthetic shard */")
+        expect_rejected(lambda:module.stage(base,staged),"stale copied shard")
+        (staged/"translated_010.cpp").write_text("/* other true TU shard */\n")
         assert len(list(base.glob("translated_*.cpp")))==64
     print("[K1A-DSINDEX] PASS: synthetic exact labels, entry/LEA/pre173/post173 probes")
     print("[K1A-DSINDEX] PASS: 63 unchanged shards, source SHA, no in-place/duplicate")
