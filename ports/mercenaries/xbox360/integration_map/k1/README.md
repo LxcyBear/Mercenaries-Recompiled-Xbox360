@@ -118,6 +118,34 @@ The report highlights the final 32 guest VAs and the candidate instructions
 that assign/use ESI. A source match is NOT proof of the exact offending
 instruction; use it to choose a grounded provenance repair.
 
+## K1A READ32: exact DSOUND table-index source audit
+
+The latest hardware fault was traced to guest VA \`002A6624\`, in
+\`sub_002A6595\`. An 8-byte table entry is addressed by
+\`ESI = ECX + EDX*8\`; the fault read is \`[ESI+4]\`.
+Post-call hardware registers \`ECX=024A8000\`, \`EDX=FDB471D8\`
+arithmetically reproduce \`ESI=EFEE0EC0\`. However, the registers were
+captured **after** a guest \`MmGetPhysicalAddress\` call, so matching values
+are NOT proof they were unchanged at the previous ESI computation.
+
+Use \`Audit-K1A-DsoundTableIndex.py\` and its synthetic test to extract
+the complete R59 function, all \`[EBP-4]\`/\`[EBP-12]\` reads and writes,
+and the translated caller before attempting a root-cause patch:
+
+\`\`\`powershell
+git pull --ff-only
+$k1 = ".\ports\mercenaries\xbox360\integration_map\k1"
+python "$k1\Test-K1A-DsoundTableIndex.py"
+if ($LASTEXITCODE -ne 0) { throw "K1A DSOUND index audit test failed" }
+python "$k1\Audit-K1A-DsoundTableIndex.py" --source ".\build\phase6_native_graphics\r59_fc4a_abi_repair\main_monolithic_r59.cpp" --out ".\build\phase6_integration_map\K1A_DSOUND_TABLE_INDEX.txt"
+if ($LASTEXITCODE -ne 0) { throw "K1A DSOUND source audit failed" }
+Get-Content ".\build\phase6_integration_map\K1A_DSOUND_TABLE_INDEX.txt" -Raw -Encoding UTF8 | Set-Clipboard
+\`\`\`
+
+Inspect the setup of the EBP-12 index and its relationship to the
+024A8000 table base, rather than inventing a mapping for EFEE0EC4.
+The R76 baseline, K1A XEX and 64 TrueTU shards remain unchanged.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
