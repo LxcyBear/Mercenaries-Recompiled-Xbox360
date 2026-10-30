@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""K1C exact guest-write site candidate: overlay only K1B's main.cpp.
+
+K1B hardware proved a single GUEST_WRITE32 at 00041D70 changed the
+retail 00041D59 data word to the newly allocated guest heap+0x28 pointer
+01B672D8. Its trace-ring 'caller=0023A3CE' is a broad context, not an
+instruction address. K1C observes the existing main.cpp guest-VA tracker
+s_phase6cpCurrentVa at that exact write, without modifying memory writes.
+64 generated TrueTU .cpp and runtime headers are reused byte-for-byte.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+K1B="P6K1B-CENTRAL-GUEST-WRITE-WATCH-20261030"
+K1C="P6K1C-EXACT-WRITE-SITE-VA-20261030"
+BOOT="PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF START"
+TRACKER="static DWORD s_phase6cpCurrentVa = 0u;"
+OLD_LABEL=("K1B CENTRAL WRITE: width=%u hit=%u address=%08X value_lo=%08X "
+           "value_hi=%08X before0=%08X before4=%08X caller=%08X budget=%u esp=%08X")
+NEW_LABEL=("K1C WRITE SITE: width=%u hit=%u address=%08X value_lo=%08X "
+           "value_hi=%08X before0=%08X before4=%08X trace_caller=%08X guest_va=%08X budget=%u esp=%08X")
+OLD_ARG="                (unsigned)k1b_last_trace_va,"
+NEW_ARG=("                (unsigned)k1b_last_trace_va,\n"
+         "                (unsigned)s_phase6cpCurrentVa,")
+BOOT_OLD=BOOT+" | "+K1B
+BOOT_NEW=BOOT+" | "+K1C+" | "+K1B
+
+
+def sha(data:bytes)->str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def patch(source:str)->str:
+    if K1C in source:
+        raise ValueError("K1C already installed in source")
+    if source.count(K1B)!=6 or source.count(BOOT_OLD)!=1:
+        raise ValueError("K1B identity drift: expected five central writers and one runtime boot tag")
+    if source.count(TRACKER)!=1:
+        raise ValueError("existing guest VA tracker missing/duplicated")
+    if source.count(OLD_LABEL)!=5 or source.count(OLD_ARG)!=5:
+        raise ValueError("K1B five exact writer messages/arguments not found")
+    if source.count("k1b_last_trace_va = s_trace[k1b_trace_index];")!=5:
+        raise ValueError("K1B baseline guest writer trace-ring witness drift")
+    if source.count("phase4c_current_caller()")>0 and source.index(TRACKER)<0:
+        raise ValueError("unexpected caller ownership")
+    crlf=source.count("\r\n")
+    if crlf and crlf!=source.count("\n"):
+        raise ValueError("mixed generated C++ line endings")
+    eol="\r\n" if crlf else "\n"
+    if source.index(TRACKER)>source.index("void recomp_guest_write8("):
+        raise ValueError("guest VA tracker declared after writer definitions")
+    new_arg=NEW_ARG.replace("\n",eol)
+    output=source.replace(OLD_LABEL,NEW_LABEL).replace(OLD_ARG,new_arg)
+    output=output.replace(BOOT_OLD,BOOT_NEW,1)
+    if output.count(NEW_LABEL)!=5 or output.count(new_arg)!=5:
+        raise ValueError("K1C message/argument count drift")
+    if output.count(BOOT_NEW)!=1 or output.count(K1C)!=1:
+        # Single K1C boot marker; its formatted trace label is independent.
+        raise ValueError("K1C runtime identity drift")
+    for name in ("recomp_guest_write8","recomp_guest_write16",
+                 "recomp_guest_write32","recomp_guest_write64",
+                 "recomp_guest_write128"):
+        if output.count("void "+name+"(")!=1:
+            raise ValueError("central writer definition changed: "+name)
+    return output
+
+
+def stage(baseline:Path,shard_dir:Path,out:Path)->dict:
+    baseline=baseline.resolve()
+    shard_dir=shard_dir.resolve()
+    out=out.resolve()
+    if out==baseline or out.parent==baseline.parent or out.parent==shard_dir:
+        raise ValueError("stage must use a separate new main directory")
+    original=baseline.read_bytes()
+    try: text=original.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("K1B generated main not UTF-8") from exc
+    changed=patch(text).encode("utf-8")
+    shards=sorted(shard_dir.glob("translated_*.cpp"))
+    headers=sorted(shard_dir.glob("*.h"))
+    if len(shards)!=64 or "translated_runtime.h" not in {x.name for x in headers}:
+        raise ValueError("missing frozen 64 TrueTU source set or runtime header")
+    hashes={f.name:sha(f.read_bytes()) for f in [*shards,*headers]}
+    if out.exists():
+        if out.read_bytes()!=changed:
+            raise ValueError("K1C staged main has drifted; never overwrite")
+        print("[K1C-SITE] REUSE PASS: new main is byte-for-byte identical")
+    else:
+        out.parent.mkdir(parents=True,exist_ok=True)
+        out.write_bytes(changed)
+    if baseline.read_bytes()!=original or any(
+        sha(f.read_bytes())!=hashes[f.name] for f in [*shards,*headers]
+    ):
+        raise RuntimeError("frozen K1B/TrueTU source mutated during K1C stage")
+    manifest={
+        "status":"STAGED_ONLY_NO_XDK_BUILD",
+        "boot_marker":K1C,
+        "original_main_sha256":sha(original),
+        "staged_main_sha256":sha(changed),
+        "source_main":str(baseline),"staged_main":str(out),
+        "source_shards":str(shard_dir),
+        "translated_cpp_count":len(shards),
+        "generated_header_count":len(headers),
+        "extra_guest_memory_writes":0,
+        "guest_memory_hard_fence":"UNCHANGED",
+        "guest_write_widths":[1,2,4,8,16],
+        "watch_range":"00041D70..00041D77",
+        "writer_telemetry":"K1C WRITE SITE",
+        "guest_va_origin":"existing s_phase6cpCurrentVa (candidate last translated VA)",
+        "unchanged_header_sha256":{f.name:hashes[f.name] for f in headers},
+    }
+    (out.parent/"k1c-write-site-manifest.json").write_text(
+        json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
+    return manifest
+
+
+def main():
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--main",required=True,type=Path)
+    ap.add_argument("--shards",required=True,type=Path)
+    ap.add_argument("--out",required=True,type=Path)
+    args=ap.parse_args()
+    doc=stage(args.main,args.shards,args.out)
+    print("[K1C-SITE] PASS: five guest writer probes now include existing guest VA tracker")
+    print("[K1C-SITE] PASS: unique hardware boot marker, no write or hard-fence mutation")
+    print("[K1C-SITE] PASS: 64 TrueTU sources and runtime headers unchanged")
+    print("[K1C-SITE] Manifest="+str(args.out.parent/"k1c-write-site-manifest.json"))
+
+
+if __name__=="__main__":main()
