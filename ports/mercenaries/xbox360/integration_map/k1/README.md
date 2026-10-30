@@ -697,3 +697,46 @@ Share only the focused K1F report, not entire original retail game assets.
 The audit verifies the frozen owner/K1E hashes and extracts original
 function setup, EBX writes and direct lexical callers without compiling
 or changing generated guest code.
+
+## K1F source audit PASS -> K1G hardware register-lifetime test (2026-10-30)
+
+K1F passed against the frozen original `translated_029.cpp` and the
+K1E stage owner hash without a new XDK build. `sub_0027DC5B` copies
+`ebx = ecx` at original source line 15570 and makes no other explicit
+EBX assignments in that function. K1E nevertheless observed EBX=00000018
+at the XACT list write. This does **not** yet prove incoming ECX was 18:
+several nested translated calls execute before the damaging store, and
+they might clobber shared guest register state. K1F found zero direct
+lexical calls to `sub_0027DC5B` among the 64 original shards; indirect
+dispatch or host-owned calls are not excluded.
+
+The new K1G *instrumented* stage builds from the existing SHA-verified
+K1E 64-TU staged set, adds host-only trace blocks to exactly
+`translated_029.cpp`, and preserves the full K1E source witness.
+Snapshots are taken at ENTRY before EBX=ECX, POST_COPY, and immediately
+after the translated calls at guest labels DC69, DC8A, DCAC, DCBB, DCE5,
+plus BEFORE_LIST at DD06. The K1E pre-write tail trace remains at DD0C.
+Guest memory reads/stores, guest register assignments and hard fences are
+unchanged. This instrumentation is NOT an EBX or list-pointer repair.
+
+From the Mercenaries repository root:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1G-XactRegisterProvenance.ps1'
+```
+
+To run all synthetic/provenance checks and stage the K1G source without
+XDK compilation, append `-PreflightOnly`.
+
+On build success **deploy only**:
+
+`build\phase6_integration_map\k1g_xact_register_provenance\xdk\Merc-K1G-XactRegisterProvenance.xex`
+
+Capture `K1G XACT ABI ENTRY`, `POST_COPY`, `AFTER_D5C0`,
+`AFTER_29FDF0`, `AFTER_29E435`, `AFTER_28345A`,
+`AFTER_1787C0`, `BEFORE_LIST`, followed by `K1E XACT LIST PRE`.
+Compare the first calls to detect the first transition to EBX=18.
+Do not infer an entry-argument bug until that on-hardware comparison.
+XDK compiler and Xbox K1G results remain unverified pending local run.
