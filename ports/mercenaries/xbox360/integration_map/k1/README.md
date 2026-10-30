@@ -561,18 +561,24 @@ GUEST_WRITE32(ecx + 4, eax);       // head->Blink=new entry
 
 K1C observed the `GUEST_WRITE32(ecx, eax)` consequence:
 `address=00041D70`, `value=01B672D8`, `before=00041D59`.
-This is consistent with the **old list tail** loaded from
-`[ebx+0x78]` being `00041D70`, a VA inside the original XBE
-`.text` section, instead of a valid existing node.
-This is still a **hypothesis about the erroneous list state**,
-not proof of the original reason for that value or proof that the
-later DSOUND `EFEE0EC4` read is caused by this exact store.
+There are TWO candidate stores within this same guest
+tick that could have produced the K1C observation:
+`GUEST_WRITE32(ecx,eax)` if the old tail is `00041D70`,
+OR `GUEST_WRITE32(ecx+4,eax)` later if the list head
+is `00041D6C`. K1C tracked the **block**, not the individual
+store. Either result would place a list pointer into the XBE
+`.text` range, so the root cause remains under investigation.
+The later DSOUND `EFEE0EC4` read has NOT yet been proven to
+be caused by this particular store.
 
 Next, K1E instruments **only translated_029.cpp** at the existing
 XACT list-link site. It logs `K1E XACT LIST PRE` immediately before
 the original `GUEST_WRITE32(ecx, eax)`, showing `ebx`,
 `edx=head`, `ecx=tail`, `eax=node`, `edi`,
-`eventcount`, and guest ESP. It reuses the K1C main XEX
+`eventcount`, and guest ESP. Its two flags
+`tail_hits_41D70` and `head_hits_41D70` explicitly
+disambiguate the original link-tail and head-backlink
+write targets without introducing another guest-memory read. It reuses the K1C main XEX
 provenance, leaves 63 other TrueTU source files and all generated
 headers unchanged, and preserves all guest register writes,
 guest memory reads/writes, existing APU policy and hard fences.
