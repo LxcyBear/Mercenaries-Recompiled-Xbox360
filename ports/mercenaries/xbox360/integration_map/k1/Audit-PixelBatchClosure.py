@@ -142,13 +142,17 @@ def audit(a:argparse.Namespace)->dict:
         raise ValueError("K1S TrueTU inventory unexpectedly incomplete")
     base=import_module(a.base_emitter,"pixel_batch_base")
     p5bb=import_module(a.phase5bb_emitter,"pixel_batch_p5bb")
+    base.STANDARD_CALLS.update(("sin","cos"))
+    print("[PIXEL] Indexing real local generated functions and their ranges...",flush=True)
     by_va,by_name=base.load_ranges(a.functions)
     generated=base.load_generated(a.generated_root,by_name)
     if len(generated)<10000:
         raise ValueError("Generated translator corpus incomplete")
     starts=sorted(by_va)
-    if LIVE in original_vas:
-        raise ValueError("New DIRECT_FRONTIER already exists in the K1S translated body inventory")
+    # A body may exist while its lookup/dispatch entry is missing.
+    # Preserve this as an explicit audit finding instead of assuming
+    # every new DIRECT_FRONTIER must mean a missing translated body.
+    live_body_present=LIVE in original_vas
     roots={}
     prospective={}
     for label,root,budget in ROOTS:
@@ -183,13 +187,16 @@ def audit(a:argparse.Namespace)->dict:
     provided.update(base.STANDARD_CALLS)
     provided.update("sub_%08X"%n for n in planned)
     records=[]
+    if live_body_present:
+        preferred=[LIVE]+[va for va in preferred if va!=LIVE]
     for va in preferred:
         parent=find_enclosing(va,starts,by_va)
         row=prospective[va]
         state=safe_preview(va,generated,base,p5bb,planned,provided)
         records.append({
             **row,
-            "classification":("EXACT_GENERATED_FUNCTION" if va in generated
+            "classification":("ALREADY_PACKED_LOOKUP_OR_CONTROL_FLOW_GAP" if va in original_vas
+                 else "EXACT_GENERATED_FUNCTION" if va in generated
                  else "MID_FUNCTION_OR_UNTRANSLATED" if parent is not None
                  else "NO_FUNCTION_RANGE"),
             "containing_function":(
@@ -219,6 +226,7 @@ def audit(a:argparse.Namespace)->dict:
         },
         "verified_baseline":{
             "marker":doc["marker"],
+            "live_frontier_body_present":live_body_present,
             "shards":len(files),
             "packed_function_bodies":len(original_vas),
             "generated_source_bodies":len(generated),
