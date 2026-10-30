@@ -155,6 +155,18 @@ compiler/hardware success remains UNVERIFIED until user runs it.
   64 true TU files, and hard-fenced memory rules. Pending real
   VS2017 build and hardware run; no milestone claimed yet.
 
+### K1C pre-XDK source mismatch corrected (2026-10-30)
+
+The initial K1C stage failed before Xbox build, despite passing the
+synthetic test: the actual K1B generated source defines global
+`s_phase6cpCurrentVa` **after** the central writer functions.
+The corrected stage keeps that state declaration in place and adds
+one earlier prototype for a later-defined read-only helper. Five
+central logging messages call it to sample the last guest VA.
+Tests now model actual late tracker placement and the original early
+fixture; staging and XDK/hardware validation are still pending.
+The 27,029,593-tick hard fence and no-pixels status remain unchanged.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
