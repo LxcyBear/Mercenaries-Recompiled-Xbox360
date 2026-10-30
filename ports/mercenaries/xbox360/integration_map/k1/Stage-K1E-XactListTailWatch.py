@@ -64,11 +64,30 @@ def modify(text:str)->str:
     if text.count("\r")!=crlf or (crlf and crlf!=text.count("\n")):
         raise ValueError("invalid/mixed generated TU line endings (CRCRLF or bare CR)")
     nl="\r\n" if crlf else "\n"
-    if text.count("void "+FUNCTION+"(void)")!=1:
-        raise ValueError("expected one XACTENG original function owner")
-    begin=text.index("void "+FUNCTION+"(void)")
-    next_func=re.search(r"(?m)^[ \t]*void[ \t]+sub_[A-Fa-f0-9]{8}[ \t]*\(",text[begin+1:])
-    end=begin+1+next_func.start() if next_func else len(text)
+    # Generated TrueTU sources can contain a forward declaration AND
+    # a later implementation of the same guest function. Only the
+    # implementation with an opening brace owns translated instructions.
+    # Requiring exactly one spelling of the function name incorrectly
+    # rejected the real K1D-proven translated_029.cpp.
+    owner=re.compile(
+        r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+"
+        +re.escape(FUNCTION)+
+        r"[ \t]*\([ \t]*void[ \t]*\)[ \t]*(?:\r?\n[ \t]*)?\{"
+    )
+    definitions=list(owner.finditer(text))
+    if len(definitions)!=1:
+        raise ValueError(
+            "expected exactly one XACTENG function BODY, got "
+            +str(len(definitions))
+        )
+    begin=definitions[0].start()
+    # The emitted C++ guest function ends at an unindented closing
+    # brace. Unlike 'next void sub_' this never mistakes intervening
+    # forward declarations for the end of the function.
+    closing=re.search(r"(?m)^\}[ \t]*(?:\r?\n|$)",text[definitions[0].end():])
+    if closing is None:
+        raise ValueError("XACTENG function body has no top-level closing brace")
+    end=definitions[0].end()+closing.end()
     body=text[begin:end]
     if body.count(LABEL)!=1 or body.count("PHASE4C_BUDGET_TICK(0x0027DD0Cu);")!=1:
         raise ValueError("XACTENG loc_0027DD0C site missing or duplicated")
