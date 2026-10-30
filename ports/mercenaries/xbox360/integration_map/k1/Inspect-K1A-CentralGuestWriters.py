@@ -17,7 +17,7 @@ from pathlib import Path
 
 CLOCK="P6K1A-BOOT-CLOCK128-304-305-20261029"
 WATCH="P6K1A-DSOUND-OBJECT-WRITER-WATCH-20261030"
-ADDRESS=re.compile(r"(?i)\b(?:0x)?0*41D7[0-7]\b")
+ADDRESS=re.compile(r"(?i)(?<![A-Za-z0-9])(?:0x|loc_)?0*41D7[0-7](?:u|ul)?(?![A-Za-z0-9])")
 DEFINITION=re.compile(
     r"(?i)^\s*(?:#\s*define\s+)?(?:"
     r"GUEST_WRITE(?:8|16|32)\b|recomp_guest_write(?:8|16|32)\b|"
