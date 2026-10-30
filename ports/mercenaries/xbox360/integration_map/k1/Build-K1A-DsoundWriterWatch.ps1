@@ -20,6 +20,7 @@ $dsShardDir=Join-Path $dsRoot "translated_shards"
 $dsManifest=Join-Path $dsRoot "k1a-dsound-index-trace-manifest.json"
 $stageDir=Join-Path $repo "build\phase6_integration_map\k1a_dsobject_writer_watch"
 $main=Join-Path $stageDir "main.cpp"
+$watchShardDir=Join-Path $stageDir "translated_shards"
 $manifestPath=Join-Path $stageDir "k1a-dsound-writer-watch-manifest.json"
 $buildDir=Join-Path $stageDir "xdk"
 $xex=Join-Path $buildDir "Merc-K1A-DSObjectWriter.xex"
@@ -85,18 +86,57 @@ foreach($header in $headers){
 Write-Host "[K1A-DSOBJECT] R76 main, K1A clock source, 64 TrueTUs and runtime headers verified"
 & $python -u (Join-Path $PSScriptRoot "Test-K1A-DsoundWriterWatch.py")
 if($LASTEXITCODE -ne 0){ throw "[K1A-DSOBJECT] Writer-watch synthetic tests failed" }
-& $python -u (Join-Path $PSScriptRoot "Stage-K1A-DsoundWriterWatch.py") --main $clockMain --out $main
+& $python -u (Join-Path $PSScriptRoot "Stage-K1A-DsoundWriterWatch.py") --main $clockMain --shards $dsShardDir --out $main
 if($LASTEXITCODE -ne 0){ throw "[K1A-DSOBJECT] Failed to stage writer-watch main" }
 $watched=Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if($watched.status -ne "STAGED_ONLY_NO_XDK_BUILD" -or
-   $watched.original_main_sha256.ToUpperInvariant() -ne $clockSha -or
-   $watched.staged_main_sha256.ToUpperInvariant() -ne
+   $watched.main_original_sha256.ToUpperInvariant() -ne $clockSha -or
+   $watched.main_staged_sha256.ToUpperInvariant() -ne
        (Get-FileHash -LiteralPath $main -Algorithm SHA256).Hash -or
+   [int]$watched.generated_cpp_count -ne 64 -or
+   [int]$watched.changed_cpp_count -ne 0 -or
+   [int]$watched.generated_header_count -ne $headers.Count -or
+   @($watched.watch_widths).Count -ne 3 -or
    $watched.guest_write_semantics -ne "PRESERVED" -or
    $watched.unknown_memory_fences -ne "PRESERVED"){
     throw "[K1A-DSOBJECT] Staged writer-watch manifest mismatch"
 }
-Write-Host "[K1A-DSOBJECT] PREFLIGHT PASS: write8/write16/write32 watch, one DSINDEX TU"
+$watchSourceHeaders=@(Get-ChildItem -LiteralPath $watchShardDir -Filter "*.h" -File)
+$watchSourceCpp=@(Get-ChildItem -LiteralPath $watchShardDir -Filter "translated_*.cpp" -File)
+if($watchSourceHeaders.Count -ne $headers.Count -or $watchSourceCpp.Count -ne 64){
+    throw "[K1A-DSOBJECT] Missing generated header or translated source in watched stage"
+}
+foreach($f in $watchSourceCpp){
+    $orig=Join-Path $dsShardDir $f.Name
+    if(-not(Test-Path -LiteralPath $orig -PathType Leaf) -or
+       (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash -ne
+       (Get-FileHash -LiteralPath $orig -Algorithm SHA256).Hash){
+        throw "[K1A-DSOBJECT] Watch staging mutated translated TU: $($f.Name)"
+    }
+}
+$owner=[string]$watched.writer_owner
+if($owner -notin @("main.cpp","translated_runtime.h")){
+    throw "[K1A-DSOBJECT] Invalid writer owner in stage manifest"
+}
+foreach($header in $headers){
+    $watchCopy=Join-Path $watchShardDir $header.Name
+    if(-not(Test-Path -LiteralPath $watchCopy -PathType Leaf)){
+        throw "[K1A-DSOBJECT] Missing watched header: $($header.Name)"
+    }
+    if($header.Name -eq "translated_runtime.h" -and $owner -eq "translated_runtime.h"){
+        if((Get-FileHash -LiteralPath $watchCopy -Algorithm SHA256).Hash -ne
+           $watched.runtime_header_staged_sha256.ToUpperInvariant()){
+            throw "[K1A-DSOBJECT] Watched runtime header SHA mismatch"
+        }
+    }elseif((Get-FileHash -LiteralPath $watchCopy -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $header.FullName -Algorithm SHA256).Hash){
+        throw "[K1A-DSOBJECT] Unmodified generated header drift: $($header.Name)"
+    }
+}
+Write-Host ("[K1A-DSOBJECT] PREFLIGHT PASS: true writer owner={0}; 64 TUs SHA-identical" -f $owner)
+if($owner -eq "translated_runtime.h"){
+    Write-Host "[K1A-DSOBJECT] NOTE: watched shared header changed; dependent TUs may recompile"
+}
 if($PreflightOnly){
     Write-Host "[K1A-DSOBJECT] PREFLIGHT ONLY: XDK build skipped"
     exit 0
@@ -105,7 +145,7 @@ New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
 $buildArgs=@{
     GeneratedMain=$main
     GeneratedEnv=$envFile
-    GeneratedShardDir=$dsShardDir
+    GeneratedShardDir=$watchShardDir
     ExpectedBuildTag="P6DQ-R51-MM173-FRAME-20261029-A"
     ExpectedEnvCookie="phase6dq_env_build_cookie"
     SolutionRoot=$SolutionRoot
