@@ -44,6 +44,15 @@ without a detected route is NOT automatically a broken runtime service.
 - Keep the new guest address hard fenced, with no synthetic success or
   invented MMIO mapping. Inspect translated VA ring and ESI provenance
   using `k1/Investigate-K1A-NextRead32.py`.
+- Exact R59 VA `002A6624` is inside `sub_002A6595`, after
+  `ESI = ECX + EDX*8` from guest locals `[EBP-4]` and `[EBP-12]`.
+  The faulting read is `[ESI+4]`. Hardware post-call values
+  `ECX=024A8000`, `EDX=FDB471D8` produce `ESI=EFEE0EC0`
+  modulo 2^32. Register snapshot is *after* `MmGetPhysicalAddress`;
+  these are consistent, not proven identical, pre-call values.
+- `k1/Audit-K1A-DsoundTableIndex.py` now extracts the entire function,
+  local-variable ancestry and upstream caller to distinguish broken index,
+  pointer translation and guest call-frame corruption. No new XDK build yet.
 - The R76 source/TrueTU base and prior executable are unchanged.
 
 ## K1A — system clock and calendar conversion (one 100ns model)
