@@ -55,6 +55,19 @@ without a detected route is NOT automatically a broken runtime service.
   pointer translation and guest call-frame corruption. No new XDK build yet.
 - The R76 source/TrueTU base and prior executable are unchanged.
 
+### New source proof: DSOUND table-index operands
+
+The complete `sub_002A6595` R59 function now proves:
+`[EBP-12]=DWORD[EBX]-DWORD[EBX+4]`,
+`[EBP-4]=DWORD[0x002BB240]`,
+and `ESI=[EBP-4]+[EBP-12]*8`. Fault-time `EBX=00041D70`
+is inside the verified retail `.text` section. The next **offline**
+proof is a two-dword differential using the user's exact SHA-gated retail
+XBE: `k1/Check-K1A-EbxTextBytes.py`. Its output will distinguish
+whether the observed `FDB471D8` index is consistent with reading
+original code-section bytes at the fault-time EBX. This does NOT prove
+whether EBX was wrong on entry or clobbered later. No runtime bypass,
+new Xbox build, or relaxed guest memory fences.
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
