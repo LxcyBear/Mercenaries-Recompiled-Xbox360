@@ -140,7 +140,7 @@ def modify(text:str)->str:
         if body.count(native_old)!=1:
             raise ValueError("non-unique insertion point: "+old)
         body=body.replace(native_old,native_new,1)
-    body="/* "+MARK+": only guest function "+FUNCTION+" modified */\n"+body
+    body="/* "+MARK+": only guest function "+FUNCTION+" modified */"+newline+body
     return text[:begin]+body+text[stop:]
 
 def stage(source:Path,out:Path)->dict:
