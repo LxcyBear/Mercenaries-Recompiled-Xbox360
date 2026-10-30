@@ -91,6 +91,33 @@ run locally if a compiler is available, and the VS2017/XDK guest
 runtime must compile and preserve its kernel ABI. Hardware test comes
 only after those checks.
 
+## Actual K1A Xbox result and next READ32 root-cause audit
+
+The K1A XEX booted on a real Xbox 360 and executed kernel ordinal 128
+once (output VA `008BF954`). Original R76 ordinal-128 hard stop **cleared**.
+The next verified boundary is `GUEST_FAULT READ32 EFEE0EC4`, with
+`ESI=EFEE0EC0`, tick `27,029,593`. No game pixels or guest display
+handoff yet. The two date conversion APIs (304/305) were staged but **not
+observed executing** in this hardware log.
+
+Do **not** whitelist this address, guess GPU/MMIO semantics, or regenerate
+the full game. Inspect the exact frozen translated source with:
+
+```powershell
+git pull --ff-only
+$k1 = ".\ports\mercenaries\xbox360\integration_map\k1"
+python "$k1\Test-K1A-NextRead32.py"
+if ($LASTEXITCODE -ne 0) { throw "K1A READ32 probe regression failed" }
+python "$k1\Investigate-K1A-NextRead32.py" --source ".\build\phase6_native_graphics\r59_fc4a_abi_repair\main_monolithic_r59.cpp" --out ".\build\phase6_integration_map\K1A_NEXT_READ32_PROVENANCE.txt"
+if ($LASTEXITCODE -ne 0) { throw "K1A READ32 source investigation failed" }
+Get-Content ".\build\phase6_integration_map\K1A_NEXT_READ32_PROVENANCE.txt" -Tail 160 | Set-Clipboard
+Get-Content ".\build\phase6_integration_map\K1A_NEXT_READ32_PROVENANCE.txt" -Tail 160
+```
+
+The report highlights the final 32 guest VAs and the candidate instructions
+that assign/use ESI. A source match is NOT proof of the exact offending
+instruction; use it to choose a grounded provenance repair.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
