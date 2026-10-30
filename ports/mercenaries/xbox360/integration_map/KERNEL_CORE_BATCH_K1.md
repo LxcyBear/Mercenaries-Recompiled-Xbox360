@@ -125,6 +125,20 @@ new Xbox build, or relaxed guest memory fences.
   DSOBJECT boot watermark and validate the writer owner in the
   actual compiled source; do not bypass the guest-memory hard fence.
 
+### K1B source-level causality candidate (2026-10-30)
+
+Offline exact source report confirms `recomp_guest_write8/16/32/64/128`
+as five central store implementations in K1A staged `main.cpp`.
+`GUEST_WRITE*` macros route there. The two literal address references
+are a descriptor payload `GUEST_WRITE32(eax+8,0x41D70)` and an
+unrelated jump-table lookup byte at `0x41D74`; neither is direct
+proof of a write to `0x41D70`.
+
+New K1B runtime-watch stage and XDK wrapper are committed with an
+independently boot-visible mark. Preserves R76, K1A, 64 TrueTUs,
+DSINDEX checkpoints and `EFEE0EC4` hard fence. Actual Xbox
+compiler/hardware success remains UNVERIFIED until user runs it.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
