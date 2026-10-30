@@ -139,6 +139,22 @@ independently boot-visible mark. Preserves R76, K1A, 64 TrueTUs,
 DSINDEX checkpoints and `EFEE0EC4` hard fence. Actual Xbox
 compiler/hardware success remains UNVERIFIED until user runs it.
 
+### K1B HARDWARE PASS -> K1C writer-site diagnosis (2026-10-30)
+
+- Real Xbox boot identifies K1B; one central `recomp_guest_write32`
+  executed at guest `00041D70`, changing `00041D59 -> 01B672D8`.
+- Value matches `RtlAllocateHeap(2400) result=01B672B0 + 0x28`.
+- Previous trace-ring caller `0023A3CE` is not an exact instruction VA.
+- No increase over `ticks=27029593 trace=1072569`; same hard
+  fence at `READ32 EFEE0EC4`, display still uninitialized.
+- K1C staged as isolated main-only diagnostic XEX with 5 writer
+  probes logging `guest_va` from existing `s_phase6cpCurrentVa`.
+  Candidate VA is a last-translated-VA tracker, not proof of
+  exact store-site PC until verified against translated body.
+- Preflight and build scripts preserve R76/K1B provenance, the
+  64 true TU files, and hard-fenced memory rules. Pending real
+  VS2017 build and hardware run; no milestone claimed yet.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
