@@ -147,10 +147,30 @@ def stage(source:Path,out:Path)->dict:
             candidates.append(f)
     if len(candidates)!=1:raise ValueError(f"expected exact ONE shard owning {FUNCTION}; got {len(candidates)}")
     target=candidates[0]
-    if out.exists():
-        existing=list(out.iterdir())
-        if existing:
-            raise ValueError("output directory must be fresh/empty; avoid stale mixed shards: "+str(out))
+    if out.exists() and any(out.iterdir()):
+        # Allow a PRECHECK-only run to be followed by the actual XDK build,
+        # but ONLY when all 64 files are unchanged and the one patched shard
+        # exactly matches the currently requested instrumentation source.
+        manifest=out.parent/"k1a-dsound-index-trace-manifest.json"
+        if not manifest.is_file():
+            raise ValueError("nonempty stage dir has no forensic manifest")
+        doc=json.loads(manifest.read_text(encoding="utf-8"))
+        if (doc.get("marker")!=MARK or
+            doc.get("status")!="STAGED_ONLY_NO_XDK_BUILD" or
+            doc.get("modified_shards")!=[target.name] or
+            doc.get("original_modified_shard_sha256")!=snapshots[target.name] or
+            doc.get("source_directory")!=str(source) or
+            doc.get("staged_directory")!=str(out) or
+            {p.name for p in out.iterdir()}!={p.name for p in inputs} or
+            doc.get("staged_modified_shard_sha256")!=
+              sha(modify(target.read_text(encoding="utf-8")).encode("utf-8"))):
+            raise ValueError("staged output identity mismatch or stale mixed shards")
+        for f in inputs:
+            actual=sha((out/f.name).read_bytes())
+            if actual!=(doc["staged_modified_shard_sha256"] if f==target else snapshots[f.name]):
+                raise ValueError("staged TrueTU content drift: "+f.name)
+        print("[K1A-DSINDEX] REUSE PASS: 64 staged hashes match; no rewrites")
+        return doc
     out.mkdir(parents=True,exist_ok=True)
     changed=[]
     for f in inputs:
