@@ -430,6 +430,53 @@ On a successful XDK build, launch only:
 No translated shard recompilation or clean is requested; no
 hardware progress claim until the new XEX actually runs.
 
+## 2026-10-30 K1B hardware PASS -> K1C write-site VA probe
+
+The K1B Xbox 360 diagnostic executable **ran with the unique boot marker**
+`P6K1B-CENTRAL-GUEST-WRITE-WATCH-20261030`.
+At one actual 32-bit write to `00041D70`, it printed:
+
+```text
+K1B CENTRAL WRITE: width=4 hit=1 address=00041D70 value_lo=01B672D8 value_hi=00000000 before0=00041D59 before4=04020100 caller=0023A3CE budget=0 esp=008BF974
+```
+
+Immediately beforehand the native heap allocated 2,400 bytes at
+`01B672B0`. The written guest value is `01B672B0 + 0x28`.
+The writer is conclusively a guest `recomp_guest_write32` call, but
+the observed `caller=0023A3CE` came from the broad trace ring and
+is **not an exact translated instruction address**. The fault
+still occurs later at `READ32 EFEE0EC4`,
+`ticks=27029593 trace=1072569`. `display_calls=0` and
+`framebuffer=00000000`; there is **no tick/pixel breakthrough yet**.
+
+K1C extends the already-proven K1B central 8/16/32/64/128 write
+messages with the existing `s_phase6cpCurrentVa` tracker, logged
+as `guest_va=%08X`, while preserving the previous `trace_caller`.
+This is a **candidate last executed guest VA**, not guaranteed to
+be the precise guest store PC; interpret it alongside the tick/
+trace context. It leaves original writes and memory hard fences
+untouched. Only host `main.cpp` changes; the 64 TrueTUs and all
+headers remain byte-for-byte identical.
+
+```powershell
+Set-Location 'C:\Users\jorda\Mercenaries-Recompiled-Xbox360'
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1C-ExactGuestWriteSite.ps1'
+```
+
+Pass `-PreflightOnly` for source verification and synthetic
+regression without an XDK build. If VS2017 compiles and publishes,
+launch **only this distinct new diagnostic XEX**:
+
+`build\phase6_integration_map\k1c_guest_write_site_va\xdk\Merc-K1C-GuestWriteSiteVA.xex`
+
+Search xbWatson for `P6K1C-EXACT-WRITE-SITE-VA-20261030` and
+`K1C WRITE SITE:`. If `guest_va` is nonzero, inspect the specific
+guest instruction against the retained translated source; if stale
+or zero, do not guess or mutate the pointer. The existing
+`EFEE0EC4` hard fence remains mandatory.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
