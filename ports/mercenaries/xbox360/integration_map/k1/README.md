@@ -146,6 +146,35 @@ Inspect the setup of the EBP-12 index and its relationship to the
 024A8000 table base, rather than inventing a mapping for EFEE0EC4.
 The R76 baseline, K1A XEX and 64 TrueTU shards remain unchanged.
 
+## K1A: test the real source of suspicious EBX without another Xbox build
+
+The complete `sub_002A6595` source shows:
+
+- At entry `EBX=ECX`, where the caller loaded `ECX=[EDI+8]`.
+- `[EBP-12]` stores `DWORD[EBX] - DWORD[EBX+4]`.
+- `[EBP-4]` stores `DWORD[0x002BB240]` (the table base).
+- The loop computes `ESI = [EBP-4] + [EBP-12]*8`, then reads `[ESI+4]`.
+- Hardware fault-time `EBX=00041D70`, which lies **inside the retail
+  XBE's .text section** (`00011000..0025561B`). This is suspicious but
+  does not alone prove which guest call corrupted or supplied the pointer.
+
+The new tool reads ONLY two dwords from the user's own, verified SHA-256
+retail XBE image at fault-time EBX. If their difference matches
+`FDB471D8`, it strongly supports that a code-section address fed the
+DSOUND object reads. If not, inspect EBX restoration and EBP locals.
+
+```powershell
+git pull --ff-only
+$k1 = '.\ports\mercenaries\xbox360\integration_map\k1'
+python "$k1\Test-K1A-EbxTextBytes.py"
+if ($LASTEXITCODE -ne 0) { throw 'K1A EBX synthetic test failed' }
+python "$k1\Check-K1A-EbxTextBytes.py" --retail-xbe '.\game_files\mercenaries-retail\default.xbe'
+if ($LASTEXITCODE -ne 0) { throw 'K1A retail XBE pointer proof failed' }
+```
+
+Do not commit/output the user's game bytes. The tool prints only the two
+relevant 32-bit values and whether their difference matches the hardware
+index. No source mutation or XDK compilation; keep EFEE0EC4 hard-fenced.
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
