@@ -174,7 +174,7 @@ def stage(source:Path,out:Path)->dict:
             doc.get("staged_directory")!=str(out) or
             {p.name for p in out.iterdir()}!={p.name for p in inputs} or
             doc.get("staged_modified_shard_sha256")!=
-              sha(modify(target.read_text(encoding="utf-8")).encode("utf-8"))):
+              sha(modify(target.read_bytes().decode("utf-8")).encode("utf-8"))):
             raise ValueError("staged output identity mismatch or stale mixed shards")
         for f in inputs:
             actual=sha((out/f.name).read_bytes())
