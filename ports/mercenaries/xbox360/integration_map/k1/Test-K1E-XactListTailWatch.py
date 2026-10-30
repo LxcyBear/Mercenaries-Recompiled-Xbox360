@@ -44,7 +44,14 @@ void sub_0027F92A(void) { }
     return body.replace("\n",eol)
 
 for eol in ("\n","\r\n"):
-    original=fixture(eol)
+    # Real generated shard has function-name references/forward declarations
+    # as well as the one translated body. Test THAT actual source shape.
+    original=(
+        "void sub_0027DC5B(void);"+eol
+        +"void sub_0027F92A(void);"+eol
+        +fixture(eol)
+    )
+    assert original.count("void sub_0027DC5B(void)")==2
     altered=m.modify(original)
     assert altered.count(m.TAG)==1
     assert altered.count("K1E XACT LIST PRE")==1
@@ -60,6 +67,12 @@ for eol in ("\n","\r\n"):
     assert altered.count("static uint32_t k1e_list_edge_visits = 0u;")==1
     assert altered.count("\r\n")==altered.count("\n") if eol=="\r\n" else "\r" not in altered
     rejects(lambda:m.modify(altered),"duplicate K1E")
+    rejects(lambda:m.modify(original+eol+fixture(eol)),
+            "two real function bodies")
+    rejects(lambda:m.modify(original.replace("void sub_0027DC5B(void)"+eol+"{",
+                                             "void sub_0027DC5B(void);"+eol,
+                                             1)),
+            "only prototypes, missing body")
     if eol=="\r\n":
         rejects(lambda:m.modify(original.replace("\r\n","\r\r\n")),
                 "Windows double-translated CRCRLF fixture")
@@ -83,7 +96,11 @@ with TemporaryDirectory(prefix="k1e-list-tail-test-") as temp:
     # Windows text-mode writes translate LF -> CRLF. Writing an already
     # CRLF fixture with write_text creates CRCRLF and breaks exact
     # original-instruction matching. Stage inputs are byte-preserved.
-    fixture_bytes=fixture("\r\n").encode("utf-8")
+    fixture_bytes=(
+        "void sub_0027DC5B(void);\r\n"
+        "void sub_0027F92A(void);\r\n"
+        +fixture("\r\n")
+    ).encode("utf-8")
     target.write_bytes(fixture_bytes)
     assert target.read_bytes()==fixture_bytes
     assert b"\r\r\n" not in target.read_bytes()
@@ -118,6 +135,7 @@ with TemporaryDirectory(prefix="k1e-list-tail-test-") as temp:
     (staged/"translated_007.cpp").unlink()
     rejects(lambda:m.stage(originals,staged),"missing staged shard")
 
+print("[K1E-XACT] SYNTHETIC PASS: real source shape (forward declarations + exactly one XACT body)")
 print("[K1E-XACT] SYNTHETIC PASS: source-window exact, original list-link stores kept")
 print("[K1E-XACT] SYNTHETIC PASS: LF/CRLF, 64 shards, only one changed, headers unchanged")
 print("[K1E-XACT] SYNTHETIC PASS: source overwrite, stale output and source drift rejected")
