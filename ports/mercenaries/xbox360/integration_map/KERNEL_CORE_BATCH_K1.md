@@ -210,6 +210,19 @@ unchanged, with no XDK Clean requested. Actual local staging,
 VS17 compiler, console runtime and tick improvements are
 pending user verification. Hard fence remains active.
 
+### K1E pre-XDK function-name gate corrected (2026-10-30)
+
+After Windows CRLF regression repair, local K1E synthetic tests
+passed; frozen 64-TU staging halted at `expected one XACTENG
+original function owner`. The source matcher incorrectly counted
+forward declarations as extra definitions of `sub_0027DC5B`.
+Now matches one actual opening-brace function body and original
+`loc_0027DD0C` triple, with regression fixture containing forward
+declarations, and fail-closed duplicate/missing function checks.
+Independent source-window comparison confirmed the literal three
+original guest instructions still match K1D. No XDK compilation
+or extra guest ticks claimed from this fix; hardware proof pending.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
