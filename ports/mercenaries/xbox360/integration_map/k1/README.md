@@ -262,6 +262,22 @@ Output on successful XDK build:
 
 `build\phase6_integration_map\k1a_dsobject_writer_watch\xdk\Merc-K1A-DSObjectWriter.xex`
 
+**2026-10-29 staging fix:** The first DSOBJECT preflight rejected
+`phase6ch_apu_write8` with definition count `0` because it only
+searched the reduced K1A `main.cpp`. The 64-TrueTU layout uses
+`translated_runtime.h` for common runtime helpers. Staging now
+identifies the single owner (`main.cpp` or `translated_runtime.h`)
+and instruments *only that owner*, staging all 64 `.cpp` inputs and
+all original runtime headers together. This avoids changing any
+translated gameplay functions. The preflight explicitly refuses
+ambiguous signatures and reports the discovered names. Logging no
+longer references per-function guest registers from shared helpers.
+
+The Xbox builder receives the new staged shard folder, which
+contains the original DSINDEX function probe and the monitored
+runtime header. If that header changes, its dependent TrueTUs may
+need recompilation even with `SkipClean` enabled. Stage tests are
+synthetic until your local build confirms this exact generated layout.
 On Xbox, filter for `K1A DSOBJECT WRITE` alongside `K1A DSINDEX`.
 An absent write record doesn't prove the bytes never changed: host/native
 bulk copies and unwatched guest-write paths remain possible.
