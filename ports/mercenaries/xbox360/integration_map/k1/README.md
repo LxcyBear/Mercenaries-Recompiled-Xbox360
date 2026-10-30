@@ -399,12 +399,24 @@ synthetic staging regression, source sync, and reached incremental
 `C3861: 'phase4c_current_caller': identifier not found` errors
 at the five newly instrumented central writer functions.
 
-Cause: existing static `phase4c_current_caller(void)` is defined
-later in `main.cpp`. The diagnostic patch now inserts exactly one
-`static DWORD phase4c_current_caller(void);` forward declaration
-before `recomp_guest_write8`. Stage refuses an absent or ambiguous
-actual function definition or incorrect ordering. Synthetic tests
-verify this prototype for LF and CRLF input and reject drifting code.
+The first fix attempted a forward declaration for
+`phase4c_current_caller(void)`, but **the real generated K1A main did
+not contain the exact assumed function definition**. That produced a
+fail-closed Python staging error before XDK.
+
+The corrected K1B writer probes no longer call
+`phase4c_current_caller()` or add a prototype. Instead, they capture
+the latest trace-ring entry using `s_traceCount`, `s_trace[index]`
+and `TRACE_CAPACITY`, mirroring the logic already present in the
+existing `recomp_guest_write32` function in the actual K1A source.
+This latest trace VA is a provenance clue, **not a guaranteed exact
+call-site address**.
+
+The new synthetic tests exercise the source-backed trace-ring path
+for both LF and Windows CRLF input, and the PowerShell wrapper
+verifies exactly five new ring reads and zero stale
+`(unsigned)phase4c_current_caller()` calls before starting VS2017.
+No game-memory behavior or translated shards change.
 
 The build script uses independent corrected output
 `build\phase6_integration_map\k1b_central_write_watch_c3861fix`
