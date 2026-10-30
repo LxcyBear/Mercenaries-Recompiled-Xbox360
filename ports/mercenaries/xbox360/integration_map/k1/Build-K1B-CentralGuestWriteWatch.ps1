@@ -74,7 +74,7 @@ foreach($header in $actualHeaders){
 }
 Write-Host "[K1B] R76 hash PASS, K1A clock & DSINDEX & DSOBJECT source identity PASS"
 Write-Host "[K1B] Running synthetic 5-writer regression (NO Xbox build yet)"
-Write-Host "[K1B] C3861 FIX: pre-declare existing caller tracker; old failed stage preserved"
+Write-Host "[K1B] C3861 FIX: use existing global trace-ring VA, no caller prototype; old failed stage preserved"
 & $python -u $test
 if($LASTEXITCODE -ne 0){throw "[K1B] Synthetic test FAILED before XDK"}
 & $python -u $stager --main $oldMain --shards $shards --out $newMain
@@ -91,7 +91,20 @@ if($doc.status -ne "STAGED_ONLY_NO_XDK_BUILD" -or
    $doc.hard_fence_policy -ne "UNCHANGED"){
     throw "[K1B] New staged source manifest identity mismatch"
 }
+$k1bStagedSource=Get-Content -LiteralPath $newMain -Raw -Encoding UTF8
+$ringLookupHits=([regex]::Matches(
+    $k1bStagedSource,
+    'k1b_last_trace_va = s_trace\[k1b_trace_index\];'
+)).Count
+$legacyCallerCalls=([regex]::Matches(
+    $k1bStagedSource,
+    '\(unsigned\)phase4c_current_caller\(\)'
+)).Count
+if($ringLookupHits -ne 5 -or $legacyCallerCalls -ne 0){
+    throw "[K1B] Pre-build source gate: expected 5 ring reads and zero unresolved caller calls; ring=$ringLookupHits stale=$legacyCallerCalls"
+}
 Write-Host "[K1B] PREFLIGHT PASS: one modified main, 5 central writer widths, 64 frozen TrueTUs"
+Write-Host "[K1B] SOURCE GATE: 5 existing trace-ring reads, no unresolved caller function calls"
 Write-Host "[K1B] BOOT MARKER: P6K1B-CENTRAL-GUEST-WRITE-WATCH-20261030"
 if($PreflightOnly){
     Write-Host "[K1B] PREFLIGHT ONLY - no XDK build"
