@@ -192,12 +192,15 @@ K1D confirms `loc_0027DD0C` in `translated_029.cpp`,
 function `sub_0027DC5B`: translates XACTENG linked-list
 insertion into a newly allocated entry `eax=heap+0x28`.
 The original code loads the previous tail through
-`ecx = GUEST_READ32(ebx+0x78)` and performs
-`GUEST_WRITE32(ecx,eax)`. K1C witnessed destination
-`00041D70` in original XBE `.text`, suggesting that the
-list's prior tail pointer is invalid or list initialization is
-out of order. This relationship does NOT prove the root cause
-of the later `EFEE0EC4` fault.
+`ecx = GUEST_READ32(ebx+0x78)`, writes
+`GUEST_WRITE32(ecx,eax)`, then writes the new entry into
+`GUEST_WRITE32(ebx+0x78,eax)` (head->Blink). K1C
+witnessed destination `00041D70` in the original XBE
+`.text`, but both stores share the same last-tick VA.
+K1E distinguishes the two candidate destinations with
+`tail_hits_41D70` / `head_hits_41D70`, BEFORE choosing
+whether old tail or list head is wrong. This does NOT yet
+prove the root cause of the later `EFEE0EC4` fault.
 
 K1E synthetic + staging/build scripts now target the precise
 source statement in **one** of the 64 true TUs, log `ebx/head/`
