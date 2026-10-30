@@ -502,6 +502,46 @@ one unchanged tracker definition and one boot marker. Build and
 hardware results remain **UNVERIFIED** until the corrected script
 runs successfully on Windows.
 
+## K1C REAL XBOX EVIDENCE -> K1D exact XACTENG source lookup
+
+K1C boots on Xbox, and its unique marker appears in the hardware log:
+
+```text
+K1C WRITE SITE: width=4 hit=1 address=00041D70 value_lo=01B672D8 value_hi=00000000 before0=00041D59 before4=04020100 trace_caller=0023A3CE guest_va=0027DD0C budget=0 esp=008BF974
+```
+
+The guest VA is inside the retail XBE's XACTENG section
+(0027D5C0..0028862F). It is the **last recorded translated tick
+location**, not yet verified as the instruction that performed the
+store. The destination 00041D70 is within retail .text
+(00011000..0025561B), and the written pointer is the recently
+allocated heap base 01B672B0 plus 0x28. **Do not mutate the store
+or assume it is corrupt until the original instruction/ABI is
+checked.** The run still stops at READ32 EFEE0EC4,
+ticks=27029593 / trace=1072569; display_calls=0 and no framebuffer.
+
+New offline script `Inspect-K1D-XactWriteSite.py` extracts the exact
+`loc_0027DD0C` / `PHASE4C_BUDGET_TICK(0x0027DD0C)`
+source window, plus any literal 00041D70 references across the
+64 compiled TrueTUs. It writes only a report and rehashes all
+source files to prove no edits.
+
+```powershell
+Set-Location 'C:\Users\jorda\Mercenaries-Recompiled-Xbox360'
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+$k1 = '.\ports\mercenaries\xbox360\integration_map\k1'
+$stage = '.\build\phase6_integration_map'
+python "$k1\Test-K1D-XactWriteSite.py"
+if ($LASTEXITCODE -ne 0) { throw 'K1D synthetic regression failed' }
+python "$k1\Inspect-K1D-XactWriteSite.py" --main "$stage\k1c_guest_write_site_va\main.cpp" --shards "$stage\k1a_dsobject_writer_watch\translated_shards" --out "$stage\k1d_xact_write_site\k1d-source-window.txt"
+if ($LASTEXITCODE -ne 0) { throw 'K1D source inspection failed' }
+notepad "$stage\k1d_xact_write_site\k1d-source-window.txt"
+```
+
+Upload the report for exact guest instruction/register interpretation.
+No new XDK build or hardware test is requested for K1D.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
