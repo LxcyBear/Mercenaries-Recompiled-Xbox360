@@ -415,7 +415,9 @@ call-site address**.
 The new synthetic tests exercise the source-backed trace-ring path
 for both LF and Windows CRLF input, and the PowerShell wrapper
 verifies exactly five new ring reads and zero stale
-`(unsigned)phase4c_current_caller()` calls before starting VS2017.
+`(unsigned)phase4c_current_caller()` calls **inside the five K1B
+probe blocks** before starting VS2017. Other pre-existing APU helper
+call sites remain unchanged.
 No game-memory behavior or translated shards change.
 
 The build script uses independent corrected output
