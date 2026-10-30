@@ -43,7 +43,7 @@ END_RE = re.compile(r"(?m)^\}[ \t]*(?:\r?\n|$)")
 GUEST_OP = re.compile(
     r"\b(?:phase6ch_apu_(?:read|write)(?:8|16|32|64)|GUEST_(?:READ|WRITE)(?:8|16|32|64))\s*\(",
     re.I)
-GUEST_REG_WRITE = re.compile(r"\b(?:eax|ebx|ecx|edx|esi|edi|ebp|esp|g_esp)\s*(?:=|\+=|-=|\+\+|--)")
+GUEST_REG_WRITE = re.compile(r"(?m)^[ \t]*(?:eax|ebx|ecx|edx|esi|edi|ebp|esp|g_esp)[ \t]*(?:=|\+=|-=|\+\+|--)")
 TAIL = "    g_seh_ebp = ebp; sub_002A7AE8(); return; /* tail jmp 0x002A7AE8 */"
 
 
