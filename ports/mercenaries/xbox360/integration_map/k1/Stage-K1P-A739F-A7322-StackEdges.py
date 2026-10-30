@@ -107,10 +107,13 @@ def modify(filename: str, source: str) -> tuple[str,list[str]]:
         call=f"PUSH32(esp, 0); sub_{callee}(); /* call 0x{callee} */"
         if new.count(call)!=count:
             raise ValueError(f"{name} callsite count drift for {callee}: {new.count(call)} vs {count}")
-        for index in range(1,count+1):
+        positions=iter(range(1,count+1))
+        def _replace_call(match: re.Match) -> str:
+            index=next(positions)
             label=f"{name[4:].upper()}_{callee}_{index}"
-            new=new.replace(call,probe(label,call,argc*4,nl),1)
             ids.append(label)
+            return probe(label,call,argc*4,nl)
+        new=re.sub(re.escape(call),_replace_call,new)
     if filename=="translated_057.cpp":
         if new.count(TAIL)!=1:
             raise ValueError("Expected one A7322->A7AE8 tail transfer")
