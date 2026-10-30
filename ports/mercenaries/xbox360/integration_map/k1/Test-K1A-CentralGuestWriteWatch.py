@@ -42,6 +42,10 @@ void recomp_guest_write128(
 {{
     GUEST_WRITE128_UNMODIFIED(address,words);
 }}
+static DWORD phase4c_current_caller(void)
+{{
+    return 0u;
+}}
 '''
     return content.replace("\n",eol)
 
@@ -67,6 +71,9 @@ def check():
             assert changed.count(signature)==original.count(signature)
         assert changed.count("recomp_guest_read32(0x00041D70u)")==5
         assert changed.count("phase4c_current_caller()")==5
+        assert changed.count("static DWORD phase4c_current_caller(void);")==1
+        assert changed.index("static DWORD phase4c_current_caller(void);") < changed.index("void recomp_guest_write8")
+        assert changed.index("void recomp_guest_write128") < changed.index("static DWORD phase4c_current_caller(void)\n{") if eol=="\n" else changed.index("void recomp_guest_write128") < changed.index("static DWORD phase4c_current_caller(void)\r\n{")
         assert changed.count("s_execBudget")==5
         assert changed.count("\r\n")==changed.count("\n") if eol=="\r\n" else "\r" not in changed
         rejects(lambda:m.patch(changed),"duplicate watch")
@@ -75,6 +82,13 @@ def check():
     rejects(lambda:m.patch(wrong),"16-bit writer definition gone")
     wrong=fixture().replace("uint64_t value","uint32_t value")
     rejects(lambda:m.patch(wrong),"64-bit writer width changed")
+    wrong=fixture().replace("static DWORD phase4c_current_caller(void)","static DWORD missing_caller(void)")
+    rejects(lambda:m.patch(wrong),"missing target caller function")
+    wrong=fixture().replace("static DWORD phase4c_current_caller(void)","static DWORD phase4c_current_caller(void);")
+    rejects(lambda:m.patch(wrong),"no true definition")
+    wrong=fixture().replace("static DWORD phase4c_current_caller(void)","static DWORD phase4c_current_caller(void)",1)
+    wrong=wrong.replace("void recomp_guest_write8", "static DWORD phase4c_current_caller(void)\n{ return 0u; }\nvoid recomp_guest_write8",1)
+    rejects(lambda:m.patch(wrong),"duplicate target caller")
     wrong=fixture().replace("const uint32_t words[4]","const uint32_t words[3]")
     rejects(lambda:m.patch(wrong),"128-bit writer changed")
     wrong=fixture().replace(m.BOOT, "some other old executable",1)
