@@ -17,7 +17,7 @@ def rejected(fn,reason):
     except ValueError: return
     raise AssertionError("accepted bad K1C stage "+reason)
 
-def fixture(eol):
+def fixture(eol, tracker_late=True):
     comments="\n".join("/* "+m.K1B+" central writer */" for _ in range(5))
     tests="\n".join(
         f'''void recomp_guest_write{width}(uint32_t address, uint{width}_t value)
@@ -43,14 +43,18 @@ def fixture(eol):
     # Add one ring expression to each of the 5 real-writer fixtures.
     tests=tests.replace("sprintf(line,", "k1b_last_trace_va = s_trace[k1b_trace_index];\n        sprintf(line,")
     write128=write128.replace("sprintf(line,", "k1b_last_trace_va = s_trace[k1b_trace_index];\n        sprintf(line,")
+    # Mirror the ACTUAL K1B main: tracker global follows early central
+    # writer functions. The previous fixture only tested the opposite
+    # order and therefore missed the real Windows staging failure.
+    early_tracker="" if tracker_late else m.TRACKER+"\n"
+    late_tracker=m.TRACKER+"\n" if tracker_late else ""
     text=(f'''/* {m.BOOT_OLD} */
-static DWORD s_phase6cpCurrentVa = 0u;
-void recomp_guest_write8(uint32_t address, uint8_t value);
+{early_tracker}void recomp_guest_write8(uint32_t address, uint8_t value);
 void recomp_guest_write32(uint32_t address, uint32_t value);
 {comments}
 {tests}
 {write128}
-''')
+{late_tracker}''')
     return text.replace("\n",eol)
 
 with TemporaryDirectory(prefix="k1c-writer-site-") as tmp:
@@ -70,7 +74,14 @@ with TemporaryDirectory(prefix="k1c-writer-site-") as tmp:
         output=root/("new-crlf" if ending=="\r\n" else "new-lf")/"main.cpp"
         patched=m.patch(fixture(ending))
         assert patched.count(m.NEW_LABEL)==5
-        assert patched.count("(unsigned)s_phase6cpCurrentVa,")==5
+        assert patched.count("(unsigned)k1c_read_guest_va(),")==5
+        assert patched.count(m.HELPER_DECL)==1
+        assert patched.count("static DWORD k1c_read_guest_va(void)"+ending+"{")==1
+        assert patched.count("return s_phase6cpCurrentVa;")==1
+        assert patched.count(m.TRACKER)==1
+        assert patched.index(m.HELPER_DECL)<patched.index("void recomp_guest_write8(")
+        assert patched.index(m.TRACKER)<patched.index("return s_phase6cpCurrentVa;")
+        assert patched.index("void recomp_guest_write128")<patched.index(m.TRACKER)
         assert patched.count(m.BOOT_NEW)==1
         assert patched.count("k1b_last_trace_va = s_trace[k1b_trace_index];")==5
         assert patched.count(m.OLD_LABEL)==0
@@ -92,6 +103,12 @@ with TemporaryDirectory(prefix="k1c-writer-site-") as tmp:
         output.write_text("DRIFT")
         rejected(lambda:m.stage(main,shard_dir,output),"existing output drift")
     source=fixture("\n")
+    # Also accept the earlier-layout synthetic source without duplicating
+    # or relocating its tracker global.
+    early=m.patch(fixture("\n", tracker_late=False))
+    assert early.count(m.HELPER_DECL)==1
+    assert early.count("return s_phase6cpCurrentVa;")==1
+    assert early.index(m.TRACKER)<early.index("void recomp_guest_write8(")
     rejected(lambda:m.patch(source.replace(m.TRACKER,"static DWORD otherVa = 0u;")),
              "missing guest VA tracker")
     rejected(lambda:m.patch(source.replace(m.OLD_LABEL,"other string",1)),
@@ -104,7 +121,7 @@ with TemporaryDirectory(prefix="k1c-writer-site-") as tmp:
     rejected(lambda:m.stage(sources/"main.cpp",shard_dir,root/"new-other"/"main.cpp"),
              "missing one of 64 TrueTUs")
 
-print("[K1C-SITE] SYNTHETIC PASS: 5 central writers + live guest VA, LF/Windows CRLF")
+print("[K1C-SITE] SYNTHETIC PASS: 5 central writers + late global tracker helper, LF/Windows CRLF")
 print("[K1C-SITE] SYNTHETIC PASS: original pointer write, trace ring, 64 TrueTUs unchanged")
 print("[K1C-SITE] SYNTHETIC PASS: source identity/drift/in-place/duplicate hard rejection")
 print("[K1C-SITE] No Xbox build and no retail game bytes")
