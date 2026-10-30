@@ -110,10 +110,26 @@ foreach($f in $originals){
     }
 }
 $patched=Get-Content -LiteralPath $modified -Raw -Encoding UTF8
-if(([regex]::Matches($patched, 'K1E XACT LIST PRE:')).Count -ne 1 -or
-   ([regex]::Matches($patched, 'GUEST_WRITE32\(ecx, eax\);')).Count -ne 1){
-    throw "[K1E] Exactly one original list-link site/witness required"
+# Translated_029.cpp contains many functions which may legitimately reuse
+# GUEST_WRITE32(ecx, eax). Scope the exact store check to the function body
+# proven by K1D, while still rejecting duplicate/missing owner bodies.
+$ownerPattern='(?ms)^[ \t]*(?:static[ \t]+)?void[ \t]+sub_0027DC5B\(void\)[ \t]*(?:\r?\n[ \t]*)?\{(?<body>.*?)^\}[ \t]*(?:\r?\n|$)'
+$owners=[regex]::Matches($patched,$ownerPattern)
+if($owners.Count -ne 1){
+    throw "[K1E] Expected exactly one XACTENG function body in staged owner"
 }
+$body=$owners[0].Groups["body"].Value
+$witnessCount=([regex]::Matches($patched,'K1E XACT LIST PRE:')).Count
+$storeCount=([regex]::Matches($body,'(?m)^[ \t]*GUEST_WRITE32\(ecx, eax\);')).Count
+$labelCount=([regex]::Matches($body,'(?m)^[ \t]*loc_0027DD0C: ;[ \t]*$')).Count
+$labelAt=$body.IndexOf('loc_0027DD0C: ;',[StringComparison]::Ordinal)
+$witnessAt=$body.IndexOf('K1E XACT LIST PRE:',[StringComparison]::Ordinal)
+$storeAt=$body.IndexOf('GUEST_WRITE32(ecx, eax);',[StringComparison]::Ordinal)
+if($witnessCount -ne 1 -or $storeCount -ne 1 -or $labelCount -ne 1 -or
+   $labelAt -lt 0 -or $witnessAt -le $labelAt -or $storeAt -le $witnessAt){
+    throw "[K1E] Exactly one original XACT list-link site/witness required"
+}
+Write-Host "[K1E] XACT-scoped list-link witness/store PASS; non-target shard stores ignored"
 Write-Host "[K1E] PREFLIGHT PASS: XACT list-tail witness at 0027DD0C, only translated_029.cpp changed"
 Write-Host "[K1E] 63 other TUs and every header SHA identical, guest stores/fences unchanged"
 if($PreflightOnly){
