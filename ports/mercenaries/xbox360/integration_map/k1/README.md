@@ -1147,13 +1147,8 @@ From the repo root, with K1P staged and K1Q report present:
 ```powershell
 git pull --ff-only
 if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
-  '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1R-A6B98A7B73StackPath.ps1'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1R-A6B98A7B73StackPath.ps1'
 ```
-
-PowerShell syntax note: the backslash shown above only separates
-the display lines; enter the `-File` script path on the same line
-or use PowerShell's backtick line continuation instead.
 
 Diagnostic output XEX (after verified successful Release Xbox 360
 incremental build):
