@@ -72,6 +72,12 @@ def test():
         for i in range(64):
             data=FAKE if i==27 else "/* other true TU shard */\n"
             (base/f"translated_{i:03d}.cpp").write_text(data)
+        # All translated TrueTUs depend on the generated shared header;
+        # previous staging silently dropped it and XDK failed with C1083.
+        (base/"translated_runtime.h").write_bytes(b"/* fake generated runtime header */\r\n")
+        (base/"other_shared.h").write_bytes(b"/* fake auxiliary header */\n")
+        header_hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest()
+                       for p in base.glob("*.h")}
         before={p.name:hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in base.glob("translated_*.cpp")}
         # Explicitly emulate Windows text-mode newline translation even on
@@ -85,6 +91,12 @@ def test():
         assert m["unchanged_shards"]==63
         assert m["modified_shards"]==["translated_027.cpp"]
         assert len(list(staged.glob("translated_*.cpp")))==64
+        assert m["header_count"]==2
+        assert m["header_sha256"]==header_hashes
+        assert set(m["auxiliary_headers"])==set(header_hashes)
+        assert len(list(staged.glob("*.h")))==2
+        for p in staged.glob("*.h"):
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==header_hashes[p.name]
         assert module.MARK in (staged/"translated_027.cpp").read_text()
         staged_data=(staged/"translated_027.cpp").read_bytes()
         assert staged_data.count(b"\r\n")==staged_data.count(b"\n"), "staging normalized CRLF"
@@ -100,12 +112,35 @@ def test():
         expect_rejected(lambda:module.stage(base,base),"in-place")
         reused=module.stage(base,staged)
         assert reused==m,"preflight stage reuse changed manifest"
+        # Simulate the EXACT failed Xbox build: 64 staged .cpp files
+        # present but all shared .h files missing. Legacy manifest has
+        # no header metadata. Migration must repair only verified headers.
+        for p in staged.glob("*.h"):
+            p.unlink()
+        old_manifest=dict(m)
+        old_manifest.pop("header_sha256")
+        old_manifest.pop("header_count")
+        old_manifest.pop("auxiliary_headers")
+        (root/"k1a-dsound-index-trace-manifest.json").write_text(
+            json.dumps(old_manifest,indent=2)+"\n")
+        repaired=module.stage(base,staged)
+        assert repaired==m,"legacy stage migration did not restore identical manifest"
+        for p in staged.glob("*.h"):
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==header_hashes[p.name]
+        assert len(list(staged.glob("translated_*.cpp")))==64
+        # Headers are checked just as strictly as the 64 source shards.
+        (staged/"translated_runtime.h").write_bytes(b"/* corrupt */")
+        expect_rejected(lambda:module.stage(base,staged),"stale translated_runtime.h")
+        (staged/"translated_runtime.h").write_bytes(
+            (base/"translated_runtime.h").read_bytes())
         (staged/"translated_010.cpp").write_text("/* corrupted synthetic shard */")
         expect_rejected(lambda:module.stage(base,staged),"stale copied shard")
         (staged/"translated_010.cpp").write_text("/* other true TU shard */\n")
         assert len(list(base.glob("translated_*.cpp")))==64
+        assert set(p.name for p in base.glob("*.h"))==set(header_hashes)
     print("[K1A-DSINDEX] PASS: synthetic exact labels, entry/LEA/pre173/post173 probes")
-    print("[K1A-DSINDEX] PASS: 63 unchanged shards, source SHA, no in-place/duplicate")
+    print("[K1A-DSINDEX] PASS: 63 unchanged shards, two header SHA identities, no in-place/duplicate")
+    print("[K1A-DSINDEX] PASS: migrated legacy 64-cpp-only stage (missing translated_runtime.h)")
     print("[K1A-DSINDEX] No game bytes, XDK build or memory fences modified")
 if __name__=="__main__":
     test()
