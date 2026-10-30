@@ -123,10 +123,15 @@ def stage(main:Path, shards:Path, out:Path)->dict:
         patched_main=main_bytes
         patched_header=patch(header_text,require_k1a=False).encode("utf-8")
     else:
+        def hints(data:str)->list[str]:
+            return [line.strip()[:180] for line in data.splitlines()
+                    if re.search(r"phase6ch_apu_write(?:8|16|32)\s*\(", line)][:12]
         raise ValueError(
             "APU writer ownership not unique. "
             f"main.cpp definitions={main_counts}, translated_runtime.h={header_counts}; "
-            "refusing speculative patch. Please send these counts plus local helper signatures.")
+            f"main.cpp signatures={hints(main_text)}; "
+            f"header signatures={hints(header_text)}. "
+            "Refusing speculative patch.")
     dest_hashes={f.name:sha(f.read_bytes()) for f in files}
     header_hashes={f.name:sha(f.read_bytes()) for f in headers}
     expected={f.name:sha(patched_header if f==header else f.read_bytes())
