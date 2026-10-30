@@ -186,6 +186,27 @@ for an **offline, read-only** window around `loc_0027DD0C`
 across the frozen 64 translated shards, with input SHA checks.
 Await actual source report before code mutation or another XDK build.
 
+### K1D list-link source explanation; K1E one-shard tail-value witness
+
+K1D confirms `loc_0027DD0C` in `translated_029.cpp`,
+function `sub_0027DC5B`: translates XACTENG linked-list
+insertion into a newly allocated entry `eax=heap+0x28`.
+The original code loads the previous tail through
+`ecx = GUEST_READ32(ebx+0x78)` and performs
+`GUEST_WRITE32(ecx,eax)`. K1C witnessed destination
+`00041D70` in original XBE `.text`, suggesting that the
+list's prior tail pointer is invalid or list initialization is
+out of order. This relationship does NOT prove the root cause
+of the later `EFEE0EC4` fault.
+
+K1E synthetic + staging/build scripts now target the precise
+source statement in **one** of the 64 true TUs, log `ebx/head/`
+`tail/node` before the write, and preserve the original guest
+load and store. All other translated files are hash-verified
+unchanged, with no XDK Clean requested. Actual local staging,
+VS17 compiler, console runtime and tick improvements are
+pending user verification. Hard fence remains active.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
