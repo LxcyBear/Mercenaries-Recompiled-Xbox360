@@ -175,6 +175,45 @@ if ($LASTEXITCODE -ne 0) { throw 'K1A retail XBE pointer proof failed' }
 Do not commit/output the user's game bytes. The tool prints only the two
 relevant 32-bit values and whether their difference matches the hardware
 index. No source mutation or XDK compilation; keep EFEE0EC4 hard-fenced.
+## DSINDEX: one modified TrueTU, four diagnostic checkpoints
+
+The original-XBE comparison of the post-fault EBX address **did not**
+reproduce the negative index. That's a negative hypothesis test, not
+proof that the caller or MM173 clobbered EBX. We need live values
+**before** the nested calls.
+
+`Stage-K1A-DsoundIndexTrace.py` copies the frozen 64 TrueTU files into
+a new directory and changes exactly one `.cpp` owner of
+`sub_002A6595`. It adds four limited, read-only host trace messages:
+`K1A DSINDEX ENTRY`, `LEA`, `PRE173`, and `POST173`. That
+distinguishes bad object fields from register/stack mutation.
+
+From the Mercenaries repo root, the new guarded build command is:
+
+```powershell
+git pull --ff-only
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  ".\ports\mercenaries\xbox360\integration_map\k1\Build-K1A-DsoundIndexTrace.ps1"
+```
+
+Or perform only the Python synthetic tests and **stage** the 64 copied
+shards (no Xbox compilation):
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  ".\ports\mercenaries\xbox360\integration_map\k1\Build-K1A-DsoundIndexTrace.ps1" -PreflightOnly
+```
+
+On build success, a **separate** diagnostic XEX will be published at:
+
+`build\phase6_integration_map\k1a_dsindex_probe\xdk\Merc-K1A-DSIndex-Probe.xex`
+
+The user must test **that** new XEX, not an older K1A executable,
+then upload its xbWatson log. Real success requires seeing the
+ENTRY/LEA/PRE173/POST173 markers and verifying the original R76
+and K1A behavior. If the trace fails to compile, keep the known-good
+K1A XEX. Never whitelist `EFEE0EC4` or remove any hard fences.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
