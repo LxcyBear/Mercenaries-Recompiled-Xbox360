@@ -44,6 +44,15 @@ def expect_rejected(action,why):
 
 def test():
     changed=module.modify(FAKE)
+    windows_fixture=FAKE.replace("\n","\r\n")
+    changed_windows=module.modify(windows_fixture)
+    assert changed_windows.count("\r\n")==changed_windows.count("\n"), "mixed EOL introduced"
+    assert changed_windows.count(module.MARK)==1
+    for tag in ("ENTRY:", "LEA:", "PRE173:", "POST173:"):
+        assert changed_windows.count("K1A DSINDEX "+tag)==1
+    expect_rejected(lambda: module.modify(windows_fixture.replace(
+        "    esi = ecx + edx * 8;\r\n",
+        "    esi = ecx + edx * 8;\n")), "mixed Windows line endings")
     assert changed.count(module.MARK)==1
     assert changed.count("K1A DSINDEX ENTRY:")==1
     assert changed.count("K1A DSINDEX LEA:")==1
@@ -65,6 +74,11 @@ def test():
             (base/f"translated_{i:03d}.cpp").write_text(data)
         before={p.name:hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in base.glob("translated_*.cpp")}
+        # Explicitly emulate Windows text-mode newline translation even on
+        # Linux CI, where Path.write_text otherwise preserves LF.
+        owner=base/"translated_027.cpp"
+        owner.write_bytes(windows_fixture.encode("utf-8"))
+        before[owner.name]=hashlib.sha256(owner.read_bytes()).hexdigest()
         m=module.stage(base,staged)
         assert m["status"]=="STAGED_ONLY_NO_XDK_BUILD"
         assert m["original_shards"]==64
@@ -72,6 +86,9 @@ def test():
         assert m["modified_shards"]==["translated_027.cpp"]
         assert len(list(staged.glob("translated_*.cpp")))==64
         assert module.MARK in (staged/"translated_027.cpp").read_text()
+        staged_data=(staged/"translated_027.cpp").read_bytes()
+        assert staged_data.count(b"\r\n")==staged_data.count(b"\n"), "staging normalized CRLF"
+        assert staged_data.count(b"\r\n")>0
         after={p.name:hashlib.sha256(p.read_bytes()).hexdigest()
                for p in base.glob("translated_*.cpp")}
         assert before==after,"original TrueTU inputs changed"
