@@ -311,6 +311,37 @@ The counts are **lexical**, not proof of executed writes.
 Next runtime XEX must visibly report a distinct DSOBJECT boot
 watermark and confirm the actual compiled writer coverage.
 
+## Next source decision: 61,619 direct `GUEST_WRITE*` references
+
+The latest lexical coverage report shows 61,619 direct `GUEST_WRITE*`
+references (61,454 in 64 translated shards) versus 1,607
+`phase6ch_apu_write*` references. **These are source call-site
+counts, not runtime write events.** The prior DSOBJECT watch was
+restricted to APU helpers and cannot rule out direct generic writes.
+
+The report also named `translated_004.cpp:21670` and
+`translated_026.cpp:1261` as two occurrences of the fault-time
+object address `00041D70`. Before a central write watch, inspect
+the actual instructions and the generic `GUEST_WRITE` implementation
+to avoid instrumenting the wrong thing again.
+
+Run from repository root:
+
+```powershell
+git pull --ff-only
+$k1 = '.\ports\mercenaries\xbox360\integration_map\k1'
+$root = '.\build\phase6_integration_map\k1a_dsobject_writer_watch'
+python "$k1\Test-K1A-CentralGuestWriters.py"
+if ($LASTEXITCODE -ne 0) { throw 'K1A central writer fixture failed' }
+python "$k1\Inspect-K1A-CentralGuestWriters.py" --main "$root\main.cpp" --shards "$root\translated_shards" --out "$root\k1a-central-writer-context.txt"
+if ($LASTEXITCODE -ne 0) { throw 'K1A central writer source inspection failed' }
+Get-Content "$root\k1a-central-writer-context.txt" -Raw | Set-Clipboard
+```
+
+This inspector copies no files, does not write guest memory, does not
+alter any of the 64 TrueTU sources and triggers **no XDK build**.
+Send the report to determine the next minimal writer instrumentation.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
