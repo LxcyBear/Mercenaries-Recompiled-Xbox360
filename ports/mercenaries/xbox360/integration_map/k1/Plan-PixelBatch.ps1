@@ -18,9 +18,9 @@ $outdir=Join-Path $repo "build\phase6_integration_map\pixel_batch"
 $report=Join-Path $outdir "pixel_batch_closure.json"
 $summary=Join-Path $outdir "pixel_batch_summary.txt"
 
-foreach($input in @($manifest,$main,$functions,$base,$p5bb,$audit,$test)){
-    if(-not(Test-Path -LiteralPath $input -PathType Leaf)){
-        throw "[PIXEL] Missing required local K1S or translated-source input: $input"
+foreach($itemPath in @($manifest,$main,$functions,$base,$p5bb,$audit,$test)){
+    if(-not(Test-Path -LiteralPath $itemPath -PathType Leaf)){
+        throw "[PIXEL] Missing required local K1S or translated-source input: $itemPath"
     }
 }
 foreach($folder in @($shards,$generatedRoot)){
