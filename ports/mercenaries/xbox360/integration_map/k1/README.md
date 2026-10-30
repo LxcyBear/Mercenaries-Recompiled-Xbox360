@@ -604,6 +604,26 @@ one-shard marker** `K1E XACT LIST PRE:` near the prior
 27,029,593-tick frontier and zero pixels remain unbroken pending
 hardware verification.
 
+## K1E Windows synthetic-fixture line endings fix (2026-10-30)
+
+The first K1E run passed K1C source/XEX/R76/K1D/64 TrueTU identity
+checks but failed **before any XDK build** inside the synthetic
+`stage()` test: `K1D linked-list instruction triple drift`.
+Root cause was a test-only Windows file-writing mistake.
+The fixture was already formatted with `\r\n`, but
+`Path.write_text()` used Windows text translation a second time,
+producing `\r\r\n` on disk; the exact K1D code anchor expects
+normal CRLF. The actual frozen generated source was not responsible.
+
+The fixture now uses `target.write_bytes(fixture("\r\n").encode("utf-8"))`
+and asserts there is no `\r\r\n`. The K1E stager also rejects
+bare CR / mixed LF / CRCRLF rather than falsely calling the
+original XACT linked-list statements changed. No generated shard
+source, XEX or hard fence was modified by this repair. Re-run the
+same `Build-K1E-XactListTailWatch.ps1` command; it will run
+the strengthened regression then stage the one-TU diagnostic
+before an incremental XDK compile. Actual re-test still pending.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
