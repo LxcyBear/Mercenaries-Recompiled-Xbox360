@@ -22,7 +22,7 @@ BOOT="PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF START"
 TRACKER="static DWORD s_phase6cpCurrentVa = 0u;"
 HELPER="k1c_read_guest_va"
 HELPER_DECL="static DWORD k1c_read_guest_va(void);"
-TRACKER_LINE=re.compile(r"(?m)^[ \t]*static[ \t]+DWORD[ \t]+s_phase6cpCurrentVa[ \t]*=[ \t]*0u;[ \t]*(?://[^\r\n]*)?$")
+TRACKER_LINE=re.compile(r"(?m)^[ \t]*static[ \t]+DWORD[ \t]+s_phase6cpCurrentVa[ \t]*=[ \t]*0u;[ \t]*(?://[^\r\n]*)?\r?$")
 WRITER_FIRST=re.compile(r"(?m)^[ \t]*void[ \t]+recomp_guest_write8[ \t]*\(")
 OLD_LABEL=("K1B CENTRAL WRITE: width=%u hit=%u address=%08X value_lo=%08X "
            "value_hi=%08X before0=%08X before4=%08X caller=%08X budget=%u esp=%08X")
