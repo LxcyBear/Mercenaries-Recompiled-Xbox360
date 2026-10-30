@@ -477,6 +477,31 @@ guest instruction against the retained translated source; if stale
 or zero, do not guess or mutate the pointer. The existing
 `EFEE0EC4` hard fence remains mandatory.
 
+## K1C actual K1B source order correction (2026-10-30)
+
+The first real K1C preflight verified R76, the built K1B XEX and all
+64 TrueTU source/header identities. It also passed the synthetic
+fixture. **Staging stopped before XDK** because the fixture placed
+`static DWORD s_phase6cpCurrentVa = 0u;` *before* central writer
+definitions whereas actual K1B generated `main.cpp` defines it
+*after* them. A direct read in those earlier writer functions is
+therefore not legal C++ at that point.
+
+The K1C stage now preserves the original guest-VA tracker definition
+in place. It inserts exactly one early
+`static DWORD k1c_read_guest_va(void);` declaration and one helper
+function body **immediately after** the original static tracker,
+returning `s_phase6cpCurrentVa`. Five K1B logging expressions now
+call that helper; original guest-store bodies, pointer values, hard
+fences, 64 TrueTUs and runtime headers remain unchanged.
+
+Synthetic tests now exercise both late (real) and early (legacy)
+tracker source order under LF and CRLF. The PowerShell pre-XDK gate
+requires exactly five helper calls, one helper declaration/body,
+one unchanged tracker definition and one boot marker. Build and
+hardware results remain **UNVERIFIED** until the corrected script
+runs successfully on Windows.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
