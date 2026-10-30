@@ -931,3 +931,41 @@ Next source-only investigation: extract original
 Audit exact epilogue ret width and any nested calls before
 proposing a location-specific repair. No broad EBX/ESP patch
 or hard-fence relaxation.
+
+## K1M original callee extraction -> K1N no-build nested return-width audit (2026-10-30)
+
+The K1M exact-source extraction PASSED, demonstrating that
+`sub_002A739F` (`translated_009.cpp`) saves ESI/EDI and finishes
+with `POP32(edi); POP32(esi); esp+=4; return; /* ret */`.
+`sub_002A19FC` passes no stack argument at this callsite, so
+R72's `A739F esp_before=008BF8B4 esp_after=008BF8B8` is
+an abnormal **+4** despite A739F's source-level plain ret.
+A739F also calls 8 unique direct helpers (9 callsites):
+`002A7322`, `002A70AA`, `002A6FDD`, `002A67E2`,
+`002A6B98`, `002A6EE9` (zero explicit stack args),
+`002A6D1A` (one explicit stack arg), and `002A77BE`
+(one explicit stack arg on each of two callsites).
+
+The `002A2A16` control has a real one-word argument and
+`esp+=8; return; /* ret 4 */`, correctly explaining the
+separate R72 `+4` observation at that particular call.
+
+K1N is a read-only indexed TrueTU analysis of A739F's direct
+helper bodies and ret widths, with provenance, exact K1M source
+matching and full numbered helper source to spot nested drift.
+It does NOT infer live execution paths from lexical return widths.
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+python '.\ports\mercenaries\xbox360\integration_map\k1\Audit-K1N-A739FReturnContracts.py' `
+  --original-shards '.\build\phase6_integration_map\k1a_dsobject_writer_watch\translated_shards' `
+  --k1e-manifest '.\build\phase6_integration_map\k1e_xact_list_tail\k1e-xact-tail-manifest.json' `
+  --k1m-report '.\build\phase6_integration_map\k1m_a739f_call_contract.txt' `
+  --out '.\build\phase6_integration_map\k1n_a739f_return_contracts.txt'
+if ($LASTEXITCODE -ne 0) { throw 'K1N audit failed' }
+Get-Content '.\build\phase6_integration_map\k1n_a739f_return_contracts.txt' -TotalCount 95
+```
+
+No XDK build or deployment. Upload the entire report.
+Do not reintroduce the withdrawn late K1L ESP repair.
