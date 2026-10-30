@@ -208,6 +208,15 @@ On build success, a **separate** diagnostic XEX will be published at:
 
 `build\phase6_integration_map\k1a_dsindex_probe\xdk\Merc-K1A-DSIndex-Probe.xex`
 
+**2026-10-29 compiler-gate fix:** The first instrumented build stopped
+at `translated_060.cpp(1): C1083 translated_runtime.h not found`. The
+instrumentation staging script had copied only `translated_*.cpp`, not
+the `*.h` files expected by the unmodified VS2017 builder. It now copies
+and SHA-verifies **all source headers**, explicitly requires
+`translated_runtime.h`, and can repair the previous 64-CPP-only stage
+without regenerating or modifying any original TrueTU files. The synthetic
+regression now covers that exact failed-build layout and rejects corrupted
+headers. The XDK compilation remains unverified until rerun on Windows.
 The user must test **that** new XEX, not an older K1A executable,
 then upload its xbWatson log. Real success requires seeing the
 ENTRY/LEA/PRE173/POST173 markers and verifying the original R76
