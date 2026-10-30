@@ -60,6 +60,9 @@ for eol in ("\n","\r\n"):
     assert altered.count("static uint32_t k1e_list_edge_visits = 0u;")==1
     assert altered.count("\r\n")==altered.count("\n") if eol=="\r\n" else "\r" not in altered
     rejects(lambda:m.modify(altered),"duplicate K1E")
+    if eol=="\r\n":
+        rejects(lambda:m.modify(original.replace("\r\n","\r\r\n")),
+                "Windows double-translated CRCRLF fixture")
     rejects(lambda:m.modify(original.replace("ecx = GUEST_READ32(edx + 4);",
                                               "ecx = GUEST_READ32(edx);")),
             "different tail load")
