@@ -57,8 +57,13 @@ def patch(source:str)->str:
     if source.count(BOOT)!=1:
         raise ValueError("exact Xbox boot log text missing or duplicated")
     caller_definition="static DWORD phase4c_current_caller(void)"
-    if source.count(caller_definition)!=1:
-        raise ValueError("required existing caller tracker definition absent/duplicated")
+    caller_body=re.compile(
+        r"(?m)^[ \t]*static[ \t]+DWORD[ \t]+phase4c_current_caller"
+        r"\(void\)[ \t]*(?:\r?\n[ \t]*)?\{"
+    )
+    existing_caller_definitions=list(caller_body.finditer(source))
+    if source.count(caller_definition)!=1 or len(existing_caller_definitions)!=1:
+        raise ValueError("required existing caller tracker BODY absent/duplicated")
     crlf=source.count("\r\n")
     if crlf and crlf!=source.count("\n"):
         raise ValueError("mixed C++ source line endings")
@@ -67,7 +72,7 @@ def patch(source:str)->str:
     # caller-tracking function. Declare it before the first store so MSVC
     # 2017 can resolve the forensic log call (C3861 otherwise).
     first=list(function_pattern("recomp_guest_write8","uint8_t").finditer(source))
-    if len(first)!=1 or source.index(caller_definition)<=first[0].start():
+    if len(first)!=1 or existing_caller_definitions[0].start()<=first[0].start():
         raise ValueError("unexpected caller definition/order; refuse speculative C3861 repair")
     declaration="static DWORD phase4c_current_caller(void);"
     if declaration in source:
