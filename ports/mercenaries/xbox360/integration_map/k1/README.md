@@ -1160,3 +1160,76 @@ The next Xbox capture must include `K1R CALL`, `K1R ICALL`,
 and `K1J DSOUND ABI`, and the first hard stop.
 Resolve the earliest nonzero A6B98 child delta and/or the A7B73
 indirect/epilogue path before changing guest ESP.
+
+## K1R HARDWARE: earliest actual +4 due to ordinal 44 consuming A7B73's saved ESI (K1S)
+
+K1R Xbox log (2026-10-30) now establishes the complete fault:
+
+- In `sub_002A7B73`, `EBP=008BF888`. At `loc_002A7BD1`
+  the original translation executes `PUSH32(esp, esi)` at
+  `EBP-12=008BF87C`; this is the saved ESI that the later
+  `loc_002A7C49` `POP32(esp, esi)` must restore.
+- Kernel ordinal 44 (`HALGETVECTOR44`, from thunk `002DBE20`)
+  returns `ESP=008BF880=EBP-8` instead of preserving
+  the saved ESI slot at `008BF87C=EBP-12`.
+- `K1R ICALL A7B73_ICALL_2 before=008BF880 after=008BF880`,
+  showing that the native continuation restored the pre-save
+  stack height. Original call passes `6` and `ebp+8`
+  as explicit parameters; the preceding `PUSH ESI` is a
+  long-lived register save, **not** a third kernel parameter.
+- The matching `POP ESI` at `loc_002A7C49` then reads
+  `ESI=00000000`. The later POP EDI/EBX/EBP become
+  one stack slot displaced (`EBX=008BFF8C`).
+- `K1R CALL A6B98_002A7B73_1` observes +8 ESP
+  instead of the expected +4, while all remaining A6B98
+  child calls match their `ret` stack-argument widths.
+- Later `K1P A739F_002A6B98_1` therefore returns +4
+  rather than zero, and `K1J FD83_AFTER_FC4A EBX=00000018`.
+  The final stop still occurs at `READ32 EFEE0EC4`,
+  tick 27,029,593, with no display calls.
+
+**K1S** is a guarded, one-TU **diagnostic correction**.
+It changes only `translated_044.cpp` at the exact
+`A7BD1 -> A7BDE` executed edge, after K1R's *raw*
+`ICALL_2` witness. It applies
+`if (esp == ebp - 8u) esp = ebp - 12u;`,
+and logs the raw/current/expected ESP. The guard prevents
+an adjustment on a different stack shape. It is not
+a generic ordinal 44 handler change or an XACT EBX mask.
+
+Unchanged: all existing K1R/P/J/G/E traces, other 63 TrueTUs,
+all headers, guest reads/writes, indirect call targets and original
+guest PUSH/POP operations and `ret 4`, as well as MMIO/VP fences.
+The script refuses stale output and changed provenance; the
+synthetic test reconstructs A7B73 from the real K1Q source.
+
+Run from repo root:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1S-HalGetVectorSavedEsi.ps1'
+```
+
+Pass `-PreflightOnly` to perform all SHA and original-source tests
+without the VS2017 Xbox 360 incremental build.
+After successful build, the diagnostic XEX is:
+
+`build\phase6_integration_map\k1s_halgetvector44_saved_esi\xdk\Merc-K1S-HalGetVectorSavedEsi.xex`
+
+**Hardware PASS criteria** for the specific stack repair:
+
+- `K1S HALGETVECTOR44 ESI SLOT: raw_esp=008BF880`
+  `expected_esp=008BF87C repaired=1 final_esp=008BF87C`.
+- `K1R PATH A7B73_BEFORE_POP_ESI esp=008BF87C`;
+  `BEFORE_RET4 esp=008BF88C`.
+- `K1R CALL 002A6B98_002A7B73_1 delta=00000004`
+  `expected=00000004`, with original EBX and ESI restored.
+- `K1P STACK EDGE 002A739F_002A6B98_1 delta=0`
+  and `K1J FD83_AFTER_FC4A ebx=01B5C320`.
+
+The historical fault should move or disappear if this was the
+only initiating defect. **Do not claim display/audio PASS**
+without new Xbox evidence. Preserve the hard stop on unknown
+MMIO and guest reads. If the exact guard does not fire,
+do not widen it; inspect the K1S trace and return untouched.
