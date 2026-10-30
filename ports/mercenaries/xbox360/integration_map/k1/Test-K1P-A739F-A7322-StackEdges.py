@@ -55,11 +55,15 @@ for nl in ("\n","\r\n"):
         broken=broken.replace("/* call 0x","/* changed call 0x",1)
         reject(lambda:stager.modify(name,broken),"source callsite drift")
         reject(lambda:stager.modify("translated_099.cpp",original),"unexpected shard")
-        assert "k1p_A739F_002A77BE_1" in modified if name=="translated_009.cpp" else "k1p_A7322_A7AE8_TAIL" in modified
+        if name=="translated_009.cpp":
+            assert modified.count("k1p_A739F_002A77BE_1_before = esp;")==1
+            assert modified.count("k1p_A739F_002A77BE_2_before = esp;")==1
+            assert modified.index("k1p_A739F_002A77BE_1_before") < modified.index("k1p_A739F_002A77BE_2_before")
+        else:
+            assert "k1p_A7322_A7AE8_TAIL" in modified
         if name=="translated_057.cpp":
             assert modified.count("sub_002A7AE8();")==1
             assert "expected ESP delta=4" in modified
-        assert "esp = " not in modified.replace(original,"") or True
 
 print("[K1P] SYNTHETIC PASS: 15 bounded host-only register/ESP trace edges")
 print("[K1P] SYNTHETIC PASS: both owner functions, LF/CRLF, duplicate and source-drift refusals")
