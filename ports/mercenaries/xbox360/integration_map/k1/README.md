@@ -859,3 +859,41 @@ checkpoint where EBX differs from XACT object's `01B5C320`
 will determine the next localized source audit or translation repair.
 The K1J test is **not** a speculative register restoration. No
 compiler or Xbox result claimed before the local build and boot.
+
+## K1J Xbox hardware PASS -> K1K exact FC4A EBX/stack audit (2026-10-30)
+
+K1J captured DSOUND register boundaries on Xbox. Original XACT
+`EBX=01B5C320` survives `sub_0029CDBE`, `sub_0029CB9F` and
+`sub_0029CF0B`; directly after `sub_0029FC4A`, EBX is
+`00000018` (first bad observed return boundary). K1E again
+confirms `WRITE32[00041D70]=01B672D8` via wrong XACT head `0x8C`.
+Hard-fenced `READ32 EFEE0EC4` at tick `27029593` remains unchanged.
+No actual guest display calls (`display_calls=0`, framebuffer 0).
+
+K1I's exact original `sub_0029FC4A` owner is
+`translated_053.cpp:17686..18123` (438 source lines). It contains
+`ebx = esi + 0x18` at line 17996, `PUSH32(esp, ebx)` at 17743
+and 18025, `POP32(esp, ebx)` at 18118, and three explicit
+`ebx = r59_saved_ebx` assignments. The working EBX values and
+nested call structure make a blind XACT-level EBX restoration
+unsound: actual saved stack contents and return path are unverified.
+
+K1K is a further **read-only source audit**, not another XDK rebuild.
+It SHA-verifies K1E/K1I provenance, exact source line anchors, and
+writes the entire original FC4A body plus numbered EBX, PUSH/POP,
+branch/return, and call-site excerpts to an independent report.
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+python '.\ports\mercenaries\xbox360\integration_map\k1\Audit-K1K-FC4A-EbxRestorePath.py' `
+  --original-shards '.\build\phase6_integration_map\k1a_dsobject_writer_watch\translated_shards' `
+  --k1e-manifest '.\build\phase6_integration_map\k1e_xact_list_tail\k1e-xact-tail-manifest.json' `
+  --k1i-report '.\build\phase6_integration_map\k1i_dsound_nested_ebx.txt' `
+  --out '.\build\phase6_integration_map\k1k_fc4a_ebx_restore.txt'
+if ($LASTEXITCODE -ne 0) { throw 'K1K audit failed' }
+Get-Content '.\build\phase6_integration_map\k1k_fc4a_ebx_restore.txt' -TotalCount 65
+```
+
+Upload the COMPLETE K1K report; do not infer final EBX ABI fix
+from one local x86 register mutation. No guest code or hard fence changes.
