@@ -98,12 +98,16 @@ if($doc.status -ne "STAGED_ONLY_NO_XDK_BUILD" -or
 }
 $content=Get-Content -LiteralPath $main -Raw -Encoding UTF8
 $siteCount=([regex]::Matches($content,'K1C WRITE SITE: width=%u')).Count
-$vaCount=([regex]::Matches($content,'\(unsigned\)s_phase6cpCurrentVa,')).Count
+$vaCount=([regex]::Matches($content,'\(unsigned\)k1c_read_guest_va\(\),')).Count
+$helperDeclarationCount=([regex]::Matches($content,'static DWORD k1c_read_guest_va\(void\);')).Count
+$helperBodyCount=([regex]::Matches($content,'static DWORD k1c_read_guest_va\(void\)\s*\{\s*return s_phase6cpCurrentVa;\s*\}')).Count
+$trackerCount=([regex]::Matches($content,'static DWORD s_phase6cpCurrentVa = 0u;')).Count
 $bootCount=([regex]::Matches($content,'P6K1C-EXACT-WRITE-SITE-VA-20261030')).Count
-if($siteCount -ne 5 -or $vaCount -ne 5 -or $bootCount -ne 1){
-    throw "[K1C] pre-XDK source gate FAILED site=$siteCount va=$vaCount boot=$bootCount"
+if($siteCount -ne 5 -or $vaCount -ne 5 -or $bootCount -ne 1 -or
+   $helperDeclarationCount -ne 1 -or $helperBodyCount -ne 1 -or $trackerCount -ne 1){
+    throw "[K1C] pre-XDK source gate FAILED site=$siteCount va=$vaCount boot=$bootCount prototype=$helperDeclarationCount helper=$helperBodyCount tracker=$trackerCount"
 }
-Write-Host "[K1C] PREFLIGHT PASS: 5 guest-VA witnesses, one boot tag, untouched 64 TrueTUs"
+Write-Host "[K1C] PREFLIGHT PASS: 5 guest-VA helper witnesses, one boot tag, untouched tracker and 64 TrueTUs"
 if($PreflightOnly){
     Write-Host "[K1C] PREFLIGHT ONLY - XDK build skipped"
     exit 0
