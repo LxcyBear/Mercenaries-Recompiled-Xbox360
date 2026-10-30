@@ -111,8 +111,17 @@ def modify(text:str)->str:
     nextfn=re.search(r"(?m)^\s*(?:static\s+)?void\s+sub_[0-9A-Fa-f]{8}\s*\(\s*void\s*\)",text[start.end():])
     stop=start.end()+nextfn.start() if nextfn else len(text)
     body=text[begin:stop]
+    # Path.write_text translates LF to CRLF on Windows; real cached TrueTU
+    # shards may be CRLF too. Match source-native lines without rewriting
+    # or normalizing ANY unmodified guest translation or shard content.
+    crlf=body.count("\r\n")
+    lf=body.count("\n")
+    if crlf and crlf!=lf:
+        raise ValueError("mixed source line endings in DSOUND translated body")
+    newline="\r\n" if crlf else "\n"
     for fragment in REQUIRED:
-        if body.count(fragment)!=1:
+        native=fragment.replace("\n",newline)
+        if body.count(native)!=1:
             raise ValueError("staged shard source drift/missing exact statement: "+fragment)
     for old,new in (
         ("uint32_t ebp;", "uint32_t ebp;\n"+DECL),
@@ -126,9 +135,11 @@ def modify(text:str)->str:
         ("loc_002A6624: ;\n    PHASE4C_BUDGET_TICK(0x002A6624u);",
          "loc_002A6624: ;\n    PHASE4C_BUDGET_TICK(0x002A6624u);\n"+POST),
     ):
-        if body.count(old)!=1:
+        native_old=old.replace("\n",newline)
+        native_new=new.replace("\n",newline)
+        if body.count(native_old)!=1:
             raise ValueError("non-unique insertion point: "+old)
-        body=body.replace(old,new,1)
+        body=body.replace(native_old,native_new,1)
     body="/* "+MARK+": only guest function "+FUNCTION+" modified */\n"+body
     return text[:begin]+body+text[stop:]
 
