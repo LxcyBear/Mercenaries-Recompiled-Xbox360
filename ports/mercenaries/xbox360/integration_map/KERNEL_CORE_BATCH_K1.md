@@ -86,6 +86,22 @@ new Xbox build, or relaxed guest memory fences.
   SHA-identical and the original 64-shard build intact.
 - Synthetic stage test and fail-closed incremental builder are committed;
   no one-shard diagnostic Xbox run has been claimed as successful yet.
+### 2026-10-30: DSINDEX on-hardware operand proof
+
+- New `ENTRY`/`LEA`/`PRE173`/`POST173` checkpoints all reached Xbox.
+- Original `[00041D70]` XBE first dword `00041D59` became live
+  `01B672D8` while `[00041D74]` stayed `04020100`. Their difference
+  is exactly `FDB471D8`; the audio page table base `024A8000` plus
+  eight times this negative index gives faulting ESI `EFEE0EC0`.
+- PRE173/POST173 EBX/ESI/ESP all **identical**. Ordinal 173 is
+  definitively not the source of those changed registers at this site.
+- The index is already bad before the 393216-byte allocation and
+  physical-memory calls. Need determine why guest `[00041D70]` changed.
+- New `k1/Stage-K1A-DsoundWriterWatch.py` and
+  `k1/Build-K1A-DsoundWriterWatch.ps1`: watch guest writes overlapping
+  `00041D70..00041D77` in all three scalar widths while retaining
+  K1A and DSINDEX. No build/runtime pass has been claimed yet.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
