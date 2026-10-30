@@ -1001,3 +1001,54 @@ Get-Content '.\build\phase6_integration_map\k1o_a7322_tail_return.txt' -TotalCou
 
 Upload full K1O source-only report before considering another
 on-hardware binary. The withdrawn K1L correction remains unsafe.
+
+## K1O PASS -> K1P two-TrueTU stack-edge Xbox witness (2026-10-30)
+
+K1O PASS resolved `sub_002A7322` (`translated_057.cpp`)
+tail jump to `sub_002A7AE8` (`translated_050.cpp`),
+whose terminal epilogue is `esp += 4; return; /* ret */`
+(zero stack arguments). Therefore the tail-jump's lexical
+return width is **correct**, and should not be blindly changed.
+The child A7AE8 has direct and indirect nested calls; an ESP
+shift within these or other A739F children is still possible.
+
+Latest K1J hardware still shows A19FC -> A739F ESP
+`008BF8B4 -> 008BF8B8` (+4 with no stack arguments), and
+later A19FC / FC4A save/restore stack-slot displacement
+corrupts XACT `EBX` to `00000018`, causing the erroneous
+guest text list write and READ32 `EFEE0EC4` hard stop.
+
+K1P is **diagnostic only**. It stages 15 source-bounded
+call-edge ESP delta logs across two TrueTUs:
+`translated_009.cpp` (9 direct A739F callsites)
+and `translated_057.cpp` (5 A7322 children plus A7AE8 tail).
+Expected deltas for ordinary callsites are argument-cleanup
+bytes from immediately before the synthetic return push;
+for tail transfer the expected +4 is return-address consumption.
+Two separate A77BE callsites receive independent labels.
+
+All original guest calls, registers, memory operations, 64
+translated shards, and safety fences remain unchanged except
+for host-side log snippets in those 2 files. K1J/G/E original
+Xbox witnesses are retained byte-for-byte.
+
+Run from repo root, assuming local K1J and K1O source reports:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1P-A739F-A7322-StackEdges.ps1'
+```
+
+Use `-PreflightOnly` to check SHA, synthetic probes and all
+source gating without compiling. If build succeeds, the new
+diagnostic XEX is:
+
+`build\phase6_integration_map\k1p_a739f_a7322_stack_edges\xdk\Merc-K1P-StackEdges.xex`
+
+On Xbox, collect *all* `K1P STACK EDGE` lines plus the original
+`K1J DSOUND ABI`, `P6DQ R72 DSOUND NESTED ABI`, `K1E XACT LIST PRE`,
+and hard-stop context. Look for the **first** `delta != expected`.
+That edge determines the next local source contract investigation.
+Do not build/deploy the withdrawn K1L late-FC4A repair.
