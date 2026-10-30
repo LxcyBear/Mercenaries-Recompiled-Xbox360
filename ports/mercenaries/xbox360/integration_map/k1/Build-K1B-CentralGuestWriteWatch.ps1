@@ -96,12 +96,18 @@ $ringLookupHits=([regex]::Matches(
     $k1bStagedSource,
     'k1b_last_trace_va = s_trace\[k1b_trace_index\];'
 )).Count
-$legacyCallerCalls=([regex]::Matches(
+# Existing later APU writers may legitimately reference phase4c_current_caller.
+# Check only new K1B probe blocks; an unrestricted search would false-fail.
+$k1bProbeCount=([regex]::Matches(
     $k1bStagedSource,
-    '\(unsigned\)phase4c_current_caller\(\)'
+    'K1B CENTRAL WRITE: width=%u'
 )).Count
-if($ringLookupHits -ne 5 -or $legacyCallerCalls -ne 0){
-    throw "[K1B] Pre-build source gate: expected 5 ring reads and zero unresolved caller calls; ring=$ringLookupHits stale=$legacyCallerCalls"
+$staleK1bCallerCount=([regex]::Matches(
+    $k1bStagedSource,
+    '(?s)K1B CENTRAL WRITE: width=%u.{0,700}\(unsigned\)phase4c_current_caller\(\)'
+)).Count
+if($ringLookupHits -ne 5 -or $k1bProbeCount -ne 5 -or $staleK1bCallerCount -ne 0){
+    throw "[K1B] Pre-build source gate: expected five K1B ring traces, zero caller calls inside K1B probes; ring=$ringLookupHits probes=$k1bProbeCount stale=$staleK1bCallerCount"
 }
 Write-Host "[K1B] PREFLIGHT PASS: one modified main, 5 central writer widths, 64 frozen TrueTUs"
 Write-Host "[K1B] SOURCE GATE: 5 existing trace-ring reads, no unresolved caller function calls"
