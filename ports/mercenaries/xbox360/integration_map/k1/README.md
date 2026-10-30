@@ -740,3 +740,42 @@ Capture `K1G XACT ABI ENTRY`, `POST_COPY`, `AFTER_D5C0`,
 Compare the first calls to detect the first transition to EBX=18.
 Do not infer an entry-argument bug until that on-hardware comparison.
 XDK compiler and Xbox K1G results remain unverified pending local run.
+
+## K1G Xbox EBX corruption boundary -> K1H offline DSOUND source audit (2026-10-30)
+
+K1G boot and all 8 checkpoint classes executed on Xbox 360.
+`sub_0027DC5B` ENTERED with `ECX=01B5C320`; `POST_COPY` and
+`AFTER_D5C0` confirmed `EBX=01B5C320` (valid XACT object pointer).
+`AFTER_29FDF0` instead reports `EBX=00000018`, `ECX=0`, `EAX=0`,
+`EDX=024908B8`, with `ESP=008BF974` unchanged across the outer
+call boundary. Later checkpoints retain `EBX=18`, producing the
+proven low list head `0x8C` and damaging `WRITE32[00041D70]`.
+Therefore the change occurs somewhere inside the original translated
+`sub_0029FDF0()` call tree, not at the original XACT function entry.
+The exact nested function or epilogue responsible is **not** yet proven.
+
+The subsequent `READ32 EFEE0EC4` memory fence is unchanged at
+`27,029,593` ticks, `display_calls=0`, framebuffer zero. This is
+diagnostic progress rather than any new display progress.
+
+The new `Audit-K1H-DsoundCalleeSave.py` is source-only and requires
+the K1E original TrueTU manifest/source SHA. It prints the complete
+original body of `sub_0029FDF0` (bounded view), EBX assignments,
+PUSH32/POP32 sites, returns, direct callsites and immediate callees.
+It does not run XDK or replace EBX with a guessed value.
+
+From repo root:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+python '.\ports\mercenaries\xbox360\integration_map\k1\Audit-K1H-DsoundCalleeSave.py' `
+    --original-shards '.\build\phase6_integration_map\k1a_dsobject_writer_watch\translated_shards' `
+    --k1e-manifest '.\build\phase6_integration_map\k1e_xact_list_tail\k1e-xact-tail-manifest.json' `
+    --out '.\build\phase6_integration_map\k1h_dsound_callee_save.txt'
+if ($LASTEXITCODE -ne 0) { throw 'K1H audit failed' }
+Get-Content '.\build\phase6_integration_map\k1h_dsound_callee_save.txt' -TotalCount 100
+```
+
+Share the full K1H report file. Only once the original callee-save
+path is understood should a corrective translation change be proposed.
