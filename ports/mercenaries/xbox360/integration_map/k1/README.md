@@ -283,6 +283,34 @@ An absent write record doesn't prove the bytes never changed: host/native
 bulk copies and unwatched guest-write paths remain possible.
 Nothing in this stage bypasses the `EFEE0EC4` hard fence.
 
+## Hardware follow-up: DSOBJECT watch did not advance the tick frontier
+
+The 2026-10-30 xbWatson log (3,402 lines) still stops at
+`27,029,593` translated ticks on the same
+`GUEST_FAULT READ32 EFEE0EC4`. The same four DSINDEX snapshots
+reproduce the invalid index. **No** `K1A DSOBJECT WRITE` record
+appeared, but that does not prove that no guest write occurred:
+the hooks monitor only `phase6ch_apu_write*` helpers. There is
+also no new **runtime-visible** DSOBJECT boot marker in this build.
+
+Before another expensive Xbox build, run this read-only coverage audit
+over the *actual staged source files*:
+
+```powershell
+$k1 = '.\ports\mercenaries\xbox360\integration_map\k1'
+python "$k1\Test-K1A-DsoundWriterCoverage.py"
+if ($LASTEXITCODE -ne 0) { throw 'K1A coverage fixture failed' }
+$root = '.\build\phase6_integration_map\k1a_dsobject_writer_watch'
+python "$k1\Audit-K1A-DsoundWriterCoverage.py" --main "$root\main.cpp" --shards "$root\translated_shards" --out "$root\k1a-writer-coverage.json"
+if ($LASTEXITCODE -ne 0) { throw 'K1A source-coverage audit failed' }
+```
+
+It summarizes direct `GUEST_WRITE8/16/32`, APU helper writes,
+native guest writes, and likely bulk copies across all 64 TUs.
+The counts are **lexical**, not proof of executed writes.
+Next runtime XEX must visibly report a distinct DSOBJECT boot
+watermark and confirm the actual compiled writer coverage.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
