@@ -779,3 +779,41 @@ Get-Content '.\build\phase6_integration_map\k1h_dsound_callee_save.txt' -TotalCo
 
 Share the full K1H report file. Only once the original callee-save
 path is understood should a corrective translation change be proposed.
+
+## K1H full report -> K1I bounded recursive DSOUND EBX source proof (2026-10-30)
+
+K1H full audit passed. The original `sub_0029FDF0` (68 lines,
+`translated_041.cpp`) has zero lexical EBX writes, and calls
+`sub_0029CDBE` plus `sub_0029FD83`. Both these direct callees also
+have zero lexical EBX writes. **This does not exclude nested calls or
+indirect dispatch:** `sub_0029CDBE` has a conditional ICALL and
+`sub_0029FD83` makes four additional direct calls to
+`sub_002A41EE`, `sub_0029CB9F`, `sub_0029CF0B`,
+`sub_0029FC4A`, and has an indirect call near its end.
+
+The K1G Xbox baseline remains: `EBX=01B5C320` before the call to
+`sub_0029FDF0`, `EBX=00000018` on return. `K1E` then writes to
+`guest .text[00041D70]`; DSOUND later hits the hard fence
+`READ32 EFEE0EC4` at tick `27029593` with no display calls.
+
+K1I is a SHA-checked **source-only** graph scan of up to four direct-call
+edges from `sub_0029FDF0`. It ranks EBX assignment candidates,
+includes source snippets, and prints the complete original
+`sub_0029FD83` plus all 4 direct child function call/EBX sites.
+This may reveal a likely missing callee-save path, but lexical
+reachability cannot establish which branch executes on the Xbox.
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+python '.\ports\mercenaries\xbox360\integration_map\k1\Audit-K1I-DsoundNestedEbx.py' `
+  --original-shards '.\build\phase6_integration_map\k1a_dsobject_writer_watch\translated_shards' `
+  --k1e-manifest '.\build\phase6_integration_map\k1e_xact_list_tail\k1e-xact-tail-manifest.json' `
+  --out '.\build\phase6_integration_map\k1i_dsound_nested_ebx.txt'
+if ($LASTEXITCODE -ne 0) { throw 'K1I audit failed' }
+Get-Content '.\build\phase6_integration_map\k1i_dsound_nested_ebx.txt' -TotalCount 60
+```
+
+Upload the complete K1I text report. No XDK/Xbox needed for this run.
+Do not blindly restore EBX at the XACT callsite, guess guest pointers,
+or relax any unknown-address/VP/MMIO hard fence.
