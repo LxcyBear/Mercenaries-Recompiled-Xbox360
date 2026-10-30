@@ -102,6 +102,29 @@ new Xbox build, or relaxed guest memory fences.
   `00041D70..00041D77` in all three scalar widths while retaining
   K1A and DSINDEX. No build/runtime pass has been claimed yet.
 
+### 2026-10-30 DSOBJECT writer-watch console outcome
+
+- The attached xbWatson run still fences at **27,029,593 ticks**,
+  `READ32 EFEE0EC4` with `ESI EFEE0EC0` and `EBX 00041D70`.
+- All four DSINDEX checkpoints execute, with the same bad entry
+  `obj_first=01B672D8 obj_second=04020100 delta=FDB471D8`.
+- **Zero `K1A DSOBJECT WRITE` records** are present in the 3,402-line
+  console log. The run prints the K1A clock boot marker but no
+  distinct DSOBJECT boot marker; the missing writes are therefore
+  NOT proof that no write happened or that a native memcpy caused it.
+- No further guest display progress: `display_calls=0`,
+  `framebuffer=00000000`, no game pixels.
+- The previous instrumentation was restricted to APU write helpers.
+  An additional read-only source audit
+  `k1/Audit-K1A-DsoundWriterCoverage.py` enumerates separate
+  `GUEST_WRITE*`, other host writer and bulk-copy call sites in the
+  actual staged 64 TrueTUs and runtime header before attempting
+  another expensive XDK compilation. Its counts are lexical,
+  NOT executed-write evidence.
+- Next instrumented build MUST contain a unique runtime-visible
+  DSOBJECT boot watermark and validate the writer owner in the
+  actual compiled source; do not bypass the guest-memory hard fence.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
