@@ -145,7 +145,7 @@ def stage(source:Path,out:Path)->dict:
     for f in inputs:
         data=f.read_bytes()
         snapshots[f.name]=sha(data)
-        if re.search(rb"\bvoid\s+sub_002A6595\s*\(\s*void\s*\)",data):
+        if re.search(rb"(?m)^\s*(?:static\s+)?void\s+sub_002A6595\s*\(\s*void\s*\)\s*\{",data):
             candidates.append(f)
     if len(candidates)!=1:raise ValueError(f"expected exact ONE shard owning {FUNCTION}; got {len(candidates)}")
     target=candidates[0]
