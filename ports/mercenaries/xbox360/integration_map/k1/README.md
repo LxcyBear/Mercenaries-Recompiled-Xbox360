@@ -542,6 +542,62 @@ notepad "$stage\k1d_xact_write_site\k1d-source-window.txt"
 Upload the report for exact guest instruction/register interpretation.
 No new XDK build or hardware test is requested for K1D.
 
+## K1D XACTENG linked-list write proved -> K1E original tail-state witness
+
+K1D hardware-source correlation found the guest VA `0027DD0C` in
+`translated_029.cpp:15690`, function `sub_0027DC5B`. Original
+translated code near that label does (abridged):
+
+```cpp
+edx = ebx + 0x74;                   // list head inside XACT context
+eax = eax + 0x28;                   // new entry in recent allocation
+GUEST_WRITE32(eax, edx);            // new Flink=head
+ecx = GUEST_READ32(edx + 4);       // old head->Blink
+GUEST_WRITE32(eax + 4, ecx);       // new Blink=old tail
+GUEST_WRITE32(ecx, eax);           // old tail->Flink=new entry
+ecx = GUEST_READ32(eax);
+GUEST_WRITE32(ecx + 4, eax);       // head->Blink=new entry
+```
+
+K1C observed the `GUEST_WRITE32(ecx, eax)` consequence:
+`address=00041D70`, `value=01B672D8`, `before=00041D59`.
+This is consistent with the **old list tail** loaded from
+`[ebx+0x78]` being `00041D70`, a VA inside the original XBE
+`.text` section, instead of a valid existing node.
+This is still a **hypothesis about the erroneous list state**,
+not proof of the original reason for that value or proof that the
+later DSOUND `EFEE0EC4` read is caused by this exact store.
+
+Next, K1E instruments **only translated_029.cpp** at the existing
+XACT list-link site. It logs `K1E XACT LIST PRE` immediately before
+the original `GUEST_WRITE32(ecx, eax)`, showing `ebx`,
+`edx=head`, `ecx=tail`, `eax=node`, `edi`,
+`eventcount`, and guest ESP. It reuses the K1C main XEX
+provenance, leaves 63 other TrueTU source files and all generated
+headers unchanged, and preserves all guest register writes,
+guest memory reads/writes, existing APU policy and hard fences.
+Only one source unit is new to the incremental VS17 compile.
+Do **not** replace the tail pointer or bypass the hard stop.
+
+```powershell
+Set-Location 'C:\Users\jorda\Mercenaries-Recompiled-Xbox360'
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1E-XactListTailWatch.ps1'
+```
+
+Use `-PreflightOnly` for synthetic test, SHA checks and staging only.
+If incremental VS17 Xbox 360 Release succeeds, run **only**:
+
+`build\phase6_integration_map\k1e_xact_list_tail\xdk\Merc-K1E-XactListTail.xex`
+
+The K1C main boot marker will still appear:
+`P6K1C-EXACT-WRITE-SITE-VA-20261030`. Look for the **new
+one-shard marker** `K1E XACT LIST PRE:` near the prior
+`K1C WRITE SITE:` message. K1E is diagnostic; current
+27,029,593-tick frontier and zero pixels remain unbroken pending
+hardware verification.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
