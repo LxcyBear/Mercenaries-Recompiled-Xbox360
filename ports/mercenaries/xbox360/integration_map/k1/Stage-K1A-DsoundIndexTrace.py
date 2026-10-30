@@ -34,7 +34,6 @@ DECL="""    /* K1A DSOUND forensic snapshots only: these are host C++ locals. */
     uint32_t k1a_ds_end = 0u;
     uint32_t k1a_ds_delta = 0u;
     uint32_t k1a_ds_table = 0u;
-    uint32_t k1a_ds_lea = 0u;
     uint32_t k1a_ds_before173_ebx = 0u;
     uint32_t k1a_ds_before173_esi = 0u;
     uint32_t k1a_ds_before173_esp = 0u;
@@ -60,8 +59,7 @@ TABLE="""    k1a_ds_table = eax;
         trace(k1a_line);
     }
 """
-LEA="""    k1a_ds_lea = esi;
-    k1a_ds_log_this = (k1a_ds_visit_count <= 4u || (esi & 0xF0000000u) == 0xE0000000u) ? 1u : 0u;
+LEA="""    k1a_ds_log_this = (k1a_ds_visit_count <= 4u || (esi & 0xF0000000u) == 0xE0000000u) ? 1u : 0u;
     if (k1a_ds_log_this) {
         char k1a_line[256];
         sprintf(k1a_line,
