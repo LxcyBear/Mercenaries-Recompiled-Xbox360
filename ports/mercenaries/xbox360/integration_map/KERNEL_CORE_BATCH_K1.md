@@ -25,6 +25,27 @@ without a detected route is NOT automatically a broken runtime service.
   or the physical Xbox 360. Correct register/stack and real runtime guest
   address validation are acceptance gates; preserve current R76 XEX.
 - K1B event/synchronization runtime is not implemented yet.
+## Hardware evidence — first K1A Xbox 360 test (2026-10-29)
+
+**K1A ordinal 128 was executed and the previous kernel hard stop was passed.**
+
+- Native Xbox boot message contains exact
+  `P6K1A-BOOT-CLOCK128-304-305-20261029` (not merely inherited R76).
+- Xbox log reports `P6K1A KESYSTEMTIME128: calls=1 output=008BF954
+  caller=0023A3CE saved_esp=008BF940`.
+- Original R76 boundary was ordinal 128, tick **26,720,251**.
+- K1A ran until tick **27,029,593**, +309,342 ticks, then stopped at
+  `GUEST_FAULT READ32 EFEE0EC4`, `ESI=EFEE0EC0`, same translated
+  caller `0023A3CE`. This is a new failure family, NOT evidence that
+  clock/date APIs 304/305 were exercised; those remain unverified on hardware.
+- XACT async-stream I/O and subsequent allocation/device setup ran past
+  the ordinal-128 site. No guest display handoff:
+  `display_calls=0 framebuffer=00000000`.
+- Keep the new guest address hard fenced, with no synthetic success or
+  invented MMIO mapping. Inspect translated VA ring and ESI provenance
+  using `k1/Investigate-K1A-NextRead32.py`.
+- The R76 source/TrueTU base and prior executable are unchanged.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
