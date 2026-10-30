@@ -48,6 +48,10 @@ for eol in ("\n","\r\n"):
     altered=m.modify(original)
     assert altered.count(m.TAG)==1
     assert altered.count("K1E XACT LIST PRE")==1
+    assert altered.count("tail_hits_41D70=%u head_hits_41D70=%u")==1
+    assert altered.count("(unsigned)(ecx == 0x00041D70u)")==1
+    assert altered.count("(unsigned)(edx + 4u == 0x00041D70u)")==1
+    assert altered.count("GUEST_WRITE32(ecx + 4, eax);")==1
     assert altered.index("K1E XACT LIST PRE")<altered.index("    GUEST_WRITE32(ecx, eax);")
     assert altered.count("GUEST_WRITE32(")==original.count("GUEST_WRITE32(")
     assert altered.count("GUEST_READ32(")==original.count("GUEST_READ32(")
