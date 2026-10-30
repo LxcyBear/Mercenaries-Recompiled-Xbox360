@@ -969,3 +969,35 @@ Get-Content '.\build\phase6_integration_map\k1n_a739f_return_contracts.txt' -Tot
 
 No XDK build or deployment. Upload the entire report.
 Do not reintroduce the withdrawn late K1L ESP repair.
+
+## K1N PASS (7 matched return widths, 1 tail transfer) -> K1O (2026-10-30)
+
+User's K1N audit passed on original 64-TU sources, 13,510 bodies,
+and found zero ordinary child callsite/ret-width mismatches.
+Seven of eight direct A739F helpers have standard lexical
+argument cleanup matching their callers. The remaining first
+helper `sub_002A7322` (`translated_057.cpp`) has no inline
+`return; /* ret */`: after popping saved ESI it executes
+`g_seh_ebp = ebp; sub_002A7AE8(); return; /* tail jmp */`.
+This is **not yet proof** of which callee shifted ESP on Xbox.
+
+`Audit-K1O-A7322TailReturn.py` follows this exact translated
+tail-transfer chain through `sub_002A7AE8`, reporting its terminal
+return widths and full original source. It refuses different
+frozen SHA, missing K1N/K1M source evidence, missing A7AE8 body,
+or attempts to overwrite frozen inputs. No XDK build or changes.
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+python '.\ports\mercenaries\xbox360\integration_map\k1\Audit-K1O-A7322TailReturn.py' `
+  --original-shards '.\build\phase6_integration_map\k1a_dsobject_writer_watch\translated_shards' `
+  --k1n-report '.\build\phase6_integration_map\k1n_a739f_return_contracts.txt' `
+  --k1m-report '.\build\phase6_integration_map\k1m_a739f_call_contract.txt' `
+  --out '.\build\phase6_integration_map\k1o_a7322_tail_return.txt'
+if ($LASTEXITCODE -ne 0) { throw 'K1O audit failed' }
+Get-Content '.\build\phase6_integration_map\k1o_a7322_tail_return.txt' -TotalCount 75
+```
+
+Upload full K1O source-only report before considering another
+on-hardware binary. The withdrawn K1L correction remains unsafe.
