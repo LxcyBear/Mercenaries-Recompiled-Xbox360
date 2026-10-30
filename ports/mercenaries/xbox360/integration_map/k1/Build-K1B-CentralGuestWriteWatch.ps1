@@ -16,11 +16,12 @@ $oldMain=Join-Path $old "main.cpp"
 $oldManifest=Join-Path $old "k1a-dsound-writer-watch-manifest.json"
 $shards=Join-Path $old "translated_shards"
 $dsindex=Join-Path $repo "build\phase6_integration_map\k1a_dsindex_probe\k1a-dsound-index-trace-manifest.json"
-$stage=Join-Path $repo "build\phase6_integration_map\k1b_central_write_watch"
+# Distinct stage: keep the original five-call C3861 artifact immutable for audit.
+$stage=Join-Path $repo "build\phase6_integration_map\k1b_central_write_watch_c3861fix"
 $newMain=Join-Path $stage "main.cpp"
 $newManifest=Join-Path $stage "k1b-central-writer-manifest.json"
 $buildDir=Join-Path $stage "xdk"
-$xex=Join-Path $buildDir "Merc-K1B-CentralWriter.xex"
+$xex=Join-Path $buildDir "Merc-K1B-CentralWriter-C3861Fix.xex"
 $envFile=Join-Path $repo "build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp"
 $buildWrapper=Join-Path $repo "ports\mercenaries\xbox360\phase6_native_graphics\Invoke-VS17Xbox360Build.ps1"
 $test=Join-Path $PSScriptRoot "Test-K1A-CentralGuestWriteWatch.py"
@@ -73,6 +74,7 @@ foreach($header in $actualHeaders){
 }
 Write-Host "[K1B] R76 hash PASS, K1A clock & DSINDEX & DSOBJECT source identity PASS"
 Write-Host "[K1B] Running synthetic 5-writer regression (NO Xbox build yet)"
+Write-Host "[K1B] C3861 FIX: pre-declare existing caller tracker; old failed stage preserved"
 & $python -u $test
 if($LASTEXITCODE -ne 0){throw "[K1B] Synthetic test FAILED before XDK"}
 & $python -u $stager --main $oldMain --shards $shards --out $newMain
