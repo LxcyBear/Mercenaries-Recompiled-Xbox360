@@ -149,6 +149,13 @@ def stage(source:Path,out:Path)->dict:
         raise ValueError("source and output directories must be independent")
     inputs=sorted(source.glob("translated_*.cpp"))
     if len(inputs)!=64:raise ValueError(f"Expected 64 translated_*.cpp TrueTU source files, got {len(inputs)}")
+    # The VS2017 TrueTU builder uses *.h from GeneratedShardDir. Omitting
+    # translated_runtime.h caused C1083 in translated_060.cpp. Preserve every
+    # source header byte-for-byte, and fail BEFORE XDK if this one is absent.
+    headers=sorted(source.glob("*.h"))
+    if not any(p.name=="translated_runtime.h" for p in headers):
+        raise ValueError("required translated_runtime.h absent from original TrueTU source")
+    header_hashes={p.name:sha(p.read_bytes()) for p in headers}
     candidates=[]
     snapshots={}
     for f in inputs:
@@ -159,28 +166,55 @@ def stage(source:Path,out:Path)->dict:
     if len(candidates)!=1:raise ValueError(f"expected exact ONE shard owning {FUNCTION}; got {len(candidates)}")
     target=candidates[0]
     if out.exists() and any(out.iterdir()):
-        # Allow a PRECHECK-only run to be followed by the actual XDK build,
-        # but ONLY when all 64 files are unchanged and the one patched shard
-        # exactly matches the currently requested instrumentation source.
+        # Older one-shard stages copied only .cpp files; the first XDK build
+        # then failed when translated_runtime.h was missing. Replay is allowed
+        # ONLY after checking all 64 staged cpp byte hashes and every existing
+        # header. Supply missing headers from the SAME frozen source.
         manifest=out.parent/"k1a-dsound-index-trace-manifest.json"
         if not manifest.is_file():
             raise ValueError("nonempty stage dir has no forensic manifest")
         doc=json.loads(manifest.read_text(encoding="utf-8"))
+        expected_names={p.name for p in inputs}
+        expected_header_names={p.name for p in headers}
+        actual_names={p.name for p in out.iterdir()}
         if (doc.get("marker")!=MARK or
             doc.get("status")!="STAGED_ONLY_NO_XDK_BUILD" or
             doc.get("modified_shards")!=[target.name] or
             doc.get("original_modified_shard_sha256")!=snapshots[target.name] or
             doc.get("source_directory")!=str(source) or
             doc.get("staged_directory")!=str(out) or
-            {p.name for p in out.iterdir()}!={p.name for p in inputs} or
+            not expected_names.issubset(actual_names) or
+            not actual_names.issubset(expected_names|expected_header_names) or
             doc.get("staged_modified_shard_sha256")!=
               sha(modify(target.read_bytes().decode("utf-8")).encode("utf-8"))):
             raise ValueError("staged output identity mismatch or stale mixed shards")
+        old_headers=doc.get("header_sha256")
+        if old_headers is not None and old_headers!=header_hashes:
+            raise ValueError("frozen header identities changed since original stage")
         for f in inputs:
             actual=sha((out/f.name).read_bytes())
             if actual!=(doc["staged_modified_shard_sha256"] if f==target else snapshots[f.name]):
                 raise ValueError("staged TrueTU content drift: "+f.name)
-        print("[K1A-DSINDEX] REUSE PASS: 64 staged hashes match; no rewrites")
+        for f in headers:
+            dest=out/f.name
+            if dest.exists() and sha(dest.read_bytes())!=header_hashes[f.name]:
+                raise ValueError("staged runtime header drift: "+f.name)
+        copied=0
+        for f in headers:
+            dest=out/f.name
+            if not dest.exists():
+                shutil.copy2(f,dest)
+                copied+=1
+            if sha(dest.read_bytes())!=header_hashes[f.name]:
+                raise RuntimeError("staged runtime header copy failed: "+f.name)
+        for f in headers:
+            if sha(f.read_bytes())!=header_hashes[f.name]:
+                raise RuntimeError("original runtime header mutated: "+f.name)
+        doc["header_sha256"]=header_hashes
+        doc["header_count"]=len(headers)
+        doc["auxiliary_headers"]=sorted(header_hashes)
+        manifest.write_text(json.dumps(doc,indent=2)+"\n",encoding="utf-8")
+        print(f"[K1A-DSINDEX] REUSE PASS: 64 staged cpp hashes + {len(headers)} header SHA(s); restored={copied}")
         return doc
     out.mkdir(parents=True,exist_ok=True)
     changed=[]
@@ -193,6 +227,13 @@ def stage(source:Path,out:Path)->dict:
         else:
             shutil.copy2(f,out/f.name)
     if len(changed)!=1:raise AssertionError("expected one modified shard")
+    for f in headers:
+        shutil.copy2(f,out/f.name)
+        if sha((out/f.name).read_bytes())!=header_hashes[f.name]:
+            raise RuntimeError("staged runtime header SHA mismatch: "+f.name)
+    for f in headers:
+        if sha(f.read_bytes())!=header_hashes[f.name]:
+            raise RuntimeError("original runtime header mutated: "+f.name)
     for f in inputs:
         if sha(f.read_bytes())!=snapshots[f.name]:
             raise RuntimeError("frozen TrueTU input was unexpectedly modified: "+f.name)
@@ -203,6 +244,8 @@ def stage(source:Path,out:Path)->dict:
             "original_modified_shard_sha256":snapshots[target.name],
             "staged_modified_shard_sha256":sha((out/target.name).read_bytes()),
             "unchanged_shards":63,"hard_fences":"PRESERVED",
+            "header_count":len(headers),"header_sha256":header_hashes,
+            "auxiliary_headers":sorted(header_hashes),
             "guest_register_writes_added":0,
             "source_directory":str(source),"staged_directory":str(out)}
     (out.parent/"k1a-dsound-index-trace-manifest.json").write_text(
@@ -216,7 +259,7 @@ def main():
     args=p.parse_args()
     m=stage(args.shards,args.out)
     print("[K1A-DSINDEX] PASS: only "+m["modified_shards"][0]+" instrumented")
-    print("[K1A-DSINDEX] 63 other TrueTU source files SHA-identical")
+    print(f"[K1A-DSINDEX] 63 other TrueTU .cpp files SHA-identical; {m['header_count']} header(s) byte-identical")
     print("[K1A-DSINDEX] R76 originals, K1A XEX and guest fences UNCHANGED")
     print("[K1A-DSINDEX] Stage only: NO XDK compilation; report="+str(args.out.parent/"k1a-dsound-index-trace-manifest.json"))
 
