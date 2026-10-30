@@ -77,6 +77,29 @@ if($record.original_modified_shard_sha256.ToUpperInvariant() -ne $original[$targ
        (Get-FileHash -LiteralPath (Join-Path $stageShards $target) -Algorithm SHA256).Hash){
     throw "[K1A-DSINDEX] staged modified shard SHA mismatch"
 }
+# Critical C1083 fix: TrueTU compilation needs generated *.h files copied
+# from the same frozen source folder as the 64 .cpp files.
+$sourceHeaders = @(Get-ChildItem -LiteralPath $shards -Filter "*.h" -File)
+$stageHeaders = @(Get-ChildItem -LiteralPath $stageShards -Filter "*.h" -File)
+if(-not (@($sourceHeaders | Where-Object Name -eq "translated_runtime.h").Count -eq 1)){
+    throw "[K1A-DSINDEX] Missing original translated_runtime.h"
+}
+if($sourceHeaders.Count -ne $stageHeaders.Count -or
+   [int]$record.header_count -ne $sourceHeaders.Count){
+    throw "[K1A-DSINDEX] Generated TrueTU header count mismatch"
+}
+foreach($header in $sourceHeaders){
+    $copy=Join-Path $stageShards $header.Name
+    if(-not (Test-Path -LiteralPath $copy -PathType Leaf)){
+        throw "[K1A-DSINDEX] Missing staged header: $($header.Name)"
+    }
+    $originalHeaderSha=(Get-FileHash -LiteralPath $header.FullName -Algorithm SHA256).Hash
+    $copyHeaderSha=(Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash
+    if($originalHeaderSha -ne $copyHeaderSha){
+        throw "[K1A-DSINDEX] Staged header SHA drift: $($header.Name)"
+    }
+}
+Write-Host ("[K1A-DSINDEX] HEADER PASS: {0} generated header(s), including translated_runtime.h" -f $stageHeaders.Count)
 Write-Host ("[K1A-DSINDEX] PREFLIGHT PASS: exact one modified TU={0}" -f $target)
 Write-Host "[K1A-DSINDEX] K1A 3-clock source reused; other 63 TUs byte-identical"
 if($PreflightOnly){
