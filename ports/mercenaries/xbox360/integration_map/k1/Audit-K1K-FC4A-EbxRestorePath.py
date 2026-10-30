@@ -27,7 +27,7 @@ EBX_WRITE = re.compile(r"(?<!\w)ebx\s*(?:=|\+=|-=|\^=|\|=|&=|\*=|/=|<<=|>>=)"
                        r"|\bPOP32\s*\(\s*(?:g_)?esp\s*,\s*ebx\s*\)")
 EBX_SAVE = re.compile(r"\b(?:PUSH32|POP32)\s*\([^;]*\bebx\b")
 STACK = re.compile(r"\b(?:PUSH32|POP32)\s*\(|\b(?:g_)?esp\s*(?:=|\+=|-=)")
-FRAME = re.compile(r"\b(?:return\s*;|goto\s+loc_[0-9A-Fa-f]+|PHASE6DJ_ICALL_SAFE)\b")
+FRAME = re.compile(r"\breturn\s*;|\bgoto\s+loc_[0-9A-Fa-f]+|\bPHASE6DJ_ICALL_SAFE\s*\(")
 CALL = re.compile(r"\bsub_[0-9A-Fa-f]{8}\s*\(\s*\)")
 
 
