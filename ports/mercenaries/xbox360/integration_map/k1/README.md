@@ -663,3 +663,37 @@ Do not attempt an XDK build or deploy any XEX from these portable files.
 Required next gate: real R76 ICALL/ITAIL and savedEsp ABI confirmation,
 then one central compatible dispatcher bridge with its own guest-stack,
 pointer safety and return-register tests.
+
+## K1E hardware confirmation and K1F source-only next step (2026-10-30)
+
+The K1E diagnostic **executed on Xbox 360**, observing eight original
+XACT list-link insertions at guest VA 0027DD0C. The first pre-write
+sample had EBX=00000018, list head=0000008C, head Blink address=00000090,
+old tail=00041D70, inserted node=01B672D8, tail_hits_41D70=1,
+head_hits_41D70=0. Immediately afterward K1C confirmed the original
+XACT store wrote guest[00041D70]=01B672D8. The destination is inside
+the original retail executable .text range. This is now an observed
+damaging store, **not** a speculative guest address or CPU fault.
+
+The same downstream DSOUND READ32 EFEE0EC4 hard stop remains at
+27,029,593 ticks. display_calls=0 and framebuffer=00000000. The XACT
+list-head origin and how EBX became 00000018 are still UNKNOWN.
+Do not replace head/tail, map low-memory pointers, or remove hard fences.
+
+Run this K1F read-only source/caller provenance audit before any more XDK builds:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+python '.\ports\mercenaries\xbox360\integration_map\k1\Audit-K1F-XactListHeadProvenance.py' `
+    --original-shards '.\build\phase6_integration_map\k1a_dsobject_writer_watch\translated_shards' `
+    --k1e-manifest '.\build\phase6_integration_map\k1e_xact_list_tail\k1e-xact-tail-manifest.json' `
+    --out '.\build\phase6_integration_map\k1f_xact_head_provenance.txt'
+if ($LASTEXITCODE -ne 0) { throw 'K1F source audit failed' }
+Get-Content '.\build\phase6_integration_map\k1f_xact_head_provenance.txt' -Raw
+```
+
+Share only the focused K1F report, not entire original retail game assets.
+The audit verifies the frozen owner/K1E hashes and extracts original
+function setup, EBX writes and direct lexical callers without compiling
+or changing generated guest code.
