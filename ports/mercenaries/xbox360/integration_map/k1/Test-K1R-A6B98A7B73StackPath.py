@@ -96,12 +96,12 @@ def main()->None:
                 for suffix in ("BEFORE_POP_ESI","BEFORE_POP_EDI","BEFORE_RET4"):
                     if new.count("K1R PATH A7B73_"+suffix)!=1:
                         raise AssertionError("Missing original conditional epilogue path")
-                if new.count("K1R CALL A7B73_002A74A4_1")!=1 or new.count(
-                    "K1R CALL A7B73_002A74A4_2"
+                if new.count("K1R CALL 002A7B73_002A74A4_1")!=1 or new.count(
+                    "K1R CALL 002A7B73_002A74A4_2"
                 )!=1:
                     raise AssertionError("Repeated A74A4 source callsites not independent")
             if filename=="translated_005.cpp":
-                if new.count("K1R CALL A6B98_002A7B73_1")!=1:
+                if new.count("K1R CALL 002A6B98_002A7B73_1")!=1:
                     raise AssertionError("First A6B98 child not traced")
     assert sites_total==42 # 21 sites tested in both LF and CRLF
     print("[K1R] REAL-SOURCE PASS: 21 distinct call/path probes extracted from K1Q")
