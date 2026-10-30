@@ -215,8 +215,8 @@ def modify(filename:str,source:str)->tuple[str,list[str]]:
 def stage(base:Path, base_manifest:Path, original:Path, k1q:Path, out:Path)->dict:
     base,base_manifest,original,k1q,out=(x.resolve() for x in
                                        (base,base_manifest,original,k1q,out))
-    if base==out or base in out.parents or original in out.parents or
-       out==original or out in {base_manifest,k1q}:
+    if (base==out or base in out.parents or original in out.parents or
+        out==original or out in {base_manifest,k1q}):
         raise ValueError("K1R cannot overwrite baseline, frozen sources or reports")
     j=json.loads(base_manifest.read_text(encoding="utf-8-sig"))
     report=k1q.read_text(encoding="utf-8-sig")
