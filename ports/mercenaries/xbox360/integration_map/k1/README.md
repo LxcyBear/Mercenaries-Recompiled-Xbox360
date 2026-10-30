@@ -1233,3 +1233,60 @@ only initiating defect. **Do not claim display/audio PASS**
 without new Xbox evidence. Preserve the hard stop on unknown
 MMIO and guest reads. If the exact guard does not fire,
 do not widen it; inspect the K1S trace and return untouched.
+
+## FIRST PIXELS: verified K1S -> multi-root offline closure plan (2026-10-30)
+
+Hardware goal: **a real guest `display_calls >= 1`**, generated
+by the original guest's AvSetDisplayMode/presentation work, never
+by synthesizing or incrementing the diagnostic counter.
+
+The K1S Xbox run proves the precise saved-ESI repair and all downstream
+register checks: `K1S repaired=1`, `A6B98->A7B73 delta=+4`,
+`A739F->A6B98 delta=0`, `FC4A EBX=01B5C320`.
+The old `READ32 EFEE0EC4` fault is NOT present in that run.
+The next genuine hard stop is `DIRECT_FRONTIER 002A3A5A` at
+`27,031,807` translated ticks (`fault=0`). A native Xenos device
+and D3D guest device are initialized but guest `display_calls=0`
+and framebuffer `00000000`.
+
+The historical static Rocket packer sorts DSOUND candidates by
+numeric distance from `002A6713`, not by *actual live
+reachability* from the latest frontier. To stop incremental
+one-function-at-a-time probes, `Audit-PixelBatchClosure.py`
+performs a **single local-source-only** multi-root inventory:
+
+- exact observed DSOUND call target `002A3A5A` and up to
+  112 directly reachable nodes;
+- guest present root `0023A3CE` and up to 80 nodes;
+- observed D3D/XGRPH roots `0028E700`, `00290895`, `0029C8BE`
+  and up to 64 reachable nodes each;
+- cross-check original 64 K1S TrueTU bodies against the complete
+  local generated C corpus and `functions.json`; flag exact
+  functions, **mid-function targets** and unsupported bodies;
+- run the existing Phase4C/5BB direct-call rewriting in memory
+  for lexical dependency screening; write a ranked set of up
+  to 192 source candidates and explanatory summary.
+
+Read-only code; no game payload copied, no XDK build, no guest
+memory or register changes, and unknown MMIO/NV2A/VP fences
+remain hard. Lexical source-clean is not a proven compile.
+
+From the repo root, **one command**:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Plan-PixelBatch.ps1'
+```
+
+Produces:
+
+- `build\phase6_integration_map\pixel_batch\pixel_batch_summary.txt`
+- `build\phase6_integration_map\pixel_batch\pixel_batch_closure.json`
+
+Only after this identifies **verified exact generated sources**
+should the batch be added to the incremental K1S TrueTU/lookup
+set and tested together on Xbox. If the live target is mid-function
+or source-missing, do not invent a return or add a lookup stub.
+Do not run another Xbox build on guesswork, and never force
+`display_calls` to increase without a real display operation.
