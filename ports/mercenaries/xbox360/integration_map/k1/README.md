@@ -817,3 +817,45 @@ Get-Content '.\build\phase6_integration_map\k1i_dsound_nested_ebx.txt' -TotalCou
 Upload the complete K1I text report. No XDK/Xbox needed for this run.
 Do not blindly restore EBX at the XACT callsite, guess guest pointers,
 or relax any unknown-address/VP/MMIO hard fence.
+
+## K1I source graph PASS -> K1J DSOUND child-call EBX hardware witness (2026-10-30)
+
+K1I passed on the actual 64 original TrueTUs: 13,510 function bodies,
+29 bounded reachable DSOUND functions, 0 missing bodies, no cap clipping.
+`sub_0029FC4A` (`translated_053.cpp`) contains 10 lexical EBX writes
+including `ebx = esi + 0x18`, multiple `r59_saved_ebx` restores,
+and an eventual `POP32(esp, ebx)`. Static reachability **does not**
+prove that the `0x18` instruction executes along the live failing
+path or that the original register is incorrectly preserved.
+
+The new K1J stage starts from the hardware-tested K1G stage and
+adds register-only traces to exactly **two** new TrueTUs:
+`translated_041.cpp` (`sub_0029FDF0`: function entry, after
+`sub_0029CDBE`, after `sub_0029FD83`, before return) and
+`translated_017.cpp` (`sub_0029FD83`: entry, after
+`sub_002A41EE`, `sub_0029CB9F`, `sub_0029CF0B`,
+`sub_0029FC4A`, and before return). It retains the prior
+`translated_029.cpp` K1G/E Xbox witness byte-for-byte. Compared with
+K1G, the 62 non-target TUs and all headers are byte-identical.
+Guest memory ops, guest register assignments and hard fences unchanged.
+
+From the Mercenaries repository root:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1J-DsoundReturnEbxWatch.ps1'
+```
+
+Use `-PreflightOnly` for source/synthetic/SHA gates without invoking
+VS2017 XDK. On success, deploy **only**:
+
+`build\phase6_integration_map\k1j_dsound_register_edges\xdk\Merc-K1J-DsoundRegisterEdges.xex`
+
+On Xbox capture the `K1J DSOUND ABI` checkpoints plus the original
+`K1G XACT ABI` and `K1E XACT LIST PRE` witnesses. The first
+checkpoint where EBX differs from XACT object's `01B5C320`
+will determine the next localized source audit or translation repair.
+The K1J test is **not** a speculative register restoration. No
+compiler or Xbox result claimed before the local build and boot.
