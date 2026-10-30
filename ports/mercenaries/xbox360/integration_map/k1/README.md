@@ -897,3 +897,37 @@ Get-Content '.\build\phase6_integration_map\k1k_fc4a_ebx_restore.txt' -TotalCoun
 
 Upload the COMPLETE K1K report; do not infer final EBX ABI fix
 from one local x86 register mutation. No guest code or hard fence changes.
+
+## K1L withdrawn; K1M source investigation at A19FC -> A739F (2026-10-30)
+
+After the actual Xbox K1J trace and K1K original source, a more
+upstream +4 ESP displacement was found:
+
+- `sub_002A19FC` at its `sub_002A739F` direct call: R72
+  `esp_before=008BF8B4 esp_after=008BF8B8` (+4). Its callsite
+  only pushes the synthetic return address, not a guest parameter.
+- The next `sub_002A2A16` call has the **same +4** across the
+  R72 witness but deliberately pushes guest argument `0x7FF`
+  first, so that one's +4 is an expected callee argument cleanup.
+- `sub_002A19FC` prologue saves ECX, EBX, EBP, ESI, EDI;
+  its epilogue pops EDI, ESI, EBP, EBX, ECX. The first shift
+  is consistent with K1J R71 raw output
+  `EBX=01B5C554` (saved ECX), `ESI=008BFF8C` (saved EBP),
+  `EDI=008C1104` (saved ESI), all one slot off.
+- It then produces `esp=008BF8D0` instead of `008BF8CC`
+  at its FC4A call edge, leading FC4A's own epilogue to restore
+  `EDI=0`, `ESI=01B5C320`, `EBX=0x18`, and corrupt XACT list head.
+
+**Do not build or deploy the former experimental K1L patch.**
+It would adjust ESP only *after* A19FC had already popped
+the wrong registers and thus would not fix the upstream cause.
+The unverified `Stage-K1L-A19FCStackBalance.py` was deleted from
+the branch to prevent an unsafe build. K1J remains the last
+hardware-tested diagnostic XEX.
+
+Next source-only investigation: extract original
+`sub_002A739F` from `translated_009.cpp` and optionally
+`sub_002A2A16` from `translated_042.cpp` as a convention control.
+Audit exact epilogue ret width and any nested calls before
+proposing a location-specific repair. No broad EBX/ESP patch
+or hard-fence relaxation.
