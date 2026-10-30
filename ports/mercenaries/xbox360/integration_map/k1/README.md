@@ -1101,3 +1101,67 @@ the A7B73 return site. If a width mismatch is proven,
 inspect it against actual runtime branch before correction.
 The old crash remained tick 27,029,593, `READ32 EFEE0EC4`,
 `display_calls=0` in K1P. No production correction proven.
+
+## K1Q PASS -> K1R first bad A6B98 child + conditional A7B73 epilogue (2026-10-30)
+
+K1Q source-only audit passed against the original 64 TrueTUs.
+All 5 A6B98 nested callee return contracts match the caller's
+declared stack arguments: A7B73 `ret 4`, A7605 `ret 8`,
+A7818 `ret 12`, A766D `ret 8`, A7598 `ret 4`.
+However K1P hardware still measured the FIRST bad A739F direct edge:
+`A6B98 esp=008BF8A8 -> 008BF8AC` (+4, expected 0).
+The R49 hardware witness records unexpected raw `ESI=0` immediately
+after the A6B98->A7B73 call. Standard return width matching
+does **not** prove that A7B73's internal indirect calls preserved
+the emulated guest stack or correct saved register slots.
+
+K1Q's `translated_044.cpp:21121..21290` A7B73 source has five
+`PHASE6DJ_ICALL_SAFE` sites, four direct calls, and a branch where
+`loc_002A7C49` executes `POP32(esp, esi)` before merging into
+`loc_002A7C4A` (which restores EDI/EBX/EBP and `ret 4`).
+An alternate path jumps directly to `loc_002A7C4A`.
+Only Xbox execution can tell which path was taken.
+
+K1R preserves the full previously hardware-proven K1P 64-TU set.
+Only `translated_005.cpp` (A6B98) and `translated_044.cpp`
+(A7B73) receive host-side diagnostic C++ blocks. It records:
+
+- 9 exact A6B98 child callsite ESP / EBX / ESI before/after edges,
+  with K1Q-proven argument cleanup expectations.
+- 4 exact A7B73 direct callsite ESP / EBX / ESI edges
+  (expected return cleanup explicitly UNKNOWN, not guessed).
+- 5 A7B73 indirect dispatch blocks, with before/after ESP, EBX, ESI.
+- 3 A7B73 epilogue path checkpoints before POP ESI, POP EDI,
+  and final `ret 4`, identifying the live branch/stack position.
+
+**Zero new guest reads/writes/register assignments**, no patched
+return widths and no changes to XACT or hard MMIO fences.
+All prior K1P/J/G/E telemetry persists byte-for-byte.
+`Test-K1R-A6B98A7B73StackPath.py` reconstructs the **real K1Q
+original C++ function bodies**, tests both LF and CRLF and
+rejects altered source anchors or duplicate probe insertion.
+Do not use withdrawn K1L ESP/EBX compensation.
+
+From the repo root, with K1P staged and K1Q report present:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  '.\ports\mercenaries\xbox360\integration_map\k1\Build-K1R-A6B98A7B73StackPath.ps1'
+```
+
+PowerShell syntax note: the backslash shown above only separates
+the display lines; enter the `-File` script path on the same line
+or use PowerShell's backtick line continuation instead.
+
+Diagnostic output XEX (after verified successful Release Xbox 360
+incremental build):
+
+`build\phase6_integration_map\k1r_a6b98_a7b73_stack_path\xdk\Merc-K1R-A6B98-A7B73-StackPath.xex`
+
+The next Xbox capture must include `K1R CALL`, `K1R ICALL`,
+`K1R PATH`, `K1P STACK EDGE`, `P6DQ R49 ESI REPAIR`,
+and `K1J DSOUND ABI`, and the first hard stop.
+Resolve the earliest nonzero A6B98 child delta and/or the A7B73
+indirect/epilogue path before changing guest ESP.
