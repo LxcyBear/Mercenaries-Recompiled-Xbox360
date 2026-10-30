@@ -167,6 +167,25 @@ Tests now model actual late tracker placement and the original early
 fixture; staging and XDK/hardware validation are still pending.
 The 27,029,593-tick hard fence and no-pixels status remain unchanged.
 
+### K1C Xbox PASS / K1D targeted source audit (2026-10-30)
+
+K1C executed on hardware with its unique boot marker. At the previously
+identified `recomp_guest_write32` to `00041D70`, captured
+`guest_va=0027DD0C` (within retail XACTENG section). Wrote
+`01B672D8`, exactly heap allocation `01B672B0+0x28`. The
+old `trace_caller=0023A3CE` is broad; the guest-VA tick
+is much narrower but still not proven to be the exact store PC.
+Destination lies within original retail .text. Need identify
+destination register arithmetic and verify whether this is an
+expected data write or an ABI/pointer bug. No memory bypass.
+
+The SAME hard fault `READ32 EFEE0EC4` remains at
+`ticks=27029593 trace=1072569`, no display/framebuffer.
+`Inspect-K1D-XactWriteSite.py` + synthetic test are committed
+for an **offline, read-only** window around `loc_0027DD0C`
+across the frozen 64 translated shards, with input SHA checks.
+Await actual source report before code mutation or another XDK build.
+
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
