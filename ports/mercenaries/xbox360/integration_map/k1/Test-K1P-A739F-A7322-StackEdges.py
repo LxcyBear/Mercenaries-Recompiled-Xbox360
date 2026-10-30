@@ -56,9 +56,9 @@ for nl in ("\n","\r\n"):
         reject(lambda:stager.modify(name,broken),"source callsite drift")
         reject(lambda:stager.modify("translated_099.cpp",original),"unexpected shard")
         if name=="translated_009.cpp":
-            assert modified.count("k1p_A739F_002A77BE_1_before = esp;")==1
-            assert modified.count("k1p_A739F_002A77BE_2_before = esp;")==1
-            assert modified.index("k1p_A739F_002A77BE_1_before") < modified.index("k1p_A739F_002A77BE_2_before")
+            assert modified.count("k1p_002A739F_002A77BE_1_before = esp;")==1
+            assert modified.count("k1p_002A739F_002A77BE_2_before = esp;")==1
+            assert modified.index("k1p_002A739F_002A77BE_1_before") < modified.index("k1p_002A739F_002A77BE_2_before")
         else:
             assert "k1p_A7322_A7AE8_TAIL" in modified
         if name=="translated_057.cpp":
