@@ -391,6 +391,31 @@ Zero writer records **with a verified K1B boot tag** directs the next
 investigation to host bulk-copy, direct guest pointers, or the earlier
 wrong-object/ABI source. It does **not** permit bypassing EFEE0EC4.
 
+## K1B VS2017 C3861 source-order fix (2026-10-30)
+
+The first K1B Xbox compile passed the 64 TrueTU source-hash gates,
+synthetic staging regression, source sync, and reached incremental
+`main.cpp` compilation only. It failed with exactly five
+`C3861: 'phase4c_current_caller': identifier not found` errors
+at the five newly instrumented central writer functions.
+
+Cause: existing static `phase4c_current_caller(void)` is defined
+later in `main.cpp`. The diagnostic patch now inserts exactly one
+`static DWORD phase4c_current_caller(void);` forward declaration
+before `recomp_guest_write8`. Stage refuses an absent or ambiguous
+actual function definition or incorrect ordering. Synthetic tests
+verify this prototype for LF and CRLF input and reject drifting code.
+
+The build script uses independent corrected output
+`build\phase6_integration_map\k1b_central_write_watch_c3861fix`
+to preserve the failed source for forensic comparison.
+On a successful XDK build, launch only:
+
+`build\phase6_integration_map\k1b_central_write_watch_c3861fix\xdk\Merc-K1B-CentralWriter-C3861Fix.xex`
+
+No translated shard recompilation or clean is requested; no
+hardware progress claim until the new XEX actually runs.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
