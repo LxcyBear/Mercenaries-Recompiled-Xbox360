@@ -624,6 +624,30 @@ same `Build-K1E-XactListTailWatch.ps1` command; it will run
 the strengthened regression then stage the one-TU diagnostic
 before an incremental XDK compile. Actual re-test still pending.
 
+## K1E actual generated function-body lookup fix (2026-10-30)
+
+After the CRLF regression fix, the K1E Python synthetic test
+**PASSed** on Windows. Real 64-TU staging then stopped **before
+XDK build** at `expected one XACTENG original function owner`.
+That check counted every occurrence of
+`void sub_0027DC5B(void)`, mistakenly treating a forward
+declaration and the actual implementation as multiple owners.
+K1D already identified the true function in
+`translated_029.cpp` with `loc_0027DD0C`.
+
+K1E now matches **exactly one definition with its opening
+brace**, bounds the body at the top-level closing brace, and
+requires the original tick marker and exact three-statement
+guest list-link sequence inside that body. Forward declarations
+are allowed; two definitions or zero definitions fail closed.
+The synthetic test now mimics the real declaration+definition
+shape under both LF and CRLF, and checks missing/duplicate
+bodies. No source modification or hardware claim follows
+from this change until the local build confirms it.
+
+Re-run the unchanged `Build-K1E-XactListTailWatch.ps1`
+command from above. The expected XEX path is unchanged.
+
 ## Optional host compilation
 
 With GCC/Clang installed and on PATH:
