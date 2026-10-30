@@ -138,6 +138,11 @@ def test():
         (staged/"translated_010.cpp").write_text("/* other true TU shard */\n")
         assert len(list(base.glob("translated_*.cpp")))==64
         assert set(p.name for p in base.glob("*.h"))==set(header_hashes)
+        # Mandatory dependency must be proven BEFORE creating new output.
+        (base/"translated_runtime.h").unlink()
+        expect_rejected(lambda:module.stage(base,root/"missing_header_stage"),
+                        "missing translated_runtime.h")
+        assert not (root/"missing_header_stage").exists()
     print("[K1A-DSINDEX] PASS: synthetic exact labels, entry/LEA/pre173/post173 probes")
     print("[K1A-DSINDEX] PASS: 63 unchanged shards, two header SHA identities, no in-place/duplicate")
     print("[K1A-DSINDEX] PASS: migrated legacy 64-cpp-only stage (missing translated_runtime.h)")
