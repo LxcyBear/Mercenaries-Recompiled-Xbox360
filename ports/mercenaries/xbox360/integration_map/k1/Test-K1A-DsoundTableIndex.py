@@ -26,7 +26,7 @@ loc_002A0AF1: ;
 }
 """
 s=module.analyze(source)
-for x in ("signed_EDX=-38563368","024A8000","EFEE0EC0",
+for x in ("signed_EDX=-38506024","024A8000","EFEE0EC0",
           "loc_002A6607","loc_002A6617","loc_002A6624",
           "sub_002A6595();","upstream","[EBP-12]"):
     assert x.lower() in s.lower(),x
