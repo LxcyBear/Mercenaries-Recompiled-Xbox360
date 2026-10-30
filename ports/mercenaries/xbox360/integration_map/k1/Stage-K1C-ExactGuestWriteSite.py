@@ -22,7 +22,7 @@ BOOT="PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF START"
 TRACKER="static DWORD s_phase6cpCurrentVa = 0u;"
 HELPER="k1c_read_guest_va"
 HELPER_DECL="static DWORD k1c_read_guest_va(void);"
-TRACKER_LINE=re.compile(r"(?m)^[ \t]*static[ \t]+DWORD[ \t]+s_phase6cpCurrentVa[ \t]*=[ \t]*0u;[ \t]*$")
+TRACKER_LINE=re.compile(r"(?m)^[ \t]*static[ \t]+DWORD[ \t]+s_phase6cpCurrentVa[ \t]*=[ \t]*0u;[ \t]*(?://[^\r\n]*)?$")
 WRITER_FIRST=re.compile(r"(?m)^[ \t]*void[ \t]+recomp_guest_write8[ \t]*\(")
 OLD_LABEL=("K1B CENTRAL WRITE: width=%u hit=%u address=%08X value_lo=%08X "
            "value_hi=%08X before0=%08X before4=%08X caller=%08X budget=%u esp=%08X")
@@ -64,8 +64,6 @@ def patch(source:str)->str:
     writer_matches=list(WRITER_FIRST.finditer(source))
     if not writer_matches:
         raise ValueError("missing early central write8 declaration/body")
-    writer_at=writer_matches[0].start()
-    tracker_at=TRACKER_LINE.search(source).start()
     helper_body=(
         eol+"static DWORD "+HELPER+"(void)"+eol
         +"{" + eol+"    return s_phase6cpCurrentVa;"+eol+"}"+eol
