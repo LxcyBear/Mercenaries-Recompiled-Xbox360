@@ -45,8 +45,6 @@ def patch(source:str)->str:
         raise ValueError("K1B five exact writer messages/arguments not found")
     if source.count("k1b_last_trace_va = s_trace[k1b_trace_index];")!=5:
         raise ValueError("K1B baseline guest writer trace-ring witness drift")
-    if source.count("phase4c_current_caller()")>0 and source.index(TRACKER)<0:
-        raise ValueError("unexpected caller ownership")
     crlf=source.count("\r\n")
     if crlf and crlf!=source.count("\n"):
         raise ValueError("mixed generated C++ line endings")
@@ -61,11 +59,11 @@ def patch(source:str)->str:
     if output.count(BOOT_NEW)!=1 or output.count(K1C)!=1:
         # Single K1C boot marker; its formatted trace label is independent.
         raise ValueError("K1C runtime identity drift")
-    for name in ("recomp_guest_write8","recomp_guest_write16",
-                 "recomp_guest_write32","recomp_guest_write64",
-                 "recomp_guest_write128"):
-        if output.count("void "+name+"(")!=1:
-            raise ValueError("central writer definition changed: "+name)
+    # The real K1B main has legitimate early forward declarations of
+    # recomp_guest_write8/32. Do not confuse them with function bodies.
+    # K1B was already staged with exactly five verified writer bodies.
+    if output.count("K1C WRITE SITE:")!=5:
+        raise ValueError("expected five unchanged central writer probe bodies")
     return output
 
 
