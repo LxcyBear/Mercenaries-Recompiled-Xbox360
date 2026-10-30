@@ -68,6 +68,24 @@ whether the observed `FDB471D8` index is consistent with reading
 original code-section bytes at the fault-time EBX. This does NOT prove
 whether EBX was wrong on entry or clobbered later. No runtime bypass,
 new Xbox build, or relaxed guest memory fences.
+### XBE byte-differential result: NO match (2026-10-29)
+
+- The owned exact-SHA XBE original `.text` dwords at guest EBX
+  `00041D70` are `00041D59` and `04020100`.
+- Their difference is `FC021C59`, NOT the fault-time
+  `[EBP-12]` / EDX value `FDB471D8`. Therefore the narrow hypothesis
+  that unmodified original code bytes at fault-time EBX generated this
+  index is **NOT CONFIRMED**.
+- Do not jump from that negative result to a proven ABI corruption.
+  The function captures its index **before** calling allocation and
+  physical-memory services, while fault-time EBX is **after** those calls.
+  Guest memory mutation is also unexcluded.
+- One-shard diagnostic stage `k1/Stage-K1A-DsoundIndexTrace.py` now
+  snapshots the object dwords, original index/base, computed ESI, and
+  registers before/after ordinal 173. It leaves 63 TrueTU shards
+  SHA-identical and the original 64-shard build intact.
+- Synthetic stage test and fail-closed incremental builder are committed;
+  no one-shard diagnostic Xbox run has been claimed as successful yet.
 ## K1A — system clock and calendar conversion (one 100ns model)
 
 | Ordinal | Export | Original Xbox export stack hint | Evidence |
