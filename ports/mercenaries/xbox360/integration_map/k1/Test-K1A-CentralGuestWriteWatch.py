@@ -91,7 +91,7 @@ def check():
     rejects(lambda:m.patch(wrong),"64-bit writer width changed")
     wrong=fixture().replace("caller = s_trace[index];", "caller = unrelated_guess;")
     rejects(lambda:m.patch(wrong),"missing existing trace ring")
-    wrong=fixture().replace("TRACE_CAPACITY", "MISSING_TRACE_CAPACITY")
+    wrong=fixture().replace("TRACE_CAPACITY", "X_CAP")
     rejects(lambda:m.patch(wrong),"missing existing trace cap")
     wrong=fixture().replace("const uint32_t words[4]","const uint32_t words[3]")
     rejects(lambda:m.patch(wrong),"128-bit writer changed")
