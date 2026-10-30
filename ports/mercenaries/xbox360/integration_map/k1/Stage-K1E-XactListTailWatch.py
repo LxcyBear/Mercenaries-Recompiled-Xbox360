@@ -32,16 +32,19 @@ PROBE="""    /* K1E-XACT-TAIL-EDGE-20261030: pre-write list-tail forensic sample
     {
         static uint32_t k1e_list_edge_visits = 0u;
         ++k1e_list_edge_visits;
-        if (k1e_list_edge_visits <= 8u || ecx == 0x00041D70u)
+        if (k1e_list_edge_visits <= 8u || ecx == 0x00041D70u ||
+            (edx + 4u) == 0x00041D70u)
         {
             char k1e_line[320];
             sprintf(k1e_line,
-                "K1E XACT LIST PRE: n=%u va=0027DD0C head=%08X tail=%08X node=%08X ebx=%08X edi=%08X eventcount=%08X esp=%08X tail_is_text=%u",
+                "K1E XACT LIST PRE: n=%u va=0027DD0C head=%08X tail=%08X node=%08X head_blink_addr=%08X tail_hits_41D70=%u head_hits_41D70=%u ebx=%08X edi=%08X eventcount=%08X esp=%08X",
                 (unsigned)k1e_list_edge_visits,
                 (unsigned)edx, (unsigned)ecx, (unsigned)eax,
+                (unsigned)(edx + 4u),
+                (unsigned)(ecx == 0x00041D70u),
+                (unsigned)(edx + 4u == 0x00041D70u),
                 (unsigned)ebx, (unsigned)edi,
-                (unsigned)s_phase6dqXactInitEventCount, (unsigned)g_esp,
-                (unsigned)(ecx >= 0x00011000u && ecx < 0x00255620u));
+                (unsigned)s_phase6dqXactInitEventCount, (unsigned)g_esp);
             trace(k1e_line);
         }
     }
