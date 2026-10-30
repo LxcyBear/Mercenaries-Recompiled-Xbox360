@@ -58,8 +58,11 @@ def sha(data:bytes)->str:
 def modify(text:str)->str:
     if TAG in text: raise ValueError("K1E already present in target")
     crlf=text.count("\r\n")
-    if crlf and crlf!=text.count("\n"):
-        raise ValueError("mixed generated TU line endings")
+    # Reject CRCRLF (from writing CRLF text with Windows newline
+    # translation), bare CR, and mixed LF/CRLF. Do not silently
+    # normalize generated guest code.
+    if text.count("\r")!=crlf or (crlf and crlf!=text.count("\n")):
+        raise ValueError("invalid/mixed generated TU line endings (CRCRLF or bare CR)")
     nl="\r\n" if crlf else "\n"
     if text.count("void "+FUNCTION+"(void)")!=1:
         raise ValueError("expected one XACTENG original function owner")
