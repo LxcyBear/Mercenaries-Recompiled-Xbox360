@@ -56,10 +56,23 @@ def patch(source:str)->str:
         raise ValueError("already has K1B central-writer watch")
     if source.count(BOOT)!=1:
         raise ValueError("exact Xbox boot log text missing or duplicated")
+    caller_definition="static DWORD phase4c_current_caller(void)"
+    if source.count(caller_definition)!=1:
+        raise ValueError("required existing caller tracker definition absent/duplicated")
     crlf=source.count("\r\n")
     if crlf and crlf!=source.count("\n"):
         raise ValueError("mixed C++ source line endings")
     newline="\r\n" if crlf else "\n"
+    # These five central stores are defined before the pre-existing static
+    # caller-tracking function. Declare it before the first store so MSVC
+    # 2017 can resolve the forensic log call (C3861 otherwise).
+    first=list(function_pattern("recomp_guest_write8","uint8_t").finditer(source))
+    if len(first)!=1 or source.index(caller_definition)<=first[0].start():
+        raise ValueError("unexpected caller definition/order; refuse speculative C3861 repair")
+    declaration="static DWORD phase4c_current_caller(void);"
+    if declaration in source:
+        raise ValueError("caller already forward declared; unexpected baseline")
+    source=source[:first[0].start()]+declaration+newline+source[first[0].start():]
     for name,typ,width in SPECS:
         matches=list(function_pattern(name,typ).finditer(source))
         if len(matches)!=1:
@@ -96,8 +109,8 @@ def patch(source:str)->str:
     # The first boot log tells us *this actual new main.cpp* was deployed,
     # even in runs where no watched write happens. No new game-side activity.
     source=source.replace(BOOT,BOOT+" | "+MARK,1)
-    if source.count(MARK)!=6:
-        raise ValueError("five writers plus one boot identity marker required")
+    if source.count(MARK)!=6 or source.count(declaration)!=1:
+        raise ValueError("five writers, one boot tag and one caller declaration required")
     return source
 
 def stage(baseline:Path,shard_dir:Path,out:Path)->dict:
