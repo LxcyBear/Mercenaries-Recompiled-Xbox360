@@ -92,8 +92,6 @@ def modify(filename: str, source: str) -> str:
         raise ValueError("K1J forensic probe count mismatch")
     if READ_WRITE.findall(body) != READ_WRITE.findall(source[begin:end]):
         raise ValueError("K1J guest memory operation sequence changed")
-    if source[:begin] != source[:begin] or source[end:] != source[end:]:
-        raise RuntimeError("source prefix/suffix invariant broken")
     result = source[:begin] + body + source[end:]
     if result.count("K1G XACT ABI ") != source.count("K1G XACT ABI "):
         raise ValueError("K1J unexpectedly changed K1G original owner")
