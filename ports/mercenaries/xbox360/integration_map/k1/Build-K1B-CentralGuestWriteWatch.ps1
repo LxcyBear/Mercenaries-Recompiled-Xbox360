@@ -92,7 +92,7 @@ if($doc.status -ne "STAGED_ONLY_NO_XDK_BUILD" -or
 Write-Host "[K1B] PREFLIGHT PASS: one modified main, 5 central writer widths, 64 frozen TrueTUs"
 Write-Host "[K1B] BOOT MARKER: P6K1B-CENTRAL-GUEST-WRITE-WATCH-20261030"
 if($PreflightOnly){
-    Write-Host "[K1B] PREFLIGHT ONLY — no XDK build"
+    Write-Host "[K1B] PREFLIGHT ONLY - no XDK build"
     exit 0
 }
 New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
