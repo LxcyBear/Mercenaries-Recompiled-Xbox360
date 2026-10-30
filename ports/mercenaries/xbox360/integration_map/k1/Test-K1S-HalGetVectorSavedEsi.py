@@ -44,7 +44,7 @@ def main()->None:
         q,"### SUB_002A7B73 (translated_044.cpp line 21121)",
         21121,21290
     )
-    assert original.count("PUSH32(esp, esi);")==2
+    assert original.count("PUSH32(esp, esi);")==3
     assert original.count("POP32(esp, esi);")==1
     assert original.count("phase6ch_apu_read32(0x2DBE20)")==1
     assert original.count("esp += 8; return; /* ret 4 */")==1
