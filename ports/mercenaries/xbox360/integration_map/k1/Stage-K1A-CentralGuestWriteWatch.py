@@ -56,28 +56,23 @@ def patch(source:str)->str:
         raise ValueError("already has K1B central-writer watch")
     if source.count(BOOT)!=1:
         raise ValueError("exact Xbox boot log text missing or duplicated")
-    caller_definition="static DWORD phase4c_current_caller(void)"
-    caller_body=re.compile(
-        r"(?m)^[ \t]*static[ \t]+DWORD[ \t]+phase4c_current_caller"
-        r"\(void\)[ \t]*(?:\r?\n[ \t]*)?\{"
+    # Use the existing last-trace-VA lookup from recomp_guest_write32.
+    # The actual frozen K1A main has no phase4c_current_caller body in
+    # the position/form expected by the earlier synthetic fixture.
+    # Require the known, earlier-working ring used by the existing code.
+    required_ring=(
+        "s_traceCount",
+        "s_trace[index]",
+        "TRACE_CAPACITY",
     )
-    existing_caller_definitions=list(caller_body.finditer(source))
-    if source.count(caller_definition)!=1 or len(existing_caller_definitions)!=1:
-        raise ValueError("required existing caller tracker BODY absent/duplicated")
+    if any(token not in source for token in required_ring):
+        raise ValueError("missing existing main.cpp trace-ring caller source")
     crlf=source.count("\r\n")
     if crlf and crlf!=source.count("\n"):
         raise ValueError("mixed C++ source line endings")
     newline="\r\n" if crlf else "\n"
-    # These five central stores are defined before the pre-existing static
-    # caller-tracking function. Declare it before the first store so MSVC
-    # 2017 can resolve the forensic log call (C3861 otherwise).
-    first=list(function_pattern("recomp_guest_write8","uint8_t").finditer(source))
-    if len(first)!=1 or existing_caller_definitions[0].start()<=first[0].start():
-        raise ValueError("unexpected caller definition/order; refuse speculative C3861 repair")
-    declaration="static DWORD phase4c_current_caller(void);"
-    if declaration in source:
-        raise ValueError("caller already forward declared; unexpected baseline")
-    source=source[:first[0].start()]+declaration+newline+source[first[0].start():]
+    # Do not add any caller-function declaration to this generated main.
+    # All required tracing globals are already read by recomp_guest_write32.
     for name,typ,width in SPECS:
         matches=list(function_pattern(name,typ).finditer(source))
         if len(matches)!=1:
@@ -97,6 +92,14 @@ def patch(source:str)->str:
             +"        if (k1b_hit_count <= 16u)"+newline
             +"        {"+newline
             +"            char k1b_line[360];"+newline
+            +"            uint32_t k1b_last_trace_va = 0u;"+newline
+            +"            if (s_traceCount != 0u)"+newline
+            +"            {"+newline
+            +"                uint32_t k1b_trace_index = s_traceCount - 1u;"+newline
+            +"                if (k1b_trace_index >= TRACE_CAPACITY)"+newline
+            +"                    k1b_trace_index = TRACE_CAPACITY - 1u;"+newline
+            +"                k1b_last_trace_va = s_trace[k1b_trace_index];"+newline
+            +"            }"+newline
             +"            sprintf(k1b_line,"+newline
             +'                "K1B CENTRAL WRITE: width=%u hit=%u address=%08X value_lo=%08X value_hi=%08X before0=%08X before4=%08X caller=%08X budget=%u esp=%08X",'+newline
             +f"                {width}u, (unsigned)k1b_hit_count,"+newline
@@ -104,7 +107,7 @@ def patch(source:str)->str:
             +f"                (unsigned)({high_expr}),"+newline
             +"                (unsigned)recomp_guest_read32(0x00041D70u),"+newline
             +"                (unsigned)recomp_guest_read32(0x00041D74u),"+newline
-            +"                (unsigned)phase4c_current_caller(),"+newline
+            +"                (unsigned)k1b_last_trace_va,"+newline
             +"                (unsigned)s_execBudget, (unsigned)g_esp);"+newline
             +"            trace(k1b_line);"+newline
             +"        }"+newline
@@ -114,8 +117,8 @@ def patch(source:str)->str:
     # The first boot log tells us *this actual new main.cpp* was deployed,
     # even in runs where no watched write happens. No new game-side activity.
     source=source.replace(BOOT,BOOT+" | "+MARK,1)
-    if source.count(MARK)!=6 or source.count(declaration)!=1:
-        raise ValueError("five writers, one boot tag and one caller declaration required")
+    if source.count(MARK)!=6 or source.count("k1b_last_trace_va = s_trace[k1b_trace_index];")!=5:
+        raise ValueError("five writers, one boot tag and five trace-ring witnesses required")
     return source
 
 def stage(baseline:Path,shard_dir:Path,out:Path)->dict:
