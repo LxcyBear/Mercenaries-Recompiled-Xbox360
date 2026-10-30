@@ -77,12 +77,23 @@ with TemporaryDirectory(prefix="k1e-list-tail-test-") as temp:
     for i in range(64):
         (originals/f"translated_{i:03d}.cpp").write_text("/* empty TU */\n")
     target=originals/m.SOURCE_FILE
-    target.write_text(fixture("\r\n"))
+    # Windows text-mode writes translate LF -> CRLF. Writing an already
+    # CRLF fixture with write_text creates CRCRLF and breaks exact
+    # original-instruction matching. Stage inputs are byte-preserved.
+    fixture_bytes=fixture("\r\n").encode("utf-8")
+    target.write_bytes(fixture_bytes)
+    assert target.read_bytes()==fixture_bytes
+    assert b"\r\r\n" not in target.read_bytes()
     (originals/"translated_runtime.h").write_text("/* generated header */\n")
     hashes={x.name:hashlib.sha256(x.read_bytes()).hexdigest()
             for x in originals.iterdir()}
     record=m.stage(originals,staged)
     assert record["modified_shards"]==[m.SOURCE_FILE]
+    assert (staged/m.SOURCE_FILE).read_bytes().count(b"\r\r\n")==0
+    assert b"\r\n" in (staged/m.SOURCE_FILE).read_bytes()
+    assert (staged/m.SOURCE_FILE).read_bytes().count(b"\r\n")==(
+        (staged/m.SOURCE_FILE).read_bytes().count(b"\n")
+    )
     assert record["unchanged_shards"]==63
     assert record["guest_store_statements_changed"]==0
     assert record["guest_read_statements_changed"]==0
