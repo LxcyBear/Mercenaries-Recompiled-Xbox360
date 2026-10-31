@@ -77,7 +77,7 @@ def main()->None:
         assert updated.count(stage.PROTOTYPE)==1
         with_predeclaration=dummy.replace(
             '#include "translated_runtime.h"',
-            '#include "translated_runtime.h"\n'+stage.PROTOTYPE)
+            '#include "translated_runtime.h"'+nl+stage.PROTOTYPE)
         predeclared,predeclared_edges=stage.patch_tu(
             with_predeclaration,True,new)
         assert predeclared_edges==1
