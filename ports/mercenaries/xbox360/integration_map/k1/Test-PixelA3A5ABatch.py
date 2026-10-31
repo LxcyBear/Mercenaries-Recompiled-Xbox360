@@ -114,17 +114,35 @@ def main()->None:
             "    PUSH32(esp, 0); "+stage.FRONTIER+nl+"}"+nl)
         main_new,main_edges=stage.patch_main(dummy_main)
         assert main_edges==1
-        assert main_new.count("case 0x002A3A5Au:")==1
+        assert main_new.count("case 0x002A3A5Au:")==0
         assert main_new.count(stage.PROTOTYPE)==1
         assert main_new.count(stage.TAG)==1
         assert "sub_002A3A5A();" in main_new
+        assert main_new.count("phase4c_lookup_pack_func")==1
         must_refuse(stage.patch_main,main_new)
-        must_refuse(stage.patch_main,dummy_main.replace(
-            "phase4c_lookup_pack_func","phase4c_lookup_wrong"))
+        # Real K1C host main is a TrueTU bootstrap and need not own
+        # the old Phase6DQ pack lookup. Direct restore must work even
+        # when the lookup function is completely absent.
+        no_lookup=dummy_main.replace(
+            "phase4c_lookup_pack_func","phase4c_lookup_wrong")
+        no_lookup_new,no_lookup_count=stage.patch_main(no_lookup)
+        assert no_lookup_count==1
+        assert "sub_002A3A5A();" in no_lookup_new
+        assert "case 0x002A3A5Au:" not in no_lookup_new
+        # If there is no DIRECT frontier in host main, it remains
+        # byte-identical, and the TrueTU owners alone restore calls.
+        no_host_edge=dummy_main.replace(stage.FRONTIER,"phase4c_direct_frontier(0x002A3A58u);")
+        untouched,num=stage.patch_main(no_host_edge)
+        assert num==0 and untouched==no_host_edge
+        # Duplicate body and internal-only declarations remain refused.
+        must_refuse(stage.patch_main,no_lookup+
+            nl+"static void sub_002A3A5A(void);"+nl)
+        must_refuse(stage.patch_main,no_lookup+
+            nl+"void sub_002A3A5A(void)"+nl+"{"+nl+"}"+nl)
     print("[PIXEL-BUILD] REAL ORIGINAL SOURCE PASS: complete 231-line original A3A5A")
     print("[PIXEL-BUILD] APU PASS: one real poll + five real VP writes routed to existing helpers")
     print("[PIXEL-BUILD] CONTROL PASS: 3 original direct calls, original ret8 and all POP/PUSH preserved")
-    print("[PIXEL-BUILD] WIRING PASS: caller TrueTU/host lookup and exact direct edge; LF/CRLF")
+    print("[PIXEL-BUILD] WIRING PASS: original host/TrueTU direct edges (legacy lookup optional); LF/CRLF")
     print("[PIXEL-BUILD] SAFETY PASS: changed targets, stale stage and orphan lookup rejected")
     print("[PIXEL-BUILD] NO XDK or Xbox invocation")
 
