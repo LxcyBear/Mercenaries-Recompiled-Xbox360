@@ -248,8 +248,19 @@ def stage(a):
         raise ValueError("No exact hardware-observed direct callsites, or broad TU mutations")
     if sum("XPP D52D4 ENTRY" in z.decode("utf-8") for z in altered.values())!=1:
         raise ValueError("D52D4 entry instrumentation missing/duplicate")
-    if sum("/* "+MARKER+";" in z.decode("utf-8") for z in altered.values())!=1:
-        raise ValueError("Unique capabilities backend absent")
+    # Check the two actual emitted tags, not a non-existent ';' variant.
+    # Both are required exactly once, within the same native-input owner TU.
+    native_tag="/* "+MARKER+":"
+    guest_tag="/* "+MARKER+" original retail XPP D52D4 */"
+    marked=[name for name,blob in altered.items()
+            if native_tag in blob.decode("utf-8")]
+    guest_marked=[name for name,blob in altered.items()
+                  if guest_tag in blob.decode("utf-8")]
+    if (marked!=[owner] or guest_marked!=[owner] or
+        altered[owner].decode("utf-8").count(native_tag)!=1 or
+        altered[owner].decode("utf-8").count(guest_tag)!=1):
+        raise ValueError("Capabilities native bridge and original guest body must "
+                         "be unique in the inherited controller owner TrueTU")
     if a.out.resolve()==a.shards.resolve() or a.out_main.resolve()==a.parent_main.resolve():
         raise ValueError("Refusing to overwrite original known-good D5272 stage")
     expected={p.name:altered.get(p.name,p.read_bytes()) for p in files+headers}
@@ -297,6 +308,12 @@ def stage(a):
 
 def self_test():
     assert TARGET==0x002D52D4 and END-TARGET==472
+    native_tag="/* "+MARKER+":"
+    guest_tag="/* "+MARKER+" original retail XPP D52D4 */"
+    assert NATIVE.count(native_tag)==1
+    assert NATIVE.count(guest_tag)==0
+    assert (NATIVE+"\n"+guest_tag).count(native_tag)==1
+    assert (NATIVE+"\n"+guest_tag).count(guest_tag)==1
     declaration="void sub_002D52D4(void)\n{\n"
     body=declaration+" eax = recomp_xinput_get_capabilities(1u,2u);\n}\n"
     assert original_body_dependencies(body)==([],[HELPER])
