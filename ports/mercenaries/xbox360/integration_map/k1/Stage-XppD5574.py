@@ -69,10 +69,35 @@ def direct_calls(src:str,base)->list[str]:
     masked=base.mask_noncode(src)
     return sorted(set(s.upper() for s in DIRECT.findall(masked)))
 
+def normalize_generated_header(src:str,va:int)->str:
+    """Use the source loader's accepted header syntax; preserve the guest body.
+
+    The original generated function may be static and/or __forceinline. These
+    are C/C++ linkage/codegen qualifiers, not guest x86 stack semantics.
+    The new function is a cross-TU direct-call target, so emit one extern-
+    linkable definition, exactly void sub_XXXXXXXX(void), while preserving the
+    entire original body and protecting the source provenance in the report.
+    Unsupported return types, arguments, attributes, or duplicate signatures
+    remain hard stops. Do NOT substitute an inferred jump or ret.
+    """
+    name="sub_%08X"%va
+    header=(r"^\\s*(?:static\\s+)?(?:__forceinline\\s+)?void\\s+"
+            +re.escape(name)+r"\\s*\\(\\s*void\\s*\\)\\s*\\{")
+    match=re.match(header,src)
+    if not match:
+        first=src.splitlines()[0][:140] if src.splitlines() else "<EMPTY>"
+        raise ValueError(
+            "Unsupported original generated signature for %s: %r"%(name,first))
+    canonical="void "+name+"(void)\\n{"
+    normalized=canonical+src[match.end():]
+    if normalized.count("void "+name+"(void)")!=1:
+        raise ValueError("Duplicate source symbol declaration: "+name)
+    return normalized
+
+
 def source_prelude(src:str,va:int,base)->tuple[str,int]:
     name="sub_%08X"%va
-    if not re.match(r"^\s*void\s+"+name+r"\s*\(\s*void\s*\)\s*\{",src):
-        raise ValueError("Original generated function header not void(void): "+name)
+    src=normalize_generated_header(src,va)
     if src.count("RECOMP_TRACE_FUNC(")!=1:
         raise ValueError("Original generated trace count differs: "+name)
     if "#include" in src:
@@ -184,7 +209,7 @@ def add_guest_bodies(owner_text:str,bodies:dict[int,str],base,compiled:dict,
 
 def report_lines(info:dict,generated:dict,closure:list[int])->str:
     lines=[
-        "XPP D5574 — SOURCE/ABI FRONTIER AUDIT, NO RETAIL BYTES COMMITTED",
+        "XPP D5574 - SOURCE/ABI FRONTIER AUDIT, NO RETAIL BYTES COMMITTED",
         "Hardware source: DIRECT_FRONTIER caller=0023A3CE target=002D5574",
         "Hardware last record: ticks=27107567, fault=0, display_calls=0",
         "Preserve working A3A5A path and K1S four-byte ESI correction.",
@@ -318,8 +343,7 @@ def stage(a:argparse.Namespace)->dict:
                 continue
             item=generated[va]
             text=item["source"]
-            if not re.match(r"^\s*void\s+sub_%08X\s*\(\s*void\s*\)\s*\{"%va,text):
-                raise ValueError("Generated function has unsupported return/entry signature: %08X"%va)
+            normalize_generated_header(text,va) # exact source-loader ABI form
             if "loc_%08X: ;"%va not in text:
                 raise ValueError("Generated function has no exact first guest label: %08X"%va)
             selected.add(va)
@@ -441,13 +465,13 @@ def main()->None:
     print("[XPP] Missing child functions: "+",".join(state.get("missing_callees",[])))
     print("[XPP] Full local source/ABI report: "+str(args.report))
     if state["status"]!="SOURCE_CLOSED_STAGED_NO_XDK":
-        print("[XPP] NO XDK BUILD — "+state.get("reason","Review needed"))
+        print("[XPP] NO XDK BUILD - "+state.get("reason","Review needed"))
         raise SystemExit(3)
     print("[XPP] STAGE PASS: original XPP + %d source-backed direct closure bodies"%len(
         state["new_guest_bodies"]))
     print("[XPP] Kept original PIXEL A3A5A, 64 TrueTUs, K1S ESI repair and all VP/MMIO fences")
     print("[XPP] New body owner: "+state["owner"])
-    print("[XPP] READY FOR EXACTLY ONE INCREMENTAL XDK BUILD — no clean")
+    print("[XPP] READY FOR EXACTLY ONE INCREMENTAL XDK BUILD - no clean")
 
 if __name__=="__main__":
     main()
