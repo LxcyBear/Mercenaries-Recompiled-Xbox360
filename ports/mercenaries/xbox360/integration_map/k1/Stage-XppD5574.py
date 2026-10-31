@@ -81,14 +81,14 @@ def normalize_generated_header(src:str,va:int)->str:
     remain hard stops. Do NOT substitute an inferred jump or ret.
     """
     name="sub_%08X"%va
-    header=(r"^\\s*(?:static\\s+)?(?:__forceinline\\s+)?void\\s+"
-            +re.escape(name)+r"\\s*\\(\\s*void\\s*\\)\\s*\\{")
+    header=(r"^\s*(?:static\s+)?(?:__forceinline\s+)?void\s+"
+            +re.escape(name)+r"\s*\(\s*void\s*\)\s*\{")
     match=re.match(header,src)
     if not match:
         first=src.splitlines()[0][:140] if src.splitlines() else "<EMPTY>"
         raise ValueError(
             "Unsupported original generated signature for %s: %r"%(name,first))
-    canonical="void "+name+"(void)\\n{"
+    canonical="void "+name+"(void)\n{"
     normalized=canonical+src[match.end():]
     if normalized.count("void "+name+"(void)")!=1:
         raise ValueError("Duplicate source symbol declaration: "+name)
