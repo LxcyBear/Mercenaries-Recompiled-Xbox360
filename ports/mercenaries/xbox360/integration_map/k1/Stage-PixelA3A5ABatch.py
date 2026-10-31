@@ -201,7 +201,11 @@ def patch_tu(text:str,change_calls:bool,add_body:str|None)->tuple[str,int]:
         # The stage must make the restored function visible in the calling TU.
         include='#include "translated_runtime.h"'
         if include in patched:
-            patched=patched.replace(include,include+nl+PROTOTYPE,1)
+            # A prior forward declaration may already be present in this
+            # TrueTU. Only add it if absent; duplicate full definitions are
+            # checked separately below.
+            if PROTOTYPE not in patched:
+                patched=patched.replace(include,include+nl+PROTOTYPE,1)
         else:
             # Prototypes may already be inherited via another header, but
             # avoid guessing position/order. Caller/TU must declare it.
@@ -222,8 +226,10 @@ def patch_tu(text:str,change_calls:bool,add_body:str|None)->tuple[str,int]:
         # The original function calls three separately compiled TrueTU
         # functions. Explicit external declarations preserve their linkage
         # without changing the shared runtime header / rebuilding 64 TUs.
-        declarations=nl.join("void "+name+"(void);" for name in EXACT_CALLS)
-        patched=patched.replace(include,include+nl+declarations,1)
+        declarations=nl.join("void "+name+"(void);" for name in EXACT_CALLS
+                             if ("void "+name+"(void);") not in patched)
+        if declarations:
+            patched=patched.replace(include,include+nl+declarations,1)
         patched=patched.rstrip("\r\n")+nl+nl+"/* "+TAG+": real generated function */"+nl+add_body+nl
     return patched,(count if change_calls else 0)
 
