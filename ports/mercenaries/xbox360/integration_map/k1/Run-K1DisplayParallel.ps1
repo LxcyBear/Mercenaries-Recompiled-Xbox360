@@ -16,12 +16,12 @@ $generated=Join-Path $repo "build\phase3n_final_abi_scale\runtime\gen"
 $emitter=Join-Path $repo "ports\mercenaries\xbox360\phase4c_native_startup\emit_phase4c_startup_slice.py"
 $xpp=Join-Path $repo "build\phase6_integration_map\xpp_d5574_batch"
 $shards=Join-Path $xpp "translated_shards"
-$host=Join-Path $xpp "main.cpp"
+$generatedHostMain=Join-Path $xpp "main.cpp"
 $manifest=Join-Path $xpp "xpp-d5574-batch-manifest.json"
 $outDir=Join-Path $repo "build\phase6_integration_map\post_xpp_display_recon"
 $out=Join-Path $outDir "display_parallel_audit.txt"
 $excerpts=Join-Path $outDir "xpp_original_source_LOCAL_ONLY.txt"
-foreach($f in @($run,$recon,$xrefs,$ranges,$emitter,$host,$manifest)){
+foreach($f in @($run,$recon,$xrefs,$ranges,$emitter,$generatedHostMain,$manifest)){
     if(-not(Test-Path -LiteralPath $f -PathType Leaf)){
         throw "[DISPLAY-RECON] Missing cached or generated file: $f"
     }
@@ -54,7 +54,7 @@ $params=@("--recon",$recon,
     "--generated",$generated,
     "--emitter",$emitter,
     "--shards",$shards,
-    "--host",$host,
+    "--host",$generatedHostMain,
     "--out",$out,
     "--excerpts",$excerpts)
 & $py -u $run @params
