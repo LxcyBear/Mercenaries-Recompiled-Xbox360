@@ -161,35 +161,33 @@ def validate_apu_bridge(main:str,header:str)->None:
         raise ValueError("Cannot mix K1S guest repair into host main")
 
 def patch_main(main:str)->tuple[str,int]:
+    """Restore only genuine DIRECT_FRONTIER callsites, if any live in main.
+
+    K1C's frozen host source is not guaranteed to contain the original
+    Phase6DQ lookup implementation. The hardware boundary was explicitly
+    DIRECT_FRONTIER, not ICALL. Never invent/rewrite a table or dispatcher.
+    """
     if TAG in main:
         raise ValueError("PIXEL already staged in main")
     nl=nl_for(main)
-    expected="P6DQ-R51-MM173-FRAME-20261029-A"
-    if main.count(expected)<1:
+    if "P6DQ-R51-MM173-FRAME-20261029-A" not in main:
         raise ValueError("Original K1C true-TU main build tag mismatch")
-    anchor=LOOKUP.replace("\n",nl)
-    if main.count(anchor)!=1:
-        raise ValueError("Missing or duplicate existing packed lookup function")
-    if main.count("case 0x002A3A5Au:"):
-        raise ValueError("A3A5A lookup case already exists; reject duplicate")
     if any(int(m.group(1),16)==TARGET for m in DEFINITION.finditer(main)):
         raise ValueError("A3A5A full function already defined in host main")
-    before,after=main.split(anchor,1)
-    if LOOKUP_DEFAULT not in after:
-        raise ValueError("Original packed lookup case/default contract changed")
-    # Global prototype before lookup, and no global rewrite of other dispatch.
-    prefix=PROTOTYPE+nl+"/* "+TAG+" lookup binding */"+nl
-    after=after.replace(LOOKUP_DEFAULT,
-                        "    case 0x002A3A5Au: return sub_002A3A5A;"+nl+LOOKUP_DEFAULT,1)
-    # Put the external declaration before ALL original host code. A direct
-    # frontier call can occur earlier than the pack lookup definition.
-    staged=prefix+before+anchor+after
-    # Rewire the exact original direct-frontier call if main owns that caller.
-    count=staged.count(FRONTIER)
-    staged=staged.replace(FRONTIER,CALL_REPLACEMENT)
-    if staged.count("case 0x002A3A5Au:")!=1:
-        raise ValueError("New guest exact pack lookup not unique")
-    return staged,count
+    if re.search(r"(?m)^[ \\t]*static[ \\t]+void[ \\t]+sub_002A3A5A[ \\t]*\\(",main):
+        raise ValueError("A3A5A host prototype has internal linkage")
+    count=main.count(FRONTIER)
+    if count==0:
+        return main,0
+    # An early global external declaration is visible to every caller in
+    # main.cpp. No lookup case and no artificial display operation.
+    prefix=PROTOTYPE+nl+"/* "+TAG+" exact direct-call binding */"+nl
+    if PROTOTYPE in main:
+        prefix="/* "+TAG+" exact direct-call binding */"+nl
+    output=prefix+main.replace(FRONTIER,CALL_REPLACEMENT)
+    if output.count(FRONTIER)!=0 or output.count(CALL_REPLACEMENT)<count:
+        raise ValueError("Original direct-call frontier rewrite incomplete")
+    return output,count
 
 def patch_tu(text:str,change_calls:bool,add_body:str|None)->tuple[str,int]:
     if TAG in text or "PIXEL A3A5A ENTRY" in text:
@@ -379,6 +377,8 @@ def stage(args:argparse.Namespace)->dict:
         "original_local_generated_sha":ORIGINAL_SHA,
         "new_guest_function_owner":owner,
         "caller_main_sites":main_edges,
+        "main_changed":staged_main!=main,
+        "lookup_policy":"ORIGINAL_K1C_LOOKUP_UNCHANGED_DIRECT_CALL_ONLY",
         "caller_tu_sites":caller_files,
         "direct_callee_owners":known,
         "patched_true_tu_files":sorted(updated),
