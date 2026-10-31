@@ -20,7 +20,7 @@ $private=Join-Path $workspacePath "private"
 $upload=Join-Path $workspacePath "upload"
 $copiedXbe=Join-Path $private "default.xbe"
 $analysis=Join-Path $private "default_analysis.json"
-New-Item -ItemType Directory -Path @($workspacePath,$private,$split,$upload) -Force|Out-Null
+New-Item -ItemType Directory -Path @($workspacePath,$private,$upload) -Force | Out-Null
 if(-not(Test-Path -LiteralPath (Join-Path $tool "tools\split\__main__.py") -PathType Leaf)){
     if(Test-Path -LiteralPath $tool){throw "[XBR] Existing tool directory is invalid: $tool"}
     Write-Host "[XBR] Clone xboxrecomp OUTSIDE the Merc360 Git repository"
@@ -110,7 +110,9 @@ try {
         throw "[XBR] ABI analyzer produced no JSON"
     }
 }
-finally{Pop-Location}
+finally {
+    Pop-Location
+}
 Write-Host "[XBR] 5/5 Build compact graph/ABI report FROM SAVED JSON (NO split/rescan)"
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\..\..\..\.."))
 $pixelShards=Join-Path $repo "build\phase6_integration_map\pixel_a3a5a_batch\translated_shards"
