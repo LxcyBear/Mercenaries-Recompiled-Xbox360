@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$Xbe,
     [string]$Workspace=(Join-Path $env:LOCALAPPDATA "Merc360-Xboxrecomp-Recon"),
-    [switch]$NoInstall
+    [switch]$NoInstall,
+    [switch]$ResumeOnly
 )
 $ErrorActionPreference="Stop"
 $expected="AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
@@ -76,6 +77,9 @@ try {
         Write-Host "[XBR] Saved functions: $($details.total_functions), previous disassembly retained"
         Write-Host "[XBR] No repeat of your 663-second disassembly."
     }else{
+        if($ResumeOnly){
+            throw "[XBR] ResumeOnly requested but Stage 2 cache is missing or not verified. No expensive rescan performed."
+        }
         Write-Host "[XBR] 2/5 Original code-section function discovery (can take a while)"
         & $py -m tools.disasm $copiedXbe --analysis-json $analysis --extra-sections $sectionNames -v
         if($LASTEXITCODE -ne 0){throw "[XBR] XBE disassembly failed"}
