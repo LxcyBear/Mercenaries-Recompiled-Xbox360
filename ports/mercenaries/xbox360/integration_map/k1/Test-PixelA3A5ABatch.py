@@ -72,6 +72,19 @@ def main()->None:
                ' /* call 0x002A3A5A */\n}\n').replace("\n",nl)
         updated,edge=stage.patch_tu(dummy,True,new)
         assert edge==1
+        # Regression for the exact 2026-10-30 failure: a new direct
+        # caller's forward declaration is never a duplicate BODY.
+        assert updated.count(stage.PROTOTYPE)==1
+        with_predeclaration=dummy.replace(
+            '#include "translated_runtime.h"',
+            '#include "translated_runtime.h"\n'+stage.PROTOTYPE)
+        predeclared,predeclared_edges=stage.patch_tu(
+            with_predeclaration,True,new)
+        assert predeclared_edges==1
+        assert predeclared.count("PIXEL A3A5A ENTRY")==1
+        existing_definition=dummy+(
+            nl+"void sub_002A3A5A(void)"+nl+"{"+nl+"}"+nl)
+        must_refuse(stage.patch_tu,existing_definition,True,new)
         assert "sub_002A3A5A(); /* call 0x002A3A5A */" in updated
         assert updated.count("PIXEL A3A5A ENTRY")==1
         assert updated.count(stage.TAG)==1
