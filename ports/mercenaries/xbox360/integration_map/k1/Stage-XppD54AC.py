@@ -162,7 +162,7 @@ def parse_original(source,reader):
         raise ValueError("No exact generated entry instrumentation site")
     emitted="\n".join(output)+"\n"
     if len(re.findall(SHAPE,reader.mask_noncode(emitted)))!=1:
-        raise ValueError("Original capabilities guest return ABI changed")
+        raise ValueError("Original XInputGetState guest return ABI changed")
     return emitted
 
 def rewrite(text,is_host=False):
@@ -201,16 +201,16 @@ def stage(a):
         Path(parent.get("staged_directory","MISSING")).resolve()!=a.shards.resolve() or
         Path(parent.get("staged_main","MISSING")).resolve()!=a.parent_main.resolve() or
         sha(a.parent_main.read_bytes())!=parent.get("new_main_sha")):
-        raise ValueError("Previously proven D5272 parent stage/manifest changed")
+        raise ValueError("Previously proven D52D4 parent stage/manifest changed")
     files=sorted(p for p in a.shards.iterdir() if SHARD.fullmatch(p.name))
     headers=sorted(a.shards.glob("*.h"))
     if len(files)!=64 or not (a.shards/"translated_runtime.h").is_file():
-        raise ValueError("D5272 source must have exactly 64 TrueTUs")
+        raise ValueError("D52D4 source must have exactly 64 TrueTUs")
     for p in files+headers:
         expected=parent.get("new_owner_hashes",{}).get(
             p.name,parent.get("original_owner_hashes",{}).get(p.name))
         if not expected or sha(p.read_bytes())!=expected:
-            raise ValueError("D5272 parent source SHA drift: "+p.name)
+            raise ValueError("D52D4 parent source SHA drift: "+p.name)
     before={p.name:p.read_text(encoding="utf-8") for p in files}
     host=a.parent_main.read_text(encoding="utf-8")
     owner=parent.get("parent_input_owner")
