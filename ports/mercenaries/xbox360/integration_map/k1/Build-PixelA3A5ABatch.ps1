@@ -74,10 +74,25 @@ if(-not(Test-Path -LiteralPath (Join-Path $targetShards "translated_runtime.h") 
     throw "[PIXEL-BUILD] Inherited runtime header missing"
 }
 $mainText=Get-Content -LiteralPath $targetMain -Raw -Encoding UTF8
-if(([regex]::Matches($mainText,"case 0x002A3A5Au: return sub_002A3A5A;")).Count -ne 1 -or
-   ([regex]::Matches($mainText,"PIXEL-A3A5A-DIRECT-APU-20261030")).Count -ne 1 -or
-   $mainText -notmatch "P6DQ-R51-MM173-FRAME-20261029-A"){
-    throw "[PIXEL-BUILD] Exact native pack lookup or inherited startup tag missing"
+$baseMainText=Get-Content -LiteralPath $sourceMain -Raw -Encoding UTF8
+if($mainText -notmatch "P6DQ-R51-MM173-FRAME-20261029-A" -or
+   $m.lookup_policy -ne "ORIGINAL_K1C_LOOKUP_UNCHANGED_DIRECT_CALL_ONLY" -or
+   ([regex]::Matches($mainText,"case 0x002A3A5Au:")).Count -ne
+     ([regex]::Matches($baseMainText,"case 0x002A3A5Au:")).Count){
+    throw "[PIXEL-BUILD] K1C original lookup or inherited startup tag changed"
+}
+$expectedMainChanged=([int]$m.caller_main_sites -gt 0)
+if([bool]$m.main_changed -ne $expectedMainChanged){
+    throw "[PIXEL-BUILD] Host main source change does not match direct caller evidence"
+}
+$mainMark=([regex]::Matches($mainText,"PIXEL-A3A5A-DIRECT-APU-20261030")).Count
+if($mainMark -ne [int]$expectedMainChanged){
+    throw "[PIXEL-BUILD] Missing or duplicate host direct-edge marker"
+}
+if(-not $expectedMainChanged -and
+   (Get-FileHash -LiteralPath $sourceMain -Algorithm SHA256).Hash -ne
+   (Get-FileHash -LiteralPath $targetMain -Algorithm SHA256).Hash){
+    throw "[PIXEL-BUILD] K1C main unexpectedly changed despite zero direct callsites"
 }
 $callerSites=[int]$m.caller_main_sites
 foreach($prop in @($m.caller_tu_sites.PSObject.Properties)){
@@ -96,7 +111,7 @@ if((Get-FileHash $originalHeader -Algorithm SHA256).Hash -ne
    (Get-FileHash $stagedHeader -Algorithm SHA256).Hash){
     throw "[PIXEL-BUILD] Runtime header must remain byte-identical"
 }
-Write-Host "[PIXEL-BUILD] PREFLIGHT PASS: original translated guest function + exact lookup + $callerSites real caller edge(s)"
+Write-Host "[PIXEL-BUILD] PREFLIGHT PASS: original translated guest function + $callerSites real direct edge(s); original lookup untouched"
 Write-Host ("[PIXEL-BUILD] Changed TrueTUs: "+($changed -join ", "))
 Write-Host "[PIXEL-BUILD] K1S ESI fix, 64 TrueTUs, headers, MMIO/VP hard fences preserved"
 Write-Host "[PIXEL-BUILD] display_calls NOT injected or fabricated"
