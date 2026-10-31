@@ -121,7 +121,7 @@ Write-Host "[XPP] K1S, 64 TUs, A3A5A audio initialization and MMIO/VP fences pre
 Write-Host "[XPP] Original guest display_calls is still 0, no fabricated pixels"
 Write-Host "[XPP] Source/ABI report: $report"
 if($PreflightOnly){
-    Write-Host "[XPP] PREFLIGHT ONLY — no Xbox build"
+    Write-Host "[XPP] PREFLIGHT ONLY - no Xbox build"
     exit 0
 }
 $buildFolder=Join-Path $target "xdk"
@@ -141,7 +141,7 @@ $buildArgs=@{
     ShadowBuildRoot=$FastBuildRoot
     SkipClean=$true
 }
-Write-Host "[XPP] Incremental VS2017 Release Xbox 360 build — SKIP CLEAN"
+Write-Host "[XPP] Incremental VS2017 Release Xbox 360 build - SKIP CLEAN"
 & $builder @buildArgs
 if($LASTEXITCODE -ne 0){throw "[XPP] Xbox compiler/linker failed; see xdk-build.log"}
 if(-not(Test-Path -LiteralPath $output -PathType Leaf)){
