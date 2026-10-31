@@ -1637,3 +1637,48 @@ Xbox proof: XPP D52D4 ENTRY, XPP XINPUT capabilities return/status,
 and next original guest frontier; real display_calls and framebuffer
 must still be measured, never faked. No D52D4 Xbox PASS yet.
 Original guest files and local-only excerpts stay private.
+
+
+## D54AC: real Xbox 360 controller state, original 22-byte layout (2026-10-31)
+
+Hardware XEX D52D4 successfully executed retail XInputGetCapabilities with
+handle=1 port=0 status=00000000 and returned to a new clean direct
+frontier at 002D54AC, tick=27,107,620, fault=0. display_calls=0.
+
+Read-only original-source audit identifies 0x002D54AC (XPP, 115
+XBE bytes, generated in private recomp_0013.c, SHA256
+48e4ccc7ccc0ae3bfa852d584996f6f1ed034d0491f05433722054038f42a0e2)
+and the sole observed host helper name recomp_xinput_get_state.
+The original generated ABI must pass exact local SHA, two stack argument
+reads, EAX return and original ret8 before the stage can build.
+
+The public original Mercenaries recomp_manual.c documents 22-byte
+XBOX_INPUT_STATE guest writes, NOT 24-byte sizeof(native struct).
+The public Xbox compat input backend maps DPad/Start/Back/sticks as
+digital low byte and Xbox360 A/B/X/Y/RB/LB/left/right triggers into
+8 original Xbox analog button bytes; four signed stick axes follow.
+Stage-XppD54AC.py uses real Xbox360 XInputGetState, returning native
+status, and serializes exactly five DWORDs and one WORD to the guest
+buffer (22 bytes; no 2-byte padding corruption), preserving original
+packet number. Do not memcpy native XINPUT_STATE into original Xbox
+guest buffer. It never fabricates controller buttons or display calls.
+
+New preflight-first runner:
+
+    cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
+    git pull --ff-only
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-XppD54AC.ps1" -PreflightOnly
+
+Preflight stages from the proven xpp_d52d4_batch in an independent
+xpp_d54ac_batch directory. It checks parent hashes, inherited 64-TU
+stage, original retail generated SHA and EAX/stack contract, exact
+direct-fence patch, unique native helper, 22-byte guest write and all
+existing unknown MMIO/VP hard fences. No XDK build/deploy until local
+preflight PASS. Local-only original source excerpts must stay private.
+
+Once preflight PASSES, the same command WITHOUT -PreflightOnly performs
+one incremental Xbox360 VS2017 build with SkipClean true:
+build\phase6_integration_map\xpp_d54ac_batch\xdk\Merc-XPP-D54AC.xex
+Xbox hardware proof will require XPP D54AC ENTRY, genuine
+XPP XINPUT state status, next direct frontier and real display_calls
+/ framebuffer fields; no fake presentation.
