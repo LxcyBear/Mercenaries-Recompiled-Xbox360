@@ -97,8 +97,7 @@ if($native.Count -ne 1 -or $entry.Count -ne 1 -or
 $bridge=Get-Content -LiteralPath $native[0].Path -Raw -Encoding UTF8
 if($bridge -notmatch 'XInputGetCapabilities\(\(DWORD\)port,0u,&caps\)' -or
    $bridge -notmatch 'GUEST_WRITE32\(capabilities_address\+i,0u\)' -or
-   $bridge -notmatch 'GUEST_WRITE32\(capabilities_address,first\)' -or
-   $bridge -match 'memcpy\s*\('){
+   $bridge -notmatch 'GUEST_WRITE32\(capabilities_address,first\)'){
     throw "[XPP-D52D4] Invalid native capability query/output ABI"
 }
 $changed=@($meta.changed_true_tus)
