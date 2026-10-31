@@ -170,8 +170,10 @@ def patch_main(main:str)->tuple[str,int]:
     anchor=LOOKUP.replace("\n",nl)
     if main.count(anchor)!=1:
         raise ValueError("Missing or duplicate existing packed lookup function")
-    if main.count("case 0x002A3A5Au:") or main.count("sub_002A3A5A(void);"):
-        raise ValueError("A3A5A lookup/prototype already exists; reject duplicate")
+    if main.count("case 0x002A3A5Au:"):
+        raise ValueError("A3A5A lookup case already exists; reject duplicate")
+    if any(int(m.group(1),16)==TARGET for m in DEFINITION.finditer(main)):
+        raise ValueError("A3A5A full function already defined in host main")
     before,after=main.split(anchor,1)
     if LOOKUP_DEFAULT not in after:
         raise ValueError("Original packed lookup case/default contract changed")
@@ -205,8 +207,15 @@ def patch_tu(text:str,change_calls:bool,add_body:str|None)->tuple[str,int]:
             # avoid guessing position/order. Caller/TU must declare it.
             raise ValueError("Caller TrueTU lacks recognized runtime include")
     if add_body is not None:
-        if NAME in patched and ("void "+NAME+"(void)" in patched):
-            raise ValueError("New owner already declares/defines A3A5A")
+        # Restoring the direct call above may have just inserted an
+        # external forward declaration. Only a full function BODY is a
+        # duplicate; never mistake a declaration for a definition.
+        existing_bodies=[
+            m for m in DEFINITION.finditer(patched)
+            if int(m.group(1),16)==TARGET
+        ]
+        if existing_bodies:
+            raise ValueError("New owner already defines A3A5A")
         include='#include "translated_runtime.h"'
         if include not in patched:
             raise ValueError("Guest function owner has no TrueTU runtime include")
@@ -306,8 +315,9 @@ def stage(args:argparse.Namespace)->dict:
     # the number of compilation units; pick smallest caller, stable ties.
     owner=min(caller_files,key=lambda k:(-caller_files[k],len(original_text[k]),k)
               ) if caller_files else "translated_063.cpp"
-    if "sub_002A3A5A(void)" in original_text[owner]:
-        raise ValueError("A3A5A original owner contains a duplicate declaration")
+    if any(int(m.group(1),16)==TARGET
+           for m in DEFINITION.finditer(original_text[owner])):
+        raise ValueError("A3A5A original owner already has a complete function body")
     # Header stays byte-identical: only changed caller TUs plus one new body
     # and a small central main lookup case incur incremental recompilation.
     updated={}
