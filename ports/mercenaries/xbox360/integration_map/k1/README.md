@@ -1436,47 +1436,45 @@ preflight checks explicit manifest direct-only policy and asserts
 there is no new lookup case. Compile still needs to pass on the
 user's cached source.
 
-## XBE-WIDE PREDICTIVE FRONTIER RECON using xboxrecomp (analysis-only)
+## XBE-WIDE PREDICTIVE FRONTIER RECON (xboxrecomp, analysis-only)
 
-`Run-XboxrecompRecon.ps1` integrates the public `sp00nznet/xboxrecomp`
-analysis/split workflow without introducing its Windows host runtime
-or changing the working Merc360 Xbox 360 TrueTU/XDK pipeline.
+Use `Run-XboxrecompRecon.ps1` to analyze the user's locally extracted,
+SHA-verified Mercenaries `default.xbe` with `sp00nznet/xboxrecomp`,
+without changing the native Xbox 360 recompilation build. The verified
+XBE SHA256 is `AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7`.
 
-Run from the Merc360 repository root, passing the location of your
-**own locally extracted retail Mercenaries** `default.xbe`:
+The original 2026-10-30 run successfully completed whole-XBE function
+discovery in **663.28 seconds**, then stopped because ABI analysis requires
+`tools/func_id/output/identified_functions.json` (not previously run).
+The current runner fixes the missing pipeline step and skips the
+splitter's **forced full rescan**. It generates a semantically equivalent
+predictive function/ABI/call-graph manifest from **saved** disassembler JSON.
+The original binary and annotated full-assembly listings are not in the ZIP.
+
+From the Merc360 repo root:
 
 ~~~powershell
 git pull --ff-only
 if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
-$xbe = 'C:\FULL\PATH\TO\YOUR\default.xbe'
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Run-XboxrecompRecon.ps1' -Xbe $xbe
+$xbe = 'C:\Users\jorda\OneDrive\Desktop\My Xbox\My Projects\Mercenaries - Xbox 360\default.xbe'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+    '.\ports\mercenaries\xbox360\integration_map\k1\Run-XboxrecompRecon.ps1' `
+    -Xbe $xbe -ResumeOnly
 ~~~
 
-The script verifies SHA-256
-`AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7`
-before analysis. It clones xboxrecomp under `%LOCALAPPDATA%` (outside
-Merc360 Git), installs the Python Capstone module if necessary,
-and performs xbe_parser, disasm, abi_analysis, and split against
-the exact user-owned XBE. It scans the XBE's XMV/XACTENG/D3D/XGRPH/
-DSOUND/WMADEC/XPP code sections, NOT just `.text`.
+`-ResumeOnly` verifies existing `.disasm_cache.json` and related output
+files. If not present or inconsistent with the exact retail XBE, it fails
+instead of repeating the long scan. Omit the switch for a first run.
 
-Tool output remains private in
-`%LOCALAPPDATA%\Merc360-Xboxrecomp-Recon`. Generated original
-annotated assembly files are never automatically uploaded or committed.
-The shareable report is a ZIP:
+The pipeline runs XBE parsing, uses cached full executable-section
+disassembly (including XPP), runs `tools.func_id`, then `tools.abi_analysis`
+with explicit paths, and calls `Pack-XboxrecompRecon.py` to produce
+`%LOCALAPPDATA%\Merc360-Xboxrecomp-Recon\Merc360_xboxrecomp_static_recon.zip`.
+This contains full function metadata, original address ranges and static
+call graph, ABI estimates, a priority XPP `002D5574` focus, and comparison
+with original PIXEL batch TrueTUs. No game file bytes or source are packaged.
 
-`%LOCALAPPDATA%\Merc360-Xboxrecomp-Recon\Merc360_xboxrecomp_static_recon.zip`
-
-The ZIP contains the full `manifest.json` function metadata/call graph,
-function census CSV cross-checked with successful Pixel A3A5A TrueTU
-definitions, a focused ABI/graph JSON for the latest XPP boundary
-`002D5574`, and a short text summary. No XBE, assembled executable
-bytes, or generated raw guest source is placed inside the ZIP.
-
-Send the ZIP to ChatGPT for cross-analysis. This is source-level
-predictive triage: detection confidence, direct callees and the
-ABI/stack metadata may be inferred rather than certain. Indirect
-dispatch, native Xenos/VP hardware initialization and the first
-guest display call still require actual Xbox hardware testing.
-
-**No XDK build or Xbox deployment** is performed by this recon step.
+The analyzer's boundaries, indirect graph and ABI information are
+heuristic. The report is a **prediction tool**, not evidence the guest
+can display pixels or complete hardware initialization. Never bypass
+hard MMIO fences or fabricate a display counter.
