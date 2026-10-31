@@ -170,6 +170,8 @@ def audit(a):
             signatures["XInputOpen"]["length"],signatures["XInputOpen"]["stack_pop"]),
         "[TGP-XBR] The original XBE D5272 has size=%d; independent signature scan is still required."%
             entries[0x002D5272]["size"],
+        "[TGP-XBR] NEW D52D4=472 bytes: no near-length XPP symbol in this SDK's 5849 database.",
+        "[TGP-XBR] TGP HLE has APIs without signatures; missing name is NOT missing code.",
         "",
     ]
     if actual is None:
@@ -188,10 +190,17 @@ def audit(a):
         lines.append("[TGP-XBR] %s section=%s size=%d end=%s old_compile=%s"%
             (x["address"],x["section"],x["size"],x["end"],x["translated_in_old_pixel_batch"]))
         lines.append("    Calls: "+", ".join(x["static_callees"][:12]))
-        lines.append("    Closest XDK5849 signature sizes (NOT proven IDs): "+
-            "; ".join("%s=%d (delta %+d,ret=%s)"%
-                (s["name"],s["length"],s["delta"],s["stack_pop"])
-                for s in x["size_nearby_signatures"]))
+        near=[v for v in x["size_nearby_signatures"] if abs(v["delta"])<=16]
+        if near:
+            lines.append("    UNVERIFIED near-length signature candidates (within 16 bytes): "+
+                "; ".join("%s=%d (delta %+d,ret=%s)"%
+                    (v["name"],v["length"],v["delta"],v["stack_pop"]) for v in near))
+        else:
+            lines.append("    NO XDK5849 signature within 16 bytes; unknown identity.")
+        lines.append("    Closest known signature by size (NOT identity): "+
+            ("; ".join("%s=%d (delta %+d)"%
+                (v["name"],v["length"],v["delta"])
+                for v in x["size_nearby_signatures"][:2])))
     lines.append("")
     lines.append("[TGP-XBR] XDK5849 object layout REFERENCES ONLY; must verify against Mercenaries:")
     for k,v in info["xdk_layout"].items():
