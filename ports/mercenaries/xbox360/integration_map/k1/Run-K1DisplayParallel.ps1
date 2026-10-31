@@ -64,3 +64,28 @@ Get-Content -LiteralPath $out -Encoding UTF8 -TotalCount 80
 Write-Host "[DISPLAY-RECON] Upload summary: $out"
 Write-Host "[DISPLAY-RECON] Upload local XPP source only for ABI review: $excerpts"
 Write-Host "[DISPLAY-RECON] DONE. No XDK build, no source patch, no fabricated display calls."
+
+# Follow up the broad dual-track report with exact ORIGINAL D3D code anatomy
+# of the TWO CONFIRMED kernel-ordinal-3 callsites. Both compiled already.
+$avScript=Join-Path $PSScriptRoot "Audit-K1AvSetCallers.py"
+$avReport=Join-Path $outDir "avset_compiled_callers.txt"
+$avPrivate=Join-Path $outDir "avset_original_D3D_source_LOCAL_ONLY.txt"
+if(-not(Test-Path -LiteralPath $avScript -PathType Leaf)){
+    throw "[AVSET] New exact caller source-audit script missing"
+}
+& $py -m py_compile $avScript
+if($LASTEXITCODE -ne 0){throw "[AVSET] Python syntax refused"}
+$avArgs=@("--xrefs",$xrefs,
+    "--ranges",$ranges,
+    "--generated",$generated,
+    "--emitter",$emitter,
+    "--shards",$shards,
+    "--report",$avReport,
+    "--private",$avPrivate)
+& $py -u $avScript @avArgs
+if($LASTEXITCODE -ne 0){throw "[AVSET] Original compiled D3D caller source audit refused"}
+Write-Host "[AVSET] PRECISE ORIGINAL KERNEL CALLSITE SOURCE AUDIT COMPLETE"
+Write-Host "[AVSET] Upload metadata: $avReport"
+Write-Host "[AVSET] Upload LOCAL-ONLY D3D source excerpt: $avPrivate"
+Write-Host "[AVSET] No XDK build, no guessed AvSetDisplayMode calls, no graphics patches."
+
