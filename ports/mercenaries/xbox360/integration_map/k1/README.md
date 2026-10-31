@@ -1290,3 +1290,45 @@ set and tested together on Xbox. If the live target is mid-function
 or source-missing, do not invent a return or add a lookup stub.
 Do not run another Xbox build on guesswork, and never force
 `display_calls` to increase without a real display operation.
+
+## PIXEL OFFLINE PLAN PASS — A3A5A exact body; APU helper source proof next (2026-10-30)
+
+User's `Plan-PixelBatch.ps1` executed **PASS** on K1S TrueTUs:
+
+- `0x002A3A5A`: exact original generated function, not a mid-function
+  target. `label_present=True` is normal for a function start.
+- Its only two unresolved lexical symbols are
+  `recomp_apu_read32` and `recomp_apu_write32`.
+- Four total new source candidates across live DSOUND/presentation
+  closure: **one exact original body**, three source/support gaps.
+  The 17/20 already-packed presentation-root nodes do NOT imply
+  three simple functions away from visible pixels.
+- K1S hard fence policy unchanged; no new XDK build yet.
+
+**Do not** guess that `recomp_apu_*` and `phase6ch_apu_*`
+are semantically interchangeable merely because names suggest
+APU. The maintained Rocket `route_all_dsound_accesses`
+rewrites `GUEST_READ/WRITE*` macros, not necessarily the
+`recomp_apu_*` helpers in this source. A blind name-only
+rename could corrupt guest reads or bypass hardware policy.
+
+To make one batched compile decision, run the fast no-XDK
+`Prove-PixelApu.ps1` on the existing planner JSON. It
+extracts the exact original 002A3A5A C body, the declared
+APU helper signatures/definitions from current runtime
+sources, and summarizes all 4 candidate types. It does
+NOT patch or publish original game assets.
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Prove-PixelApu.ps1'
+```
+
+Output: `build\phase6_integration_map\pixel_batch\pixel_apu_contracts.txt`.
+
+After checking its actual helper contracts, batch source-correct
+translation/dispatch coverage into K1S's 64 TrueTU build once,
+alongside any support-clean present-root additions. Keep unknown
+VP/MMIO hard fences and only count true guest AvSetDisplayMode
+or presentation requests. No one-function-per-build loop.
