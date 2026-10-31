@@ -79,6 +79,20 @@ def main():
     refused(x.source_prelude,bridge.replace(
         "recomp_xinput_init_devices();","recomp_unsupported();"),x.TARGET,TinyBase)
     assert x.sha_bytes(bridge.encode("utf-8"))!=x.XINPUT_D5574_SOURCE_SHA256
+    # Real native pad enumeration must live in exactly one owner TU and must
+    # never be replaced by a no-op or fabricated connected mask.
+    owner_test=x.HEADER+"\n\nvoid sub_0023A3CE(void)\n{\n}\n"
+    bridge_owner=x.inject_xinput_bridge(owner_test,{"translated_000.cpp":owner_test})
+    assert bridge_owner.count(x.XINPUT_BRIDGE_MARKER)==1
+    assert bridge_owner.count("XInputGetState(")==1
+    assert "for (port=0u; port<4u; ++port)" in bridge_owner
+    assert "connected_mask|=(1u<<port)" in bridge_owner
+    assert bridge_owner.count("static void recomp_xinput_init_devices(void)")==1
+    assert "XPP D5574 ENTRY" not in bridge_owner
+    assert x.HEADER in bridge_owner
+    refused(x.inject_xinput_bridge,bridge_owner,{"translated_000.cpp":owner_test})
+    prior_impl=owner_test+"\nvoid recomp_xinput_init_devices(void)\n{\n}\n"
+    refused(x.inject_xinput_bridge,owner_test,{"translated_000.cpp":prior_impl})
     body,count=x.source_prelude(sample,x.TARGET,TinyBase)
     assert count==1
     assert "XPP D5574 ENTRY" in body
@@ -124,6 +138,7 @@ def main():
         # No old hard fence relaxed, and no synthetic display call.
         assert "display_calls" not in owner
         assert "phase6dq_note_vp_unknown_read" not in owner
+    print("[XPP] SYNTHETIC PASS: native XDK 4-port input init, no duplicate definitions or synthetic devices")
     print("[XPP] SYNTHETIC PASS: no-label XInput bridge, exact stack cleanup, negative shape checks")
     print("[XPP] SYNTHETIC PASS: static/forceinline original header normalized, guest body preserved")
     print("[XPP] SYNTHETIC PASS: true direct caller, exact XPP entry and unchanged ret")
