@@ -156,7 +156,8 @@ def report(args:argparse.Namespace)->str:
         "","## APU helper callsite counts in exact original A3A5A",
     ])
     for name in HELPERS:
-        lines.append(f"{name}: {len(re.findall(r'\b'+name+r'\s*\(',mask_noncode(body)))} callsites")
+        call_count=len(re.findall(r"\b"+re.escape(name)+r"\s*\(",mask_noncode(body)))
+        lines.append(f"{name}: {call_count} callsites")
     lines.extend([
         f"Direct translated callees in A3A5A: {', '.join(sorted(set(CALL_RE.findall(mask_noncode(body))))) or '(none)'}",
         "","## Existing runtime helper definitions and original source slices"
