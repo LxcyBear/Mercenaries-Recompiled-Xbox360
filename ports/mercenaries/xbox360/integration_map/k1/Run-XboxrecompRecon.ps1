@@ -27,7 +27,7 @@ if(-not(Test-Path -LiteralPath (Join-Path $tool "tools\split\__main__.py") -Path
     & $git clone --depth 1 https://github.com/sp00nznet/xboxrecomp.git $tool
     if($LASTEXITCODE -ne 0){throw "[XBR] Git clone failed"}
 }
-& $py -c "import capstone" 2>$null
+& $py -c "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('capstone') else 1)"
 if($LASTEXITCODE -ne 0){
     if($NoInstall){throw "[XBR] Python Capstone unavailable; run: python -m pip install capstone"}
     & $py -m pip install capstone
@@ -60,14 +60,21 @@ $functions=@($data.function_list)
 if($functions.Count -lt 1000){throw "[XBR] Function count too small for retail Mercenaries"}
 $byAddress=@{}
 foreach($f in $functions){$byAddress[([string]$f.address).ToUpperInvariant()]=$f}
-if(-not $byAddress.ContainsKey("0X002D5574")){throw "[XBR] Exact live XPP target 002D5574 missing; inspect section coverage at $manifest"}
-$target=$byAddress["0X002D5574"]
-if([string]$target.section -ne "XPP"){throw "[XBR] XPP target mapped to unexpected section: $($target.section)"}
+$target=$null
+if($byAddress.ContainsKey("0X002D5574")){$target=$byAddress["0X002D5574"]}
+if($null -eq $target){
+    Write-Warning "[XBR] 002D5574 not detected as an exact function start; preserving full report for boundary review."
+}elseif([string]$target.section -ne "XPP"){
+    Write-Warning "[XBR] 002D5574 reported in section $($target.section), expected XPP. Cross-checking mapping."
+}
 $focus=@("0X002D5574","0X002A3A5A","0X0023A3CE","0X00280C39","0X0028E700","0X00290895","0X0029C8BE","0X0027DB5C")
-foreach($callee in @($target.calls_to)){
-    if($focus.Count -ge 30){break}
-    $key=([string]$callee).ToUpperInvariant()
-    if($focus -notcontains $key){$focus+= $key}
+if($null -ne $target){
+    foreach($callee in @($target.calls_to)){
+        if($null -eq $callee){continue}
+        if($focus.Count -ge 30){break}
+        $key=([string]$callee).ToUpperInvariant()
+        if($focus -notcontains $key){$focus+= $key}
+    }
 }
 $priority=@()
 foreach($key in $focus){if($byAddress.ContainsKey($key)){$priority+= $byAddress[$key]}}
@@ -110,6 +117,20 @@ $lines.Add("Functions with ABI guesses: $($data.with_abi)")
 $lines.Add("Sections: "+(@($data.sections) -join ", "))
 $lines.Add("Known PIXEL TrueTUs: $($shardFiles.Count), compiled function bodies: $($compiled.Count)")
 $lines.Add("Known Xbox stop: DIRECT_FRONTIER 0023A3CE -> 002D5574; ticks=27107567; fault=0")
+$lines.Add("Xboxrecomp exact target 002D5574 discovered: "+($null -ne $target))
+if($null -eq $target){
+    $address=[uint32]0x002D5574
+    $enclosing=@($functions | Where-Object {
+        try{
+            $lo=[Convert]::ToUInt32(([string]$_.address).Substring(2),16)
+            $hi=[Convert]::ToUInt32(([string]$_.end).Substring(2),16)
+            return ($lo -le $address -and $address -lt $hi)
+        }catch{return $false}
+    })
+    foreach($fn in $enclosing){
+        $lines.Add("Possible containing function: $($fn.address) .. $($fn.end) section=$($fn.section) method=$($fn.detection_method)")
+    }
+}
 $lines.Add("Guest display_calls=0; never synthesize a display call")
 $lines.Add("Static graph is not proven runtime coverage. Validate function/ABI confidence.")
 $lines.Add("")
@@ -132,7 +153,9 @@ $zip=Join-Path $workspacePath "Merc360_xboxrecomp_static_recon.zip"
 if(Test-Path -LiteralPath $zip){Remove-Item -LiteralPath $zip -Force}
 Compress-Archive -LiteralPath @($summary,$focusJson,$csv,$manifestCopy) -DestinationPath $zip -CompressionLevel Optimal -Force
 Write-Host "[XBR] ===================================================="
-Write-Host "[XBR] COMPLETE: $($functions.Count) functions, original XPP target $($target.name)"
+$targetName="NOT DETECTED (see summary)"
+if($null -ne $target){$targetName=[string]$target.name}
+Write-Host "[XBR] COMPLETE: $($functions.Count) functions, original XPP target $targetName"
 Write-Host "[XBR] Upload THIS file to ChatGPT: $zip"
 Write-Host "[XBR] Original byte-exact assembly remains PRIVATE: $split\asm"
 Write-Host "[XBR] No build, no Xbox run, no game binary in ZIP"
