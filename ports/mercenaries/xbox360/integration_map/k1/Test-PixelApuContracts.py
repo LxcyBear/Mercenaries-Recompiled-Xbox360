@@ -59,7 +59,9 @@ with tempfile.TemporaryDirectory(prefix="pixel_apu_") as td:
     assert "recomp_apu_write32: 1 callsites" in result
     assert "phase6ch_apu_read32" in result
     assert "phase6ch_apu_write32" in result
-    assert "No XDK" not in result or True
+    assert "Guest display_calls=0" in result
+    assert "NO XDK BUILD." in result
+    assert "A candidate count of 4" in result
     args.plan.write_text("{}",encoding="utf-8")
     try:
         probe.report(args)
