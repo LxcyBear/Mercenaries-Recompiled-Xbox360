@@ -1515,3 +1515,42 @@ display_parallel_audit.txt is metadata-only.
 xpp_original_source_LOCAL_ONLY.txt has private original XPP source for
 local ABI review. Do not commit that code or retail game data to GitHub.
 No function is automatically staged and no guest display call is faked.
+
+
+## TGP482 XboxXBERecomp independent sidecar (2026-10-30)
+
+Upstream: https://github.com/TGP482/XboxXBERecomp (MIT).
+This is a SEPARATE original-Xbox XBE static recompilation engine.
+Its generated runtime is for Windows x64/Direct3D12, not Xbox 360.
+Use its function discovery, XDK 5849 signature database, and ABI results
+as an independent source of evidence; never swap its outputs into our XEX.
+
+Run from the Mercenaries git root with Windows PowerShell:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Run-TGP482SecondOpinion.ps1"
+
+The default run clones the upstream SDK outside Mercenaries git and compares
+its XDK5849 signature lengths/layout against the existing cached metadata-only
+16,662-function xboxrecomp ZIP. It does not compile, read retail XBE bytes,
+run Xbox, or write any game code.
+
+Optional exact increasing analysis tiers (same command, add one option):
+- -BuildTools: tools-only upstream xbe_symbols/xbe_recomp CMake build.
+- -ScanXbe: above, plus exact XDK signature scan against locally verified retail XBE.
+- -RunRecompiler: above, plus full independent code discovery and source generation.
+- -UpdateSdk: explicitly fast-forward the cloned upstream SDK.
+- -Generator "Visual Studio 18 2026": override CMake generator if needed.
+- -Xbe "C:\path\default.xbe": override cached private original retail source.
+
+All user-private output:
+%LOCALAPPDATA%\Merc360-TGP482-XBERecomp\reports\tgp482_second_opinion.txt
+(and .json). Upload those METADATA REPORTS only. Keep XBE, emitted C++,
+generated mapping and signature config local and out of GitHub. The known
+original retail SHA256 is strictly checked before any real XBE scan.
+
+New hardware (xbWatson 2026-10-31): 27,107,602 translated ticks;
+XPP D5272 and real XInputOpen port=0 handle=1 PASS. New genuine
+DIRECT_FRONTIER 0023A3CE -> 002D52D4, XPP length 472, original recorded
+direct children 002D6B3E, 002D7620, 002D79B6. Equal/near XDK
+signature lengths are NOT sufficient proof of matching identities.
+Also trace genuine D3DDevice_Swap/presentation, not just kernel ordinal 3.
