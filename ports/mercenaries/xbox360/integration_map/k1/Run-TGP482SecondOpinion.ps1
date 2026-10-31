@@ -6,6 +6,7 @@ param(
     [switch]$BuildTools,
     [switch]$ScanXbe,
     [switch]$RunRecompiler,
+    [switch]$ReportOnly,
     [switch]$UpdateSdk,
     [string]$Generator=""
 )
@@ -81,6 +82,32 @@ $compareArgs=@("--sdk",$sdk,"--recon-zip",$ReconZip,
     "--report",$report,"--json-out",$reportJson)
 & $python -u $auditScript @compareArgs
 if($LASTEXITCODE -ne 0){throw "[TGP-XBR] XDK5849 signature/metadata audit failed"}
+if($ReportOnly){
+    if($ScanXbe -or $RunRecompiler -or $BuildTools){
+        throw "[TGP-XBR] -ReportOnly is exclusive; it never builds or scans"
+    }
+    $sourceXbe=[IO.Path]::GetFullPath($Xbe)
+    if(-not(Test-Path -LiteralPath $sourceXbe -PathType Leaf)){
+        throw "[TGP-XBR] Missing previously scanned retail XBE, pass -Xbe"
+    }
+    $sourceHash=(Get-FileHash -LiteralPath $sourceXbe -Algorithm SHA256).Hash.ToUpperInvariant()
+    if($sourceHash -ne $shaExpected){
+        throw "[TGP-XBR] Wrong retail XBE SHA; refusing cached scan attribution"
+    }
+    if(-not(Test-Path -LiteralPath $config -PathType Leaf)){
+        throw "[TGP-XBR] No saved scanner configuration. Run -ScanXbe first"
+    }
+    $scanScript=Join-Path $PSScriptRoot "Summarize-TGP482Scan.py"
+    if(-not(Test-Path -LiteralPath $scanScript -PathType Leaf)){
+        throw "[TGP-XBR] Missing scan report packager; update Mercenaries repository"
+    }
+    $scanTxt=Join-Path $reports "tgp482_signature_scan.txt"
+    $scanCsv=Join-Path $reports "tgp482_signature_symbols.csv"
+    & $python -u $scanScript --config $config --old-zip $ReconZip --out-txt $scanTxt --out-csv $scanCsv
+    if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Cached scanner report failed"}
+    Write-Host "[TGP-XBR] CACHE REUSE PASS: no compile, no retail rescan. Share: $scanTxt"
+    exit 0
+}
 if($RunRecompiler){$ScanXbe=$true; $BuildTools=$true}
 if($ScanXbe){$BuildTools=$true}
 if(-not $BuildTools){
