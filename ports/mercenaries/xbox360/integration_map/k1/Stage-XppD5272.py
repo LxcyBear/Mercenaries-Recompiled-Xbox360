@@ -192,6 +192,22 @@ def stage(args):
     if not entry or entry["file"]!=ORIGIN:
         raise ValueError("XPP 002D5272 user-local original generated body missing")
     src=entry["source"]
+    # Save original source LOCALLY before strict semantic checks. If a new
+    # generated function shape is unfamiliar, the user still gets actionable
+    # private evidence without weakening any build/ABI gate.
+    args.private.parent.mkdir(parents=True,exist_ok=True)
+    args.private.write_text(
+        "PRIVATE ORIGINAL GENERATED 002D5272 SOURCE (DO NOT COMMIT TO GITHUB)\n\n"
+        +src,encoding="utf-8")
+    args.audit.parent.mkdir(parents=True,exist_ok=True)
+    args.audit.write_text(
+        "[XPP-D5272] PRELIMINARY ORIGINAL SOURCE CAPTURE\n"
+        "Hardware DIRECT 0023A3CE -> 002D5272 at ticks=27107599\n"
+        "Original source SHA256="+sha_text(src)+"\n"
+        "Source="+entry["file"]+"\n"
+        "Expected retail XInputOpen helper signature=uint32_t(port)\n"
+        "Build is BLOCKED unless exact guest ABI and call closure pass.\n",
+        encoding="utf-8")
     body,masked=normalize_original(src,original)
     def pattern(va):
         return re.compile(r"(?m)^\s*(?:static\s+)?void\s+sub_%08X"%va
