@@ -69,34 +69,71 @@ def direct_calls(src:str,base)->list[str]:
     masked=base.mask_noncode(src)
     return sorted(set(s.upper() for s in DIRECT.findall(masked)))
 
-def normalize_generated_header(src:str,va:int)->str:
-    """Use the source loader's accepted header syntax; preserve the guest body.
+# Exact generated source body from the user-local, SHA-verified retail translation.
+# This 5-byte XPP function is an XInput bridge, not a loc_* body.
+# Require both the body fingerprint and instruction-level source shape before
+# allowing label-less entry handling. No original game bytes are committed.
+XINPUT_D5574_SOURCE_SHA256="308c05f616e32e6bf3c054df00493183039391d9e7707916a4956a0ac8f1f020"
 
-    The original generated function may be static and/or __forceinline. These
-    are C/C++ linkage/codegen qualifiers, not guest x86 stack semantics.
-    The new function is a cross-TU direct-call target, so emit one extern-
-    linkable definition, exactly void sub_XXXXXXXX(void), while preserving the
-    entire original body and protecting the source provenance in the report.
-    Unsupported return types, arguments, attributes, or duplicate signatures
-    remain hard stops. Do NOT substitute an inferred jump or ret.
+
+def normalize_generated_header(src:str,va:int)->str:
+    """Normalize only a source-proven void(void) definition for cross-TU linkage.
+
+    The extractor may include a leading documentation comment and blank
+    lines. Preserve that prefix, the trace and all original body instructions.
     """
     name="sub_%08X"%va
-    header=(r"^\s*(?:static\s+)?(?:__forceinline\s+)?void\s+"
-            +re.escape(name)+r"\s*\(\s*void\s*\)\s*\{")
-    match=re.match(header,src)
-    if not match:
-        first=src.splitlines()[0][:140] if src.splitlines() else "<EMPTY>"
+    header=(r"(?m)^[ \t]*(?:static[ \t]+)?(?:__forceinline[ \t]+)?"
+            +r"void[ \t]+"+re.escape(name)
+            +r"[ \t]*\([ \t]*void[ \t]*\)[ \t]*\{")
+    matches=list(re.finditer(header,src))
+    if len(matches)!=1:
+        preview=" / ".join(line.strip()[:120] for line in src.splitlines()
+                         if line.strip())[:300]
         raise ValueError(
-            "Unsupported original generated signature for %s: %r"%(name,first))
+            "Unsupported/ambiguous original function header for %s: %r"%
+            (name,preview))
+    match=matches[0]
+    prefix=src[:match.start()]
+    if re.sub(r"/\*.*?\*/|//[^\n]*","",prefix,flags=re.S).strip():
+        raise ValueError("Unexpected executable prefix before "+name)
     canonical="void "+name+"(void)\n{"
-    normalized=canonical+src[match.end():]
-    if normalized.count("void "+name+"(void)")!=1:
-        raise ValueError("Duplicate source symbol declaration: "+name)
-    return normalized
+    return prefix+canonical+src[match.end():]
+
+
+def is_exact_xinput_bridge(src:str,va:int,base)->bool:
+    """Recognize only the observed 5-byte XInput direct-call bridge body."""
+    if va!=TARGET:
+        return False
+    normalized=normalize_generated_header(src,va)
+    masked=base.mask_noncode(normalized)
+    shape=(r"\s*void[ \t]+sub_002D5574[ \t]*\([ \t]*void[ \t]*\)"
+           r"[ \t]*\{\s*"
+           r"RECOMP_TRACE_FUNC\(\s*0x002D5574u\s*\);\s*"
+           r"recomp_xinput_init_devices\(\s*\);\s*"
+           r"esp[ \t]*\+=[ \t]*12u;\s*return;\s*\}\s*")
+    return re.fullmatch(shape,masked) is not None
+
+
+def xpp_entry_probe()->list[str]:
+    return [
+        "    {",
+        "        static uint32_t xpp_d5574_entries=0u;",
+        "        ++xpp_d5574_entries;",
+        "        if (xpp_d5574_entries<=4u)",
+        "        {",
+        "            char xpp_d5574_line[192];",
+        '            sprintf(xpp_d5574_line,"XPP D5574 ENTRY n=%u esp=%08X ecx=%08X",',
+        "               (unsigned)xpp_d5574_entries,(unsigned)esp,(unsigned)ecx);",
+        "            trace(xpp_d5574_line);",
+        "        }",
+        "    }",
+    ]
 
 
 def source_prelude(src:str,va:int,base)->tuple[str,int]:
     name="sub_%08X"%va
+    xinput_bridge=is_exact_xinput_bridge(src,va,base)
     src=normalize_generated_header(src,va)
     if src.count("RECOMP_TRACE_FUNC(")!=1:
         raise ValueError("Original generated trace count differs: "+name)
@@ -107,6 +144,14 @@ def source_prelude(src:str,va:int,base)->tuple[str,int]:
     entry=0
     for line in src.splitlines():
         out.append(line.replace("__debugbreak()","PHASE4C_DEBUGBREAK()"))
+        if xinput_bridge and re.fullmatch(
+                r"\s*RECOMP_TRACE_FUNC\(\s*0x002D5574u\s*\);\s*",line):
+            # The actual original source has no loc_002D5574 label.
+            # Instrument before executing the source-proven XInput helper.
+            count+=1
+            entry+=1
+            out.append("    PHASE4C_BUDGET_TICK(0x002D5574u);")
+            out.extend(xpp_entry_probe())
         label=LABEL.fullmatch(line)
         if label:
             addr=int(label.group(2),16)
@@ -115,24 +160,18 @@ def source_prelude(src:str,va:int,base)->tuple[str,int]:
             if addr==va:
                 entry+=1
                 if va==TARGET:
-                    out.extend([
-                        "    {",
-                        "        static uint32_t xpp_d5574_entries=0u;",
-                        "        ++xpp_d5574_entries;",
-                        "        if (xpp_d5574_entries<=4u)",
-                        "        {",
-                        "            char xpp_d5574_line[192];",
-                        '            sprintf(xpp_d5574_line,"XPP D5574 ENTRY n=%u esp=%08X ecx=%08X",',
-                        "               (unsigned)xpp_d5574_entries,(unsigned)esp,(unsigned)ecx);",
-                        "            trace(xpp_d5574_line);",
-                        "        }",
-                        "    }",
-                    ])
+                    out.extend(xpp_entry_probe())
     if entry!=1 or count<1:
-        raise ValueError("Original exact entry label missing or duplicate: "+name)
-    if RET.findall(src) and len(RET.findall(src))!=len(RET.findall("\n".join(out))):
+        raise ValueError("No single source-proven trace/label entry for "+name)
+    result="\n".join(out)+"\n"
+    if RET.findall(src) and len(RET.findall(src))!=len(RET.findall(result)):
         raise ValueError("Guest stack-return bytes changed unexpectedly")
-    return "\n".join(out)+"\n",count
+    if xinput_bridge and not re.search(
+            r"recomp_xinput_init_devices\(\s*\);\s*"
+            r"esp\s*\+=\s*12u;\s*return;",result):
+        raise ValueError("XPP XInput bridge lost original +12 guest ESP cleanup")
+    return result,count
+
 
 def patch_direct(text:str,decls:list[str],include_tag:bool)->tuple[str,int]:
     n=text.count(FENCE)
@@ -344,7 +383,16 @@ def stage(a:argparse.Namespace)->dict:
             item=generated[va]
             text=item["source"]
             normalize_generated_header(text,va) # exact source-loader ABI form
-            if "loc_%08X: ;"%va not in text:
+            is_bridge=is_exact_xinput_bridge(text,va,base)
+            if is_bridge:
+                if (sha_bytes(text.encode("utf-8"))!=XINPUT_D5574_SOURCE_SHA256
+                    or item["file"]!="recomp_0013.c"
+                    or start["end"]!=0x002D5579):
+                    raise ValueError(
+                        "XPP XInput bridge fingerprint/5-byte range changed; "
+                        "source review required")
+                info["entry_kind"]="XINPUT_D5574_TRACE_ENTRY_NO_LABEL"
+            elif "loc_%08X: ;"%va not in text:
                 raise ValueError("Generated function has no exact first guest label: %08X"%va)
             selected.add(va)
             deps=direct_calls(text,base)
