@@ -179,6 +179,17 @@ if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $config -PathType Leaf)){
     throw "[TGP-XBR] Signature scan failed; check actual XDK library build/signature compatibility"
 }
 Write-Host "[TGP-XBR] Signature config saved PRIVATE: $config"
+# Share only the scanner's generic function names and addresses, never the
+# private TOML config or original retail XBE.
+$scanSummarizer=Join-Path $PSScriptRoot "Summarize-TGP482Scan.py"
+if(-not(Test-Path -LiteralPath $scanSummarizer -PathType Leaf)){
+    throw "[TGP-XBR] Missing scan reporter - pull the latest Mercenaries branch"
+}
+$scanReport=Join-Path $reports "tgp482_signature_scan.txt"
+$scanCsv=Join-Path $reports "tgp482_signature_symbols.csv"
+& $python -u $scanSummarizer --config $config --old-zip $ReconZip --out-txt $scanReport --out-csv $scanCsv
+if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Scanner symbol report failed; private TOML remains saved"}
+Write-Host "[TGP-XBR] SHARE THIS NEW REPORT: $scanReport"
 if(-not $RunRecompiler){
     Write-Host "[TGP-XBR] For independent function inventory: add -RunRecompiler"
     exit 0
