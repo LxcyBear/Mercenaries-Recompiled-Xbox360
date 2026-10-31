@@ -95,7 +95,7 @@ def original_body_dependencies(masked):
     # declaration, not the whole translated C function: the declaration
     # "void sub_002D52D4(void)" is NOT a recursive guest call.
     entry=list(re.finditer(
-        r"(?m)^[ \\t]*void[ \\t]+sub_002D52D4[ \\t]*\\([ \\t]*void[ \\t]*\\)\\s*\\{",
+        r"(?m)^[ \t]*void[ \t]+sub_002D52D4[ \t]*\([ \t]*void[ \t]*\)\s*\{",
         masked))
     if len(entry)!=1:
         raise ValueError("Original D52D4 masked function declaration missing or ambiguous")
@@ -297,12 +297,12 @@ def stage(a):
 
 def self_test():
     assert TARGET==0x002D52D4 and END-TARGET==472
-    declaration="void sub_002D52D4(void)\\n{\\n"
-    body=declaration+" eax = recomp_xinput_get_capabilities(1u,2u);\\n}\\n"
+    declaration="void sub_002D52D4(void)\n{\n"
+    body=declaration+" eax = recomp_xinput_get_capabilities(1u,2u);\n}\n"
     assert original_body_dependencies(body)==([],[HELPER])
-    recursive=declaration+" sub_002D52D4();\\n}\\n"
+    recursive=declaration+" sub_002D52D4();\n}\n"
     assert original_body_dependencies(recursive)==(["002D52D4"],[])
-    other=declaration+" sub_002D6B3E();\\n}\\n"
+    other=declaration+" sub_002D6B3E();\n}\n"
     assert original_body_dependencies(other)==(["002D6B3E"],[])
     assert "XInputGetCapabilities((DWORD)port,0u,&caps)" in NATIVE
     assert "i<28u;i+=4u" in NATIVE
