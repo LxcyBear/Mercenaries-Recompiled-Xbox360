@@ -15,7 +15,7 @@ import zipfile
 from pathlib import Path
 
 EXPECTED_SHA="AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
-FOCUS=(0x002D52D4,0x002D6B3E,0x002D7620,0x002D79B6,
+FOCUS=(0x002D52D4,0x002D54AC,0x002D6B3E,0x002D7620,0x002D79B6,
        0x0023A3CE,0x002D5272,0x0028BDB0,0x0020FAE0,0x0010C790)
 FUNC=re.compile(r"(?m)^[ \t]*(?:static[ \t]+)?(?:__forceinline[ \t]+)?void[ \t]+sub_([0-9A-Fa-f]{8})[ \t]*\([ \t]*void[ \t]*\)\s*\{")
 DIRECT=re.compile(r"\bsub_([0-9A-Fa-f]{8})\s*\(")
@@ -70,11 +70,11 @@ def audit(args):
     stage,status=staged_sources(args.stage_shards)
     lines=[
         "[K1-XPP] ====================================================",
-        "[K1-XPP] ORIGINAL XPP D52D4 SOURCE/ABI - NO XDK OR XBOX RUN",
+        "[K1-XPP] ORIGINAL XPP D52D4 -> D54AC SOURCE/ABI - NO XDK OR XBOX RUN",
         "[K1-XPP] ====================================================",
         "[K1-XPP] Source function count=%d; original xboxrecomp count=%d"%(len(sources),len(originals)),
         "[K1-XPP] Stage: "+status,
-        "[K1-XPP] HARDWARE LAST: DIRECT 0023A3CE -> 002D52D4 tick=27,107,602",
+        "[K1-XPP] HARDWARE LAST: D52D4 ENTRY + native GetCapabilities SUCCESS; next DIRECT=002D54AC ticks=27,107,620 fault=0",
         "[K1-XPP] REAL Swap=0028BDB0 scanned by TGP482; guest display_calls=0",
         "[K1-XPP] Cached metadata is not evidence of a function executing on Xbox.",
         ""
@@ -112,13 +112,19 @@ def audit(args):
                 (len(callers),",".join(hx(v) for v in children if v is not None) or "NONE"),
             "    actual_generated_callees="+(",".join(hx(v) for v in source_calls) or "NONE"),
             "    original_host_helpers="+(",".join(helper_names[:30]) or "NONE"),
-            "    source_last_120_chars="+repr(body[-120:] if body else ""),
+            "    original_source_tail=LOCAL_ONLY_SOURCE_EXCERPT",
             ""
         ])
-        if at in FOCUS[:4]:
+        if at in FOCUS[:5]:
             private.extend(["== ORIGINAL "+hx(at)+" "+
                             (source["file"] if source else "NO_BODY")+" ==",
                             body if body else "MISSING SOURCE BODY",""])
+    if 0x002D54AC not in originals:
+        lines.append("[K1-XPP] NEXT DIRECT 002D54AC not an exact original function start; HARD BLOCK for ABI classification.")
+    elif 0x002D54AC not in sources:
+        lines.append("[K1-XPP] NEXT DIRECT 002D54AC original generated body missing; do not guess source.")
+    else:
+        lines.append("[K1-XPP] NEXT DIRECT 002D54AC original generated body found; inspect private function/ABI before stage.")
     if 0x002D52D4 not in sources:
         lines.append("[K1-XPP] HARD BLOCK: D52D4 ORIGINAL BODY MISSING; never synthesize it.")
     elif stage is None or 0x002D52D4 not in stage:
@@ -149,7 +155,7 @@ def main():
         assert FUNC.findall("void sub_002D52D4(void)\n{\n}\n")==["002D52D4"]
         assert DIRECT.findall("sub_002D6B3E();")==["002D6B3E"]
         assert HELPER.findall("recomp_guest_read32(esp);")==["recomp_guest_read32"]
-        assert len(FOCUS)==9 and len(set(FOCUS))==len(FOCUS)
+        assert len(FOCUS)==10 and len(set(FOCUS))==len(FOCUS)
         print("[K1-XPP] SELFTEST PASS")
         return
     for key in ("recon","ranges","generated","emitter","out","excerpts"):
