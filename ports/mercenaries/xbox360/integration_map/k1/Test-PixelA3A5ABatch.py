@@ -81,6 +81,7 @@ def main()->None:
         predeclared,predeclared_edges=stage.patch_tu(
             with_predeclaration,True,new)
         assert predeclared_edges==1
+        assert predeclared.count(stage.PROTOTYPE)==1
         assert predeclared.count("PIXEL A3A5A ENTRY")==1
         existing_definition=dummy+(
             nl+"void sub_002A3A5A(void)"+nl+"{"+nl+"}"+nl)
