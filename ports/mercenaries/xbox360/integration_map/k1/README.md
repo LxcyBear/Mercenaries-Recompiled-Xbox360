@@ -1435,3 +1435,48 @@ main.cpp when direct callers live only in TrueTUs. The PowerShell
 preflight checks explicit manifest direct-only policy and asserts
 there is no new lookup case. Compile still needs to pass on the
 user's cached source.
+
+## XBE-WIDE PREDICTIVE FRONTIER RECON using xboxrecomp (analysis-only)
+
+`Run-XboxrecompRecon.ps1` integrates the public `sp00nznet/xboxrecomp`
+analysis/split workflow without introducing its Windows host runtime
+or changing the working Merc360 Xbox 360 TrueTU/XDK pipeline.
+
+Run from the Merc360 repository root, passing the location of your
+**own locally extracted retail Mercenaries** `default.xbe`:
+
+~~~powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed' }
+$xbe = 'C:\FULL\PATH\TO\YOUR\default.xbe'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\ports\mercenaries\xbox360\integration_map\k1\Run-XboxrecompRecon.ps1' -Xbe $xbe
+~~~
+
+The script verifies SHA-256
+`AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7`
+before analysis. It clones xboxrecomp under `%LOCALAPPDATA%` (outside
+Merc360 Git), installs the Python Capstone module if necessary,
+and performs xbe_parser, disasm, abi_analysis, and split against
+the exact user-owned XBE. It scans the XBE's XMV/XACTENG/D3D/XGRPH/
+DSOUND/WMADEC/XPP code sections, NOT just `.text`.
+
+Tool output remains private in
+`%LOCALAPPDATA%\Merc360-Xboxrecomp-Recon`. Generated original
+annotated assembly files are never automatically uploaded or committed.
+The shareable report is a ZIP:
+
+`%LOCALAPPDATA%\Merc360-Xboxrecomp-Recon\Merc360_xboxrecomp_static_recon.zip`
+
+The ZIP contains the full `manifest.json` function metadata/call graph,
+function census CSV cross-checked with successful Pixel A3A5A TrueTU
+definitions, a focused ABI/graph JSON for the latest XPP boundary
+`002D5574`, and a short text summary. No XBE, assembled executable
+bytes, or generated raw guest source is placed inside the ZIP.
+
+Send the ZIP to ChatGPT for cross-analysis. This is source-level
+predictive triage: detection confidence, direct callees and the
+ABI/stack metadata may be inferred rather than certain. Indirect
+dispatch, native Xenos/VP hardware initialization and the first
+guest display call still require actual Xbox hardware testing.
+
+**No XDK build or Xbox deployment** is performed by this recon step.
