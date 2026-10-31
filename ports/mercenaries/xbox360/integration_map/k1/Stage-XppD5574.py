@@ -156,11 +156,16 @@ def add_guest_bodies(owner_text:str,bodies:dict[int,str],base,compiled:dict,
     prototypes=set(names)
     for va,src in bodies.items():
         for name in direct_calls(src,base):
-            if name.upper() in compiled:
-                where,static=compiled[name.upper()]
+            if name in compiled:
+                where,static=compiled[name]
                 if static and where!=owner_name:
                     raise ValueError("Cross-TU callee has internal linkage: "+name)
-            prototypes.add(name.lower()[:4]+name[4:]) # 'sub_' + original VA spelling
+                # A local compiled definition is already visible above the
+                # appended original bodies, and may be static. Adding an
+                # unconditional extern would break C++ linkage.
+                if where==owner_name:
+                    continue
+            prototypes.add("sub_"+name[4:])
     # Every original generated direct call must have a real C++ declaration.
     declarations=[]
     for name in sorted(prototypes):
@@ -296,6 +301,8 @@ def stage(a:argparse.Namespace)->dict:
         provided.update(base.support_symbols(
             (baseline/"translated_runtime.h").read_text(encoding="utf-8")))
         provided.update(base.STANDARD_CALLS)
+        # Existing maintained XPP/math paths use both normal C math calls.
+        provided.update(("sin","cos"))
         queue=collections.deque([TARGET])
         selected=set()
         missing=set()
@@ -326,11 +333,8 @@ def stage(a:argparse.Namespace)->dict:
                 if call.startswith("sub_") and re.fullmatch(r"sub_[0-9A-Fa-f]{8}",call):
                     sub=int(call[4:],16)
                     if call.upper() in compiled:
-                        where,static=compiled[call.upper()]
-                        if static and where not in caller_files:
-                            # Actual owner is not known until after closure,
-                            # check again after selecting owner below.
-                            pass
+                        # Visibility/linkage is checked once the original
+                        # direct-caller owner is selected (below).
                         continue
                     if sub not in selected:
                         queue.append(sub)
