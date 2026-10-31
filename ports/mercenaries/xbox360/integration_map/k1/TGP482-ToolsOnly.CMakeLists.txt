@@ -23,6 +23,21 @@ add_executable(xbe_recomp ${XBE_RECOMP_SOURCES})
 target_include_directories(xbe_recomp PRIVATE "${SDK_DIR}/runtime" "${SDK_DIR}/tools/recomp")
 target_compile_definitions(xbe_recomp PRIVATE _CRT_SECURE_NO_WARNINGS)
 target_link_libraries(xbe_recomp PRIVATE Zydis tomlplusplus::tomlplusplus)
+# The upstream recompiler has GCC/Clang __attribute__((format(printf,...)))
+# diagnostics on four source-local formatting helpers. cl.exe (MSVC) cannot
+# parse this annotation; those annotations are NOT runtime behavior.
+# Keep upstream source unchanged and suppress ONLY this diagnostic annotation
+# for MSVC by forced-including a header generated in the private CMake build.
+if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(TGP_MSVC_COMPAT "${CMAKE_CURRENT_BINARY_DIR}/tgp482-msvc-compat.h")
+    file(WRITE "${TGP_MSVC_COMPAT}"
+        "#if defined(_MSC_VER) && !defined(__clang__)\n"
+        "#ifndef __attribute__\n"
+        "#define __attribute__(x)\n"
+        "#endif\n"
+        "#endif\n")
+    target_compile_options(xbe_recomp PRIVATE "/FI${TGP_MSVC_COMPAT}")
+endif()
 add_executable(xbe_symbols "${SDK_DIR}/tools/symbols/main.cpp")
 target_include_directories(xbe_symbols PRIVATE "${SDK_DIR}/runtime")
 target_compile_definitions(xbe_symbols PRIVATE _CRT_SECURE_NO_WARNINGS)
