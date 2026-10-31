@@ -141,16 +141,28 @@ if(-not [string]::IsNullOrWhiteSpace($Generator)){
 Write-Host "[TGP-XBR] CMake: ONLY upstream xbe_symbols and xbe_recomp (no D3D12/SDL)"
 & $cmake @configArgs
 if($LASTEXITCODE -ne 0){throw "[TGP-XBR] CMake configuration failed; specify a supported -Generator"}
-& $cmake --build $cmakeBuild --config Release --target xbe_symbols xbe_recomp --parallel 4
-if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Tools-only build failed; Xbox runtime untouched"}
+# A signature scan needs ONLY xbe_symbols. Do not block a useful real-XBE
+# signature scan on an unrelated code-generator compatibility issue.
+$buildTargets=@("xbe_symbols")
+$needRecompiler=($RunRecompiler -or (-not $ScanXbe))
+if($needRecompiler){$buildTargets+=@("xbe_recomp")}
+Write-Host "[TGP-XBR] Build targets: $($buildTargets -join ', ')"
+& $cmake --build $cmakeBuild --config Release --target @buildTargets --parallel 4
+if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Analysis-tools build failed; Xbox runtime untouched"}
 $symbols=@(Get-ChildItem -LiteralPath $cmakeBuild -Filter "xbe_symbols.exe" -Recurse -File |
     Sort-Object FullName -Descending | Select-Object -First 1)
-$recompiler=@(Get-ChildItem -LiteralPath $cmakeBuild -Filter "xbe_recomp.exe" -Recurse -File |
-    Sort-Object FullName -Descending | Select-Object -First 1)
-if($symbols.Count -ne 1 -or $recompiler.Count -ne 1){
-    throw "[TGP-XBR] Compiled CLIs not found after build"
+if($symbols.Count -ne 1){throw "[TGP-XBR] xbe_symbols executable missing after build"}
+$recompiler=@()
+if($needRecompiler){
+    $recompiler=@(Get-ChildItem -LiteralPath $cmakeBuild -Filter "xbe_recomp.exe" -Recurse -File |
+        Sort-Object FullName -Descending | Select-Object -First 1)
+    if($recompiler.Count -ne 1){throw "[TGP-XBR] xbe_recomp executable missing after build"}
 }
-Write-Host "[TGP-XBR] TOOLS PASS: both independent analysis CLIs compiled"
+if($needRecompiler){
+    Write-Host "[TGP-XBR] TOOLS PASS: both independent analysis CLIs compiled"
+}else{
+    Write-Host "[TGP-XBR] SYMBOL SCANNER PASS: xbe_symbols ready; xbe_recomp build intentionally skipped"
+}
 if(-not $ScanXbe){
     Write-Host "[TGP-XBR] To scan verified retail XBE signatures: add -ScanXbe"
     exit 0
