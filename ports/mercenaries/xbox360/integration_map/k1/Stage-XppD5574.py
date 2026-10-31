@@ -85,7 +85,7 @@ def normalize_generated_header(src:str,va:int)->str:
     name="sub_%08X"%va
     header=(r"(?m)^[ \t]*(?:static[ \t]+)?(?:__forceinline[ \t]+)?"
             +r"void[ \t]+"+re.escape(name)
-            +r"[ \t]*\([ \t]*void[ \t]*\)[ \t]*\{")
+            +r"[ \t]*\([ \t]*void[ \t]*\)\s*\{")
     matches=list(re.finditer(header,src))
     if len(matches)!=1:
         preview=" / ".join(line.strip()[:120] for line in src.splitlines()
