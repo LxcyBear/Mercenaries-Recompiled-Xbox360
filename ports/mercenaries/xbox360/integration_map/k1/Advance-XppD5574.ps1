@@ -64,8 +64,8 @@ Write-Host "[XPP] Scan REAL ORIGINAL local XPP functions, direct-call closure an
 & $python -u $stage @args1
 if($LASTEXITCODE -ne 0){
     if(Test-Path -LiteralPath $report -PathType Leaf){
-        Write-Host "[XPP] SOURCE AUDIT REQUIRES REVIEW (first 17 lines):"
-        Get-Content -LiteralPath $report -TotalCount 17
+        Write-Host "[XPP] SOURCE AUDIT REQUIRES REVIEW (first 85 lines; includes original signature):"
+        Get-Content -LiteralPath $report -Encoding UTF8 -TotalCount 85
         Write-Host "[XPP] Upload this local audit report: $report"
     }
     throw "[XPP] Source closure/ABI not proven, so NO XDK build was attempted"
