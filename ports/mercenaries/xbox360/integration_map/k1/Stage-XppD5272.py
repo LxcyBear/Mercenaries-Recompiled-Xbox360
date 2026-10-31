@@ -221,9 +221,9 @@ def stage(args):
     compiled={}
     for file_name,text in previous.items():
         for m in DEFINITION.finditer(text):
-            compiled[int(m.group(2),16)]=(file_name,bool(m.group(1)))
+            compiled[int(m.group(2)[4:],16)]=(file_name,bool(m.group(1)))
     for m in DEFINITION.finditer(host):
-        compiled[int(m.group(2),16)]=("main.cpp",bool(m.group(1)))
+        compiled[int(m.group(2)[4:],16)]=("main.cpp",bool(m.group(1)))
     deps=sorted({int(m.group(1)[4:],16) for m in SUBCALL.finditer(masked)})
     unresolved=[a for a in deps if a not in compiled]
     cross_static=[a for a in deps if a in compiled and compiled[a][1]
@@ -352,6 +352,20 @@ def synthetic():
     assert "XInputGetState((DWORD)port,&state)!=ERROR_SUCCESS" in NATIVE
     assert "port >= 4u" in NATIVE and "return port+1u;" in NATIVE
     assert "return 0u;" in NATIVE
+    # Generated and TrueTU definition names include literal sub_ prefix.
+    # Regression for hardware user's: invalid literal for int() base 16:
+    # 'sub_00018FD0'. Both compiled-index creation and SUBCALL use a
+    # consistent hexadecimal address only after removing this prefix.
+    synthetic_defs=(HEADER+"\n"
+        "static void sub_00018FD0(void) {}\n"
+        "void sub_002D563F(void) {}\n")
+    indexed={int(m.group(2)[4:],16):bool(m.group(1))
+             for m in DEFINITION.finditer(synthetic_defs)}
+    assert indexed=={0x00018FD0:True,0x002D563F:False}
+    synthetic_calls="sub_00018FD0(); sub_002D563F();"
+    assert sorted({int(m.group(1)[4:],16)
+                   for m in SUBCALL.finditer(synthetic_calls)})==[
+                       0x00018FD0,0x002D563F]
     for nl in ("\n","\r\n"):
         input_src=(HEADER+nl+"void caller(void)"+nl+
                    "{ "+FENCE+" }"+nl)
