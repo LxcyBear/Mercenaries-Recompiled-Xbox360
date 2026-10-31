@@ -42,6 +42,19 @@ def main()->None:
     original=original_from_proof(proof)
     assert original.startswith("void sub_002A3A5A(void)")
     assert original.rstrip().endswith("}")
+    # Exact regression for the real generated file's reported 0 definitions:
+    # generated function names retain a lowercase 'sub_' prefix. Confirm
+    # upper/lowercase normalization on the actual 231-line source, not only
+    # a synthetic one-line C function.
+    extracted=stage.find_body(
+        "/* uncompromised original generated source */\n"
+        +original+"\nvoid sub_002A0000(void)\n{\n}\n",
+        stage.NAME)
+    assert extracted.strip()==original.strip()
+    assert extracted.count("loc_002A3A5A: ;")==1
+    must_refuse(stage.find_body,
+        "void sub_002A0000(void)\n{\n}\n",stage.NAME)
+    must_refuse(stage.find_body,original+"\n"+original,stage.NAME)
     for nl in ("\n","\r\n"):
         new,metric=stage.budgeted_body(original,nl)
         assert "PIXEL A3A5A ENTRY" in new
