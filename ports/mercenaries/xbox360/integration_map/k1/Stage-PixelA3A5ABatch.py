@@ -296,9 +296,15 @@ def stage(args:argparse.Namespace)->dict:
                 body_entries.append((p.name,len(pat.findall(text))))
         if len(body_entries)!=1 or body_entries[0][1]!=1:
             raise ValueError("A3A5A direct callee not uniquely compiled in K1S: "+func)
-        if re.search(r"(?m)^[ \t]*static[ \t]+void[ \t]+"+func+r"\(",(
-            baseline/body_entries[0][0]).read_text(encoding="utf-8")):
-            raise ValueError("Cross-TU function is static (no external linkage): "+func)
+        callee_text=(baseline/body_entries[0][0]).read_text(encoding="utf-8")
+        actual_definitions=re.findall(
+            r"(?m)^[ \t]*(static[ \t]+)?void[ \t]+"+re.escape(func)
+            +r"[ \t]*\([ \t]*void[ \t]*\)[ \t]*(?:\r?\n[ \t]*)?\{",
+            callee_text)
+        if len(actual_definitions)!=1:
+            raise ValueError("Callee definition identity changed: "+func)
+        if actual_definitions[0].strip():
+            raise ValueError("Cross-TU definition has internal linkage: "+func)
         known[func]=body_entries[0][0]
     caller_files={}
     original_text={}
