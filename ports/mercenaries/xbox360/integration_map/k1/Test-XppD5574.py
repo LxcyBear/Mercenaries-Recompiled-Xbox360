@@ -38,6 +38,19 @@ def main():
         "  esp += 4; return; /* ret 0 */\n"
         "}\n"
     )
+    for modifier in ("", "static ", "__forceinline ",
+                     "static __forceinline "):
+        input_src=sample.replace("void sub_002D5574(void)",modifier+"void sub_002D5574(void)",1)
+        normal=x.normalize_generated_header(input_src,x.TARGET)
+        assert normal.startswith("void sub_002D5574(void)\n{")
+        assert normal.partition("{")[2]==sample.partition("{")[2]
+        adjusted,labels=x.source_prelude(input_src,x.TARGET,TinyBase)
+        assert labels==1 and "PHASE4C_BUDGET_TICK(0x002D5574u)" in adjusted
+        assert adjusted.startswith("void sub_002D5574(void)\n{")
+    refused(x.normalize_generated_header,sample.replace(
+        "void sub_002D5574(void)", "int sub_002D5574(void)",1),x.TARGET)
+    refused(x.normalize_generated_header,sample.replace(
+        "void sub_002D5574(void)", "void sub_002D5574(int)",1),x.TARGET)
     body,count=x.source_prelude(sample,x.TARGET,TinyBase)
     assert count==1
     assert "XPP D5574 ENTRY" in body
@@ -83,6 +96,7 @@ def main():
         # No old hard fence relaxed, and no synthetic display call.
         assert "display_calls" not in owner
         assert "phase6dq_note_vp_unknown_read" not in owner
+    print("[XPP] SYNTHETIC PASS: static/forceinline original header normalized, guest body preserved")
     print("[XPP] SYNTHETIC PASS: true direct caller, exact XPP entry and unchanged ret")
     print("[XPP] SYNTHETIC PASS: 64-TU owner placement, LF/CRLF, no duplicate compiled bodies")
     print("[XPP] SYNTHETIC PASS: absent label/trace/include fail closed")
