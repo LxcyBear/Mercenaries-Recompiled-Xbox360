@@ -108,7 +108,7 @@ def is_exact_xinput_bridge(src:str,va:int,base)->bool:
     normalized=normalize_generated_header(src,va)
     masked=base.mask_noncode(normalized)
     shape=(r"\s*void[ \t]+sub_002D5574[ \t]*\([ \t]*void[ \t]*\)"
-           r"[ \t]*\{\s*"
+           r"\s*\{\s*"
            r"RECOMP_TRACE_FUNC\(\s*0x002D5574u\s*\);\s*"
            r"recomp_xinput_init_devices\(\s*\);\s*"
            r"esp[ \t]*\+=[ \t]*12u;\s*return;\s*\}\s*")
