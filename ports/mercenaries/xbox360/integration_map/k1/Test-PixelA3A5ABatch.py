@@ -66,7 +66,8 @@ def main()->None:
             "esp += 12; return; /* ret 8 */",
             "esp += 8; return; /* ret 4 */"),nl)
         include='#include "translated_runtime.h"'+nl
-        dummy=(include+'void sub_002A3B00(void)\n{\n'
+        dummy=('#include "translated_runtime.h"\n'
+               'void sub_002A3B00(void)\n{\n'
                '    PUSH32(esp, 0); '+stage.FRONTIER+
                ' /* call 0x002A3A5A */\n}\n').replace("\n",nl)
         updated,edge=stage.patch_tu(dummy,True,new)
