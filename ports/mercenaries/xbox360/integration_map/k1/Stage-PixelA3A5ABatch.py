@@ -179,7 +179,9 @@ def patch_main(main:str)->tuple[str,int]:
     prefix=PROTOTYPE+nl+"/* "+TAG+" lookup binding */"+nl
     after=after.replace(LOOKUP_DEFAULT,
                         "    case 0x002A3A5Au: return sub_002A3A5A;"+nl+LOOKUP_DEFAULT,1)
-    staged=before+prefix+anchor+after
+    # Put the external declaration before ALL original host code. A direct
+    # frontier call can occur earlier than the pack lookup definition.
+    staged=prefix+before+anchor+after
     # Rewire the exact original direct-frontier call if main owns that caller.
     count=staged.count(FRONTIER)
     staged=staged.replace(FRONTIER,CALL_REPLACEMENT)
@@ -205,6 +207,14 @@ def patch_tu(text:str,change_calls:bool,add_body:str|None)->tuple[str,int]:
     if add_body is not None:
         if NAME in patched and ("void "+NAME+"(void)" in patched):
             raise ValueError("New owner already declares/defines A3A5A")
+        include='#include "translated_runtime.h"'
+        if include not in patched:
+            raise ValueError("Guest function owner has no TrueTU runtime include")
+        # The original function calls three separately compiled TrueTU
+        # functions. Explicit external declarations preserve their linkage
+        # without changing the shared runtime header / rebuilding 64 TUs.
+        declarations=nl.join("void "+name+"(void);" for name in EXACT_CALLS)
+        patched=patched.replace(include,include+nl+declarations,1)
         patched=patched.rstrip("\r\n")+nl+nl+"/* "+TAG+": real generated function */"+nl+add_body+nl
     return patched,(count if change_calls else 0)
 
@@ -261,9 +271,9 @@ def stage(args:argparse.Namespace)->dict:
     validate_apu_bridge(main,runtime)
     staged_main,main_edges=patch_main(main)
     original_hashes={p.name:sha(p) for p in [*files,*headers]}
-    if len({name[4:] for name in re.findall(
-            r"(?m)^void (sub_[0-9A-Fa-f]{8})\(void\)",guest_body)})>1:
-        raise ValueError("Multiple functions injected rather than A3A5A")
+    if (len(re.findall(r"(?m)^void (sub_[0-9A-Fa-f]{8})\(void\)",guest_body))!=1
+        or not guest_body.startswith("void sub_002A3A5A(void)")):
+        raise ValueError("Function staging contains anything except A3A5A")
     # The original function's three direct subcalls all exist in EXACTLY
     # one original K1S compiled body; no fabricated return stubs.
     known={}
