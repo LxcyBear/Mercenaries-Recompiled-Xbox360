@@ -90,6 +90,20 @@ def nl(text):
         raise ValueError("Mixed newline source, refuse silent normalization")
     return "\r\n" if "\r\n" in text else "\n"
 
+def original_body_dependencies(masked):
+    # SUBCALL matches function definitions too. Search AFTER the source
+    # declaration, not the whole translated C function: the declaration
+    # "void sub_002D52D4(void)" is NOT a recursive guest call.
+    entry=list(re.finditer(
+        r"(?m)^[ \\t]*void[ \\t]+sub_002D52D4[ \\t]*\\([ \\t]*void[ \\t]*\\)\\s*\\{",
+        masked))
+    if len(entry)!=1:
+        raise ValueError("Original D52D4 masked function declaration missing or ambiguous")
+    body=masked[entry[0].end():]
+    calls=sorted(set(SUBCALL.findall(body)))
+    helpers=sorted(set(HELPERCALL.findall(body)))
+    return calls,helpers
+
 def parse_original(source,reader):
     if sha(source.encode("utf-8"))!=ORIGINAL_SHA:
         raise ValueError("Original XPP D52D4 function SHA changed; no build")
@@ -105,10 +119,11 @@ def parse_original(source,reader):
         len(re.findall(SHAPE,code))!=1 or
         HELPER not in code):
         raise ValueError("Exact original capabilities EAX/ESP+12/ret ABI not found")
-    calls=sorted(set(SUBCALL.findall(code)))
-    helpers=sorted(set(HELPERCALL.findall(code)))
+    calls,helpers=original_body_dependencies(code)
     if calls or helpers!=[HELPER]:
-        raise ValueError("Original translated D52D4 has unreviewed dependencies")
+        raise ValueError(
+            "Original translated D52D4 has unreviewed dependencies: "
+            "direct_callees="+",".join(calls)+" helpers="+",".join(helpers))
     output=[]
     probes=0
     for line in canonical.splitlines():
@@ -282,6 +297,13 @@ def stage(a):
 
 def self_test():
     assert TARGET==0x002D52D4 and END-TARGET==472
+    declaration="void sub_002D52D4(void)\\n{\\n"
+    body=declaration+" eax = recomp_xinput_get_capabilities(1u,2u);\\n}\\n"
+    assert original_body_dependencies(body)==([],[HELPER])
+    recursive=declaration+" sub_002D52D4();\\n}\\n"
+    assert original_body_dependencies(recursive)==(["002D52D4"],[])
+    other=declaration+" sub_002D6B3E();\\n}\\n"
+    assert original_body_dependencies(other)==(["002D6B3E"],[])
     assert "XInputGetCapabilities((DWORD)port,0u,&caps)" in NATIVE
     assert "i<28u;i+=4u" in NATIVE
     assert "GUEST_WRITE32(capabilities_address+i,0u)" in NATIVE
