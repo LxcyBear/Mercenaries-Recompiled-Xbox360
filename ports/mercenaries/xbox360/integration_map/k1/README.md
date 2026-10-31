@@ -1478,3 +1478,40 @@ The analyzer's boundaries, indirect graph and ABI information are
 heuristic. The report is a **prediction tool**, not evidence the guest
 can display pixels or complete hardware initialization. Never bypass
 hard MMIO fences or fabricate a display counter.
+
+
+## K1 post-XPP next frontier + dual-track display audit (2026-10-30)
+
+**Xbox hardware:** XPP 0x002D5574 executed; native XInput scan returned
+connected mask 00000001. Next hardware DIRECT_FRONTIER: 0x002D559B
+from 0x0023A3CE at **27,107,590 ticks** (previous 27,107,567;
+gain +23; fault=0). Guest display_calls=0, framebuffer=00000000,
+AvSetDisplayMode calls=0. This is a proven milestone, not a frame.
+
+Run the source-only twin-track audit (no XDK or new disassembly):
+Run-K1DisplayParallel.ps1 from the integration_map/k1 directory.
+
+The runner reads the saved xboxrecomp metadata-only ZIP and xrefs.json
+from the user-local Merc360-Xboxrecomp-Recon workspace, original locally
+translated recomp_*.c, and the successful XPP-D5574 64-TrueTU stage.
+It checks the D5574 manifest and original MMIO/hard-fence policy.
+
+Audit A: XPP 0x002D559B with neighbors 0x002D5579 and 0x002D5574.
+The original Mercenaries-Recompiled patch inventory associates D559B
+with XGetDeviceChanges, but its exact guest ABI/device-change semantics
+must be reviewed before another bridge.
+
+Audit B: D3D/XGRPH missing candidates 0x002888A0, 0x00288F80,
+0x00288B30, 0x00289E20, 0x0028A090, 0x00288960, 0x0029C13E;
+read original translator sources, compiled TrueTU coverage, callees
+and xref callsite owners.
+
+Audit C: exact-name AvSetDisplayMode kernel ordinal 3 cross-references
+from saved xrefs.json. No named refs does not prove the import
+is unreachable, since indirect/thunk call edges may be missed.
+
+Output directory: build/phase6_integration_map/post_xpp_display_recon
+display_parallel_audit.txt is metadata-only.
+xpp_original_source_LOCAL_ONLY.txt has private original XPP source for
+local ABI review. Do not commit that code or retail game data to GitHub.
+No function is automatically staged and no guest display call is faked.
