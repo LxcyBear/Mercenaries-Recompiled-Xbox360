@@ -107,6 +107,22 @@ $bodyMatches=@(Get-ChildItem -LiteralPath $targetShards -Filter "translated_*.cp
 if($bodyMatches.Count -ne 1){
     throw "[XPP] Genuine XPP function entry marker not unique"
 }
+if($meta.native_xinput_init -ne "XINPUTGETSTATE_4PORTS_REAL_HARDWARE" -or
+   $meta.native_xinput_bridge_marker -ne "XPP-D5574-NATIVE-XINPUT-INIT-20261030"){
+    throw "[XPP] No verified real Xbox 360 XInput initializer was staged"
+}
+$nativeOwners=@(Get-ChildItem -LiteralPath $targetShards -Filter "translated_*.cpp" -File |
+    Select-String -Pattern "XPP-D5574-NATIVE-XINPUT-INIT-20261030" -List)
+if($nativeOwners.Count -ne 1){
+    throw "[XPP] Native XInput initializer missing or duplicated across TrueTUs"
+}
+$nativeSource=Get-Content -LiteralPath $nativeOwners[0].Path -Raw -Encoding UTF8
+if($nativeSource -notmatch 'XInputGetState\s*\(' -or
+   $nativeSource -notmatch 'for \(port=0u; port<4u; \+\+port\)' -or
+   $nativeSource -notmatch 'connected_mask\|=\(1u<<port\)'){
+    throw "[XPP] Native XInput bridge was not a four-port hardware query"
+}
+Write-Host "[XPP] NATIVE XINPUT PROOF: real 4-port XInputGetState scan, original ESP+12 unchanged"
 $oldHost=Get-Content -LiteralPath $main -Raw -Encoding UTF8
 $newHost=Get-Content -LiteralPath $targetMain -Raw -Encoding UTF8
 if($newHost -notmatch "P6DQ-R51-MM173-FRAME-20261029-A" -or
