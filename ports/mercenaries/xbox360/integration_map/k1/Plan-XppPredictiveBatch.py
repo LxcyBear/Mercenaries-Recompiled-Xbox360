@@ -48,7 +48,7 @@ KNOWN={
 }
 DECL=re.compile(r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+sub_([0-9A-Fa-f]{8})[ \t]*\([ \t]*void[ \t]*\)\s*\{")
 CALL=re.compile(r"\bsub_([0-9A-Fa-f]{8})\s*\(")
-HELPERCALL=re.compile(r"\b(recomp_xinput_[A-Za-z_0-9]+)\s*\(")
+HELPERCALL=re.compile(r"\b(recomp_[A-Za-z_0-9]+)\s*\(")
 RET=re.compile(r"\besp\s*\+=\s*(\d+)u?\s*;\s*return\s*;")
 LITERAL_DIRECT=re.compile(r"phase4c_direct_frontier\(\s*0x([0-9A-Fa-f]{8})u\s*\)\s*;")
 SUPPORTED_SHA={
@@ -179,7 +179,9 @@ def scan(a):
         if at in SUPPORTED_SHA and digest!=SUPPORTED_SHA[at]:
             raise ValueError("Retail known XPP function SHA drift at "+hx(at))
         cached_edges=[addr(v) for v in meta.get("calls_to",[])]
-        caller_count=len(meta.get("called_by",[]))
+        caller_vas=[addr(v) for v in meta.get("called_by",[])]
+        caller_count=len(caller_vas)
+        staged_callers=sorted(v for v in caller_vas if v in compiled)
         status=HELPERS[name]
         if at in compiled:
             disposition="ALREADY_STAGED_SOURCE"
@@ -196,6 +198,8 @@ def scan(a):
             "original_source_file":item["file"],
             "ret_esp_deltas":returns,
             "static_caller_count":caller_count,
+            "current_staged_static_callers":[hx(v) for v in staged_callers],
+            "original_function_size":meta.get("size","UNKNOWN"),
             "static_callees":[hx(v) for v in cached_edges if v is not None],
             "stage_source_owner":sorted(compiled.get(at,[])),
             "current_direct_frontier_sites":sorted(direct_sites.get(at,[])),
@@ -245,9 +249,10 @@ def scan(a):
     ]
     for row in detected:
         lines.append(
-            "[XPP-PREDICT] %s helper=%s status=%s caller_count=%d ret_esp=%s direct_sites=%s stage=%s source_sha256=%s"%
+            "[XPP-PREDICT] %s helper=%s status=%s caller_count=%d staged_callers=%s ret_esp=%s direct_sites=%s stage=%s source_sha256=%s"%
             (row["va"],row["helper"],row["status"],
-             row["static_caller_count"],",".join(row["ret_esp_deltas"]) or "?",
+             row["static_caller_count"],",".join(row["current_staged_static_callers"]) or "NONE",
+             ",".join(row["ret_esp_deltas"]) or "?",
              ",".join(row["current_direct_frontier_sites"]) or "NONE",
              ",".join(row["stage_source_owner"]) or "NOT_STAGED",
              row["original_source_sha256"]))
