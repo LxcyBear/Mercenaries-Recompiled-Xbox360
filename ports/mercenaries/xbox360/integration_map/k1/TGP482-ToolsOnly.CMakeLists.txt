@@ -1,7 +1,10 @@
 # TGP482 XboxXBERecomp tools only: no Windows runtime, SDL, ImGui, Direct3D12.
 # Original source under SDK_DIR is used unchanged; generated guest data
 # belongs in a separate private user-local workspace, never the game repo.
-cmake_minimum_required(VERSION 3.25)
+# This standalone tools-only project intentionally supports VS2019's
+# CMake 3.20 bundle. It uses FetchContent (3.11) and C++20 settings (3.12).
+# Upstream full-game runtime has separate requirements; we do not build it.
+cmake_minimum_required(VERSION 3.20)
 project(Merc360_TGP482_AnalysisTools LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
