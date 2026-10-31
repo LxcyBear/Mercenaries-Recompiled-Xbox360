@@ -247,7 +247,7 @@ def inject_xinput_bridge(owner_text:str,compiled_sources:dict[str,str])->str:
     # alone is not a provider; reject a second definition regardless of TU.
     signature=re.compile(
         r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+"
-        r"recomp_xinput_init_devices[ \t]*\([ \t]*void[ \t]*\)[ \t]*\{")
+        r"recomp_xinput_init_devices[ \t]*\([ \t]*void[ \t]*\)\s*\{")
     for name,text in compiled_sources.items():
         if signature.search(text):
             raise ValueError("Existing compiled XInput initializer in "+name+
