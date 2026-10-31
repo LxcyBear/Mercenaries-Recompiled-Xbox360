@@ -174,7 +174,7 @@ def patch_main(main:str)->tuple[str,int]:
         raise ValueError("Original K1C true-TU main build tag mismatch")
     if any(int(m.group(1),16)==TARGET for m in DEFINITION.finditer(main)):
         raise ValueError("A3A5A full function already defined in host main")
-    if re.search(r"(?m)^[ \\t]*static[ \\t]+void[ \\t]+sub_002A3A5A[ \\t]*\\(",main):
+    if re.search(r"(?m)^\s*static\s+void\s+sub_002A3A5A\s*\(",main):
         raise ValueError("A3A5A host prototype has internal linkage")
     count=main.count(FRONTIER)
     if count==0:
