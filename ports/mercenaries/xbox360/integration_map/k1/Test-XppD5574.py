@@ -51,6 +51,34 @@ def main():
         "void sub_002D5574(void)", "int sub_002D5574(void)",1),x.TARGET)
     refused(x.normalize_generated_header,sample.replace(
         "void sub_002D5574(void)", "void sub_002D5574(int)",1),x.TARGET)
+    # Synthetic documentation prelude + exact semantic wrapper SHAPE.
+    # This is not the game's proprietary original function body/bytes.
+    bridge=(
+        "\n/** synthetic test metadata, not retail source */\n"
+        "void sub_002D5574(void)\n"
+        "{\n"
+        "    RECOMP_TRACE_FUNC(0x002D5574u);\n"
+        "    recomp_xinput_init_devices();\n"
+        "    esp += 12u;\n"
+        "    return;\n"
+        "}\n"
+    )
+    assert x.is_exact_xinput_bridge(bridge,x.TARGET,TinyBase)
+    assert not x.is_exact_xinput_bridge(bridge.replace(
+        "esp += 12u;","esp += 8u;"),x.TARGET,TinyBase)
+    assert not x.is_exact_xinput_bridge(bridge,x.TARGET+5,TinyBase)
+    normal_bridge=x.normalize_generated_header(bridge,x.TARGET)
+    assert "synthetic test metadata" in normal_bridge
+    assert "recomp_xinput_init_devices();" in normal_bridge
+    xinput_instrumented,bridge_entries=x.source_prelude(bridge,x.TARGET,TinyBase)
+    assert bridge_entries==1
+    assert "PHASE4C_BUDGET_TICK(0x002D5574u)" in xinput_instrumented
+    assert xinput_instrumented.count("XPP D5574 ENTRY")==1
+    assert "recomp_xinput_init_devices();" in xinput_instrumented
+    assert "esp += 12u;\n    return;" in xinput_instrumented
+    refused(x.source_prelude,bridge.replace(
+        "recomp_xinput_init_devices();","recomp_unsupported();"),x.TARGET,TinyBase)
+    assert x.sha_bytes(bridge.encode("utf-8"))!=x.XINPUT_D5574_SOURCE_SHA256
     body,count=x.source_prelude(sample,x.TARGET,TinyBase)
     assert count==1
     assert "XPP D5574 ENTRY" in body
@@ -96,6 +124,7 @@ def main():
         # No old hard fence relaxed, and no synthetic display call.
         assert "display_calls" not in owner
         assert "phase6dq_note_vp_unknown_read" not in owner
+    print("[XPP] SYNTHETIC PASS: no-label XInput bridge, exact stack cleanup, negative shape checks")
     print("[XPP] SYNTHETIC PASS: static/forceinline original header normalized, guest body preserved")
     print("[XPP] SYNTHETIC PASS: true direct caller, exact XPP entry and unchanged ret")
     print("[XPP] SYNTHETIC PASS: 64-TU owner placement, LF/CRLF, no duplicate compiled bodies")
