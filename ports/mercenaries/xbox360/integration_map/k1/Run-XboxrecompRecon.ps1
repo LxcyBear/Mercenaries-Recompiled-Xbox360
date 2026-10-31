@@ -1,4 +1,6 @@
 [CmdletBinding()]
+# ASCII-only source: Windows PowerShell 5.1 may interpret UTF-8 without BOM as ANSI.
+# Non-ASCII punctuation inside strings can become smart quotes and break parsing.
 param(
     [Parameter(Mandatory=$true)][string]$Xbe,
     [string]$Workspace=(Join-Path $env:LOCALAPPDATA "Merc360-Xboxrecomp-Recon"),
@@ -89,7 +91,7 @@ try {
             throw "[XBR] Stage 2 prerequisite was not written: $name"
         }
     }
-    Write-Host "[XBR] 3/5 Function classification — missing prerequisite of original runner"
+    Write-Host "[XBR] 3/5 Function classification - missing prerequisite of original runner"
     if(-not(Test-Path -LiteralPath $identified -PathType Leaf)){
         & $py -m tools.func_id $copiedXbe --functions $functions --strings $strings --xrefs $xrefs -v
         if($LASTEXITCODE -ne 0){throw "[XBR] Function identification failed"}
@@ -123,7 +125,7 @@ if(-not(Test-Path -LiteralPath $zip -PathType Leaf)){
     throw "[XBR] Report ZIP absent despite claimed pass: $zip"
 }
 Write-Host "[XBR] ====================================================="
-Write-Host "[XBR]  COMPLETE — SAVED DISASSEMBLY, ABI & STATIC CALL GRAPH"
+Write-Host "[XBR]  COMPLETE - SAVED DISASSEMBLY, ABI & STATIC CALL GRAPH"
 Write-Host "[XBR] ====================================================="
 Write-Host "[XBR] SEND TO CHATGPT: $zip"
 Write-Host "[XBR] Original retail XBE stays private. NO XDK build or Xbox run."
