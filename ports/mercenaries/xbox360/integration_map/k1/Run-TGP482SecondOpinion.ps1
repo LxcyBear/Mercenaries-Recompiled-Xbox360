@@ -1,0 +1,122 @@
+[CmdletBinding()]
+param(
+    [string]$Workspace=(Join-Path $env:LOCALAPPDATA "Merc360-TGP482-XBERecomp"),
+    [string]$ReconZip=(Join-Path $env:LOCALAPPDATA "Merc360-Xboxrecomp-Recon\Merc360_xboxrecomp_static_recon.zip"),
+    [string]$Xbe=(Join-Path $env:LOCALAPPDATA "Merc360-Xboxrecomp-Recon\private\default.xbe"),
+    [switch]$BuildTools,
+    [switch]$ScanXbe,
+    [switch]$RunRecompiler,
+    [switch]$UpdateSdk,
+    [string]$Generator=""
+)
+# PowerShell 5.1 / ASCII only. Never write original game code into git.
+# This is an independent XBE analysis sidecar, NOT an Xbox 360 build.
+$ErrorActionPreference="Stop"
+Set-StrictMode -Version Latest
+$shaExpected="AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
+$work=[IO.Path]::GetFullPath($Workspace)
+$sdk=Join-Path $work "XboxXBERecomp"
+$private=Join-Path $work "private"
+$reports=Join-Path $work "reports"
+$cmakeSrc=Join-Path $work "cmake-tools-only"
+$cmakeBuild=Join-Path $work "cmake-build"
+$report=Join-Path $reports "tgp482_second_opinion.txt"
+$reportJson=Join-Path $reports "tgp482_second_opinion.json"
+$generated=Join-Path $private "generated"
+$config=Join-Path $private "mercenaries.toml"
+$auditScript=Join-Path $PSScriptRoot "Audit-TGP482SecondOpinion.py"
+$cmakeTemplate=Join-Path $PSScriptRoot "TGP482-ToolsOnly.CMakeLists.txt"
+$git=(Get-Command git -ErrorAction Stop).Source
+$python=(Get-Command python -ErrorAction Stop).Source
+Write-Host "[TGP-XBR] =================================================="
+Write-Host "[TGP-XBR] TGP482 XBOX XBE RECOMP SECOND-OPINION SIDECAR"
+Write-Host "[TGP-XBR] =================================================="
+New-Item -ItemType Directory -Path @($work,$private,$reports) -Force | Out-Null
+foreach($required in @($auditScript,$cmakeTemplate,$ReconZip)){
+    if(-not(Test-Path -LiteralPath $required -PathType Leaf)){
+        throw "[TGP-XBR] Required metadata/helper missing: $required"
+    }
+}
+if(-not(Test-Path -LiteralPath (Join-Path $sdk "xdk\5849\signatures.toml") -PathType Leaf)){
+    if(Test-Path -LiteralPath $sdk){throw "[TGP-XBR] Existing SDK directory incomplete; will not delete it: $sdk"}
+    Write-Host "[TGP-XBR] Cloning upstream tool privately, outside Mercenaries git"
+    & $git clone --depth 1 https://github.com/TGP482/XboxXBERecomp.git $sdk
+    if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Git clone failed"}
+}
+$origin=(& $git -C $sdk remote get-url origin | Select-Object -First 1)
+if($LASTEXITCODE -ne 0 -or $origin -notmatch '(?i)[/:]TGP482/XboxXBERecomp(\.git)?$'){
+    throw "[TGP-XBR] SDK remote is not verified TGP482/XboxXBERecomp"
+}
+if($UpdateSdk){
+    & $git -C $sdk pull --ff-only
+    if($LASTEXITCODE -ne 0){throw "[TGP-XBR] SDK fast-forward update failed"}
+}
+$version=(& $git -C $sdk rev-parse --short HEAD | Select-Object -First 1)
+Write-Host "[TGP-XBR] Verified SDK checkout: $version"
+& $python -m py_compile $auditScript
+if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Python syntax failed"}
+$compareArgs=@("--sdk",$sdk,"--recon-zip",$ReconZip,
+    "--report",$report,"--json-out",$reportJson)
+& $python -u $auditScript @compareArgs
+if($LASTEXITCODE -ne 0){throw "[TGP-XBR] XDK5849 signature/metadata audit failed"}
+if($RunRecompiler){$ScanXbe=$true; $BuildTools=$true}
+if($ScanXbe){$BuildTools=$true}
+if(-not $BuildTools){
+    Write-Host "[TGP-XBR] METADATA PASS. No compiler, original XBE scan or Xbox build."
+    Write-Host "[TGP-XBR] Share report: $report"
+    exit 0
+}
+$cmake=(Get-Command cmake -ErrorAction Stop).Source
+New-Item -ItemType Directory -Force -Path @($cmakeSrc,$cmakeBuild) | Out-Null
+Copy-Item -LiteralPath $cmakeTemplate -Destination (Join-Path $cmakeSrc "CMakeLists.txt") -Force
+$configArgs=@("-S",$cmakeSrc,"-B",$cmakeBuild,"-DSDK_DIR:PATH=$sdk")
+if(-not [string]::IsNullOrWhiteSpace($Generator)){
+    $configArgs+=@("-G",$Generator)
+    if($Generator -like "Visual Studio*"){$configArgs+=@("-A","x64")}
+}
+Write-Host "[TGP-XBR] CMake: ONLY upstream xbe_symbols and xbe_recomp (no D3D12/SDL)"
+& $cmake @configArgs
+if($LASTEXITCODE -ne 0){throw "[TGP-XBR] CMake configuration failed; specify a supported -Generator"}
+& $cmake --build $cmakeBuild --config Release --target xbe_symbols xbe_recomp --parallel 4
+if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Tools-only build failed; Xbox runtime untouched"}
+$symbols=@(Get-ChildItem -LiteralPath $cmakeBuild -Filter "xbe_symbols.exe" -Recurse -File |
+    Sort-Object FullName -Descending | Select-Object -First 1)
+$recompiler=@(Get-ChildItem -LiteralPath $cmakeBuild -Filter "xbe_recomp.exe" -Recurse -File |
+    Sort-Object FullName -Descending | Select-Object -First 1)
+if($symbols.Count -ne 1 -or $recompiler.Count -ne 1){
+    throw "[TGP-XBR] Compiled CLIs not found after build"
+}
+Write-Host "[TGP-XBR] TOOLS PASS: both independent analysis CLIs compiled"
+if(-not $ScanXbe){
+    Write-Host "[TGP-XBR] To scan verified retail XBE signatures: add -ScanXbe"
+    exit 0
+}
+$xbePath=[IO.Path]::GetFullPath($Xbe)
+if(-not(Test-Path -LiteralPath $xbePath -PathType Leaf)){
+    throw "[TGP-XBR] Original user-local XBE missing: $xbePath; pass -Xbe"
+}
+$hash=(Get-FileHash -LiteralPath $xbePath -Algorithm SHA256).Hash.ToUpperInvariant()
+if($hash -ne $shaExpected){throw "[TGP-XBR] WRONG RETAIL XBE SHA $hash; refusing false cross-game analysis"}
+Write-Host "[TGP-XBR] Original retail SHA256 PASS; XDK signature scanner starting"
+& $symbols[0].FullName $xbePath (Join-Path $sdk "xdk") --library Mercenaries.dll --out $config
+if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $config -PathType Leaf)){
+    throw "[TGP-XBR] Signature scan failed; check actual XDK library build/signature compatibility"
+}
+Write-Host "[TGP-XBR] Signature config saved PRIVATE: $config"
+if(-not $RunRecompiler){
+    Write-Host "[TGP-XBR] For independent function inventory: add -RunRecompiler"
+    exit 0
+}
+New-Item -ItemType Directory -Force -Path $generated | Out-Null
+Write-Host "[TGP-XBR] Independent function discovery + codegen, user-local only"
+& $recompiler[0].FullName $config $xbePath $generated --xdk (Join-Path $sdk "xdk")
+if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Independent recomp failed; Xbox build unchanged"}
+$mapping=Join-Path $generated "x86_func_mapping.cpp"
+if(-not(Test-Path -LiteralPath $mapping -PathType Leaf)){
+    throw "[TGP-XBR] Independent function mapping not created"
+}
+& $python -u $auditScript @compareArgs --mapping $mapping
+if($LASTEXITCODE -ne 0){throw "[TGP-XBR] Function-inventory comparison failed"}
+Write-Host "[TGP-XBR] DONE: share metadata report $report"
+Write-Host "[TGP-XBR] XBE, guest-source C++, and config remain PRIVATE."
+Write-Host "[TGP-XBR] No Xbox build or fabricated display."
