@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 MARKER="XPP-D54AC-NATIVE-GETSTATE-20261031"
-PARENT="XPP-D54AC-NATIVE-CAPABILITIES-20261031"
+PARENT="XPP-D52D4-NATIVE-CAPABILITIES-20261031"
 TARGET=0x002D54AC
 END=0x002D551F
 ORIGINAL="recomp_0013.c"
@@ -133,7 +133,7 @@ def parse_original(source,reader):
     if (len(re.findall(r"\bRECOMP_TRACE_FUNC\(\s*0x002D54ACu\s*\);",code))!=1 or
         len(re.findall(SHAPE,code))!=1 or
         HELPER not in code):
-        raise ValueError("Exact original capabilities EAX/ESP+12/ret ABI not found")
+        raise ValueError("Exact original XInputGetState EAX/ESP+12/ret ABI not found; inspect LOCAL_ONLY source")
     calls,helpers=original_body_dependencies(code)
     if calls or helpers!=[HELPER]:
         raise ValueError(
@@ -225,7 +225,7 @@ def stage(a):
         "P6DQ-R51-MM173-FRAME-20261029-A" not in host):
         raise ValueError("Known-good native controller chain/K1S/host provenance missing")
     if any(MARKER in t for t in list(before.values())+[host]):
-        raise ValueError("D54AC native helper already staged")
+        raise ValueError("D54AC native state helper already staged")
     if any(DEFINITION.search(t) and any(int(m,16)==TARGET for m in DEFINITION.findall(t))
            for t in list(before.values())+[host]):
         raise ValueError("D54AC already defined; no duplicate guest function")
@@ -277,7 +277,7 @@ def stage(a):
     if (marked!=[owner] or guest_marked!=[owner] or
         altered[owner].decode("utf-8").count(native_tag)!=1 or
         altered[owner].decode("utf-8").count(guest_tag)!=1):
-        raise ValueError("Capabilities native bridge and original guest body must "
+        raise ValueError("Native XInputGetState bridge and original guest body must "
                          "be unique in the inherited controller owner TrueTU")
     if a.out.resolve()==a.shards.resolve() or a.out_main.resolve()==a.parent_main.resolve():
         raise ValueError("Refusing to overwrite original known-good D5272 stage")
@@ -327,6 +327,8 @@ def stage(a):
 
 def self_test():
     assert TARGET==0x002D54AC and END-TARGET==115
+    assert PARENT=="XPP-D52D4-NATIVE-CAPABILITIES-20261031"
+    assert ORIGINAL_SHA=="48e4ccc7ccc0ae3bfa852d584996f6f1ed034d0491f05433722054038f42a0e2"
     declaration="void sub_002D54AC(void)\n{\n"
     assert original_body_dependencies(declaration+
         " eax = recomp_xinput_get_state(1u,2u);\n}\n")==([],[HELPER])
