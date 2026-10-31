@@ -93,6 +93,16 @@ def main():
     refused(x.inject_xinput_bridge,bridge_owner,{"translated_000.cpp":owner_test})
     prior_impl=owner_test+"\nvoid recomp_xinput_init_devices(void)\n{\n}\n"
     refused(x.inject_xinput_bridge,owner_test,{"translated_000.cpp":prior_impl})
+    refused(x.inject_xinput_bridge,owner_test,{
+        "translated_000.cpp":prior_impl.replace("\n","\r\n")})
+    refused(x.inject_xinput_bridge,owner_test,{
+        "translated_000.cpp":prior_impl.replace("(void)\n{","(void) {")})
+    refused(x.inject_xinput_bridge,owner_test,{
+        "translated_000.cpp":prior_impl.replace(
+            "void recomp_xinput_init_devices", "static void recomp_xinput_init_devices")})
+    prototype_only=owner_test+"\nvoid recomp_xinput_init_devices(void);\n"
+    assert x.inject_xinput_bridge(owner_test,{
+        "translated_000.cpp":prototype_only}).count(x.XINPUT_BRIDGE_MARKER)==1
     body,count=x.source_prelude(sample,x.TARGET,TinyBase)
     assert count==1
     assert "XPP D5574 ENTRY" in body
