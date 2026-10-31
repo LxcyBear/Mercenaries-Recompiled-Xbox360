@@ -4,8 +4,10 @@
 Goal: enable the exact K1S Xbox DIRECT_FRONTIER 0x002A3A5A, not fake a
 display call. Copy one original user-local generated DSOUND function into an
 existing TrueTU, resolve its 32-bit APU read/write calls through the existing
-phase6ch APU bridge, restore the original direct caller(s), and add the exact
-existing pack lookup case. Never commit retail or generated guest code.
+phase6ch APU bridge, and restore only the original direct caller(s).
+Do not assume the K1C bootstrap host main owns Phase6DQ's legacy pack
+lookup. Do not modify that lookup or fabricate an indirect route.
+Never commit retail or generated guest code.
 
 The generated original hash and exact helper/wrapper source contracts come
 from the local user's pixel_apu_contracts.txt and K1S TrueTU manifest.
@@ -30,8 +32,6 @@ FRONTIER="phase4c_direct_frontier(0x002A3A5Au);"
 # Original lifter's rewritten direct call syntax is preserved byte for byte
 # apart from replacing only the artificially inserted frontier call.
 CALL_REPLACEMENT="sub_002A3A5A();"
-LOOKUP="static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
-LOOKUP_DEFAULT="    default: return (recomp_func_t)0;"
 EXACT_CALLS=("sub_0029CBB0","sub_002A303C","sub_0029CBD2")
 DEFINITION=re.compile(r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+sub_([0-9A-Fa-f]{8})"
                       r"[ \t]*\([ \t]*void[ \t]*\)[ \t]*(?:\r?\n[ \t]*)?\{")
