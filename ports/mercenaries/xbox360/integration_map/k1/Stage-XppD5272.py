@@ -250,9 +250,20 @@ def stage(args):
     n=normalized_newline(previous[owner])
     if previous[owner].count("#include <xtl.h>"+n)!=1:
         raise ValueError("Native XInput owner insertion anchor not unique")
+    # Original direct dependencies may live in other TrueTUs.
+    # Declare them locally, never change the shared 64-TU runtime header.
+    # Avoid extern declarations for static functions defined in this owner.
+    direct_prototypes=[]
+    for dep in deps:
+        if compiled.get(dep,("",False))[0]==owner:
+            continue
+        declaration="void sub_%08X(void);"%dep
+        if declaration not in previous[owner]:
+            direct_prototypes.append(declaration)
+    prologue=(n.join(direct_prototypes)+n) if direct_prototypes else ""
     expanded=previous[owner].replace(
         "#include <xtl.h>"+n,
-        "#include <xtl.h>"+n+NATIVE.replace("\n",n)+n,1)
+        "#include <xtl.h>"+n+prologue+NATIVE.replace("\n",n)+n,1)
     expanded=expanded.rstrip("\r\n")+n+n+(
         "/* "+MARKER+" original guest source 0x002D5272 */"+n
         +body.replace("\n",n))
