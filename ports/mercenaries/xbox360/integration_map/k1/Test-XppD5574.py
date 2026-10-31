@@ -28,7 +28,7 @@ def main():
     assert x.direct_calls(
         "void sub_002D5574(void) { /* sub_002D9999(); */ "
         "sub_002D4320(); sub_002D4320(); }",TinyBase
-    )==["SUB_002D4320","SUB_002D5574"]
+    )==["SUB_002D4320"] # definition with (void) is not a call
     sample=(
         "void sub_002D5574(void)\n"
         "{\n"
