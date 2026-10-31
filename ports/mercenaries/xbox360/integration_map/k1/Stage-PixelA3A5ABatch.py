@@ -59,7 +59,7 @@ def nl_for(data:str)->str:
 
 def find_body(file_text:str,name:str)->str:
     defs=[m for m in DEFINITION.finditer(file_text)
-          if "sub_"+m.group(1).upper()==name.upper()]
+          if ("sub_"+m.group(1)).upper()==name.upper()]
     if len(defs)!=1:
         raise ValueError(f"Expected one translated {name} body; found {len(defs)}")
     finish=CLOSE.search(file_text,defs[0].end())
