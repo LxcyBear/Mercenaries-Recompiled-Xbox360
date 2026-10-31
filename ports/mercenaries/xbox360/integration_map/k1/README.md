@@ -1403,3 +1403,35 @@ On Xbox watch `PIXEL A3A5A ENTRY`, the first next frontier
 or genuine MMIO fence, `P6DQ PRESENT PROXIMITY`, and
 `display_calls`/framebuffer. Success requires an actual
 guest AvSetDisplayMode/presentation request; no fake counters.
+
+### PIXEL K1C lookup-layout correction (2026-10-30, before XDK)
+
+The user's real K1S `main.cpp` is the accumulated K1C host bootstrap,
+not necessarily the older unsplit Rocket main. The first real
+`Build-PixelA3A5ABatch.ps1` staging run failed:
+
+`Missing or duplicate existing packed lookup function`.
+
+All original-source A3A5A regression tests had passed, and no XDK
+build started. **This was an unsupported host-layout assumption**
+in our staging script, not a missing retail function. The Xbox
+stop `DIRECT_FRONTIER 002A3A5A` comes from an exact *direct* guest
+call; a new packed indirect lookup entry is not necessary for this
+one restoration.
+
+The corrected stager therefore leaves the entire K1C lookup and
+indirect dispatch untouched. It restores only literal
+`phase4c_direct_frontier(0x002A3A5Au);` callsite(s),
+which must exist in the K1S host and/or TrueTU inputs. It adds
+an external declaration only where a direct caller needs it,
+places the real local generated body into a TrueTU, and requires
+the entire existing APU/ret8/source-identity contract as before.
+If there are no exact direct sites, it hard fails rather than
+creating a fake lookup or bypass.
+
+The regression tests now cover host source **with or without**
+the legacy packed lookup function and an entirely unchanged
+main.cpp when direct callers live only in TrueTUs. The PowerShell
+preflight checks explicit manifest direct-only policy and asserts
+there is no new lookup case. Compile still needs to pass on the
+user's cached source.
