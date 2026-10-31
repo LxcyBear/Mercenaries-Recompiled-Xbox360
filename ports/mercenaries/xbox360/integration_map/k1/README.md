@@ -1554,3 +1554,44 @@ DIRECT_FRONTIER 0023A3CE -> 002D52D4, XPP length 472, original recorded
 direct children 002D6B3E, 002D7620, 002D79B6. Equal/near XDK
 signature lengths are NOT sufficient proof of matching identities.
 Also trace genuine D3DDevice_Swap/presentation, not just kernel ordinal 3.
+
+## K1: TGP482 real Swap identification -> XPP D52D4 original-source audit (2026-10-31)
+
+Independent TGP482 XboxXBERecomp scanner (XDK library build 5849)
+assigned `D3DDevice_Swap=0x0028BDB0` by constant analysis, and
+`XInputOpen=0x002D5272` via .XTLID. The original xboxrecomp inventory
+agrees on exact starts. In the previous 64-shard pixel batch, Swap and
+its six known direct callers were present. Upstream graph layers:
+6 / 13 / 7; no known direct-only path from current
+`0x0023A3CE -> 0x002D52D4` frontier to Swap within eight edges.
+Indirect dispatch remains unproven; do not call it unreachable.
+
+LAST HARDWARE: 27,107,602 translated ticks, XInputOpen native port=0
+handle=1 PASS, next real XPP direct frontier 0x002D52D4, guest
+display_calls=0. Saved static metadata has D52D4 size 472,
+`old_pixel_batch=False`, and children 002D6B3E/002D7620/002D79B6.
+This is not evidence that those children execute or that an independent
+codegen succeeded.
+
+For a NEW, NO-XDK diagnostic proving original generated-source bodies
+and stack/ABI metadata at D52D4 and three callees (plus known Swap roots):
+
+```powershell
+cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
+git pull --ff-only
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Run-K1TgpXppFrontierAudit.ps1"
+```
+
+This reuses the private original generated source corpus plus the cached
+16,662-function metadata manifest; no fresh XBE scan, Xbox compile, or
+deployment. It checks local source and optional staged Pixel A3A5A TrueTU
+coverage without claiming the staged source is what is deployed.
+
+Share only the metadata report:
+`build\phase6_integration_map\tgp482_d52d4_source_audit\d52d4_source_abi_metadata.txt`.
+
+A separate local source excerpt
+`d52d4_original_source_LOCAL_ONLY.txt`
+contains original guest-generated code for private ABI inspection;
+NEVER commit it. Preserve all real MMIO/VP hard fences, no fake guest
+display calls, no made-up function bodies or return widths.
