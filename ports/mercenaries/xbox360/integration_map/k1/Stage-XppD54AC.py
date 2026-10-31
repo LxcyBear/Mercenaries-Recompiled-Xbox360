@@ -280,7 +280,7 @@ def stage(a):
         raise ValueError("Native XInputGetState bridge and original guest body must "
                          "be unique in the inherited controller owner TrueTU")
     if a.out.resolve()==a.shards.resolve() or a.out_main.resolve()==a.parent_main.resolve():
-        raise ValueError("Refusing to overwrite original known-good D5272 stage")
+        raise ValueError("Refusing to overwrite original known-good D52D4 stage")
     expected={p.name:altered.get(p.name,p.read_bytes()) for p in files+headers}
     a.out.mkdir(parents=True,exist_ok=True)
     if {p.name for p in a.out.iterdir()} not in (set(),set(expected)):
