@@ -207,6 +207,60 @@ def patch_host(text:str)->tuple[str,int]:
         raise ValueError("Remaining unfixed direct XPP caller")
     return changed,n
 
+# The original Mercenaries-Recompiled recomp_manual.c implements
+# recomp_xinput_init_devices() by calling xbox_InputInit() once.
+# Xbox 360 XDK XInput works through XInputGetState (automatically provided
+# by the native console runtime); enumerate all four actual controller slots
+# so this is not a silent no-op or a fabricated connected device.
+# The result is diagnostic only: GetDevices/GetDeviceChanges must implement
+# their own original controller-state semantics when separately reached.
+XINPUT_BRIDGE_MARKER="XPP-D5574-NATIVE-XINPUT-INIT-20261030"
+XINPUT_BRIDGE=(
+    "/* "+XINPUT_BRIDGE_MARKER+"; real native Xbox 360 pad query */\n"
+    "static void recomp_xinput_init_devices(void)\n"
+    "{\n"
+    "    static unsigned xpp_native_init_calls=0u;\n"
+    "    if (xpp_native_init_calls++) return;\n"
+    "    unsigned connected_mask=0u;\n"
+    "    unsigned port;\n"
+    "    for (port=0u; port<4u; ++port)\n"
+    "    {\n"
+    "        XINPUT_STATE state;\n"
+    "        ZeroMemory(&state,sizeof(state));\n"
+    "        if (XInputGetState((DWORD)port,&state)==ERROR_SUCCESS)\n"
+    "            connected_mask|=(1u<<port);\n"
+    "    }\n"
+    "    char line[120];\n"
+    '    sprintf(line,"XPP XINPUT native init: connected_mask=%08X",connected_mask);\n'
+    "    trace(line);\n"
+    "}\n"
+)
+
+
+def inject_xinput_bridge(owner_text:str,compiled_sources:dict[str,str])->str:
+    """Place one source-audited XDK native input bridge in the same TrueTU."""
+    if HEADER not in owner_text:
+        raise ValueError("XInput bridge owner lacks translated_runtime.h")
+    if XINPUT_BRIDGE_MARKER in owner_text:
+        raise ValueError("XInput native bridge already staged")
+    # No helper may already be defined by a compiled TrueTU. A declaration
+    # alone is not a provider; reject a second definition regardless of TU.
+    signature=re.compile(
+        r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+"
+        r"recomp_xinput_init_devices[ \t]*\([ \t]*void[ \t]*\)[ \t]*\{")
+    for name,text in compiled_sources.items():
+        if signature.search(text):
+            raise ValueError("Existing compiled XInput initializer in "+name+
+                             "; use that source instead of injecting another")
+    # Only local owner altered: shared header and other 63 TUs stay identical.
+    nl=newline(owner_text)
+    before=HEADER+nl
+    after=HEADER+nl+"#include <xtl.h>"+nl+XINPUT_BRIDGE.replace("\n",nl)+nl
+    if owner_text.count(before)!=1:
+        raise ValueError("XInput bridge injection header not unique")
+    return owner_text.replace(before,after,1)
+
+
 def add_guest_bodies(owner_text:str,bodies:dict[int,str],base,compiled:dict,
                      owner_name:str)->str:
     if HEADER not in owner_text:
@@ -261,6 +315,7 @@ def report_lines(info:dict,generated:dict,closure:list[int])->str:
         "Origin file: "+str(info.get("original_file","UNAVAILABLE")),
         "Source SHA256: "+str(info.get("source_sha256","UNAVAILABLE")),
         "Selected TrueTU owner: "+str(info.get("owner","UNDECIDED")),
+        "Native XInput backend: "+str(info.get("native_xinput_init","NOT_STAGED")),
         "",
         "EXACT SOURCE EXCERPTS (LOCAL ONLY; DO NOT COMMIT THIS REPORT):",
     ]
@@ -367,6 +422,9 @@ def stage(a:argparse.Namespace)->dict:
         provided.update(base.STANDARD_CALLS)
         # Existing maintained XPP/math paths use both normal C math calls.
         provided.update(("sin","cos"))
+        # Only the SHA-verified D5574 bridge may use the real native Xbox360
+        # input-init helper. No arbitrary missing helper is whitelisted.
+        provided.add("recomp_xinput_init_devices")
         queue=collections.deque([TARGET])
         selected=set()
         missing=set()
@@ -419,6 +477,8 @@ def stage(a:argparse.Namespace)->dict:
             raise ValueError("Original XPP direct child function has no generated body")
         if unknown:
             raise ValueError("XPP contains helpers not proven callable by host/TrueTU shared header")
+        if TARGET in selected and info.get("entry_kind")!="XINPUT_D5574_TRACE_ENTRY_NO_LABEL":
+            raise ValueError("Unexpected XPP D5574 source: refusing native XInput bridge")
         # Choose original caller TU to avoid changing new or shared headers.
         owner=min(caller_files,key=lambda k:(-caller_files[k],len(text_by_file[k]),k)) if caller_files else "translated_063.cpp"
         info["owner"]=owner
@@ -431,6 +491,10 @@ def stage(a:argparse.Namespace)->dict:
         # No silent rewriting of indirect dispatch or backend MMIO.
         bodies={va:generated[va]["source"] for va in closure}
         expanded=add_guest_bodies(text_by_file[owner],bodies,base,compiled,owner)
+        if TARGET in bodies:
+            expanded=inject_xinput_bridge(expanded,{**text_by_file,"main.cpp":main})
+            info["native_xinput_init"]="XINPUTGETSTATE_4PORTS_REAL_HARDWARE"
+            info["native_xinput_bridge_marker"]=XINPUT_BRIDGE_MARKER
         new_main,main_edges=patch_host(main)
         transformed={}
         for p in files:
