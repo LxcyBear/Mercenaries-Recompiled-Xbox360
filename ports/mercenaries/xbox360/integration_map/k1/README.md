@@ -1595,3 +1595,45 @@ A separate local source excerpt
 contains original guest-generated code for private ABI inspection;
 NEVER commit it. Preserve all real MMIO/VP hard fences, no fake guest
 display calls, no made-up function bodies or return widths.
+
+
+## K1 D52D4: source-proven Xbox controller capabilities (2026-10-31)
+
+Read-only source audit PASS: the latest hardware target 0x002D52D4
+is retail XInputGetCapabilities, not a mystery graphics routine.
+Exact source in the user-local recomp_0013.c has SHA256:
+80aa0150e3d680d11925e2b2c3465509930b557fc511f625bafbbdea39e09ed5.
+Its original guest wrapper reads two stack args (handle and output pointer),
+sets EAX to the helper status, then executes esp += 12u; return
+(i.e. two arguments and 8 bytes of guest argument cleanup).
+
+The previous pixel TrueTU set did not include D52D4, though
+its three disassembler-reported children were present. The actual
+translated helper wrapper does not call those three static callees.
+Existing original public host code in ports/mercenaries/src/recomp_manual.c
+shows XInputGetCapabilities must use handle=port+1 and clear a 28-byte
+original-Xbox capabilities buffer, writing Type/SubType/Flags only.
+Xbox 360's native XINPUT_CAPABILITIES has a different layout and must
+not be copied directly to guest memory.
+
+Stage-XppD52D4.py is a guarded incremental source stage preserving
+the prior D5272/D559B/D5579/K1S inputs and unknown VP/MMIO hard fences.
+It queries real native XInputGetCapabilities and serializes 28 original-
+Xbox guest bytes through existing GUEST_WRITE32, preserving EAX and ret8.
+It rejects unrecognized retail source SHA, changed parent input hashes,
+missing exact direct callsites, duplicate guest body, or changed ABI.
+
+FIRST: no XDK, no deployment; from Merc360 repo root:
+
+    git pull --ff-only
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-XppD52D4.ps1" -PreflightOnly
+
+After clean preflight PASS, run the same command without -PreflightOnly
+for an incremental VS2017 Xbox 360 build (SkipClean=true).
+Published diagnostic XEX only after successful build:
+build\phase6_integration_map\xpp_d52d4_batch\xdk\Merc-XPP-D52D4.xex
+
+Xbox proof: XPP D52D4 ENTRY, XPP XINPUT capabilities return/status,
+and next original guest frontier; real display_calls and framebuffer
+must still be measured, never faked. No D52D4 Xbox PASS yet.
+Original guest files and local-only excerpts stay private.
