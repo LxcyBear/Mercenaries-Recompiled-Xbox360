@@ -88,7 +88,49 @@ if(-not $BuildTools){
     Write-Host "[TGP-XBR] Share report: $report"
     exit 0
 }
-$cmake=(Get-Command cmake -ErrorAction Stop).Source
+# CMake may be installed as an optional Visual Studio C++ component and
+# therefore absent from the user's normal Windows PowerShell PATH.
+# Prefer installed tools. Never auto-install or modify their toolchains.
+$cmake=$null
+$cmakeCandidates=New-Object 'System.Collections.Generic.List[string]'
+$pathCmake=Get-Command "cmake.exe" -ErrorAction SilentlyContinue
+if($null -ne $pathCmake -and -not [string]::IsNullOrWhiteSpace($pathCmake.Source)){
+    $cmakeCandidates.Add($pathCmake.Source)
+}
+$vswherePaths=New-Object 'System.Collections.Generic.List[string]'
+foreach($base in @($env:ProgramFiles, [Environment]::GetEnvironmentVariable('ProgramFiles(x86)'))){
+    if([string]::IsNullOrWhiteSpace($base)){continue}
+    $vswherePaths.Add((Join-Path $base "Microsoft Visual Studio\Installer\vswhere.exe"))
+}
+foreach($vswhere in $vswherePaths){
+    if(-not(Test-Path -LiteralPath $vswhere -PathType Leaf)){continue}
+    $installations=@(& $vswhere -products "*" -property installationPath)
+    if($LASTEXITCODE -ne 0){continue}
+    foreach($root in $installations){
+        $cmakeCandidates.Add((Join-Path ([string]$root) "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"))
+    }
+}
+# Fallback when vswhere is absent or VS is installed in an unusual layout.
+foreach($base in @($env:ProgramFiles,[Environment]::GetEnvironmentVariable('ProgramFiles(x86)'))){
+    if([string]::IsNullOrWhiteSpace($base)){continue}
+    $cmakeCandidates.Add((Join-Path $base "CMake\bin\cmake.exe"))
+    foreach($version in @("18","2026","2022","2019","2017")){
+        foreach($edition in @("Community","Professional","Enterprise","BuildTools")){
+            $cmakeCandidates.Add((Join-Path $base ("Microsoft Visual Studio\"+$version+"\"+$edition+"\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe")))
+        }
+    }
+}
+foreach($candidate in $cmakeCandidates){
+    if(Test-Path -LiteralPath $candidate -PathType Leaf){
+        $cmake=$candidate
+        break
+    }
+}
+if($null -eq $cmake){
+    throw "[TGP-XBR] CMake is not installed or discoverable in PATH/Visual Studio. In Visual Studio Installer select 'C++ CMake tools for Windows', or install standalone CMake: winget install --exact --id Kitware.CMake. Reopen PowerShell and rerun -ScanXbe. No XBE scan or XDK build occurred."
+}
+Write-Host "[TGP-XBR] Discovered CMake: $cmake"
+& $cmake --version | Select-Object -First 1
 New-Item -ItemType Directory -Force -Path @($cmakeSrc,$cmakeBuild) | Out-Null
 Copy-Item -LiteralPath $cmakeTemplate -Destination (Join-Path $cmakeSrc "CMakeLists.txt") -Force
 $configArgs=@("-S",$cmakeSrc,"-B",$cmakeBuild,"-DSDK_DIR:PATH=$sdk")
