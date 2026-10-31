@@ -1682,3 +1682,50 @@ build\phase6_integration_map\xpp_d54ac_batch\xdk\Merc-XPP-D54AC.xex
 Xbox hardware proof will require XPP D54AC ENTRY, genuine
 XPP XINPUT state status, next direct frontier and real display_calls
 / framebuffer fields; no fake presentation.
+
+
+## Predictive multi-recompiler XPP batch, not one Xbox build per API (2026-10-31)
+
+After the successful D52D4 hardware test (XInputGetCapabilities status=0,
+next XPP DIRECT 002D54AC at 27,107,620 translated ticks; fault=0),
+the original C/source audit proved D54AC is retail XInputGetState (115
+original bytes), exact SHA256
+48e4ccc7ccc0ae3bfa852d584996f6f1ed034d0491f05433722054038f42a0e2.
+Native D54AC exact 22-byte controller state bridge preflight now PASS:
+all 64 inherited TrueTUs, changed TUs translated_027.cpp and
+translated_033.cpp; NO XDK build or Xbox test yet for D54AC.
+
+**Do not continue blindly one XDK build for each XPP wrapper.**
+The existing upstream public Mercenaries compatibility layer lists
+eight original XPP native input helpers. Six are already supported by
+the staged native controller chain; remaining Close and SetState require
+the user's exact original guest source and guest feedback memory ABI
+before attempting native packaging. The xboxrecomp static inventory
+(16,662 original functions) supplies original direct caller evidence.
+TGP482/XboxXBERecomp symbols provide independent names where assigned.
+Neither static source provides execution proof.
+
+New source-only predictive scan (NO VS2017, NO XDK, NO Xbox):
+
+    cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
+    git pull --ff-only
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Run-K1XppPredictiveBatch.ps1"
+
+The runner reruns known-good D54AC preflight for hashes, then maps
+original-generated XPP function bodies to the known input-helper family
+and original xboxrecomp caller graph, plus optional TGP482 symbol
+assignments. It reports source SHA, helper identity, exact guest stack
+cleanup hints, static caller count, already-compiled callers and
+live direct-frontier replacement opportunities. Unknown helper, ABI
+or VP/MMIO semantics remain HARD FENCED.
+
+Share metadata-only:
+build\phase6_integration_map\xpp_predictive_batch\xpp_input_candidate_report.txt
+and optionally the JSON manifest in the same folder.
+
+Next batch strategy: source/ABI-validate every reachable safe candidate,
+then stage several in one incremental TrueTU XEX, retaining
+previous hardware witness and renderer/presentation counters.
+Do not use static callgraph position as a replacement for real runtime
+execution. No private XBE, original C translations or guest bytes should
+enter GitHub.
