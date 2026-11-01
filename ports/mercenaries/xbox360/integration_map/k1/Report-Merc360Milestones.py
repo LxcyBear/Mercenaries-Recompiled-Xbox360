@@ -108,9 +108,9 @@ def summarize(raw: str, input_name: str, test: str = "auto"):
     kind = boundary.group(1) if boundary else (
         "HARD_STOP_KIND_" + stop.group(1) if stop else None)
     no_fault = fault.group(1) == "0" if fault else None
-    nt207_gate = observed(r"K1NT207 FRAME GATE:.*guarded=1\\b", lines)
-    nt207_raw0 = observed(r"K1NT207 FRAME RAW0:.*\\bret=[0-9A-Fa-f]{8}", lines)
-    nt207_raw1 = observed(r"K1NT207 FRAME RAW1:.*\\ba9=[0-9A-Fa-f]{8}", lines)
+    nt207_gate = observed(r"K1NT207 FRAME GATE:.*guarded=1(?:\\s|$)", lines)
+    nt207_raw0 = observed(r"K1NT207 FRAME RAW0:.*ret=[0-9A-Fa-f]{8}", lines)
+    nt207_raw1 = observed(r"K1NT207 FRAME RAW1:.*a9=[0-9A-Fa-f]{8}", lines)
     nt207_captured = observed(r"K1NT207 FRAME CAPTURED:.*original_ordinal=207", lines)
     nt207_probe = observed(r"K1NT207 PROBE ONLY:.*hard stop preserved", lines)
     nt207_full = all((nt207_gate, nt207_raw0, nt207_raw1, nt207_captured, nt207_probe))
