@@ -64,7 +64,7 @@ def observed(pattern: str, lines: list[str], flags=0) -> bool:
     return any(rx.search(line) for line in lines)
 
 
-def summarize(raw: str, input_name: str):
+def summarize(raw: str, input_name: str, test: str = "auto"):
     lines = extract_run(raw)
     all_text = "\n".join(lines)
     complete = any(END_MARK in line for line in lines)
@@ -108,11 +108,33 @@ def summarize(raw: str, input_name: str):
     kind = boundary.group(1) if boundary else (
         "HARD_STOP_KIND_" + stop.group(1) if stop else None)
     no_fault = fault.group(1) == "0" if fault else None
+    nt207_gate = observed(r"K1NT207 FRAME GATE:.*guarded=1\\b", lines)
+    nt207_raw0 = observed(r"K1NT207 FRAME RAW0:.*\\bret=[0-9A-Fa-f]{8}", lines)
+    nt207_raw1 = observed(r"K1NT207 FRAME RAW1:.*\\ba9=[0-9A-Fa-f]{8}", lines)
+    nt207_captured = observed(r"K1NT207 FRAME CAPTURED:.*original_ordinal=207", lines)
+    nt207_probe = observed(r"K1NT207 PROBE ONLY:.*hard stop preserved", lines)
+    nt207_full = all((nt207_gate, nt207_raw0, nt207_raw1, nt207_captured, nt207_probe))
+    if test not in ("auto", "xpp", "nt207"):
+        raise ValueError("Unknown test: " + test)
+    if test == "auto":
+        test = "nt207" if nt207_probe or nt207_gate else "xpp"
     # The milestone is "native GetState was actually called and returned".
     # A disconnected controller result is not a native-call failure; list
     # SUCCESS status separately. No state trace -> no success banner.
     input_ok = get_entry and get is not None
-    if input_ok:
+    if test == "nt207":
+        if nt207_full:
+            verdict = "PASS"
+            reason = ("Original ordinal 207 ten-argument frame captured on Xbox. "
+                      "Diagnostic succeeded; directory service is STILL BLOCKED.")
+        elif stop and complete:
+            verdict = "BLOCKED"
+            reason = ("Ordinal 207 live frame was not completely captured; "
+                      "hardware hard stop remains.")
+        else:
+            verdict = "INCONCLUSIVE"
+            reason = "Ordinal 207 probe evidence or run completion is insufficient."
+    elif input_ok:
         verdict = "PASS"
         reason = "Real XInputGetState entry and native return were observed."
     elif stop and complete:
@@ -126,7 +148,7 @@ def summarize(raw: str, input_name: str):
     details = {
         "kind": "Merc360 post-run HOST analysis, not emitted by Xbox runtime",
         "input_log": input_name,
-        "test": "XPP-INPUT-FAMILY-GETSTATE",
+        "test": "NT207-FRAME-CAPTURE" if test == "nt207" else "XPP-INPUT-FAMILY-GETSTATE",
         "verdict": verdict,
         "reason": reason,
         "completed": complete,
@@ -143,6 +165,8 @@ def summarize(raw: str, input_name: str):
             "xpp_setstate_guest_entry": set_entry,
             "xpp_setstate_native_return": set_call is not None,
             "xpp_close_guest_entry": close_entry,
+            "nt207_original_directory_frame_capture": nt207_full,
+            "nt207_native_directory_enumeration": False,
             "audio_code_path_reached_not_audible_proof": audio_path,
             "guest_av_display_call_reached": display_count > 0,
             "guest_display_calls_max": display_count,
@@ -167,18 +191,22 @@ def render(result: dict) -> str:
     m = result["milestones"]
     stop = result["stop"]
     label = result["verdict"]
+    frame_probe = result["test"] == "NT207-FRAME-CAPTURE"
     lines = [BEGIN, BAR, BAR,
              "MERCENARIES 360  |  END-OF-RUN MILESTONE VERDICT",
              BAR, BAR]
     if label == "PASS":
         lines += ["", "!" * 72,
-                  "!!!   SUCCESS!!!   XPP INPUT GETSTATE NATIVE CALL PROVED   !!!",
+                  ("!!!   SUCCESS!!!   ORDINAL 207 LIVE FRAME CAPTURED   !!!"
+                   if frame_probe else
+                   "!!!   SUCCESS!!!   XPP INPUT GETSTATE NATIVE CALL PROVED   !!!"),
                   "!" * 72]
     else:
         lines += ["", "#" * 72,
-                  f"###  {label}: XPP INPUT GETSTATE NOT PROVEN  ###",
+                  (f"###  {label}: ORDINAL 207 FRAME NOT PROVEN  ###" if frame_probe
+                   else f"###  {label}: XPP INPUT GETSTATE NOT PROVEN  ###"),
                   "#" * 72]
-    lines += ["", "CURRENT TEST: XPP-INPUT-FAMILY-GETSTATE",
+    lines += ["", "CURRENT TEST: " + result["test"],
               "RESULT: " + label, "WHY: " + result["reason"], "", BAR,
               "MILESTONE BOARD (success means observed, never inferred)",
               BAR]
@@ -201,6 +229,10 @@ def render(result: dict) -> str:
     milestone(m["xpp_setstate_guest_entry"], "Guest XPP SetState entry")
     milestone(m["xpp_setstate_native_return"], "Native XInputSetState returned")
     milestone(m["xpp_close_guest_entry"], "Guest XPP Close entry")
+    milestone(m["nt207_original_directory_frame_capture"],
+              "Xbox original NtQueryDirectoryFile argument frame captured")
+    milestone(m["nt207_native_directory_enumeration"],
+              "Native NtQueryDirectoryFile enumeration completed")
     milestone(m["guest_av_display_call_reached"],
               "REAL guest AvSetDisplayMode / display call",
               " count=" + str(m["guest_display_calls_max"]))
@@ -222,8 +254,12 @@ def render(result: dict) -> str:
                                    else "NO" if stop["fault_zero"] is False
                                    else "UNKNOWN"),
               "Completed log: " + ("YES" if result["completed"] else "NO"),
-              "", "VERDICT RULE: current test SUCCESS requires actual guest",
-              "GetState ENTRY plus real native GetState status trace.",
+              "", "VERDICT RULE: success requires proof of selected TEST,",
+              "not tick increases or static source coverage.",
+              ("Ordinal207 frame capture is DIAGNOSTIC ONLY; native directory"
+               if frame_probe else "XPP GetState success requires actual entry")
+              + (" enumeration still blocked." if frame_probe
+                 else " and native return."),
               "Tick increases alone never cause SUCCESS.",
               "This board is added by a PC log analyzer; it does not",
               "retroactively change what the running Xbox executed.",
@@ -235,6 +271,8 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--log", type=Path, required=False,
                    help="Finished xbWatson text log")
+    p.add_argument("--test", choices=["auto", "xpp", "nt207"], default="auto",
+                   help="Select expected hardware test; auto recognizes ordinal207 probe")
     p.add_argument("--self-test", action="store_true",
                    help="Run synthetic PASS/BLOCKED marker regressions without XDK")
     p.add_argument("--no-append", action="store_true",
@@ -284,6 +322,31 @@ def main() -> int:
         assert not sf["milestones"]["guest_d3d_swap_entry"]
         assert not sf["milestones"]["native_present_recorded"]
         assert not sf["milestones"]["guest_av_display_call_reached"]
+        nt207_log = header + (
+            "[Merc360:P5] K1NT207 FRAME GATE: ordinal=207 NtQueryDirectoryFile "
+            "caller=0023A3CE call_esp=008BF618 saved_esp=008BF644 "
+            "delta=44 expected=44 guarded=1\n"
+            "[Merc360:P5] K1NT207 FRAME RAW0: ret=00000000 a0=48000001 "
+            "a1=00000000 a2=00000000 a3=00000000 a4=008BF794\n"
+            "[Merc360:P5] K1NT207 FRAME RAW1: a5=008BF7D4 a6=00001000 "
+            "a7=00000000 a8=00000000 a9=00000001\n"
+            "[Merc360:P5] K1NT207 FRAME CAPTURED: original_ordinal=207 "
+            "ret=00000000 handle=48000001\n"
+            "[Merc360:P5] K1NT207 PROBE ONLY: NtQueryDirectoryFile "
+            "NOT handled; original hard stop preserved\n"
+            "[Merc360:P5] P6DQ ROCKET HARD STOP kind=2 caller=0023A3CE "
+            "target=800000CF esp=008BF644 ticks=27108191\n"
+        ) + footer
+        nt = summarize(nt207_log, "synthetic", test="auto")
+        assert nt["test"] == "NT207-FRAME-CAPTURE"
+        assert nt["verdict"] == "PASS"
+        assert nt["milestones"]["nt207_original_directory_frame_capture"]
+        assert not nt["milestones"]["nt207_native_directory_enumeration"]
+        assert "SUCCESS!!!   ORDINAL 207 LIVE FRAME CAPTURED" in render(nt)
+        assert "DIAGNOSTIC ONLY" in render(nt)
+        assert summarize(nt207_log.replace("guarded=1", "guarded=0"),
+                         "synthetic", test="nt207")["verdict"] != "PASS"
+        assert summarize(nt207_log, "synthetic", test="xpp")["verdict"] != "PASS"
         print("[MERC360-VERDICT] SELFTEST PASS: BLOCKED, PASS, graphics anti-false-positive")
         return 0
     if args.log is None:
@@ -291,7 +354,7 @@ def main() -> int:
     if not args.log.is_file():
         p.error("Log file missing: " + str(args.log))
     raw = args.log.read_text(encoding="utf-8-sig", errors="replace")
-    result = summarize(raw, str(args.log))
+    result = summarize(raw, str(args.log), test=args.test)
     board = render(result)
     txt = Path(str(args.log) + ".verdict.txt")
     js = Path(str(args.log) + ".verdict.json")
