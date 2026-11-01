@@ -147,7 +147,7 @@ def original(target: dict, item: dict, reader) -> str:
                 "        if (++count<=8u)",
                 "        {",
                 "            char msg[128];",
-                f'            sprintf(msg,"XPP {at:06X} ENTRY n=%u esp=%08X eax=%08X",',
+                f'            sprintf(msg,"XPP {at & 0xFFFFF:05X} ENTRY n=%u esp=%08X eax=%08X",',
                 "                    (unsigned)count,(unsigned)esp,(unsigned)eax);",
                 "            trace(msg);",
                 "        }",
