@@ -1778,3 +1778,47 @@ actual new frontier and guest display_calls/framebuffer. Static compilation is
 not evidence that any entry ran on Xbox. Do not count additional ticks as a
 success if no meaningful behavior changes; preserve all MMIO/VP fences and
 do not synthesize Swap or display events.
+
+## Watson log success/failure/milestone verdict (no new XEX!)
+
+Watson's high-volume heartbeat and debug stream is not intended to be watched
+live. **After the capture has finished**, get one honest, conspicuous verdict
+board appended to the END of that text log using:
+
+    cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
+    git pull --ff-only
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Show-Merc360WatsonVerdict.ps1"
+
+The command opens a Windows file-picker for the finished xbWatson .txt/.log.
+To supply a path instead, use -LogPath "C:\path\to\watson_log.txt".
+For a read-only run without appending to the log use -NoAppend.
+
+The board is printed in the console, saved as <log>.verdict.txt and
+<log>.verdict.json, and (unless -NoAppend) appended after the final Watson
+line with unique MERC360 POST-RUN VERDICT delimiters. Repeating the
+command on the same unchanged log does not duplicate the final board.
+This is a PC-side analyzer and adds NO new instrumentation to the XEX.
+
+SUCCESS!!! is reserved for proof of the **current test's** objective:
+the actual XPP D54AC ENTRY plus an XPP XINPUT state: runtime status
+message proving the real native XInputGetState returned. An unsuccessful
+controller connection is a separate item from whether the native call
+executed. If a prior hard stop occurs first, print BLOCKED, NOT SUCCESS.
+The current test's previous hardware tick counter alone never implies PASS.
+
+Separate milestone lines cover the retail XBE, host Xenos device, guest
+D3D device handoff, each new XPP entry, first REAL guest display call
+(display_calls > 0), nonzero guest framebuffer, guest D3D Swap entry,
+native Present instrumentation and DSOUND/XACT path. A framebuffer
+address does not prove visible pixels; an initialized Xenos device is
+not guest Swap. Unobserved features are explicitly NOT REACHED.
+The report also prints the actual last guest hard-stop target, call
+kind, tick count and fault flag. Never interpret source-only static
+function lists as executed graphics events.
+
+For the 2026-11-01 example run, the latest hard stop was 0x800000CF
+at 27,108,191 ticks (fault=0); only guest XPP InitDevices and DeviceChanges
+were observed, no GetState/SetState/Close entry, guest display_calls=0,
+framebuffer=0. Expected report: BLOCKED with positive older XBE/Xenos/D3D
+milestones but no claim of first pixels. This does not imply all newly
+staged XPP functions executed.
