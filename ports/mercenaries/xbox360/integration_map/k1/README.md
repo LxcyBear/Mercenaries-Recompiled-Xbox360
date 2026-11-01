@@ -1874,3 +1874,42 @@ over the already-verified native game:\dataxbox\ directory, respecting
 real filenames and matching filter semantics, buffers, IOSB, no-more-
 files status and 32-bit return/stack cleanup. Unknown guest classes
 and invalid native handles must remain hard-fenced.
+
+### K1NT207 Xbox hardware capture 2026-11-01 (proof PASS; kernel still fenced)
+
+The Watson hardware log Pasted text(20261101-054737).txt contains each
+of the five K1NT207 diagnostic labels exactly once. The first live
+original Xbox ordinal 207 call has a 44-byte frame and ten DWORD args:
+
+    K1NT207 FRAME GATE: ordinal=207 NtQueryDirectoryFile caller=0023A3CE call_esp=008BF618 saved_esp=008BF644 delta=44 expected=44 guarded=1
+    K1NT207 FRAME RAW0: ret=00000000 a0=48000001 a1=00000000 a2=00000000 a3=00000000 a4=008BF794
+    K1NT207 FRAME RAW1: a5=008BF64C a6=00000148 a7=00000001 a8=008BF7A8 a9=00000000
+    K1NT207 FRAME CAPTURED: original_ordinal=207 ret=00000000 handle=48000001 iosb_candidate=008BF794 output_candidate=008BF64C length_candidate=328 arg7=00000001 arg8=008BF7A8 arg9=00000000
+
+The preceding live NtOpenFile opened xbox d:\dataxbox\ mapped to
+native game:\dataxbox\, status=0, virtual token=48000001.
+The query likely means handle=a0, Event=a1, ApcRoutine=a2,
+ApcContext=a3, IOStatusBlock=a4 (also matched previous NtOpenFile IOSB),
+FileInformation=a5, Length=a6=328, FileInformationClass=a7=1
+(FileDirectoryInformation), FileName filter pointer=a8, RestartScan=a9.
+Only RAW values are hardware-proven: the contents of a8 were not captured.
+Verify that a8 is a well-formed 8-byte Xbox ANSI_STRING and validate the
+name/mask before following or trusting it. Xbox directory information
+names are OCHAR (ANSI bytes), NOT the WCHAR tail on modern Windows.
+Do not confuse this 10-argument original Xbox signature with modern
+Windows variants or emulator-specific reduced prototypes.
+
+Physical result still P6DQ ROCKET HARD STOP kind=2 target=800000CF,
+ticks=27108191, fault=0. Guest display_calls=0, framebuffer=0.
+No GetState/SetState/Close entry was recorded in this run.
+The K1NT207 SUCCESS! verdict means *frame captured* only, not that
+native directory enumeration executed or any pixels appeared.
+
+Next engineering gate: guarded native FindFirstFileA/FindNextFileA
+over the real game: backing path, with exact Xbox class-1 directory
+record layout (64-byte fixed fields followed by OCHAR filename),
+bounded guest ANSI_STRING pattern, per-handle cursor, real timestamps
+and attributes, IOSB length/status, NO_MORE_FILES semantics, and
+conservative hard fences for unsupported classes. Ensure original 44B
+frame and saved ESP are validated before any guest-visible changes,
+and add no-build tests before compiling an incremental XEX.
