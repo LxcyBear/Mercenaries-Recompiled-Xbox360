@@ -30,7 +30,7 @@ DISPLAY = re.compile(r"\bdisplay_calls=(\d+)")
 FB = re.compile(r"\bframebuffer=([0-9A-Fa-f]{8})")
 GSTATE = re.compile(r"XPP XINPUT state:.*?\bstatus=([0-9A-Fa-f]{8})")
 SSTATE = re.compile(r"XPP XINPUT setstate:.*?\bstatus=([0-9A-Fa-f]{8})")
-FRAME = re.compile(r"\b(?:native_present_calls|present_calls|swap_calls)=(\d+)")
+FRAME = re.compile(r"\b(?:native_present_calls|xenos_present_calls)=(\d+)")
 # Runtime-specific evidence only. A static xref/compiled symbol is NOT an entry.
 SWAP_ENTRY = re.compile(
     r"(?:\bD3DDevice_Swap\s+(?:ENTRY|ENTERED|LIVE)\b|"
@@ -233,11 +233,61 @@ def render(result: dict) -> str:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--log", type=Path, required=True,
+    p.add_argument("--log", type=Path, required=False,
                    help="Finished xbWatson text log")
+    p.add_argument("--self-test", action="store_true",
+                   help="Run synthetic PASS/BLOCKED marker regressions without XDK")
     p.add_argument("--no-append", action="store_true",
                    help="Only print and write sibling reports")
     args = p.parse_args()
+    if args.self_test:
+        header = "[Merc360:P5] PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF START\n"
+        footer = "[Merc360:P5] PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF END\n"
+        blocked = header + (
+            "[Merc360:P5] XPP D5574 ENTRY n=1\n"
+            "[Merc360:P5] P6DQ ROCKET HARD STOP kind=2 caller=0023A3CE "
+            "target=800000CF esp=008BF644 ticks=27108191\n"
+            "[Merc360:P5] P6DQ AV FAMILY: display_calls=0 "
+            "framebuffer=00000000\n"
+        ) + footer
+        b = summarize(blocked, "synthetic")
+        assert b["verdict"] == "BLOCKED"
+        assert b["stop"]["target"] == "0x800000CF"
+        assert b["stop"]["ticks"] == 27108191
+        assert not b["milestones"]["guest_d3d_swap_entry"]
+        assert not b["milestones"]["guest_av_display_call_reached"]
+        assert "SUCCESS!!!   XPP INPUT GETSTATE" not in render(b)
+        passed = header + (
+            "[Merc360:P5] XPP D54AC ENTRY n=1\n"
+            "[Merc360:P5] XPP XINPUT state: handle=1 port=0 "
+            "status=00000000 out=008BF000 packet=12\n"
+            "[Merc360:P5] P6DQ AV FAMILY: display_calls=1 "
+            "framebuffer=02628000\n"
+            "[Merc360:P5] D3DDevice_Swap ENTRY n=1\n"
+            "[Merc360:P5] native_present_calls=1\n"
+        ) + footer
+        ok = summarize(passed, "synthetic")
+        assert ok["verdict"] == "PASS"
+        assert ok["milestones"]["guest_av_display_call_reached"]
+        assert ok["milestones"]["guest_framebuffer_nonzero"]
+        assert ok["milestones"]["guest_d3d_swap_entry"]
+        assert ok["milestones"]["native_present_recorded"]
+        assert "SUCCESS!!!   XPP INPUT GETSTATE" in render(ok)
+        mismatch = passed.replace("XPP D54AC ENTRY", "XPP 002D559B ENTRY")
+        assert summarize(mismatch, "synthetic")["verdict"] != "PASS"
+        static_false = header + (
+            "[Merc360:P5] static D3DDevice_Swap 0x0028BDB0\n"
+            "[Merc360:P5] P6DQ AV FAMILY: display_calls=0 "
+            "framebuffer=00000000 swap_calls=8\n"
+        ) + footer
+        sf = summarize(static_false, "synthetic")
+        assert not sf["milestones"]["guest_d3d_swap_entry"]
+        assert not sf["milestones"]["native_present_recorded"]
+        assert not sf["milestones"]["guest_av_display_call_reached"]
+        print("[MERC360-VERDICT] SELFTEST PASS: BLOCKED, PASS, graphics anti-false-positive")
+        return 0
+    if args.log is None:
+        p.error("--log is required except when --self-test is used")
     if not args.log.is_file():
         p.error("Log file missing: " + str(args.log))
     raw = args.log.read_text(encoding="utf-8-sig", errors="replace")
