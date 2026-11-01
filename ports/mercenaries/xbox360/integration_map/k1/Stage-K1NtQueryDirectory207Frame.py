@@ -79,11 +79,17 @@ PROBE=r'''    /* K1NT207-DIRECTORY-FRAME-WITNESS-20261101
     }
 '''
 
-REGEX=re.compile(
-    r"(?P<start>static void phase6dq_note_hard_stop\s*\(\s*"
-    r"uint32_t kind\s*,\s*uint32_t target\s*,\s*uint32_t caller\s*,\s*"
-    r"uint32_t savedEsp\s*\)\s*\{\s*uint32_t i;\s*char line\[448\];)",
-    re.M)
+# Match the exact live hard-stop LOGGING STATEMENT, not the fragile
+# function header/local-declaration layout.  Later integration stages can
+# add locals, qualifiers or instrumentation to the function without
+# changing the journal anchor.  The expression still requires the original
+# trace(line) call immediately after the hard-stop sprintf and never matches
+# a cached Python declaration of the string.
+HARD_STOP_ANCHOR = re.compile(
+    r'\bsprintf\s*\(\s*line\s*,\s*"P6DQ ROCKET HARD STOP[^"]*"'
+    r'[^;]{0,3000};\s*trace\s*\(\s*line\s*\)\s*;',
+    re.M
+)
 
 def sha(p:Path)->str: return hashlib.sha256(p.read_bytes()).hexdigest()
 
@@ -91,14 +97,24 @@ def transform(text:str)->str:
     if MARKER in text: raise ValueError("Existing K1NT207 probe present")
     if text.count("P6DQ ROCKET HARD STOP") != 1:
         raise ValueError("Rocket hard-stop runtime marker not unique")
-    matches=list(REGEX.finditer(text))
+    matches=list(HARD_STOP_ANCHOR.finditer(text))
     if len(matches)!=1:
-        raise ValueError("phase6dq_note_hard_stop exact source anchor missing or duplicated")
+        raise ValueError(
+            "Expected ONE P6DQ hard-stop sprintf+trace anchor; found "
+            + str(len(matches)) + ". Do not build."
+        )
+    hit=matches[0]
+    fn=text.rfind("phase6dq_note_hard_stop", 0, hit.start())
+    if fn<0 or hit.start()-fn>5000:
+        raise ValueError(
+            "P6DQ hard-stop logging anchor no longer lies inside "
+            "phase6dq_note_hard_stop; refuse insertion"
+        )
     n="\r\n" if "\r\n" in text else "\n"
     if text.count("\r")!=text.count("\r\n"):
         raise ValueError("Mixed newlines in host")
     insertion=n+PROBE.replace("\n",n)
-    result=text[:matches[0].end()] + insertion + text[matches[0].end():]
+    result=text[:hit.end()] + insertion + text[hit.end():]
     if result.count(MARKER)!=1 or result.count("K1NT207 FRAME CAPTURED")!=1:
         raise ValueError("Frame probe insertion/uniqueness failed")
     if result.count("P6DQ ROCKET HARD STOP")!=1:
@@ -198,6 +214,8 @@ def stage(a):
     print("[K1NT207] Next hardware proof: raw a0..a9 + return, class/filename ABI analysis")
 
 def self_test():
+    # The real Rocket source logs hard stop AFTER an sprintf; do not depend
+    # on its exact header/locals.  Exercise both original and drifted layout.
     stub="""static void phase6dq_note_hard_stop(
     uint32_t kind,
     uint32_t target,
@@ -206,25 +224,51 @@ def self_test():
 {
     uint32_t i;
     char line[448];
-
-    sprintf(line,"P6DQ ROCKET HARD STOP");
+    sprintf(line,
+        "P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X esp=%08X ticks=%u",
+        (unsigned)kind,(unsigned)caller,(unsigned)target,
+        (unsigned)savedEsp,(unsigned)s_phase4cBlockTicks);
+    trace(line);
+    sprintf(line,"P6DQ ROCKET HARD REGS eax=%08X",(unsigned)g_eax);
+    trace(line);
 }"""
-    out=transform(stub)
-    assert MARKER in out
-    assert out.count("P6DQ ROCKET HARD STOP")==1
-    assert "savedEsp == k1nt207_callEsp + 44u" in out
-    assert "a[j]=GUEST_READ32(k1nt207_callEsp+j*4u)" in out
-    assert "K1NT207 PROBE ONLY:" in out
+    for base in (
+        stub,
+        stub.replace("char line[448];", "char line[512];\n    uint32_t diagnostic = 0u;"),
+        stub.replace("\n", "\r\n"),
+    ):
+        out=transform(base)
+        assert MARKER in out
+        assert out.count("P6DQ ROCKET HARD STOP")==1
+        assert "savedEsp == k1nt207_callEsp + 44u" in out
+        assert "a[j]=GUEST_READ32(k1nt207_callEsp+j*4u)" in out
+        assert "K1NT207 PROBE ONLY:" in out
+        assert "P6DQ ROCKET HARD REGS" in out
+        assert out.index("P6DQ ROCKET HARD STOP") < out.index(MARKER)
+        assert out.index(MARKER) < out.index("P6DQ ROCKET HARD REGS")
+        newline="\r\n" if "\r\n" in base else "\n"
+        assert out.replace(newline+PROBE.replace("\n",newline), "", 1)==base
+        try:
+            transform(out)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Probe insertable twice")
     for forbidden in ("g_eax =", "g_esp =", "GUEST_WRITE32(",
                       "phase4c_escape(", "NtQueryDirectoryFile("):
         assert forbidden not in PROBE, "Unsafe behavior in diagnostic "+forbidden
-    try:
-        transform(out)
-    except ValueError:pass
-    else:raise AssertionError("Probe accidentally insertable twice")
-    assert len(re.findall("GUEST_READ32\\(",PROBE))==1
     assert PROBE.count("if (kind == 2u && target == 0x800000CFu)") == 1
-    print("[K1NT207] SELFTEST PASS: ordinal207 frame capture only, hard stop retained")
+    assert PROBE.count("GUEST_READ32(")==1
+    for drift in (stub.replace("trace(line);","log_something_else();",1),
+                  stub.replace("P6DQ ROCKET HARD STOP","P6DQ UNKNOWN HARD STOP")):
+        try:
+            transform(drift)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Unsafe unknown rocket logging layout accepted")
+    print("[K1NT207] SELFTEST PASS: stable runtime journal anchor, "
+          "CRLF + added locals, hard stop retained, zero guest writes")
 
 def main():
     p=argparse.ArgumentParser()
