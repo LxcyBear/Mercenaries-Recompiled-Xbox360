@@ -28,6 +28,10 @@ $scriptPath=Join-Path $PSScriptRoot "Report-Merc360Milestones.py"
 if(-not(Test-Path -LiteralPath $scriptPath -PathType Leaf)){
     throw "[MERC360-VERDICT] Missing companion Python analyzer: $scriptPath"
 }
+& $python -u $scriptPath --self-test
+if($LASTEXITCODE -ne 0){
+    throw "[MERC360-VERDICT] Milestone classification self-test failed; no log modifications"
+}
 Write-Host "[MERC360-VERDICT] Reading completed Watson run (no Xbox access)"
 $argsList=@("-u",$scriptPath,"--log",$LogPath)
 if($NoAppend){$argsList+="--no-append"}
