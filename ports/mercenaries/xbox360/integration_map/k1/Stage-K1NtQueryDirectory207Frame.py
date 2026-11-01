@@ -137,7 +137,8 @@ def stage(a):
         if not expected or sha(p)!=expected:
             raise ValueError("Inherited TrueTU hash mismatch: "+p.name)
 
-    src=a.parent_main.read_text(encoding="utf-8")
+    # Preserve the original Windows line endings; never normalize main.cpp.
+    src=a.parent_main.read_bytes().decode("utf-8")
     for marker in ("XPP D54AC ENTRY", "XPP D551F ENTRY",
                    "XPP D52C8 ENTRY", "P6DQ ROCKET HARD STOP",
                    "P6DQ-R51-MM173-FRAME-20261029-A"):
