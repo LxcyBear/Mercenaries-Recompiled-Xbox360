@@ -1729,3 +1729,52 @@ previous hardware witness and renderer/presentation counters.
 Do not use static callgraph position as a replacement for real runtime
 execution. No private XBE, original C translations or guest bytes should
 enter GitHub.
+
+## Source-closed XPP input family (Close + SetState), preflight before ONE XDK build
+
+The no-XDK predictive report found all eight original input wrappers. Six
+are already source-staged in the D54AC parent; the only two still fenced
+have exact guest caller sites:
+
+- XInputClose 0x002D52C8: 12 original bytes, one return-stack argument
+  and ESP +8, direct site in translated_005.cpp.
+- XInputSetState 0x002D551F: 51 original bytes, two return-stack
+  arguments and ESP +12, direct site in translated_027.cpp.
+- Real XInputGetState 0x002D54AC: 22-byte guest state, already staged
+  by the inherited D54AC preflight.
+
+Stage-XppInputFamily.py rejects original-source SHA drift, unexpected
+return/EAX/stack layout, additional helper dependencies, any changed direct
+frontier owner, duplicate translated definitions and changed parent hashes.
+The source hashes match the local predictive report; original generated guest
+code stays on the user's PC. Native XInputClose remains a no-op as in the
+original PC compatibility reference. Native SetState reads two 16-bit rumble
+motors from feedback offsets 0x42 and 0x44, inside a 0x46-byte original
+Xbox guest buffer, then calls actual Xbox 360 XInputSetState. The input handle
+is port+1, as in inherited native GetState. Never write a native feedback
+struct directly to original guest memory.
+
+Windows PowerShell 5.1, no build by default:
+
+    cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
+    git pull --ff-only
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-XppInputFamily.ps1"
+
+This command also revalidates the D54AC parent preflight. Only after PASS,
+deliberately run ONE incremental Release Xbox360 build with:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-XppInputFamily.ps1" -Build
+
+Expected changed TrueTUs: translated_005.cpp, translated_027.cpp,
+translated_033.cpp; the remaining 61 TUs and runtime header must be
+byte-identical to the D54AC stage. SkipClean=true, local shadow root reused,
+no Xbox deployment from the runner. Output:
+
+    build\phase6_integration_map\xpp_input_family_batch\xdk\Merc-XPP-InputFamily.xex
+
+Hardware witness required: D54AC guest entry + real GetState native status;
+if execution reaches them, D551F/D52C8 entry and SetState status;
+actual new frontier and guest display_calls/framebuffer. Static compilation is
+not evidence that any entry ran on Xbox. Do not count additional ticks as a
+success if no meaningful behavior changes; preserve all MMIO/VP fences and
+do not synthesize Swap or display events.
