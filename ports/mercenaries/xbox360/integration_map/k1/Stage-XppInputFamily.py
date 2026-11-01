@@ -280,7 +280,10 @@ def stage(a):
             or a.out_main.resolve() == a.parent_main.resolve()
             or a.out.parent == a.shards):
         raise ValueError("Refusing overwrite of last known staged sources")
-    expected_files = {p.name: altered[p.name].encode("utf-8") for p in files}
+    # Preserve byte-identical files so VS2017 can reuse every unchanged TU.
+    # Reading text normalizes Windows CRLF; never re-encode unchanged shards.
+    expected_files = {p.name: (altered[p.name].encode("utf-8") if p.name in changed
+                               else p.read_bytes()) for p in files}
     expected_files.update({p.name: p.read_bytes() for p in headers})
     a.out.mkdir(parents=True, exist_ok=True)
     if {p.name for p in a.out.iterdir()} not in (set(), set(expected_files)):
