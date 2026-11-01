@@ -1822,3 +1822,55 @@ were observed, no GetState/SetState/Close entry, guest display_calls=0,
 framebuffer=0. Expected report: BLOCKED with positive older XBE/Xenos/D3D
 milestones but no claim of first pixels. This does not imply all newly
 staged XPP functions executed.
+
+## Kernel ordinal 207 NtQueryDirectoryFile: hardware-proven real frontier
+
+The 2026-11-01 Watson log stopped on original Xbox kernel thunk
+0x800000CF (ordinal 207, NtQueryDirectoryFile) at translated
+tick=27,108,191, fault=0, caller=0x0023A3CE. Immediately beforehand:
+- XPP init devices and device changes entered on Xbox.
+- NtOpenFile path d:\dataxbox\ translated to game:\dataxbox\ and
+  succeeded with virtual handle 0x48000001.
+- Boundary call_esp=0x008BF618 saved_esp=0x008BF644;
+  stack delta=44 bytes including return slot -> 10 original Xbox
+  32-bit stack arguments (the original export is NtQueryDirectoryFile@40).
+- The runtime did NOT reach 0x002D54AC native GetState after this
+  boundary. display_calls=0, framebuffer=0.
+
+Do not confuse original-Xbox ordinal 207 with Xbox 360 kernel ordinals.
+Do not blindly use a Windows/x86 or emulator NtQueryDirectoryFile ABI:
+the original Xbox XDK @40 export and other emulator declarations differ
+in their parameter count. Before implementing directory enumeration,
+capture real RAW a0..a9 and verify the exact output information layout,
+filename filter, restart behavior and IOSB semantics.
+
+The K1NT207 probe modifies main.cpp ONLY, and copies all 64 TrueTUs
+byte-for-byte, preserving the source/ABI-closed XPP input family. It
+records raw arguments at the existing hard stop; it cannot return
+success or enumerate any files. Source self-tests and parent hashes
+are mandatory.
+
+Default is NO XDK build; use Windows PowerShell 5.1:
+
+    cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
+    git pull --ff-only
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1NtQueryDirectory207.ps1"
+
+After the preflight PASS, one meaningful incremental frame-capture XEX
+can be compiled explicitly (no clean):
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1NtQueryDirectory207.ps1" -Build
+
+Output (not deployed automatically):
+
+    build\phase6_integration_map\k1_ntquerydirectory207\xdk\Merc-K1NT207-FrameProbe.xex
+
+Look for K1NT207 FRAME GATE/RAW0/RAW1/CAPTURED and the original
+HARD STOP 0x800000CF. The milestone analyzer recognizes the ABI capture
+separately: SUCCESS!!! means the diagnostic captured real guest
+arguments, NOT that NtQueryDirectoryFile was serviced or the game ran
+farther. With the captured frame, implement exact guest enumeration
+over the already-verified native game:\dataxbox\ directory, respecting
+real filenames and matching filter semantics, buffers, IOSB, no-more-
+files status and 32-bit return/stack cleanup. Unknown guest classes
+and invalid native handles must remain hard-fenced.
