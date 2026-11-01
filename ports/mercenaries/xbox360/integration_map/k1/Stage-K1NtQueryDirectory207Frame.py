@@ -223,7 +223,7 @@ def self_test():
     except ValueError:pass
     else:raise AssertionError("Probe accidentally insertable twice")
     assert len(re.findall("GUEST_READ32\\(",PROBE))==1
-    assert len(re.findall(r"\\bif \\(kind == 2u && target == 0x800000CFu\\)",PROBE))==1
+    assert PROBE.count("if (kind == 2u && target == 0x800000CFu)") == 1
     print("[K1NT207] SELFTEST PASS: ordinal207 frame capture only, hard stop retained")
 
 def main():
