@@ -77,3 +77,35 @@ Xbox hardware must independently prove:
 If Xbox 360 XDK compilation reports an unavailable Reset entrypoint or an
 API contract difference, fix that using the local XDK headers. Do NOT
 replace Reset with S_OK, skip the second CreateDevice, or remove its fences.
+
+## First hardware result and R2 follow-up
+
+First hardware K1D3D run on November 3, 2026 (build tag includes
+P6K1-D3D-SECOND-CREATE-20261103):
+* K1STATE MAIN CHECKPOINT: calls=1, state=59C00449, substate=039D462F.
+* Second PP 640x480 format 6, buffers=2, multisample=0x1121 accepted by
+  the explicit presentation contract.
+* The *new ownership check* stopped before Xenos Reset:
+  K1D3D SECOND: first-device ownership/out-pointer contract drift.
+* Final ticks=58,540,130, RENDERER_FATAL 0x80070057, display_calls=0.
+* First CreateDevice bridge count=1 and identity=0x00299380 in summary;
+  the old ownership guard did not report out-slot readback, so the
+  actual second-call out-slot contents are UNKNOWN at this checkpoint.
+
+R2 therefore reads the out slot ONCE and checks s_accessFault first; logs
+the actual first-device call count, identity, out slot address and slot value;
+then only accepts the two proven-compatible values 0 (caller cleared the
+slot) or 0x00299380 (first guest device) at the observed 0x007AD604
+address. Unknown nonzero pointers and all other identity/ownership
+changes remain fatal. The native Reset is still obligatory before guest
+success, not fabricated. Do not claim R2 hardware success without a log.
+
+R2 output directory:
+build\phase6_integration_map\k1_d3d_second_create_r2
+
+R2 XEX:
+build\phase6_integration_map\k1_d3d_second_create_r2\xdk\Merc-K1D3D-SecondCreateDevice-r2.xex
+
+The R2 path is intentionally isolated from the previous completed stage:
+the source stager refuses to overwrite earlier generated outputs when
+they differ. Keeping the earlier XEX aids rollback and differential tests.
