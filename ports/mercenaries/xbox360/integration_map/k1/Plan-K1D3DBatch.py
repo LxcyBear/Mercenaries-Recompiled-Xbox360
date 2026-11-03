@@ -706,14 +706,15 @@ def selftest() -> None:
     }
     cls = classify(ITAIL, by_va, generated)
     assert cls["classification"] == "interior_label"
-    generated[JUMP_TABLE_SOURCE] = {
+    proof_generated = dict(generated)
+    proof_generated[JUMP_TABLE_SOURCE] = {
         "name": "sub_00296550",
         "source": "void sub_00296550(void){ eax=edi; "
                   "PUSH32(esp, esi); eax = eax & 0xF; "
                   "RECOMP_ITAIL(GUEST_READ32(eax * 4 + 0x2965D4));}",
         "file": "original.c",
     }
-    jt = prove_d3d_jump_table(by_va, generated)
+    jt = prove_d3d_jump_table(by_va, proof_generated)
     assert jt["entries"] == 16
     assert jt["table_end_exclusive"] == "0x00296614"
     assert jt["ambiguous_code_data_region"] and not jt["safe_to_emulate_tail_target"]
@@ -729,7 +730,7 @@ def selftest() -> None:
         by_va, generated)
     assert sample_table["hardware_target_match_indices"] == [0]
     assert sample_table["entries"][0]["destination_in_75_byte_gap"]
-    assert not sample_table["entries"][0]["destination_in_d3d_section"] is False
+    assert sample_table["entries"][0]["destination_in_d3d_section"]
     try:
         prove_d3d_jump_table(by_va, {
             **generated, JUMP_TABLE_SOURCE: {
