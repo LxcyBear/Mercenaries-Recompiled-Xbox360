@@ -70,7 +70,7 @@ static void k1nt207_skip_dots(K1Nt207Cursor* c)
 # The original 10-argument Xbox call has no ReturnSingleEntry argument.
 # Do not use the *modern Windows* (11-argument) prototype.
 HANDLER=r'''
-static void k1nt207_nt_query_directory_file(uint32_t savedEsp)
+void k1nt207_nt_query_directory_file(uint32_t savedEsp)
 {
     const uint32_t callEsp=g_esp;
     uint32_t words[11];
@@ -512,6 +512,8 @@ def self_test():
         assert forbidden not in HANDLER
     assert "GUEST_WRITE32(recordVa+60u,nameLen)" in HANDLER
     assert "GUEST_WRITE8(recordVa+64u+i," in HANDLER
+    assert "void k1nt207_nt_query_directory_file(uint32_t savedEsp)\n{" in HANDLER
+    assert "static void k1nt207_nt_query_directory_file" not in HANDLER
     assert "savedEsp!=callEsp+44u" in HANDLER
     assert "FindFirstFileA(search,&cursor->entry)" in HANDLER
     assert "FindNextFileA(cursor->search,&cursor->entry)" in HANDLER
