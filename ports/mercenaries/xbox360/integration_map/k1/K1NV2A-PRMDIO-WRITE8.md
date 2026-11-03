@@ -18,6 +18,56 @@ The `caller=0023A3CE` from the trace ring is **not** the exact translated
 instruction PC. `EAX=00000001` is also **not** proof that the byte argument
 to the write was 01.
 
+## Verified real hardware witness after the first diagnostic XEX (2026-11-03)
+
+The new first-fault instrumentation **executed on real Xbox 360 hardware**:
+
+```text
+K1NV2A EXACT WRITE8: addr=FD6813C8 value=00 last_guest_block_va=0028ED48 esp=008BF3E8 eax=00000001 ecx=FD000000 edx=0029B484 ebx=0029B484 esi=FFFFFF00 edi=0029B784
+FAULT ACCESS IMMEDIATE: WRITE width=1 guest=FD6813C8
+P6DQ ROCKET HARD STOP ... ticks=56902779
+P6DQ PIXEL CHASE: ... display_calls=0 framebuffer=00000000
+```
+
+**PROVED:** the passed `recomp_guest_write8` byte is `00`.
+The most recently tracked translated basic block is `0028ED48`,
+within the retail `D3D` XBE section (VA `00288640`,
+offset `+6708`; section raw starts `0027A000` giving raw file
+offset `00280708`). `ECX=FD000000` corroborates the original
+Xbox NV2A MMIO base. This is **not** proof of the individual x86
+store instruction or of successful guest presentation.
+
+The original XBE map is confirmed in the live log. The user again
+observed purple, but hardware counters still show no guest
+`Swap` or framebuffer.
+
+### Targeted PC-only source/disassembly replay, no Xbox run
+
+Pull the branch after the XDK build completes. From repo root:
+
+```powershell
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw "Git pull failed" }
+$script = ".\ports\mercenaries\xbox360\integration_map\k1\Audit-K1NV2ASource.py"
+$shards = ".\build\phase6_integration_map\k1_ntquerydirectory207_native\translated_shards"
+$xbe = ".\game_files\mercenaries-retail\default.xbe"
+$argsAudit = @("--shards", $shards, "--focus-va", "0x0028ED48",
+               "--out", ".\build\phase6_integration_map\k1_nv2a_prmdio_write8\focused-0028ED48.txt",
+               "--max", "8")
+if (Test-Path -LiteralPath $xbe -PathType Leaf) { $argsAudit += @("--xbe", $xbe) }
+python $script @argsAudit
+if ($LASTEXITCODE -ne 0) { throw "Focused source audit failed" }
+```
+
+The updated auditor always prints the **actual translated block
+around `PHASE4C_BUDGET_TICK(0x0028ED48u)`**, whether or not the
+general call-site heuristic finds a corresponding WRITE8. When the
+exact verified XBE is accessible, it also prints the 32-bit original
+x86 instructions starting at `0028ED48` (Capstone required for
+instruction decoding). If there is no matching marker, report that
+honestly: the tracker might be stale or the source set different.
+The output is local source excerpts and metadata, not game files.
+
 ## GPU register identification
 
 This address is in the original Xbox NV2A MMIO BAR at
