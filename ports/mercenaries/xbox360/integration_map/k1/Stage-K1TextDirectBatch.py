@@ -245,6 +245,8 @@ def self_test(base, p5bb, p5bc):
         'void recomp_frontend_shell_loop_checkpoint(void) {}\n'
     )
     p = ('#define PHASE4C_BUDGET_TICK(va) ((void)0)\n'
+         '#define GUEST_READ32(addr) ((uint32_t)0)\n'
+         '#define GUEST_WRITE32(addr,value) ((void)0)\n'
          'P6K1-THREELANE-20261103\n'
          'K1PFIFO DMA_PUT READ32:\nP6DQ ROCKET HARD STOP\n'
          'static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n'
@@ -292,13 +294,8 @@ def self_test(base, p5bb, p5bc):
     witness = io.StringIO()
     try:
         with contextlib.redirect_stdout(witness):
-            # Change only the required PC-only helper to another true missing
-            # helper, so the mandatory root still fails with exact evidence.
-            unsupported[ROOT]['source'] = generated[ROOT]['source'].replace(
-                "recomp_main_state_checkpoint(", "k1_missing_real_helper("
-            )
-            # Explicitly inspect this case with the checkpoint shape restored
-            # to the genuine source and an additional unsupported call.
+            # The required PC helper is supported, but an unrelated missing
+            # runtime function must remain a fail-closed original source stop.
             unsupported[ROOT]['source'] = (
                 generated[ROOT]['source'].replace(
                     '    GUEST_WRITE32(0x413F6C, eax);',
