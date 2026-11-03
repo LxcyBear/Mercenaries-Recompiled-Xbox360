@@ -125,11 +125,10 @@ without original instruction-boundary and guest stack/register proof.
 The latest known good native Reset/64 TrueTUs remain unchanged.
 
 
-## Source-proven D3D 16-way jump table (latest 2026-11-03 audit)
+## Retail-XBE-verified switch case dispatch (November 3, 2026)
 
 The exact retail generated C function sub_00296550 spans
-0x00296550–0x0029655D (13 bytes, 4 original x86 instructions)
-and ends with:
+0x00296550–0x0029655D (13 original x86 bytes). Its tail is:
 
     eax = edi;
     PUSH32(esp, esi);
@@ -137,45 +136,70 @@ and ends with:
     g_seh_ebp = ebp;
     RECOMP_ITAIL(GUEST_READ32(eax * 4 + 0x2965D4));
 
-This provides concrete *original C* evidence of a computed 16-way
-indirect tail jump, with ESI pushed onto the guest stack before the jump.
-The Xbox observed destination was 0x0029655D, exactly the previous
-function's end-exclusive boundary. It is **not** a recognized function
-start. The recognized next function starts at 0x002965A8, 75 bytes
-later.
+The guest value EDI & 15 permits indices 0..15, but this does NOT
+prove sixteen valid table-pointer entries.
 
-The indexed table reads 16 32-bit little-endian DWORD slots at
-0x002965D4 through 0x00296613, end-exclusive 0x00296614.
-This is significant: the function inventory claims sub_002965F0
-starts at 0x002965F0, *inside that table*, at slot 7
-(0x002965F0 - 0x002965D4 = 28 bytes = 7 DWORDs).
+The user-local **exact SHA-256 verified** original retail XBE
+(AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7)
+proves the following STATIC pointer table at 0x002965D4:
 
-Consequently, **code-versus-data provenance is now suspect** for
-this segment. The original function inventory and generated source
-do not independently prove that the 16 slots are ordinary immutable
-function addresses, nor that sub_002965F0 is truly safe compiled
-code at that overlapping address. D3D guest memory may be modified
-at runtime. Do not automatically prune or erase sub_002965F0 or
-invent guest execution at 0x0029655D.
+| Index | Original DWORD target |
+| --- | --- |
+| 0 | 0x002965A3 |
+| 1 | 0x00296599 |
+| 2 | 0x0029655D |
+| 3 | 0x00296577 |
+| 4 | 0x0029657E |
+| 5 | 0x00296592 |
+| 6 | 0xCCCCCCCC (padding/sentinel) |
 
-The K1 batch planner now validates the exact original 96550
-source instruction pattern and reports this table/code overlap.
-When a local exact-SHA retail default.xbe path is provided,
-it also extracts all 16 actual original XBE DWORDs and classifies
-each target relative to the retail inventory, flagging the
-hardware-observed destination and any branch targets in the gap.
-This is **static file** evidence, NOT a claim that those DWORDs
-were unchanged at the time of execution on Xbox 360.
+The hardware-observed ITAIL destination 0x0029655D **exactly**
+matches original slot 2. The destinations are in the 75-byte
+0x0029655D–0x002965A8 original function-inventory gap. They are
+genuine original jump-table *data values*, not guessed function
+starts or necessarily already-proven x86 instruction boundaries.
 
-Run without a build:
+The previous audit's "16 valid TABLE entries" and "CODE/DATA CONFLICT
+at 0x002965F0" presentation was **misleading**. Starting at
+0x002965F0, the original bytes are executable-looking x86 machine
+code (e.g. 8B 4C 24 04), not further jump-table pointers. The
+function inventory places sub_002965F0 at that address; it need not
+be pruned on account of a presumed data overlap. The real hazard
+is that an EDI index >= 6 would use the padding sentinel or
+interpret *code bytes* as jump targets. The original caller's
+range contract has NOT yet been proven. Only the six observed
+static cases are safe to treat as legitimate case entries.
+
+**No fix can be fabricated yet**: the local original x86 instructions
+in 0x0029655D..0x002965D3, branch/fallthrough reachability, entry
+alignment, ESI/ESP guest tail-call contract, and common follow-on
+function ownership must be decoded and verified.
+
+The new source-only Capstone audit does exactly that using the local
+verified XBE and original recomp_0013.c (without uploading the XBE):
 
     cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
     git pull --ff-only
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Plan-K1D3DBatch.ps1" -XbePath "C:\path\to\your\original\default.xbe"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Audit-K1D3DSwitchCases.ps1"
 
-Or omit -XbePath for the original-source-only static table/overlap
-audit. Raw data stays entirely on the local PC; never commit
-or upload the game file. No additional XDK build is justified until
-we reconcile the 16-way table, its memory/code overlap, and the
-guest stack/register/target ABI. The known-good second Xenos Reset
-and original 64 TrueTUs remain untouched.
+The runner defaults to the supported local path:
+C:\Users\jorda\OneDrive\Desktop\My Xbox\default.xbe
+and accepts -XbePath if that changes. It uses the same Capstone
+dependency as the original repository disassembly tooling; install
+into the selected Python with python -m pip install capstone only
+if it is missing.
+
+Report path:
+
+    build\phase6_integration_map\k1_d3d_predictive_batch\k1-d3d-six-switch-cases-original-xbe.json
+
+The audit disassembles six original destination paths, follows
+bounded direct branches and fallthrough edges, refuses to decode
+the static table as sequential code, and flags overlapping
+instruction boundaries and unresolved indirect branches.
+It never builds or stages an XEX, never edits TrueTUs, and
+continues to require source/ABI proof before the one-batch
+graphics recompile.
+
+Existing proven native Xenos Reset and current hardware XEX
+remain unchanged.
