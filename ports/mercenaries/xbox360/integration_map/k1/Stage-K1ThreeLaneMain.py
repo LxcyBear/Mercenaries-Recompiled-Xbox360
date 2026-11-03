@@ -24,11 +24,6 @@ WRITE32 = re.compile(
     r"(?m)^[ \t]*void[ \t]+recomp_guest_write32[ \t]*"
     r"\(\s*uint32_t[ \t]+address\s*,\s*uint32_t[ \t]+value\s*\)\s*\{"
 )
-FRONTIER = re.compile(
-    r"(?m)^[ \t]*static[ \t]+void[ \t]+phase6dq_note_dispatch\s*"
-    r"\(\s*uint32_t[ \t]+kind\s*,\s*uint32_t[ \t]+target\s*,"
-    r"\s*uint32_t[ \t]+caller\s*,\s*uint32_t[ \t]+espValue\s*\)\s*\{"
-)
 TRACE_START = re.compile(
     r"(?m)^[ \t]*void[ \t]+trace[ \t]*\("
     r"const[ \t]+char[ \t]*\*[ \t]*line\s*\)\s*\{"
@@ -142,25 +137,21 @@ PERF = '''
 '''
 
 PRESENT_WATCH = '''
-    /* K1 presentation lane: records attempts through the existing
-       packed frontier only. Direct compiled calls are NOT observed here.
-       No fake display_calls, framebuffer, Swap, or Xenos Present. */
-    if (target == 0x0028BDB0u || target == 0x0028A530u)
+    /* K1 presentation lane: detect only actual, existing P6DQ
+       "DISPATCH FIRST" trace messages that target retail Swap or
+       PersistDisplay. The dispatch notifier may be compiled in a
+       different TrueTU; observe its global trace() output instead
+       of trying to modify a function that is absent from main.cpp.
+       A dispatch-route witness is NOT proof that guest Swap ran.
+       Do not touch display_calls or framebuffer. */
+    if (strncmp(line, "P6DQ ROCKET DISPATCH FIRST",
+                sizeof("P6DQ ROCKET DISPATCH FIRST") - 1u) == 0 &&
+        (strstr(line, "target=0028BDB0") != NULL ||
+         strstr(line, "target=0028A530") != NULL))
     {
-        static unsigned int k1PresentSwapFrontier = 0u;
-        static unsigned int k1PresentPersistFrontier = 0u;
-        unsigned int* k1PresentCounter = target == 0x0028BDB0u
-            ? &k1PresentSwapFrontier : &k1PresentPersistFrontier;
-        ++*k1PresentCounter;
-        if (*k1PresentCounter <= 4u ||
-            (*k1PresentCounter & 255u) == 0u)
-        {
-            char k1PresentLine[240];
-            sprintf(k1PresentLine,
-                "K1PRESENT FRONTIER ROUTE: kind=%u target=%08X caller=%08X hits=%u",
-                kind, target, caller, *k1PresentCounter);
-            trace(k1PresentLine);
-        }
+        char k1PresentLine[400];
+        sprintf(k1PresentLine, "K1PRESENT FRONTIER ROUTE: %s", line);
+        k1quiet_emit_unfiltered(k1PresentLine);
     }
 '''
 
@@ -197,8 +188,10 @@ def patch(src: str) -> str:
     src = src[:reader[0].start()] + PFIFO_STATE.replace("\n", nl) + src[reader[0].start():]
     src = once_insert(src, READ32, PFIFO_READ, "read32")
     src = once_insert(src, WRITE32, PFIFO_WRITE, "write32")
-    src = once_insert(src, TRACE_START, PERF, "global trace")
-    src = once_insert(src, FRONTIER, PRESENT_WATCH, "phase6dq_note_dispatch")
+    # Global trace ABI is the stable cross-TU observation point.
+    # The emitter-owned phase6dq_note_dispatch lives outside this
+    # main-only stage in some TrueTU layouts. Do not assume otherwise.
+    src = once_insert(src, TRACE_START, PERF + PRESENT_WATCH, "global trace")
     src = src.replace(PARENT, PARENT + " | " + MARK, 1)
     for marker in ("K1PFIFO DMA_PUT READ32:", "K1PFIFO DMA_PUT WRITE32:",
                    "K1PERF WINDOW:", "K1PERF LAST_TO_FAULT:",
@@ -238,15 +231,8 @@ void recomp_guest_write32(uint32_t address, uint32_t value)
 {
     GUEST_WRITE32(address, value);
 }
-static void phase6dq_note_dispatch(
-    uint32_t kind,
-    uint32_t target,
-    uint32_t caller,
-    uint32_t espValue)
-{
-    uint32_t i;
-    trace("P6DQ ROCKET HARD STOP");
-}
+/* Intentionally no phase6dq_note_dispatch implementation here.
+   In the real 64-TrueTU layout the function may live in another TU. */
 void startup()
 {
     /* The real DAC parent has a guest-VA read at its hardware witness. */
@@ -254,11 +240,16 @@ void startup()
     if (lastGuestBlock == 0u) trace("guest-VA fixture");
     trace("P6K1DQ-QUIET-LOG-20261103");
     trace("K1QUIET MILESTONE SUMMARY:");
+    trace("P6DQ ROCKET HARD STOP");
+    trace("P6DQ ROCKET DISPATCH FIRST kind=DIRECT caller=0023A3CE target=0028BDB0 esp=00000000 unique=1");
 }
 """
     for initial in (fixture, fixture.replace("\n", "\r\n")):
         result = patch(initial)
         assert result.count("K1PRESENT FRONTIER ROUTE:") == 1
+        assert "phase6dq_note_dispatch(" not in result
+        assert 'strstr(line, "target=0028BDB0")' in result
+        assert "k1quiet_emit_unfiltered(k1PresentLine);" in result
         assert result.count("K1PERF WINDOW:") == 1
         assert result.count("K1PFIFO DMA_PUT READ32:") == 1
         assert result.count("K1PFIFO DMA_PUT WRITE32:") == 1
