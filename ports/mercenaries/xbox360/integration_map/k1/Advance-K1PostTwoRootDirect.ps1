@@ -2,7 +2,8 @@
 param(
     [switch]$Build,
     [string]$SolutionRoot = "C:\Users\jorda\OneDrive\Desktop\My Xbox\My Projects\Mercenaries - Xbox 360\Mercenaries-PPC-Port",
-    [string]$FastBuildRoot = "C:\Merc360Build\Mercenaries-PPC-Port"
+    [string]$FastBuildRoot = "C:\Merc360Build\Mercenaries-PPC-Port",
+    [string]$RetailXbe = "$env:USERPROFILE\OneDrive\Desktop\My Xbox\default.xbe"
 )
 # One original retail .text function at 002228C0, source-only by default.
 # Preserve hardware-good r4 main, two original functions, six-case D3D patch
@@ -15,6 +16,10 @@ $stage = Join-Path $PSScriptRoot "Stage-K1PostTwoRootDirect.py"
 $post = Join-Path $PSScriptRoot "Plan-K1PostTwoRootDirect.py"
 $previousPlanner = Join-Path $PSScriptRoot "Plan-K1NextICallBatch.py"
 $previousStage = Join-Path $PSScriptRoot "Stage-K1NextICallBatch.py"
+$clone = Join-Path $PSScriptRoot "Prepare-K1PCReference.ps1"
+$pcRetail = Join-Path $PSScriptRoot "Audit-K1PCRetailSource.py"
+$retailAuditor = Join-Path $PSScriptRoot "Audit-K1D3DSwitchCases.py"
+$pcReference = Join-Path $root ".deps\mercenaries-pc-reference"
 $base = Join-Path $root "ports\mercenaries\xbox360\phase4c_native_startup\emit_phase4c_startup_slice.py"
 $bb = Join-Path $root "ports\mercenaries\xbox360\phase5_subsystem_bringup\emit_phase5bb_frontier22dda4.py"
 $bc = Join-Path $root "ports\mercenaries\xbox360\phase5_subsystem_bringup\emit_phase5bc_broad_sweep.py"
@@ -32,7 +37,7 @@ $builder = Join-Path $root "ports\mercenaries\xbox360\phase6_native_graphics\Inv
 $envFile = Join-Path $root "build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp"
 $xdk = Join-Path $outDir "xdk"
 $xex = Join-Path $xdk "Merc-K1Direct-2228C0-r5.xex"
-foreach($file in @($stage,$post,$previousPlanner,$previousStage,$base,$bb,$bc,$functions,$parentMain,$parentManifest)) {
+foreach($file in @($stage,$post,$previousPlanner,$previousStage,$base,$bb,$bc,$functions,$parentMain,$parentManifest,$clone,$pcRetail,$retailAuditor,$RetailXbe)) {
     if(-not(Test-Path -LiteralPath $file -PathType Leaf)) {
         throw "[K1-DIRECT-R5] Required original retail source or tested r4 artifact absent: $file"
     }
@@ -42,7 +47,9 @@ foreach($folder in @($generated,$shards)){
         throw "[K1-DIRECT-R5] Original retail disassembly/64 TrueTU corpus missing: $folder"
     }
 }
-& $pythonExe -m py_compile $stage
+& $clone -Destination $pcReference
+if(-not $?){throw "[K1-DIRECT-R5] PC developer patch repo clone/pinned source gate failed. NO XDK"}
+& $pythonExe -m py_compile $stage $pcRetail
 if($LASTEXITCODE -ne 0){throw "[K1-DIRECT-R5] Source syntax gate failed, NO XDK"}
 & $pythonExe -u $stage --self-test --previous-stage $previousStage --previous-planner $previousPlanner
 if($LASTEXITCODE -ne 0){throw "[K1-DIRECT-R5] Original r4 source/one-root fixtures failed, NO XDK"}
@@ -53,6 +60,10 @@ $sourceArgs = @(
     "--post-planner",$post,
     "--previous-planner",$previousPlanner,
     "--previous-stage",$previousStage,
+    "--pc-retail-module",$pcRetail,
+    "--pc-reference",$pcReference,
+    "--retail-xbe",$RetailXbe,
+    "--retail-auditor",$retailAuditor,
     "--functions",$functions,
     "--generated",$generated,
     "--parent",$parentMain,
@@ -72,6 +83,11 @@ if($doc.status -ne "K1_TEXT_DIRECT_2228C0_ORIGINAL_SOURCE_ONLY_NO_XDK" -or
     $doc.original_retail_xbe_sha256 -ne "AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7" -or
     $doc.original_function_address -ne "0x002228C0" -or
     $doc.original_generated_c -ne "recomp_0011.c" -or
+    $doc.pc_reference_git_commit -ne "f513ae4e041401b7b032410016940971488d523b" -or
+    $doc.pc_developer_patch_reverted_to_original_retail.status -ne "PINNED_PC_DEVELOPER_ONLY_PATCH_RESTORED_TO_RETAIL" -or
+    $doc.pc_developer_patch_reverted_to_original_retail.x86_retail_cmp_jne_proof.original_002228f0_x86_cmp_jne -ne $true -or
+    $doc.pc_developer_patch_reverted_to_original_retail.arbitrary_helper_stub_used -ne $false -or
+    $doc.pc_developer_patch_reverted_to_original_retail.guest_register_abi_modified -ne $false -or
     $doc.new_main_sha256 -ne $hash -or
     [int]$doc.source_only_staged_new_functions -ne 1 -or
     [int]$doc.true_tu_count -ne 64 -or
@@ -91,6 +107,7 @@ if($doc.status -ne "K1_TEXT_DIRECT_2228C0_ORIGINAL_SOURCE_ONLY_NO_XDK" -or
 }
 Write-Host "[K1-DIRECT-R5] =========================================="
 Write-Host "[K1-DIRECT-R5] ORIGINAL RETAIL 002228C0 SOURCE-ONLY STAGE PASS"
+Write-Host "[K1-DIRECT-R5] Original retail CMP/JNE from XBE restored in place of PC developer-only patch"
 Write-Host "[K1-DIRECT-R5] r4 two-body source, real six-case D3D, Xenos Reset retained"
 Write-Host "[K1-DIRECT-R5] Original 64 TrueTUs unchanged, one new original .text function"
 Write-Host "[K1-DIRECT-R5] Source-only manifest: $outManifest"
