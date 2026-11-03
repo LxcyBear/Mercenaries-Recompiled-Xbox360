@@ -109,7 +109,25 @@ if($quiet.marker -ne "P6K1DQ-QUIET-LOG-20261103" -or
 # trace(char const*) import. A static wrapper compiles main.cpp successfully
 # but fails 64-way at LINK (LNK2001); fail now, before XDK.
 $quietText=Get-Content -LiteralPath $quietMain -Raw -Encoding UTF8
-$traceExportPattern='(?m)^[ \t]*void[ \t]+trace[ \t]*\([ \t]*const[ \t]+char[ \t]*\*[ \t]*line[ \t]*\)[ \t]*\{'
+# Source generator puts the opening brace on the following line.
+# Accept either a same-line brace or LF/CRLF before it, but never
+# accept a forward declaration, a static wrapper, or a different ABI.
+$traceExportPattern='(?m)^[ \t]*void[ \t]+trace[ \t]*\([ \t]*const[ \t]+char[ \t]*\*[ \t]*line[ \t]*\)[ \t\r\n]*\{'
+# Fail before XDK if the C++ global symbol check itself regresses.
+$traceCases=@(
+    @{Source="void trace(const char* line) {"; Expect=1},
+    @{Source="void trace(const char* line)" + [char]10 + "{"; Expect=1},
+    @{Source="void trace(const char* line)" + [char]13 + [char]10 + "{"; Expect=1},
+    @{Source="static void trace(const char* line)" + [char]10 + "{"; Expect=0},
+    @{Source="void trace(const char* line);"; Expect=0}
+)
+foreach($case in $traceCases){
+    $count=[regex]::Matches([string]$case.Source,$traceExportPattern).Count
+    if($count -ne [int]$case.Expect){
+        throw "[K1QUIET] LINKAGE CHECK SELFTEST FAILED expected=$($case.Expect) actual=$count; no XDK"
+    }
+}
+Write-Host "[K1QUIET] LINKAGE CHECK SELFTEST PASS: LF, CRLF, same-line brace, static rejection, prototype rejection"
 $traceStaticPattern='(?m)^[ \t]*static[ \t]+void[ \t]+trace[ \t]*\('
 $globalCount=[regex]::Matches($quietText,$traceExportPattern).Count
 $staticCount=[regex]::Matches($quietText,$traceStaticPattern).Count
