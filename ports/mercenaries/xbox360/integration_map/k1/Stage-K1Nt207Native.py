@@ -96,6 +96,7 @@ void k1nt207_nt_query_directory_file(uint32_t savedEsp)
     uint32_t status=0u, bytes=0u, rows=0u, lastOffset=0u;
     uint32_t slot;
     DWORD error=ERROR_SUCCESS;
+    DWORD nativeAttrs=0u;
     const char* path;
     HANDLE native;
     K1Nt207Cursor* cursor=NULL;
@@ -160,8 +161,11 @@ void k1nt207_nt_query_directory_file(uint32_t savedEsp)
         status=0xC0000008u; /* STATUS_INVALID_HANDLE */
         goto k1nt207_return_status;
     }
-    if (GetFileAttributesA(path)==INVALID_FILE_ATTRIBUTES ||
-        (GetFileAttributesA(path) & FILE_ATTRIBUTE_DIRECTORY)==0u)
+    nativeAttrs=GetFileAttributesA(path);
+    /* XDK does not expose INVALID_FILE_ATTRIBUTES; GetFileAttributesA
+     * documents failure as (DWORD)-1. Check once, not two native calls. */
+    if (nativeAttrs==(DWORD)0xFFFFFFFFu ||
+        (nativeAttrs & FILE_ATTRIBUTE_DIRECTORY)==0u)
     {
         status=0xC0000103u; /* STATUS_NOT_A_DIRECTORY */
         goto k1nt207_return_status;
@@ -489,10 +493,34 @@ def patch_dispatch(src: str, nl: str, label: str,
         + "    } \\" + nl + lines[last]
     )
     declaration = "void k1nt207_nt_query_directory_file(uint32_t savedEsp);" + nl
-    result = "".join(lines[:first]) + declaration + replacement \
-             + "".join(lines[last + 1:])
+    result = "".join(lines[:first]) + replacement + "".join(lines[last + 1:])
+    if required:
+        # The TrueTU header starts with extracted #include/#define blocks.
+        # It does NOT guarantee that uint32_t is defined at macro line 197.
+        # Type definitions precede the generated "runtime/support entry
+        # points" section; put our prototype there, just like other public
+        # support declarations. The macro expands later in the shard bodies.
+        anchor = "/* runtime/support entry points */" + nl
+        if result.count(anchor) != 1:
+            raise ValueError(
+                f"{label}: generated typed support section missing or duplicate; "
+                "NO XDK."
+            )
+        result = result.replace(anchor, anchor + declaration, 1)
+        type_section = result.find("/* shared generated types */")
+        decl_position = result.find(declaration)
+        if type_section < 0 or decl_position < type_section:
+            raise ValueError(
+                f"{label}: native prototype appeared before shared types; NO XDK."
+            )
+    else:
+        # The host main.cpp already compiled past the native handler call;
+        # preserve its existing macro-near declaration placement.
+        result = "".join(lines[:first]) + declaration + replacement \
+                 + "".join(lines[last + 1:])
     if (result.count(
         "k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") != 1
+        or result.count(declaration) != 1
         or old_body not in result):
         raise ValueError(f"{label}: ordinal207 wrapper/body proof failed")
     return result
@@ -582,6 +610,10 @@ def self_test():
         "        phase4c_escape(PHASE4C_BOUNDARY_ICALL_SAFE, _phase4c_target, (uint32_t)(saved_esp)); \\\n"
         "    } \\\n"
         "} while (0)\n"
+        "\n/* shared generated types */\n"
+        "typedef unsigned int uint32_t;\n"
+        "/* shared runtime storage */\n"
+        "/* runtime/support entry points */\n"
     )
     print("[K1NT207-NATIVE] SELFTEST REV C: macro wraps original full ICALL hard-stop; old ordinal211 not required",flush=True)
     for externalized in (False, True):
@@ -601,6 +633,11 @@ def self_test():
             main, hdr = transform(h0, s0)
             assert main.count(TAG) == 1, label + " injected marker count mismatch"
             assert hdr.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
+            decl_pos = hdr.find("void k1nt207_nt_query_directory_file(uint32_t savedEsp);")
+            assert decl_pos > hdr.find("typedef unsigned int uint32_t;"), (
+                label + " prototype precedes uint32_t; would break all TrueTUs"
+            )
+            assert hdr.find("/* runtime/support entry points */") < decl_pos
             assert hdr.count("phase4c_escape(") == 1, label + " original fallback lost"
             assert main.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
             assert "void k1nt207_nt_query_directory_file(uint32_t savedEsp);" in hdr
@@ -678,6 +715,16 @@ def self_test():
     assert "k1nt207_nt_query_directory_file((uint32_t)(saved_esp));" in generic_header
     assert "_phase4c_target == 0x800000D4u" in generic_header
     assert "phase5n_nt_query_information_file((uint32_t)(saved_esp));" in generic_header
+    # Missing type/support staging marker must fail BEFORE XDK, instead of
+    # inserting a uint32_t prototype into the header's pre-type macro block.
+    try:
+        transform(real_host, shared_header.replace(
+            "/* runtime/support entry points */",
+            "/* wrong section; no typed declarations */"))
+    except ValueError as exc:
+        assert "typed support section" in str(exc)
+    else:
+        raise AssertionError("Unsafe header prototype location was accepted")
     # The shared header itself must retain a recognizable original macro.
     try:
         transform(real_host, shared_header.replace(
@@ -721,6 +768,11 @@ def self_test():
     assert "((uint64_t)value->dwHighDateTime << 32)" in CURSOR
     assert "GUEST_WRITE32(address + 4u, (uint32_t)(value >> 32));" in CURSOR
     assert "ZeroMemory(pattern,sizeof(pattern));" in HANDLER
+    assert "nativeAttrs=GetFileAttributesA(path);" in HANDLER
+    assert HANDLER.count("GetFileAttributesA(path)") == 1
+    assert "(DWORD)0xFFFFFFFFu" in HANDLER
+    assert "INVALID_FILE_ATTRIBUTES" not in HANDLER.replace(
+        "XDK does not expose INVALID_FILE_ATTRIBUTES", "")
     assert "GUEST_WRITE32(recordVa+60u,nameLen)" in HANDLER
     assert "GUEST_WRITE8(recordVa+64u+i," in HANDLER
     assert "void k1nt207_nt_query_directory_file(uint32_t savedEsp)\n{" in HANDLER
