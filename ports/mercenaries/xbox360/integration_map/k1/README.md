@@ -1945,11 +1945,14 @@ MMIO/VP hard fences, input work and startup initialization. The
 Phase6 TrueTU emitter externalizes host support definitions (removes
 their original "static" linkage). The stage handles both forms rather
 than requiring the original pre-sharding signatures. The ONLY changed
-shared header is translated_runtime.h; ordinal207 is routed in BOTH
-generated main.cpp AND the active per-TrueTU macro dispatcher through
-an externally linked native helper. Skipping the shared header would
-leave the Xbox guest calling the original hard stop. The exception is
-exact retail ordinal207; all unknown ordinals remain fenced. Genuine Xbox 360
+shared header is translated_runtime.h, which MUST carry the ordinal207
+dispatcher and the externally linked native helper declaration for all
+64 TrueTUs. Sharding can remove the original ordinal211 macro case from
+generated host main.cpp; that host macro is patched only if present.
+Native K1NT207 support lives in host main.cpp regardless. Skipping the
+shared header would leave real translated callers reaching the old
+hard stop. The exception is exact retail ordinal207; all unknown
+ordinals remain fenced. Genuine Xbox 360
 FindFirstFileA/FindNextFileA on the original mounted game: backing
 directory supplies real filenames, attributes, size and FILETIME.
 Xbox FILE_DIRECTORY_INFORMATION class1 is a 64-byte fixed section plus
