@@ -42,6 +42,22 @@ static K1Nt207Cursor s_k1nt207Cursors[PHASE5B_HANDLE_CAP];
 static uint32_t s_k1nt207Calls=0u;
 static uint32_t s_k1nt207Successes=0u;
 
+/* Minimal, exact equivalents of the original Phase5N filetime and guest-u64
+ * helpers. TrueTU sharding can omit their earlier support-owned bodies.
+ * Keep K1NT207 independent; never restore a guessed Phase5N function.
+ * FILETIME is Windows/Xbox 100ns since 1601; guest u64 is two LE DWORDs.
+ */
+static uint64_t k1nt207_filetime_value(const FILETIME* value)
+{
+    return ((uint64_t)value->dwHighDateTime << 32) |
+           (uint64_t)value->dwLowDateTime;
+}
+static void k1nt207_write_guest_u64(uint32_t address, uint64_t value)
+{
+    GUEST_WRITE32(address + 0u, (uint32_t)value);
+    GUEST_WRITE32(address + 4u, (uint32_t)(value >> 32));
+}
+
 static void k1nt207_clear(uint32_t handleToken)
 {
     const uint32_t index=handleToken & 0x00FFFFFFu;
@@ -291,14 +307,14 @@ void k1nt207_nt_query_directory_file(uint32_t savedEsp)
         recordVa=output+bytes;
         GUEST_WRITE32(recordVa+0u,0u);
         GUEST_WRITE32(recordVa+4u,cursor->nextFileIndex);
-        phase5n_write_guest_u64(recordVa+8u,
-            phase5n_filetime_value(&cursor->entry.ftCreationTime));
-        phase5n_write_guest_u64(recordVa+16u,
-            phase5n_filetime_value(&cursor->entry.ftLastAccessTime));
-        phase5n_write_guest_u64(recordVa+24u,
-            phase5n_filetime_value(&cursor->entry.ftLastWriteTime));
-        phase5n_write_guest_u64(recordVa+32u,
-            phase5n_filetime_value(&cursor->entry.ftLastWriteTime));
+        k1nt207_write_guest_u64(recordVa+8u,
+            k1nt207_filetime_value(&cursor->entry.ftCreationTime));
+        k1nt207_write_guest_u64(recordVa+16u,
+            k1nt207_filetime_value(&cursor->entry.ftLastAccessTime));
+        k1nt207_write_guest_u64(recordVa+24u,
+            k1nt207_filetime_value(&cursor->entry.ftLastWriteTime));
+        k1nt207_write_guest_u64(recordVa+32u,
+            k1nt207_filetime_value(&cursor->entry.ftLastWriteTime));
         size=((uint64_t)cursor->entry.nFileSizeHigh<<32) |
              (uint64_t)cursor->entry.nFileSizeLow;
         if ((cursor->entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)!=0u)
@@ -306,8 +322,8 @@ void k1nt207_nt_query_directory_file(uint32_t savedEsp)
         allocation=size==0u ? 0u :
             ((size<=0xFFFFFFFFFFFFC000ui64) ?
               ((size+0x3FFFui64)&~0x3FFFui64) : size);
-        phase5n_write_guest_u64(recordVa+40u,size);
-        phase5n_write_guest_u64(recordVa+48u,allocation);
+        k1nt207_write_guest_u64(recordVa+40u,size);
+        k1nt207_write_guest_u64(recordVa+48u,allocation);
         GUEST_WRITE32(recordVa+56u,cursor->entry.dwFileAttributes ?
             cursor->entry.dwFileAttributes : FILE_ATTRIBUTE_NORMAL);
         GUEST_WRITE32(recordVa+60u,nameLen);
@@ -446,12 +462,13 @@ def transform(src: str, header: str) -> tuple[str, str]:
     # spelling and position are NOT an insertion contract.  Place our new
     # top-level helper after ALL inherited host support definitions instead.
     # Its dispatcher prototype is installed separately BEFORE the macro.
+    # The original Phase5N tiny FILETIME/guest-u64 helpers are NOT guaranteed
+    # to survive TrueTU sharding. K1NT207 now owns exact local equivalents.
+    # Keep only hard dependencies that actually exist in the proven host.
     required_host_helpers = (
         "phase5c_read_native_handle(",
         "phase5b_read_handle_path(",
         "phase5b_open_status_from_error(",
-        "phase5n_filetime_value(",
-        "phase5n_write_guest_u64(",
     )
     missing = [name for name in required_host_helpers if name not in src]
     if missing:
@@ -485,8 +502,6 @@ def self_test():
         "static HANDLE phase5c_read_native_handle(uint32_t token){}\n"
         "static const char* phase5b_read_handle_path(uint32_t token){}\n"
         "static uint32_t phase5b_open_status_from_error(DWORD error){}\n"
-        "static uint64_t phase5n_filetime_value(const FILETIME* value){}\n"
-        "static void phase5n_write_guest_u64(uint32_t address,uint64_t value){}\n"
         "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
         "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
         "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
@@ -566,14 +581,22 @@ def self_test():
     # Missing runtime dependencies must still be hard-fenced.  Broadening
     # insertion placement is NOT permission to emit an unlinked native helper.
     try:
-        transform(real_host.replace("phase5n_filetime_value(", "missing_time_helper("),
+        transform(real_host.replace("phase5b_open_status_from_error(", "missing_open_status("),
                   shared_header)
     except ValueError as exc:
-        assert "phase5n_filetime_value(" in str(exc)
+        assert "phase5b_open_status_from_error(" in str(exc)
     else:
         raise AssertionError("Missing native filetime support was accepted")
     for forbidden in ("fopen(", "CreateDirectory(", "return STATUS_SUCCESS"):
         assert forbidden not in HANDLER
+    assert "phase5n_filetime_value(" not in HANDLER
+    assert "phase5n_write_guest_u64(" not in HANDLER
+    assert "k1nt207_filetime_value(" in HANDLER
+    assert "k1nt207_write_guest_u64(" in HANDLER
+    assert "static uint64_t k1nt207_filetime_value(const FILETIME* value)" in CURSOR
+    assert "static void k1nt207_write_guest_u64(uint32_t address, uint64_t value)" in CURSOR
+    assert "((uint64_t)value->dwHighDateTime << 32)" in CURSOR
+    assert "GUEST_WRITE32(address + 4u, (uint32_t)(value >> 32));" in CURSOR
     assert "GUEST_WRITE32(recordVa+60u,nameLen)" in HANDLER
     assert "GUEST_WRITE8(recordVa+64u+i," in HANDLER
     assert "void k1nt207_nt_query_directory_file(uint32_t savedEsp)\n{" in HANDLER
@@ -657,6 +680,7 @@ def stage(a):
         raise ValueError("Refusing native manifest drift")
     if not a.manifest.exists():a.manifest.write_bytes(manifest)
     print("[K1NT207-NATIVE] STAGE PASS: native Xbox360 FindFirst/Next directory enumeration source")
+    print("[K1NT207-NATIVE] Native FILETIME/u64 guest writers are K1NT207-owned; Phase5N omitted helpers NOT needed")
     print("[K1NT207-NATIVE] ORIGINAL XBOX ABI: NtQueryDirectoryFile @40 RET44, class1, ANSI 64B header")
     print("[K1NT207-NATIVE] 64 TrueTUs BYTE EXACT; shared translated_runtime.h ordinal207 dispatch patched")
     print("[K1NT207-NATIVE] Existing XPP + original hard stop preserved; native NT207 is explicit exception")
