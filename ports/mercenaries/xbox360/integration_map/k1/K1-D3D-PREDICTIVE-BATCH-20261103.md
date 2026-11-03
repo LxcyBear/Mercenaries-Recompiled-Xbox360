@@ -78,3 +78,48 @@ The xbWatson upload has host-added wallclock timestamps and occasionally
 duplicate timestamps inserted within a single line; those are formatting,
 not evidence of repeated guest execution. The observed hardware
 boundary and tick values above are unchanged.
+
+## Local 2026-11-03 source audit outcome and correction
+
+The first hardware-informed source audit returned:
+
+    ITAIL=0x0029655D classification=not_in_retail_function_inventory
+    SEED 0x00296550 exact_source_entry recomp_0013.c
+    SEED 0x002965F0 exact_source_entry recomp_0013.c
+    GRAPH: source-authentic candidate=0
+    RELATED ORIGINAL CALLSITES: owners=4 itail_macro_sites=2
+
+This disproves the early hypothesis that 0x0029655D is necessarily a
+valid interior label inside 0x00296550. The current retail function
+inventory does not cover it. A short offset from a valid function start
+is NOT an ABI, instruction boundary, or legal tail-call destination.
+
+**Planner issue corrected:** prior breadth-first search stopped at already
+compiled graphics functions. Consequently zero new candidates was not
+a proof that the graph contained no uncompiled dependencies. The new
+search traverses the *original C* of already compiled functions without
+re-emitting them, then selects only genuine missing D3D/XGRPH function
+starts within a bounded depth/candidate cap. A regression fixture
+checks this through-compiled-root graph traversal.
+
+**New evidence:** the report now includes the nearest previous and
+following original function ranges, their exact exclusive ends,
+gap width/offset, original C prologue and epilogue excerpts, target
+string occurrences anywhere in D3D source, and nearby original ITAIL
+macro callsite context. The console displays the gap summary and
+through-compiled-root graph metrics.
+
+Optional local raw-byte proof:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Plan-K1D3DBatch.ps1" -XbePath "C:\your\existing\retail\default.xbe"
+
+This is an optional input. The script verifies the exact supported
+retail SHA-256 before interpreting the XBE section table, and reports
+only a bounded byte window around 0x0029655D. Raw bytes are **not**
+an x86 instruction-boundary proof; they help determine whether the
+inventory gap contains actual code, padding or an unexpected thunk.
+No retail XBE bytes or game assets are committed to GitHub.
+
+There is still **no authorization to compile an ITAIL trampoline**
+without original instruction-boundary and guest stack/register proof.
+The latest known good native Reset/64 TrueTUs remain unchanged.
