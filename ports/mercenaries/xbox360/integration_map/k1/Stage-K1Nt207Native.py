@@ -16,6 +16,8 @@ import argparse
 import hashlib
 import json
 import re
+import sys
+import traceback
 from pathlib import Path
 
 TAG="K1NT207-REAL-DIRECTORY-ENUMERATION-20261102"
@@ -482,6 +484,7 @@ def self_test():
         "    } else { \\\n"
         "} while (0)\n"
     )
+    print("[K1NT207-NATIVE] SELFTEST REV B: fixture includes TrueTU static/externalized host and active runtime header",flush=True)
     for externalized in (False, True):
         host = real_host
         if externalized:
@@ -494,8 +497,10 @@ def self_test():
         for newline in ("\n", "\r\n"):
             h0 = host.replace("\n", newline)
             s0 = shared_header.replace("\n", newline)
+            label = "externalized=" + str(externalized) + " CRLF=" + str(newline == "\r\n")
+            print("[K1NT207-NATIVE] SELFTEST CASE: " + label,flush=True)
             main, hdr = transform(h0, s0)
-            assert main.count(TAG) == 1
+            assert main.count(TAG) == 1, label + " injected marker count mismatch"
             assert hdr.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
             assert main.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
             assert "void k1nt207_nt_query_directory_file(uint32_t savedEsp);" in hdr
@@ -606,7 +611,16 @@ def main():
         p.add_argument("--"+key.replace("_","-"),type=Path)
     a=p.parse_args()
     if a.self_test:
-        self_test();return
+        try:
+            self_test()
+        except Exception as exc:
+            # Windows PowerShell 5.x can collapse native-process stderr into
+            # one unhelpful wrapper line. Emit exact traceback on stdout.
+            print("[K1NT207-NATIVE] SELFTEST FAILURE: "
+                  + type(exc).__name__ + ": " + str(exc),flush=True)
+            traceback.print_exc(file=sys.stdout)
+            raise SystemExit(2)
+        return
     for key in ("parent_main","parent_manifest","parent_shards",
                 "out_main","out_shards","manifest"):
         if getattr(a,key) is None:
