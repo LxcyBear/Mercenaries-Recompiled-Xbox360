@@ -616,7 +616,9 @@ def plan(a) -> None:
     data = (json.dumps(report, indent=2) + "\n").encode("utf-8")
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_bytes(data)
-    print("[K1D3D-BATCH] ORIGINAL retail XBE/hash PASS; original 64 TrueTUs untouched")
+    print("[K1D3D-BATCH] RETAIL DISASM CACHE/hash PASS; original 64 TrueTUs untouched")
+    if local_xbe is None:
+        print("[K1D3D-BATCH] RAW XBE NOT CHECKED: cannot prove jump-table DWORD values from cache alone")
     print("[K1D3D-BATCH] ITAIL=%s classification=%s owner=%s .. %s label=%s" %
           (target["address"], target["classification"],
            target["owner_va"], target["owner_end"], target["original_label_present"]))
