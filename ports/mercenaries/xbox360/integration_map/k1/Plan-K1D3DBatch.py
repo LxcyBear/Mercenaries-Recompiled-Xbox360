@@ -331,44 +331,65 @@ def prove_d3d_jump_table(by_va: dict, generated: dict) -> dict:
 
 def read_verified_jump_table(blob: bytes, section_rows: list[tuple],
                              by_va: dict, generated: dict) -> dict:
-    """Extract 16 original Xbox little-endian DWORDs with section bounds."""
+    """Confirm six actual static function pointers and 0xCC sentinel.
+
+    The EDI&15 *possible index* range is 16. This does NOT mean there
+    are 16 pointer words: static XBE has six, one 0xCCCCCCCC sentinel,
+    then actual x86 code at 0x002965F0.
+    """
     import struct
     sections = [r for r in section_rows if
                 r[1] <= JUMP_TABLE_START and
                 JUMP_TABLE_END <= r[1]+r[2] and
                 JUMP_TABLE_END <= r[1]+r[4]]
     if len(sections) != 1:
-        raise ValueError("Jump-table 64 bytes do not fit unique original raw section")
+        raise ValueError("64-byte indexed window lacks unique original raw section")
     _, va, _, raw, _ = sections[0]
     off = raw + JUMP_TABLE_START - va
     if off < 0 or off + JUMP_TABLE_COUNT*4 > len(blob):
-        raise ValueError("Retail XBE jump-table raw bytes out of bounds")
+        raise ValueError("Retail XBE indexed window bytes out of bounds")
     values = struct.unpack_from("<16I", blob, off)
-    rows = []
+    proven = (0x002965A3, 0x00296599, 0x0029655D,
+              0x00296577, 0x0029657E, 0x00296592)
+    if values[:6] != proven or values[6] != 0xCCCCCCCC:
+        raise ValueError("Retail pointer destinations/sentinel changed from SHA-verified witness")
+    all_words, pointers, post_table_code_words = [], [], []
     for idx, value in enumerate(values):
+        kind = ("proven_static_branch_pointer" if idx < 6
+                else "padding_sentinel" if idx == 6
+                else "original_x86_code_bytes_not_branch_pointer")
         classified = classify(value, by_va, generated)
-        rows.append({
+        row = {
             "index": idx,
             "table_word_va": "0x%08X" % (JUMP_TABLE_START + 4*idx),
             "raw_word_hex_little_endian": blob[off+4*idx:off+4*idx+4].hex(" "),
             "value": "0x%08X" % value,
-            "destination_classification": classified["classification"],
-            "destination_inventory_owner": classified["owner_va"],
-            "destination_in_d3d_section": D3D_START <= value < D3D_END,
-            "destination_in_75_byte_gap": ITAIL <= value < 0x002965A8,
-            "matches_hardware_itail": value == ITAIL,
-        })
+            "static_interpretation": kind,
+            "destination_classification": classified["classification"] if idx < 6 else None,
+            "destination_inventory_owner": classified["owner_va"] if idx < 6 else None,
+            "matches_hardware_itail": value == ITAIL and idx < 6,
+        }
+        all_words.append(row)
+        if idx < 6:
+            pointers.append(row)
+        elif idx >= 7:
+            post_table_code_words.append(row)
     return {
         "table_va": "0x%08X" % JUMP_TABLE_START,
         "table_file_offset": "0x%08X" % off,
-        "entries": rows,
+        "entries": pointers,
+        "static_pointer_entries": 6,
+        "static_pointer_table_end_exclusive": "0x002965EC",
+        "padding_sentinel": all_words[6],
+        "later_original_x86_bytes_not_pointer_entries": post_table_code_words,
+        "full_16_index_address_window_raw_words": all_words,
+        "source_index_mask_allows_16_but_only_6_static_pointers": True,
         "hardware_target_match_indices": [
-            row["index"] for row in rows if row["matches_hardware_itail"]],
-        "matching_hardware_target_present_in_original_raw_bytes": ITAIL in values,
-        "table_entry_values_sha256": sha(blob[off:off+64]),
+            row["index"] for row in pointers if row["matches_hardware_itail"]],
+        "matching_hardware_target_present_in_original_raw_bytes": ITAIL in values[:6],
+        "static_indexed_window_sha256": sha(blob[off:off+64]),
         "static_file_table_is_not_a_runtime_memory_proof": True,
     }
-
 
 def inspect_verified_xbe_bytes(path: Path, target: int,
                                by_va: dict | None = None,
@@ -657,19 +678,22 @@ def plan(a) -> None:
     for item in selected:
         print("[K1D3D-BATCH] MISSING SOURCE CANDIDATE %s file=%s depth=%d from=%s" %
               (item["va"], item["source_file"], item["depth"], item["reason"]))
-    print("[K1D3D-BATCH] JUMPTABLE PROVEN: 00296550 -> GUEST_READ32(002965D4 + 4*(edi&15)); 16 entries; table end=%s" %
-          jump_table["table_end_exclusive"])
-    for overlap in jump_table["original_function_inventory_overlaps"]:
-        print("[K1D3D-BATCH] CODE/DATA CONFLICT: %s..%s overlaps table slot=%s source=%s" %
-              (overlap["source_start"], overlap["source_end_exclusive"],
-               overlap["start_table_slot_index"], overlap["source_name"]))
+    print("[K1D3D-BATCH] INDEXED BRANCH PROVEN: 00296550 -> READ32(002965D4+4*(edi&15)); mask permits 16 indices, NOT 16 proven pointer entries")
+    if local_xbe is None:
+        for overlap in jump_table["original_function_inventory_overlaps"]:
+            print("[K1D3D-BATCH] UNVERIFIED 16-INDEX WINDOW OVERLAP: %s..%s intersects possible index=%s source=%s" %
+                  (overlap["source_start"], overlap["source_end_exclusive"],
+                   overlap["start_table_slot_index"], overlap["source_name"]))
     if local_xbe is not None:
         proof = local_xbe["source_verified_jump_table"]
+        print("[K1D3D-BATCH] VERIFIED STATIC TABLE: 6 real case pointers, slot 6=CCCCCCCC sentinel; 0x002965F0 onward is x86 code, not table pointer data")
         for slot in proof["entries"]:
-            print("[K1D3D-BATCH] TABLE[%02u] @%s -> %s (%s)%s" %
+            print("[K1D3D-BATCH] CASE[%02u] @%s -> %s (%s)%s" %
                   (slot["index"], slot["table_word_va"], slot["value"],
                    slot["destination_classification"],
                    " [HARDWARE TARGET]" if slot["matches_hardware_itail"] else ""))
+        print("[K1D3D-BATCH] SENTINEL[06] @%s = %s" %
+              (proof["padding_sentinel"]["table_word_va"], proof["padding_sentinel"]["value"]))
         print("[K1D3D-BATCH] STATIC TABLE VS HARDWARE: matched_indices=%s; runtime data could differ" %
               proof["hardware_target_match_indices"])
     print("[K1D3D-BATCH] Target literal in other original D3D source bodies: %u; exact local-XBE bytes: %s" %
@@ -732,14 +756,18 @@ def selftest() -> None:
                for r in jt["original_function_inventory_overlaps"])
     import struct
     sample_blob = bytearray(128)
-    values = [0x0029655D]+[0x002965A8]*15
+    values = [0x002965A3, 0x00296599, 0x0029655D,
+              0x00296577, 0x0029657E, 0x00296592,
+              0xCCCCCCCC] + [0x90C39090]*9
     struct.pack_into("<16I", sample_blob, 0, *values)
     sample_table = read_verified_jump_table(
         bytes(sample_blob), [(3, JUMP_TABLE_START, 128, 0, 128)],
         by_va, generated)
-    assert sample_table["hardware_target_match_indices"] == [0]
-    assert sample_table["entries"][0]["destination_in_75_byte_gap"]
-    assert sample_table["entries"][0]["destination_in_d3d_section"]
+    assert sample_table["hardware_target_match_indices"] == [2]
+    assert sample_table["static_pointer_entries"] == 6
+    assert sample_table["padding_sentinel"]["value"] == "0xCCCCCCCC"
+    assert sample_table["entries"][0]["value"] == "0x002965A3"
+    assert len(sample_table["later_original_x86_bytes_not_pointer_entries"]) == 9
     try:
         prove_d3d_jump_table(by_va, {
             **generated, JUMP_TABLE_SOURCE: {
