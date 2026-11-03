@@ -175,6 +175,9 @@ def stage(a) -> None:
     hashes = {}
     recorded_owner = parent_manifest.get("source_root_owner")
     recorded_changed = parent_manifest.get("changed_true_tus", [])
+    recorded_common_owner = parent_manifest.get("original_common_tail_owner")
+    if recorded_common_owner not in (["main.cpp"] + [p.name for p in shards]):
+        raise ValueError("Original six-case compiled common tail owner missing")
     if recorded_owner not in (["main.cpp"] + [p.name for p in shards]):
         raise ValueError("Original six-case compiled owner missing/unknown in manifest")
     if recorded_changed != ([] if recorded_owner == "main.cpp" else [recorded_owner]):
@@ -184,6 +187,10 @@ def stage(a) -> None:
     if parent_manifest.get("exact_original_budget_tick_retained") is not True:
         raise ValueError("Six-case original entry/guest budget instrumentation proof lost")
     marker_occurrences = 0
+    common_tail_occurrences = 0
+    if recorded_common_owner == "main.cpp":
+        common_tail_occurrences += parent_bytes.decode(
+            "utf-8", errors="replace").count("void sub_002965A8(void)")
     if recorded_owner == "main.cpp":
         main_text = parent_bytes.decode("utf-8", errors="replace")
         if (main_text.count(PARENT_MARK) != 1 or
@@ -203,18 +210,19 @@ def stage(a) -> None:
             if (body.count(PARENT_MARK) != 1 or
                 "k1d3d_296550_original_sixcase(eax, k1_original_tail_target)" not in body or
                 "RECOMP_ITAIL(k1_original_tail_target)" not in body or
-                "void sub_00296550(void)" not in body or
-                "void sub_002965A8(void)" not in body):
+                "void sub_00296550(void)" not in body):
                 raise ValueError("Real six-case owner TrueTU executable patch/ABI absent: "+file.name)
             marker_occurrences += 1
         elif PARENT_MARK in body:
             raise ValueError("Six-case marker duplicated in non-owner TrueTU: "+file.name)
+        if file.name == recorded_common_owner:
+            common_tail_occurrences += body.count("void sub_002965A8(void)")
         for va in source_inventory(body):
             if va in existing:
                 raise ValueError("Original function duplicated in main/TrueTUs: %08X" % va)
             existing.add(va)
-    if marker_occurrences != 1:
-        raise ValueError("Original six-case owner file not uniquely verified")
+    if marker_occurrences != 1 or common_tail_occurrences < 1:
+        raise ValueError("Original six-case owner/common tail not uniquely verified")
     cache = a.functions.parent / ".disasm_cache.json"
     if (not cache.is_file() or json.loads(cache.read_text(encoding="utf-8-sig"))
             .get("xbe_hash", "").upper() != RETAIL_SHA):
@@ -299,6 +307,7 @@ def stage(a) -> None:
         "lookup_both_exact_original_entries": True,
         "preserves_six_case_graphics_dispatch": True,
         "six_case_verified_owner_file": recorded_owner,
+        "six_case_verified_common_tail_owner": recorded_common_owner,
         "six_case_owner_marker_verified": marker_occurrences == 1,
         "six_case_original_64_true_tu_sha256_verified": True,
         "native_xenos_reset_source_unchanged": True,
