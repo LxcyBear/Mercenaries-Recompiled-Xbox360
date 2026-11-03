@@ -1931,6 +1931,30 @@ The hardware-proven K1NT207 argument capture and all XPP TrueTUs
 remain unchanged. No XDK compilation or Xbox execution was performed
 for this fix.
 
+### K1NT207 first Release Xbox360 compiler feedback (2026-11-03)
+
+The first `Advance-K1Nt207Native.ps1 -Build` compiled the staged source
+but failed at two root diagnostics: `main.cpp` referenced
+`INVALID_FILE_ATTRIBUTES` (not declared in this XDK), and
+`translated_runtime.h:197` placed a new `uint32_t` function
+declaration in the preprocessor block before the generated type
+definitions. The many subsequent `C2064` shard diagnostics were
+cascades from the single invalid header declaration, not individually
+proven guest-translation defects. **No new XEX was published.**
+
+The stage now evaluates `GetFileAttributesA` once and checks its
+documented `(DWORD)0xFFFFFFFFu` failure sentinel. It inserts the
+exact native function prototype after the generated
+`/* runtime/support entry points */` marker (after shared types),
+rather than beside the early RECOMP_ICALL_SAFE macro. Synthetic tests
+reject an absent typed-support section and verify declaration
+position. A verified-output restage also checks the existing native
+manifest, existing main/header hashes, parent manifest, and inherited
+64 TrueTUs, then replaces only derived native `main.cpp`, the
+shared runtime header, and derived manifest, preserving XDK logs.
+This is XDK-compiler feedback only; Xbox hardware execution and
+directory records remain unverified.
+
 ### K1NT207 real native enumeration candidate (2026-11-02)
 
 After the Xbox hardware-captured original ordinal207 10-DWORD frame
