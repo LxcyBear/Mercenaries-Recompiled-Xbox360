@@ -58,6 +58,38 @@ def verify_original_graph(post, base, generated, by_va, compiled):
     return missing, graph
 
 
+def verify_parent_markers(original: str, derived: str) -> None:
+    """Guard exact dispatch cases and preserve all existing diagnostic sites.
+
+    Trace text can intentionally occur more than once in the original
+    r4 main.cpp. Requiring == 1 for a diagnostic string incorrectly
+    rejects a byte-identical, proven working parent. Require the
+    *original occurrence count* to be nonzero and unchanged instead.
+    """
+    for expected in (
+        PARENT_MARKER,
+        "case 0x001F7620u: return sub_001F7620;",
+        "case 0x001F7520u: return sub_001F7520;",
+    ):
+        if original.count(expected) != 1 or derived.count(expected) != 1:
+            raise ValueError(
+                "r4 exact original lookup/marker changed: %s old=%d new=%d" %
+                (expected, original.count(expected), derived.count(expected))
+            )
+    for expected in (
+        "K1D3D SECOND: native Xenos Reset PASS",
+        "P6DQ ROCKET HARD STOP",
+        "K1STATE MAIN CHECKPOINT:",
+    ):
+        before = original.count(expected)
+        after = derived.count(expected)
+        if before < 1 or after != before:
+            raise ValueError(
+                "r4 original diagnostic/fence text changed: %s old=%d new=%d" %
+                (expected, before, after)
+            )
+
+
 def stage(args):
     parent_blob = args.parent.read_bytes()
     meta_blob = args.parent_manifest.read_bytes()
@@ -165,16 +197,7 @@ def stage(args):
             output.count("case 0x002228C0u: return sub_002228C0;") != 1 or
             TARGET in pruned or pruned):
         raise ValueError("002228C0 original C body/lookup was not staged cleanly")
-    for expected in (
-        PARENT_MARKER,
-        "case 0x001F7620u: return sub_001F7620;",
-        "case 0x001F7520u: return sub_001F7520;",
-        "K1D3D SECOND: native Xenos Reset PASS",
-        "P6DQ ROCKET HARD STOP",
-        "K1STATE MAIN CHECKPOINT:",
-    ):
-        if old_source.count(expected) != 1 or output.count(expected) != 1:
-            raise ValueError("r4 exact-original source marker/lookup lost: "+expected)
+    verify_parent_markers(old_source, output)
     for va in PREV:
         if old_pack.source_inventory(output).__contains__(va) is False:
             raise ValueError("Original r4 function definition lost: 0x%08X" % va)
@@ -315,6 +338,29 @@ def selftest(args):
     assert staged.count(PARENT_MARKER) == 1
     assert all(staged.count(
         "case 0x%08Xu: return sub_%08X;" % (va, va)) == 1 for va in PREV)
+    # The real r4 parent contains repeated legitimate diagnostics. They
+    # are preserved exactly; they are not duplicate lookup dispatch cases.
+    repeated = fixture.replace(
+        "P6DQ ROCKET HARD STOP\n",
+        "P6DQ ROCKET HARD STOP\nP6DQ ROCKET HARD STOP\n")
+    same_diagnostics = staged.replace(
+        "P6DQ ROCKET HARD STOP\n",
+        "P6DQ ROCKET HARD STOP\nP6DQ ROCKET HARD STOP\n", 1)
+    verify_parent_markers(repeated, same_diagnostics)
+    for original, changed in (
+        (fixture, staged.replace("P6DQ ROCKET HARD STOP",
+                                 "FENCE REGRESSED", 1)),
+        (fixture, staged.replace("case 0x001F7620u: return sub_001F7620;",
+                                 "case 0x001F7620u: return (recomp_func_t)0;")),
+        (fixture, staged + "P6DQ ROCKET HARD STOP"),
+    ):
+        try:
+            verify_parent_markers(original, changed)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("r4 diagnostic/fence mutation wrongly accepted")
+    verify_parent_markers(fixture, staged)
     for bad in (
         fixture.replace(PARENT_MARKER, "source gone"),
         fixture.replace("P6DQ ROCKET HARD STOP", "fence gone"),
