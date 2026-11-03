@@ -231,7 +231,7 @@ def insert(parent: str, members: list[int], compiled: set[int],
     return result, new, sorted(frontiers), pruned
 
 
-def self_test(base, p5bb, p5bc):
+def self_test(base, p5bb, p5bc, pc_manual: str):
     root_name = 'sub_0017A0A0'
     generated = {ROOT: {'name': root_name,
                         'source': ('void sub_0017A0A0(void)\n{\n'
@@ -250,6 +250,9 @@ def self_test(base, p5bb, p5bc):
         '  guest_u32(0x00413F6Cu);\n}\n'
         'void recomp_frontend_shell_loop_checkpoint(void) {}\n'
     )
+    # Require the actual maintained PC helper, not just a synthetic fixture.
+    pc_definition = verify_pc_checkpoint(pc_manual, generated[ROOT]['source'])
+    assert len(pc_definition) == 64
     p = ('#define PHASE4C_BUDGET_TICK(va) ((void)0)\n'
          '#define GUEST_READ32(addr) ((uint32_t)0)\n'
          '#define GUEST_WRITE32(addr,value) ((void)0)\n'
@@ -416,7 +419,10 @@ def main():
     p5bb = load(a.p5bb_module, 'k1_text_bb')
     p5bc = load(a.p5bc_module, 'k1_text_bc')
     if a.self_test:
-        self_test(base, p5bb, p5bc)
+        if a.pc_manual is None:
+            ap.error("--pc-manual required for source-authentic self-test")
+        self_test(base, p5bb, p5bc,
+                  a.pc_manual.read_text(encoding='utf-8', errors='replace'))
         return
     for k in ('parent','shards','functions','generated_root','pc_manual','out','manifest'):
         if getattr(a, k) is None:
