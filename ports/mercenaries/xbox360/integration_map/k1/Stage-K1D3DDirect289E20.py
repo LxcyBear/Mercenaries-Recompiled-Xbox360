@@ -92,6 +92,153 @@ def restore_parent(text: str, original: str, newline: str) -> str:
     return text
 
 
+
+# The maintained PC recomp port adds two hooks at this original game entry.
+# Their production behavior is source-proven below, not a missing-helper
+# whitelist or an artificial texture/movie success.
+TEXTURE_HOOK = r'''
+/* Port of maintained recomp_manual.c texture pointer validator.
+ * An invalid pointer is not a legitimate source texture: preserve PC
+ * semantics (return 0), record a bounded trace, never make an asset up.
+ */
+static uint32_t s_k1TextureBindInvalidReports = 0u;
+static uint32_t recomp_validate_texture_bind(uint32_t caller,
+                                             uint32_t stage,
+                                             uint32_t texture)
+{
+    if (texture == 0u ||
+        (texture >= 0x00010000u && texture <= 0x03FFFFE0u))
+        return texture;
+    if (s_k1TextureBindInvalidReports++ < 64u)
+    {
+        char line[192];
+        sprintf(line,
+            "K1D3D TEXTURE-BIND-INVALID caller=%08X stage=%u texture=%08X; binding NULL",
+            (unsigned int)caller, (unsigned int)stage, (unsigned int)texture);
+        trace(line);
+    }
+    return 0u;
+}
+'''
+
+MOVIE_HOOK = r'''
+/* Port ONLY of the PC movie checkpoint's stage-23 texture diagnostic.
+ * The maintained PC stage-23 path is read-only and samples at most 128
+ * events. Selected source calls are statically proven to be stage 23.
+ * This does not emulate the movie decoder or alter a texture resource.
+ */
+static uint32_t s_k1MovieTextureSamples = 0u;
+static void recomp_movie_checkpoint(uint32_t stage, uint32_t object,
+                                    uint32_t path_address, uint32_t value0,
+                                    uint32_t value1)
+{
+    int brush_valid;
+    int pointer_valid;
+    char line[256];
+    if (stage != 23u)
+    {
+        trace("K1D3D MOVIE stage contract drift; stage-23-only hook");
+        return;
+    }
+    if (s_k1MovieTextureSamples++ >= 128u)
+        return;
+    brush_valid = object >= 0x00010000u &&
+                  object <= 0x04000000u - 0x60u;
+    pointer_valid = path_address >= 0x00010000u &&
+                    path_address <= 0x04000000u - 0x68u;
+    sprintf(line,
+        "K1D3D MOVIE-TEXTURE stage=%u brush=%08X pointer=%08X hash=%08X target=%08X",
+        (unsigned int)stage, (unsigned int)object,
+        (unsigned int)path_address, (unsigned int)value0, (unsigned int)value1);
+    trace(line);
+    sprintf(line,
+        "K1D3D MOVIE BRUSH vt=%08X bound=%08X/%08X",
+        (unsigned int)(brush_valid ? GUEST_READ32(object) : 0u),
+        (unsigned int)(brush_valid ? GUEST_READ32(object + 0x24u) : 0u),
+        (unsigned int)(brush_valid ? GUEST_READ32(object + 0x44u) : 0u));
+    trace(line);
+    sprintf(line,
+        "K1D3D MOVIE RESOURCE %08X/%08X/%08X/%08X/%08X",
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address) : 0u),
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 4u) : 0u),
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 8u) : 0u),
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 0xCu) : 0u),
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 0x10u) : 0u));
+    trace(line);
+    sprintf(line,
+        "K1D3D MOVIE CONTEXT %08X/%08X/%08X/%08X/%08X",
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 0x48u) : 0u),
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 0x4Cu) : 0u),
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 0x50u) : 0u),
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 0x54u) : 0u),
+        (unsigned int)(pointer_valid ? GUEST_READ32(path_address + 0x64u) : 0u));
+    trace(line);
+}
+'''
+SUPPORT_HOOKS = TEXTURE_HOOK + "\n" + MOVIE_HOOK
+MOVIE_CALL = re.compile(r'\brecomp_movie_checkpoint\s*\(\s*(\d+)u\s*,')
+TEXTURE_CALL = re.compile(r'\brecomp_validate_texture_bind\s*\(')
+
+
+def verify_pc_hooks(manual: str, generated: dict, members: list[int]) -> dict:
+    """Require the actual maintained PC implementations and stage-23 calls."""
+    begin = manual.find('uint32_t recomp_validate_texture_bind(')
+    end = manual.find('void recomp_transient_update_abi_checkpoint(', begin + 1)
+    if begin < 0 or end < 0 or end - begin > 3500 or end <= begin:
+        raise ValueError("Maintained PC texture validator source absent/changed")
+    validator = manual[begin:end]
+    # Preserve both PC branches: valid textures unchanged, invalid -> 0.
+    if not all(k in validator for k in (
+        'texture == 0u', 'texture >= 0x00010000u',
+        'texture <= 0x03FFFFE0u', 'return texture;',
+        'reports++ < 64u', 'return 0u;',
+    )):
+        raise ValueError("Maintained PC texture validation contract drift")
+    begin = manual.find('void recomp_movie_checkpoint(')
+    if begin < 0:
+        raise ValueError("Maintained PC movie hook definition absent")
+    next_function = re.search(r'\nvoid\s+[A-Za-z_]\w*\s*\(', manual[begin+1:])
+    if next_function is None:
+        raise ValueError("Maintained PC movie hook boundary missing")
+    movie = manual[begin:begin+1+next_function.start()]
+    start = movie.find('if (stage >= 10u && stage <= 24u)')
+    finish = movie.find('if (path_address >= 0x00010000u', start+1)
+    if start < 0 or finish < 0 or finish <= start or finish - start > 6500:
+        raise ValueError("PC movie stage-23 diagnostic block absent/changed")
+    stage_23 = movie[start:finish]
+    for k in ('movie_texture_samples++ < 128u',
+              'const int brush_valid', 'const int pointer_valid',
+              '[RETAIL-MOVIE-TEXTURE]',
+              'guest_u32(object + 0x24u)',
+              'guest_u32(path_address + 0x64u)',
+              'return;'):
+        if k not in stage_23:
+            raise ValueError("Maintained PC stage-23 movie diagnostic drift: " + k)
+    if re.search(r'\b(?:GUEST_WRITE\d*|guest_write\w*|MEM_WRITE\w*|guest_ptr)\s*\(', stage_23):
+        raise ValueError("PC movie stage-23 hook now writes guest memory")
+    calls = []
+    for va in members:
+        source = generated[va]['source']
+        movie_calls = MOVIE_CALL.findall(source)
+        # Do not silently port unrelated movie stages or resolve a moving
+        # support problem by accepting a different call form.
+        if 'recomp_movie_checkpoint' in source and not movie_calls:
+            raise ValueError("Unknown movie hook invocation shape: 0x%08X" % va)
+        if any(item != "23" for item in movie_calls):
+            raise ValueError("Non-stage-23 movie hook in selected D3D closure: 0x%08X" % va)
+        if movie_calls:
+            calls.append(va)
+    if ROOT not in calls or not TEXTURE_CALL.search(generated[ROOT]['source']):
+        raise ValueError("Actual 289E20 hooks missing; no reason to install compatibility helpers")
+    return {
+        'pc_texture_validator_sha256': sha(validator.encode('utf-8')),
+        'pc_movie_stage_23_sha256': sha(stage_23.encode('utf-8')),
+        'movie_callsite_vas': ['0x%08X' % v for v in calls],
+        'texture_return_rule': 'unchanged if NULL or 0x00010000..0x03FFFFE0; else 0',
+        'movie_hook_scope': 'stage-23 read-only 128-sample diagnostics only',
+    }
+
+
 def choose(generated: dict, compiled: set[int], base) -> list[int]:
     if ROOT in compiled:
         raise ValueError("Root already compiled in TrueTU; audit lookup/linkage, do not duplicate")
@@ -125,6 +272,16 @@ def choose(generated: dict, compiled: set[int], base) -> list[int]:
 def emit(parent: str, choices: list[int], compiled: set[int], generated: dict,
          base, bb, bc) -> tuple[str, list[int], list[int], dict]:
     prepared, original_lookup, newline = prepare_parent(parent)
+    for name in ('recomp_movie_checkpoint', 'recomp_validate_texture_bind'):
+        if re.search(r'(?m)^(?:static\s+)?(?:void|uint32_t)\s+' + name +
+                     r'\s*\(', prepared):
+            raise ValueError("D3D helper already defined; no duplicate implementation: " + name)
+    if prepared.count(LOOKUP_CANON) != 1:
+        raise ValueError("No unique lookup anchor for original PC support")
+    prepared = prepared.replace(LOOKUP_CANON, SUPPORT_HOOKS + "\n" + LOOKUP_CANON, 1)
+    if prepared.count("static uint32_t recomp_validate_texture_bind(") != 1 or \
+       prepared.count("static void recomp_movie_checkpoint(") != 1:
+        raise ValueError("Authentic PC helper ports not uniquely installed")
     previous_root = bc.SWEEP_ROOT
     previous_entry = bc.instrument_root_entry
     previous_standard = set(base.STANDARD_CALLS)
@@ -187,6 +344,10 @@ def selftest() -> None:
                 pass
             else:
                 raise AssertionError("Second staging accepted")
+    assert "return texture;" in SUPPORT_HOOKS and "return 0u;" in SUPPORT_HOOKS
+    assert "s_k1MovieTextureSamples++ >= 128u" in SUPPORT_HOOKS
+    assert SUPPORT_HOOKS.count("GUEST_WRITE32") == 0
+    assert "GUEST_READ32(path_address + 0x64u)" in SUPPORT_HOOKS
     for bad in (start.replace("D3DDevice_Reset(", ""),
                 start.replace("P6DQ ROCKET HARD STOP", ""),
                 start.replace(PARENT_MARK, "")):
@@ -204,6 +365,29 @@ def selftest() -> None:
         0x00289E80: {"name": "sub_00289E80", "source": "return;"},
     }
     assert choose(sources, set(), Base()) == [ROOT, 0x00289E80]
+    actual_pc_source = Path(__file__).resolve().parents[2] / "src" / "recomp_manual.c"
+    if not actual_pc_source.is_file():
+        raise AssertionError("Maintained PC hook implementations missing from checkout")
+    real_proof_source = actual_pc_source.read_text(encoding="utf-8")
+    support_source = {
+        ROOT: {"name": "sub_00289E20", "source":
+               "recomp_validate_texture_bind(g_recomp_current_func, 0u, 0u); "
+               "recomp_movie_checkpoint(23u, 0u, 0u, 0u, 0u);"}
+    }
+    proof = verify_pc_hooks(real_proof_source, support_source, [ROOT])
+    assert len(proof["pc_texture_validator_sha256"]) == 64
+    assert len(proof["pc_movie_stage_23_sha256"]) == 64
+    for changed in ("recomp_movie_checkpoint(6u, 0u, 0u, 0u, 0u);",
+                    "recomp_movie_checkpoint(0u, 0u, 0u, 0u, 0u);"):
+        try:
+            verify_pc_hooks(real_proof_source,
+                            {ROOT: {"source": changed +
+                                    "recomp_validate_texture_bind(0u,0u,0u);"}},
+                            [ROOT])
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Unsupported PC movie stage accepted")
     try:
         choose(sources, {ROOT}, Base())
     except ValueError:
@@ -223,6 +407,8 @@ def write_once(path: Path, blob: bytes) -> None:
 
 
 def stage(a: argparse.Namespace, base, bb, bc) -> None:
+    if not a.pc_manual.is_file():
+        raise ValueError("Original maintained PC helper source unavailable")
     originals = sorted(a.shards.glob("translated_???.cpp"))
     if len(originals) != 64 or not (a.shards / "translated_runtime.h").is_file():
         raise ValueError("Exactly 64 original TrueTUs and header required")
@@ -256,6 +442,7 @@ def stage(a: argparse.Namespace, base, bb, bc) -> None:
     base.support_symbols = lambda text: orig_support(text) | extra_support
 
     chosen = choose(generated, compiled, base)
+    support_proof = verify_pc_hooks(a.pc_manual.read_text(encoding="utf-8"), generated, chosen)
     original_bytes = a.parent.read_bytes()
     result, retained, frontier, pruned = emit(
         original_bytes.decode("utf-8"), chosen, compiled, generated, base, bb, bc
@@ -278,6 +465,9 @@ def stage(a: argparse.Namespace, base, bb, bc) -> None:
         "promoted_vas": ["0x%08X" % v for v in retained],
         "remaining_direct_frontiers": ["0x%08X" % v for v in frontier],
         "pruned_support_missing": {"0x%08X" % v: issue for v, issue in pruned.items()},
+        "pc_support_proof": support_proof,
+        "pc_supported_texture_hook_implemented": True,
+        "pc_stage23_telemetry_implemented": True,
         "original_true_tus": 64, "modified_true_tus": 0,
         "true_tu_sha256": originals_hashes,
         "native_xenos_reset_replaced": False,
@@ -305,14 +495,14 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--self-test", action="store_true")
     for name in ("base-module", "p5bb-module", "p5bc-module", "parent",
-                 "shards", "functions", "generated-root", "output", "manifest"):
+                 "shards", "functions", "generated-root", "pc-manual", "output", "manifest"):
         p.add_argument("--" + name, type=Path)
     a = p.parse_args()
     if a.self_test:
         selftest()
         return
     for name in ("base_module", "p5bb_module", "p5bc_module", "parent", "shards",
-                 "functions", "generated_root", "output", "manifest"):
+                 "functions", "generated_root", "pc_manual", "output", "manifest"):
         if getattr(a, name) is None:
             p.error("Missing --" + name.replace("_", "-"))
     stage(a, load(a.base_module, "k1direct_base"),
