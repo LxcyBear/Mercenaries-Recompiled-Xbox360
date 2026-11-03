@@ -373,66 +373,143 @@ def insert_once(src:str,needle:str, replacement:str, label:str)->str:
     if count!=1:raise ValueError(f"{label} expected one source anchor, got {count}")
     return src.replace(needle,replacement,1)
 
-def transform(src:str)->str:
-    if TAG in src:raise ValueError("Already patched; reject duplicate")
-    if "\r" in src.replace("\r\n",""):raise ValueError("Mixed newlines")
-    nl="\r\n" if "\r\n" in src else "\n"
-    # The declarations belong in host main.cpp, not in any translated TU.
-    header="static uint32_t phase5b_native_handle_token(HANDLE handle)"
-    src=insert_once(src,header,CURSOR.replace("\n",nl)+nl+header,"cursor owner")
+def insert_before_definition(src: str, pattern: str, injection: str, label: str) -> str:
+    """Insert only before one REAL function definition, static or TU-external.
 
-    close_stmt="nativeHandle = phase5c_take_native_handle(handleToken);"
-    src=insert_once(src,close_stmt,
-        "k1nt207_clear(handleToken);"+nl+"    "+close_stmt,
-        "NtClose lifecycle")
+    Phase6 TrueTU externalization removes 'static' from support definitions;
+    the previously hardcoded static spelling was NOT an invariant.
+    """
+    rx = re.compile(pattern, re.M)
+    matches = list(rx.finditer(src))
+    if len(matches) != 1:
+        raise ValueError(
+            f"{label} expected one actual function definition, got {len(matches)}"
+        )
+    at = matches[0].start()
+    return src[:at] + injection + src[at:]
 
-    body="static void phase5n_nt_query_information_file(uint32_t savedEsp)"
-    src=insert_once(src,body,HANDLER.replace("\n",nl)+nl+body,
-                    "query handler insertion")
 
-    # Source-backed packed ICALL_SAFE dispatch: call the native helper BEFORE
-    # the preexisting D3/QueryInformation case or the fallback hard stop.
-    case=("} else if (_phase4c_target == 0x800000D3u) { \\"+nl+
-          "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\")
-    if case not in src:
-        raise ValueError("Original native dispatcher D3 case not recognized; NO XDK")
-    src=insert_once(src,case,
-        ("} else if (_phase4c_target == 0x800000CFu) { \\"+nl+
-         "        k1nt207_nt_query_directory_file((uint32_t)(saved_esp)); \\"+nl+
-         "    "+case),"native ICALL_SAFE 207 dispatch")
-    decl="#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\"
-    src=insert_once(src,decl,
-        "static void k1nt207_nt_query_directory_file(uint32_t savedEsp);"+nl+
-        decl,"forward declaration")
-    if src.count(TAG)!=1:raise ValueError("Tag count mismatch")
-    if src.count("K1NT207 REAL ENUM RESULT:")!=1:
-        raise ValueError("Runtime success witness not unique")
-    if "K1NT207 FRAME GATE:" not in src or "P6DQ ROCKET HARD STOP" not in src:
-        raise ValueError("Existing ABI capture/hard-stop was modified")
+def patch_dispatch(src: str, nl: str, label: str) -> str:
+    """Patch both host main AND translated_runtime.h macro consistently."""
+    case = ("} else if (_phase4c_target == 0x800000D3u) { \\" + nl +
+            "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\")
+    if src.count(case) != 1:
+        raise ValueError(
+            f"{label}: expected one original ordinal211 D3 dispatcher, "
+            f"got {src.count(case)}. No XDK."
+        )
+    original = src
+    src = insert_once(
+        src,
+        case,
+        ("} else if (_phase4c_target == 0x800000CFu) { \\" + nl +
+         "        k1nt207_nt_query_directory_file((uint32_t)(saved_esp)); \\" + nl +
+         "    " + case),
+        label + " ordinal207 dispatch")
+    decl = "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\"
+    src = insert_once(
+        src, decl,
+        "void k1nt207_nt_query_directory_file(uint32_t savedEsp);" + nl + decl,
+        label + " cross-TU native function prototype")
+    if src.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") != 1:
+        raise ValueError(label + ": native dispatch not unique")
+    if original.count("0x800000CFu") and "k1nt207_nt_query_directory_file" in original:
+        raise ValueError(label + ": existing 207 native override detected")
     return src
 
+
+def transform(src: str, header: str) -> tuple[str, str]:
+    if TAG in src or TAG in header:
+        raise ValueError("Already patched; reject duplicate")
+    if "\r" in src.replace("\r\n", "") or "\r" in header.replace("\r\n", ""):
+        raise ValueError("Mixed newlines")
+    nl = "\r\n" if "\r\n" in src else "\n"
+    hn = "\r\n" if "\r\n" in header else "\n"
+    # Sharding externalizes this native helper; don't require 'static'.
+    src = insert_before_definition(
+        src,
+        r"^[ \t]*(?:static[ \t]+)?uint32_t[ \t]+"
+        r"phase5b_native_handle_token[ \t]*\([ \t]*HANDLE[ \t]+handle[ \t]*\)"
+        r"[ \t\r\n]*(?=\{)",
+        CURSOR.replace("\n", nl) + nl,
+        "Phase5B native-handle table owner")
+    close_stmt = "nativeHandle = phase5c_take_native_handle(handleToken);"
+    src = insert_once(
+        src, close_stmt, "k1nt207_clear(handleToken);" + nl +
+        "    " + close_stmt, "NtClose lifecycle")
+    src = insert_before_definition(
+        src,
+        r"^[ \t]*(?:static[ \t]+)?void[ \t]+"
+        r"phase5n_nt_query_information_file[ \t]*"
+        r"\([ \t]*uint32_t[ \t]+savedEsp[ \t]*\)[ \t\r\n]*(?=\{)",
+        HANDLER.replace("\n", nl) + nl,
+        "Phase5N native query handler owner")
+
+    # The TRUE TU compiler consumes the shared HEADER macro. Updating only
+    # main.cpp silently leaves the active translated callsites unmodified!
+    src = patch_dispatch(src, nl, "host main.cpp")
+    header = patch_dispatch(header, hn, "translated_runtime.h")
+
+    if src.count(TAG) != 1 or src.count("K1NT207 REAL ENUM RESULT:") != 1:
+        raise ValueError("Native handler marker/trace uniqueness failed")
+    if header.count("void k1nt207_nt_query_directory_file(uint32_t savedEsp);") != 1:
+        raise ValueError("Cross-TU native handler declaration missing")
+    if "K1NT207 FRAME GATE:" not in src or "P6DQ ROCKET HARD STOP" not in src:
+        raise ValueError("Existing hardware ABI witness or hard stop not preserved")
+    return src, header
+
+
 def self_test():
-    stub=("static uint32_t phase5b_native_handle_token(HANDLE handle){}"
-          "\nstatic void phase5c_nt_close(uint32_t savedEsp){\n"
-          "    nativeHandle = phase5c_take_native_handle(handleToken);\n}\n"
-          "static void phase5n_nt_query_information_file(uint32_t savedEsp){}\n"
-          "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
-          "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
-          "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
-          "    } else { \\\n"
-          "} while (0)\n"
-          "K1NT207 FRAME GATE:\nP6DQ ROCKET HARD STOP\n")
-    for inp in (stub,stub.replace("\n","\r\n")):
-        got=transform(inp)
-        assert got.count(TAG)==1
-        assert got.count("k1nt207_clear(handleToken);")==1
-        assert got.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));")==1
-        assert "K1NT207 REAL ENUM SUCCESS!!!" in got
-        for forbidden in ("fopen(", "CreateDirectory(", "game:\\\\dataxbox\\\\hud", "return STATUS_SUCCESS"):
-            assert forbidden not in HANDLER
-        try:transform(got)
-        except ValueError:pass
-        else:raise AssertionError("Double stage accepted")
+    real_host = (
+        "#define PHASE5B_HANDLE_TAG 0x48000000u\n"
+        "#define PHASE5B_HANDLE_CAP 64u\n"
+        "static uint32_t phase5b_native_handle_token(HANDLE handle){}\n"
+        "static void phase5c_nt_close(uint32_t savedEsp){\n"
+        "    nativeHandle = phase5c_take_native_handle(handleToken);\n}\n"
+        "static void phase5n_nt_query_information_file(uint32_t savedEsp){}\n"
+        "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
+        "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
+        "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
+        "    } else { \\\n"
+        "} while (0)\n"
+        "K1NT207 FRAME GATE:\nP6DQ ROCKET HARD STOP\n"
+    )
+    shared_header = (
+        "#pragma once\n"
+        "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
+        "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
+        "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
+        "    } else { \\\n"
+        "} while (0)\n"
+    )
+    for externalized in (False, True):
+        host = real_host
+        if externalized:
+            host = host.replace(
+                "static uint32_t phase5b_native_handle_token",
+                "uint32_t phase5b_native_handle_token")
+            host = host.replace(
+                "static void phase5n_nt_query_information_file",
+                "void phase5n_nt_query_information_file")
+        for newline in ("\n", "\r\n"):
+            h0 = host.replace("\n", newline)
+            s0 = shared_header.replace("\n", newline)
+            main, hdr = transform(h0, s0)
+            assert main.count(TAG) == 1
+            assert hdr.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
+            assert main.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
+            assert "void k1nt207_nt_query_directory_file(uint32_t savedEsp);" in hdr
+            assert main.count("k1nt207_clear(handleToken);") == 1
+            assert "K1NT207 REAL ENUM SUCCESS!!!" in main
+            assert "P6DQ ROCKET HARD STOP" in main
+            try:
+                transform(main, hdr)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Repeated stage accepted")
+    for forbidden in ("fopen(", "CreateDirectory(", "return STATUS_SUCCESS"):
+        assert forbidden not in HANDLER
     assert "GUEST_WRITE32(recordVa+60u,nameLen)" in HANDLER
     assert "GUEST_WRITE8(recordVa+64u+i," in HANDLER
     assert "savedEsp!=callEsp+44u" in HANDLER
@@ -440,7 +517,9 @@ def self_test():
     assert "FindNextFileA(cursor->search,&cursor->entry)" in HANDLER
     assert "k1nt207_clear(handleToken);" not in HANDLER
     assert "phase4c_escape(PHASE4C_BOUNDARY_FILE_INFORMATION" in HANDLER
-    print("[K1NT207-NATIVE] SELFTEST PASS: 10-arg ABI, ANSI class1, bounded output, cursor/close, no fake data")
+    print("[K1NT207-NATIVE] SELFTEST PASS: static/externalized TrueTU "
+          "signatures, BOTH dispatch macros, CRLF, ANSI class1, RET44, "
+          "per-handle cursor and no fabricated files")
 
 def stage(a):
     for p in (a.parent_main,a.parent_manifest,a.parent_shards):
@@ -458,7 +537,12 @@ def stage(a):
     if a.out_main.resolve()==a.parent_main.resolve() or a.out_shards.resolve()==a.parent_shards.resolve():
         raise ValueError("Cannot overwrite proven hardware witness")
     src=a.parent_main.read_bytes().decode("utf-8")
-    new=transform(src)
+    runtime_h=a.parent_shards/"translated_runtime.h"
+    if not runtime_h.is_file():
+        raise ValueError("Missing inherited TrueTU runtime header")
+    old_header=runtime_h.read_bytes()
+    new,new_header=transform(src,old_header.decode("utf-8"))
+    header_blob=new_header.encode("utf-8")
     files=sorted(p for p in a.parent_shards.glob("translated_???.cpp") if p.is_file())
     headers=sorted(a.parent_shards.glob("*.h"))
     if len(files)!=64 or not (a.parent_shards/"translated_runtime.h").is_file():
@@ -466,9 +550,10 @@ def stage(a):
     a.out_shards.mkdir(parents=True,exist_ok=True)
     for p in files+headers:
         dest=a.out_shards/p.name
-        if dest.exists() and dest.read_bytes()!=p.read_bytes():
-            raise ValueError("Refusing changed TrueTU "+p.name)
-        if not dest.exists():dest.write_bytes(p.read_bytes())
+        new_blob=header_blob if p.name=="translated_runtime.h" else p.read_bytes()
+        if dest.exists() and dest.read_bytes()!=new_blob:
+            raise ValueError("Refusing changed inherited file "+p.name)
+        if not dest.exists():dest.write_bytes(new_blob)
     blob=new.encode("utf-8")
     a.out_main.parent.mkdir(parents=True,exist_ok=True)
     if a.out_main.exists() and a.out_main.read_bytes()!=blob:
@@ -480,6 +565,9 @@ def stage(a):
         "parent_marker":PARENT,
         "parent_main_sha256":sha(a.parent_main.read_bytes()),
         "native_main_sha256":sha(blob),
+        "parent_runtime_header_sha256":sha(old_header),
+        "native_runtime_header_sha256":sha(header_blob),
+        "changed_headers":["translated_runtime.h"],
         "out_main":str(a.out_main.resolve()),
         "out_shards":str(a.out_shards.resolve()),
         "source_original_ordinal":207,
@@ -504,7 +592,8 @@ def stage(a):
     if not a.manifest.exists():a.manifest.write_bytes(manifest)
     print("[K1NT207-NATIVE] STAGE PASS: native Xbox360 FindFirst/Next directory enumeration source")
     print("[K1NT207-NATIVE] ORIGINAL XBOX ABI: NtQueryDirectoryFile @40 RET44, class1, ANSI 64B header")
-    print("[K1NT207-NATIVE] 64 TrueTUs BYTE EXACT; existing XPP + old hard stop preserved")
+    print("[K1NT207-NATIVE] 64 TrueTUs BYTE EXACT; shared translated_runtime.h ordinal207 dispatch patched")
+    print("[K1NT207-NATIVE] Existing XPP + original hard stop preserved; native NT207 is explicit exception")
     print("[K1NT207-NATIVE] SOURCE ONLY: no XDK, no Xbox execution, no guest display injected")
 
 def main():
