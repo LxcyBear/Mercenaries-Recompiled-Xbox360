@@ -1914,6 +1914,23 @@ conservative hard fences for unsupported classes. Ensure original 44B
 frame and saved ESP are validated before any guest-visible changes,
 and add no-build tests before compiling an incremental XEX.
 
+### TrueTU source-only Phase5N helper closure (2026-11-02)
+
+User-local native-directory preflight reached the real 64-TU host and
+reported `phase5n_filetime_value` and `phase5n_write_guest_u64`
+absent. These support-owned Phase5N functions are **not guaranteed to
+survive the TrueTU runtime rewrite**, even though the original Phase5N
+emitter defines them. The K1NT207 service now owns two private
+`k1nt207_*` equivalents with the original FILETIME high/low DWORD
+combination and `GUEST_WRITE32` at address+0/address+4. This does
+not fake metadata or enable a new kernel ordinal. The preflight test
+fixture deliberately omits both Phase5N functions, so the same
+closure regression is caught before another generated host build.
+
+The hardware-proven K1NT207 argument capture and all XPP TrueTUs
+remain unchanged. No XDK compilation or Xbox execution was performed
+for this fix.
+
 ### K1NT207 real native enumeration candidate (2026-11-02)
 
 After the Xbox hardware-captured original ordinal207 10-DWORD frame
