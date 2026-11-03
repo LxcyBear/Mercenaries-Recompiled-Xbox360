@@ -20,6 +20,7 @@ $original = Join-Path $root "build\phase3n_final_abi_scale"
 $generated = Join-Path $original "runtime\gen"
 $functions = Join-Path $original "analysis\disasm\functions.json"
 $cache = Join-Path $original "analysis\disasm\.disasm_cache.json"
+$pcManual = Join-Path $root "ports\mercenaries\src\recomp_manual.c"
 $parentRoot = Join-Path $root "build\phase6_integration_map\k1_d3d_second_create_r2"
 $parentMain = Join-Path $parentRoot "main.cpp"
 $parentManifest = Join-Path $parentRoot "k1-d3d-second-manifest.json"
@@ -32,7 +33,7 @@ $envFile = Join-Path $root "build\phase6_native_graphics\rocket_frontier_journal
 $xdk = Join-Path $outRoot "xdk"
 $xex = Join-Path $xdk "Merc-K1D3D-Direct289E20.xex"
 
-foreach($file in @($stage,$parentRunner,$base,$bb,$bc,$functions,$cache,$builder,$envFile)){
+foreach($file in @($stage,$parentRunner,$base,$bb,$bc,$functions,$cache,$pcManual,$builder,$envFile)){
     if(-not(Test-Path -LiteralPath $file -PathType Leaf)){
         throw "[K1D3D-DIRECT] Missing required source: $file"
     }
@@ -78,7 +79,7 @@ if($LASTEXITCODE -ne 0){ throw "[K1D3D-DIRECT] Python syntax failed; XDK blocked
 if($LASTEXITCODE -ne 0){ throw "[K1D3D-DIRECT] Fail-closed source fixtures failed; XDK blocked" }
 $argsList = @("--base-module",$base,"--p5bb-module",$bb,"--p5bc-module",$bc,
               "--parent",$parentMain,"--shards",$shards,"--functions",$functions,
-              "--generated-root",$generated,"--output",$nextMain,"--manifest",$nextManifest)
+              "--generated-root",$generated,"--pc-manual",$pcManual,"--output",$nextMain,"--manifest",$nextManifest)
 & $python -u $stage @argsList
 if($LASTEXITCODE -ne 0){ throw "[K1D3D-DIRECT] Exact original D3D source promotion failed; XDK blocked" }
 
@@ -92,6 +93,100 @@ if($doc.status -ne "K1_D3D_DIRECT_289E20_SOURCE_ONLY_NO_XDK" -or
    $doc.new_main_sha256 -ne $hash -or
    [int]$doc.original_true_tus -ne 64 -or
    [int]$doc.modified_true_tus -ne 0 -or
+   $doc.pc_supported_texture_hook_implemented -ne $true -or
+   $doc.pc_stage23_telemetry_implemented -ne $true -or
+   $doc.pc_support_proof.movie_hook_scope -ne "stage-23 read-only 128-sample diagnostics only" -or
+   -not ($doc.pc_support_proof.pc_texture_validator_sha256 -match '^[0-9a-f]{64}
+   $doc.native_xenos_reset_replaced -ne $false -or
+   $doc.unknown_mmio_fences_changed -ne $false -or
+   $doc.fake_guest_pixels -ne $false -or
+   $doc.hardware_verified -ne $false -or
+   @($doc.promoted_vas) -notcontains "0x00289E20" -or
+   -not $txt.Contains("case 0x00289E20u: return sub_00289E20;") -or
+   -not $txt.Contains("K1D3D SECOND: native Xenos Reset PASS") -or
+   -not $txt.Contains("K1STATE MAIN CHECKPOINT:") -or
+   -not $txt.Contains("P6DQ ROCKET HARD STOP")){
+    throw "[K1D3D-DIRECT] Mandatory original function / inherited guest-safety manifest mismatch"
+}
+Write-Host ("[K1D3D-DIRECT] PREFLIGHT PASS: authentic retail D3D 00289E20; packed={0}; 64 TrueTUs intact" -f @($doc.promoted_vas).Count)
+Write-Host "[K1D3D-DIRECT] Maintained PC hook implementations: texture validity preserved, movie stage-23 diagnostic-only, 64 TUs untouched"
+Write-Host "[K1D3D-DIRECT] Native second CreateDevice/Xenos Reset unchanged. No guest result fabricated."
+if(-not $Build){
+    Write-Host "[K1D3D-DIRECT] SOURCE ONLY. Add -Build after source preflight succeeds."
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $xdk | Out-Null
+$buildArgs = @{
+    GeneratedMain = $nextMain
+    GeneratedEnv = $envFile
+    GeneratedShardDir = $shards
+    ExpectedBuildTag = "P6DQ-R51-MM173-FRAME-20261029-A"
+    ExpectedEnvCookie = "phase6dq_env_build_cookie"
+    SolutionRoot = $SolutionRoot
+    Configuration = "Release"
+    Platform = "Xbox 360"
+    CleanLog = (Join-Path $xdk "xdk-clean.log")
+    BuildLog = (Join-Path $xdk "xdk-build.log")
+    PublishedXex = $xex
+    ShadowBuildRoot = $FastBuildRoot
+    SkipClean = $true
+}
+Write-Host "[K1D3D-DIRECT] ONE INCREMENTAL XDK BUILD: new main; original 64 TrueTUs reused"
+& $builder @buildArgs
+if($LASTEXITCODE -ne 0){throw "[K1D3D-DIRECT] XDK build failed. See $($buildArgs.BuildLog)"}
+if(-not(Test-Path -LiteralPath $xex -PathType Leaf)){
+    throw "[K1D3D-DIRECT] Build reported success without expected XEX"
+}
+Write-Host "[K1D3D-DIRECT] XDK BUILD PASS: $xex"
+Write-Host "[K1D3D-DIRECT] Hardware unverified: require authentic 00289E20 crossing, real Swap/PersistDisplay evidence"
+) -or
+   -not ($doc.pc_support_proof.pc_movie_stage_23_sha256 -match '^[0-9a-f]{64}
+   $doc.native_xenos_reset_replaced -ne $false -or
+   $doc.unknown_mmio_fences_changed -ne $false -or
+   $doc.fake_guest_pixels -ne $false -or
+   $doc.hardware_verified -ne $false -or
+   @($doc.promoted_vas) -notcontains "0x00289E20" -or
+   -not $txt.Contains("case 0x00289E20u: return sub_00289E20;") -or
+   -not $txt.Contains("K1D3D SECOND: native Xenos Reset PASS") -or
+   -not $txt.Contains("K1STATE MAIN CHECKPOINT:") -or
+   -not $txt.Contains("P6DQ ROCKET HARD STOP")){
+    throw "[K1D3D-DIRECT] Mandatory original function / inherited guest-safety manifest mismatch"
+}
+Write-Host ("[K1D3D-DIRECT] PREFLIGHT PASS: authentic retail D3D 00289E20; packed={0}; 64 TrueTUs intact" -f @($doc.promoted_vas).Count)
+Write-Host "[K1D3D-DIRECT] Native second CreateDevice/Xenos Reset unchanged. No guest result fabricated."
+if(-not $Build){
+    Write-Host "[K1D3D-DIRECT] SOURCE ONLY. Add -Build after source preflight succeeds."
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $xdk | Out-Null
+$buildArgs = @{
+    GeneratedMain = $nextMain
+    GeneratedEnv = $envFile
+    GeneratedShardDir = $shards
+    ExpectedBuildTag = "P6DQ-R51-MM173-FRAME-20261029-A"
+    ExpectedEnvCookie = "phase6dq_env_build_cookie"
+    SolutionRoot = $SolutionRoot
+    Configuration = "Release"
+    Platform = "Xbox 360"
+    CleanLog = (Join-Path $xdk "xdk-clean.log")
+    BuildLog = (Join-Path $xdk "xdk-build.log")
+    PublishedXex = $xex
+    ShadowBuildRoot = $FastBuildRoot
+    SkipClean = $true
+}
+Write-Host "[K1D3D-DIRECT] ONE INCREMENTAL XDK BUILD: new main; original 64 TrueTUs reused"
+& $builder @buildArgs
+if($LASTEXITCODE -ne 0){throw "[K1D3D-DIRECT] XDK build failed. See $($buildArgs.BuildLog)"}
+if(-not(Test-Path -LiteralPath $xex -PathType Leaf)){
+    throw "[K1D3D-DIRECT] Build reported success without expected XEX"
+}
+Write-Host "[K1D3D-DIRECT] XDK BUILD PASS: $xex"
+Write-Host "[K1D3D-DIRECT] Hardware unverified: require authentic 00289E20 crossing, real Swap/PersistDisplay evidence"
+) -or
+   -not $txt.Contains("static uint32_t recomp_validate_texture_bind(") -or
+   -not $txt.Contains("static void recomp_movie_checkpoint(") -or
    $doc.native_xenos_reset_replaced -ne $false -or
    $doc.unknown_mmio_fences_changed -ne $false -or
    $doc.fake_guest_pixels -ne $false -or
