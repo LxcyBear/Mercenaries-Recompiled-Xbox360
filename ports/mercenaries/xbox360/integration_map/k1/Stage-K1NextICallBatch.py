@@ -72,8 +72,6 @@ def prepare(parent: str) -> tuple[str, str, str]:
     for required in REQUIRED:
         if required not in normalized:
             raise ValueError("Hardware-proven graphics fence/source lost: "+required)
-    if PARENT_MARK not in normalized:
-        raise ValueError("Hardware six-case original source missing")
     if MARKER in normalized or OPT_PLACEHOLDER in normalized:
         raise ValueError("Already staged or dirty output")
     for va in MEMBERS:
@@ -99,9 +97,13 @@ def restore(packed: str, original_lookup: str, newline: str) -> str:
         raise ValueError("Real pack lookup changed by emitter")
     packed = packed.replace(CANON, original_lookup, 1)
     packed = packed.replace(OPT_PLACEHOLDER, OPT_ON)
-    if MARKER in packed or PARENT_MARK not in packed:
-        raise ValueError("Parent stage already contains next pack marker")
-    packed = packed.replace(PARENT_MARK, PARENT_MARK + " | " + MARKER, 1)
+    if MARKER in packed or original_lookup not in packed:
+        raise ValueError("Missing original lookup or duplicate new batch marker")
+    # D3D six-case code resides in its manifest-proven TrueTU, not
+    # necessarily in main.cpp. Mark this main-only .text extension
+    # without pretending the previous TrueTU patch moved to main.
+    packed = packed.replace(
+        original_lookup, "/* " + MARKER + " */\n" + original_lookup, 1)
     if newline == '\r\n':
         packed = packed.replace('\n', '\r\n')
     for required in REQUIRED:
@@ -171,15 +173,48 @@ def stage(a) -> None:
         raise ValueError("Missing parent 64 TrueTU + original runtime header")
     existing = source_inventory(parent_bytes.decode("utf-8", errors="replace"))
     hashes = {}
+    recorded_owner = parent_manifest.get("source_root_owner")
+    recorded_changed = parent_manifest.get("changed_true_tus", [])
+    if recorded_owner not in (["main.cpp"] + [p.name for p in shards]):
+        raise ValueError("Original six-case compiled owner missing/unknown in manifest")
+    if recorded_changed != ([] if recorded_owner == "main.cpp" else [recorded_owner]):
+        raise ValueError("Six-case modified TrueTU does not match manifest owner")
+    if parent_manifest.get("changed_true_tu_count") != len(recorded_changed):
+        raise ValueError("Six-case number of modified TrueTUs changed")
+    if parent_manifest.get("exact_original_budget_tick_retained") is not True:
+        raise ValueError("Six-case original entry/guest budget instrumentation proof lost")
+    marker_occurrences = 0
+    if recorded_owner == "main.cpp":
+        main_text = parent_bytes.decode("utf-8", errors="replace")
+        if (main_text.count(PARENT_MARK) != 1 or
+            "k1d3d_296550_original_sixcase(eax, k1_original_tail_target)" not in main_text or
+            "RECOMP_ITAIL(k1_original_tail_target)" not in main_text):
+            raise ValueError("Six-case executable patch missing in parent main")
+        marker_occurrences = 1
+    elif PARENT_MARK in parent_bytes.decode("utf-8", errors="replace"):
+        raise ValueError("Six-case TrueTU owner marker unexpectedly also in parent main")
     for file in shards:
         contents = file.read_bytes()
         hashes[file.name] = digest(contents)
         if hashes[file.name] != parent_manifest.get("derived_64_tu_hashes", {}).get(file.name):
             raise ValueError("Hardware parent TrueTU changed: "+file.name)
-        for va in source_inventory(contents.decode("utf-8", errors="replace")):
+        body = contents.decode("utf-8", errors="replace")
+        if file.name == recorded_owner:
+            if (body.count(PARENT_MARK) != 1 or
+                "k1d3d_296550_original_sixcase(eax, k1_original_tail_target)" not in body or
+                "RECOMP_ITAIL(k1_original_tail_target)" not in body or
+                "void sub_00296550(void)" not in body or
+                "void sub_002965A8(void)" not in body):
+                raise ValueError("Real six-case owner TrueTU executable patch/ABI absent: "+file.name)
+            marker_occurrences += 1
+        elif PARENT_MARK in body:
+            raise ValueError("Six-case marker duplicated in non-owner TrueTU: "+file.name)
+        for va in source_inventory(body):
             if va in existing:
                 raise ValueError("Original function duplicated in main/TrueTUs: %08X" % va)
             existing.add(va)
+    if marker_occurrences != 1:
+        raise ValueError("Original six-case owner file not uniquely verified")
     cache = a.functions.parent / ".disasm_cache.json"
     if (not cache.is_file() or json.loads(cache.read_text(encoding="utf-8-sig"))
             .get("xbe_hash", "").upper() != RETAIL_SHA):
@@ -229,9 +264,15 @@ def stage(a) -> None:
         'case 0x001F7620u: return sub_001F7620;' not in output or
         'case 0x001F7520u: return sub_001F7520;' not in output):
         raise ValueError("Both original missing root/helper and marker not linked")
-    if ('K1D3D-296550-SIXCASES-ONEBUILD-20261103' not in output or
-        output.count("K1STATE MAIN CHECKPOINT:") != 1):
-        raise ValueError("Six-way graphics dispatch or state checkpoint lost")
+    if (output.count("K1STATE MAIN CHECKPOINT:") != 1 or
+        output.count("/* " + MARKER + " */") != 1):
+        raise ValueError("Main original state checkpoint or new batch marker lost")
+    # Six-case guest bridge remains exclusively in its verified original
+    # translation unit. This main-only batch MUST NOT replace/duplicate it.
+    if recorded_owner != "main.cpp" and (
+        PARENT_MARK in output or
+        "k1d3d_296550_original_sixcase" in output):
+        raise ValueError("Six-case TrueTU bridge incorrectly duplicated into main")
     changed = output.encode("utf-8")
     metadata = {
         "status": STATUS,
@@ -257,6 +298,9 @@ def stage(a) -> None:
             "0x%08X" % k: v for k, v in pruned.items()},
         "lookup_both_exact_original_entries": True,
         "preserves_six_case_graphics_dispatch": True,
+        "six_case_verified_owner_file": recorded_owner,
+        "six_case_owner_marker_verified": marker_occurrences == 1,
+        "six_case_original_64_true_tu_sha256_verified": True,
         "native_xenos_reset_source_unchanged": True,
         "unknown_indirect_hard_fence_unchanged": True,
         "dummy_guest_data": False,
@@ -285,7 +329,8 @@ def stage(a) -> None:
     print("[K1-NEXT-PACK] ORIGINAL .text 001F7620 + direct CALLEE 001F7520 PASS")
     print("[K1-NEXT-PACK] Exact original generated C from recomp_0010.c, no synthetic bodies")
     print("[K1-NEXT-PACK] INCREMENTAL BATCH: 2 exact new functions, both in pack lookup")
-    print("[K1-NEXT-PACK] Six real D3D switch cases, native Xenos Reset and hard fences preserved")
+    print("[K1-NEXT-PACK] SIX-CASE BRIDGE PROVEN IN %s (source SHA unchanged); Reset/hard fences preserved" %
+          recorded_owner)
     print("[K1-NEXT-PACK] Parent 64 TrueTUs unchanged, reused with original runtime header")
     print("[K1-NEXT-PACK] NO XDK, NO XEX, NO NEW PIXELS CLAIMED")
     print("[K1-NEXT-PACK] Source-only manifest: "+str(a.manifest))
@@ -324,7 +369,6 @@ def selftest() -> None:
         'P6DQ ROCKET HARD STOP\n'
         'K1D3D SECOND: native Xenos Reset PASS\n'
         'K1STATE MAIN CHECKPOINT:\n'
-        'K1D3D-296550-SIXCASES-ONEBUILD-20261103\n'
         'case 0x00289E20u: return sub_00289E20;\n'
         'case 0x0017A0A0u: return sub_0017A0A0;\n'
         'recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n'
@@ -341,11 +385,13 @@ def selftest() -> None:
     assert value.count("case 0x001F7620u: return sub_001F7620;") == 1
     assert value.count("case 0x001F7520u: return sub_001F7520;") == 1
     assert "K1D3D SECOND: native Xenos Reset PASS" in value
+    assert value.count("/* " + MARKER + " */") == 1
+    # Six-case proof belongs to a separate manifest-hashed owner TrueTU.
+    assert PARENT_MARK not in value
     for invalid in (
         fixture.replace("P6DQ ROCKET HARD STOP", "no hard fence"),
         fixture.replace("K1D3D SECOND: native Xenos Reset PASS", "no reset"),
         fixture.replace("recomp_func_t phase4c_lookup_pack_func", "void old_lookup"),
-        fixture.replace("K1D3D-296550-SIXCASES-ONEBUILD-20261103", "no D3D"),
         value,
     ):
         try:
