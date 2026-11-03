@@ -105,6 +105,22 @@ if($quiet.marker -ne "P6K1DQ-QUIET-LOG-20261103" -or
    [int]$quiet.runtime_headers_changed -ne 0){
     throw "[K1QUIET] Source provenance or preserved safety gates mismatch"
 }
+# The 64 translated_???.obj files were compiled with an external C++
+# trace(char const*) import. A static wrapper compiles main.cpp successfully
+# but fails 64-way at LINK (LNK2001); fail now, before XDK.
+$quietText=Get-Content -LiteralPath $quietMain -Raw -Encoding UTF8
+$traceExportPattern='(?m)^[ \t]*void[ \t]+trace[ \t]*\([ \t]*const[ \t]+char[ \t]*\*[ \t]*line[ \t]*\)[ \t]*\{'
+$traceStaticPattern='(?m)^[ \t]*static[ \t]+void[ \t]+trace[ \t]*\('
+$globalCount=[regex]::Matches($quietText,$traceExportPattern).Count
+$staticCount=[regex]::Matches($quietText,$traceStaticPattern).Count
+if($globalCount -ne 1 -or $staticCount -ne 0){
+    throw "[K1QUIET] LNK2001 PREVENTION: external C++ trace(char const*) global=$globalCount static=$staticCount; no XDK"
+}
+if($quietText -notmatch 'K1QUIET MILESTONE SUMMARY:' -or
+   $quietText -notmatch 'K1NV2A DAC PALETTE COMMIT:'){
+    throw "[K1QUIET] Staged quiet/DAC runtime message watermarks missing; no XDK"
+}
+Write-Host "[K1QUIET] CROSS-TU LINKAGE PREFLIGHT PASS: exactly one external C++ trace(const char*) and zero static wrappers"
 Write-Host "[K1DAC] SOURCE+ABI PREFLIGHT PASS; reused 64 TrueTUs and original fences"
 Write-Host "[K1QUIET] PREFLIGHT PASS: first frame/PASS + unusual/failures logged; repeats counted silently"
 Write-Host "[K1QUIET] CPU/kernel guest operations unchanged; GPU faults/Swap/Present always visible"
