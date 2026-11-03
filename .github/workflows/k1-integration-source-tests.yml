@@ -52,6 +52,8 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1D3DSixCaseBatch.py --self-test
       - name: Post-switch ICALL_SAFE 001F7620 source-only exact/compiled/lookup fixtures
         run: python ports/mercenaries/xbox360/integration_map/k1/Plan-K1NextICallBatch.py --self-test
+      - name: One batch for original text 001F7620 and 001F7520, original six-case/64-TU gates
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1NextICallBatch.py --self-test
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -158,6 +160,26 @@ jobs:
               throw "K1 next ICALL_SAFE source-only/64-TU/never-XDK contract changed"
           }
           Write-Host "[PS51] PASS: post-switch target source-only audit, no XDK invocation"
+      - name: Parse original two-root batch preflight and single optional Xbox360 build
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1NextICallBatch.ps1"
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) {
+              $errors | ForEach-Object { Write-Host $_ }
+              throw "K1 two-function original text batch PowerShell5.1 parse failed"
+          }
+          $content = Get-Content -LiteralPath $path.Path -Raw -Encoding UTF8
+          if (-not $content.Contains('Stage-K1NextICallBatch.py') -or
+              -not $content.Contains('if(-not $Build)') -or
+              -not $content.Contains('unknown_indirect_hard_fence_unchanged') -or
+              [regex]::Matches($content, '(?m)^& \$builder @buildArgs$').Count -ne 1) {
+              throw "K1 post-switch one-build and source/guest hard-fence gate changed"
+          }
+          Write-Host "[PS51] PASS: original two-body source preflight and one optional XDK build"
+
 
 
 
