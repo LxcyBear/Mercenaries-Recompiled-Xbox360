@@ -407,20 +407,27 @@ def insert_before_definition(src: str, pattern: str, injection: str, label: str)
     return src[:at] + injection + src[at:]
 
 
-def patch_dispatch(src: str, nl: str, label: str) -> str:
-    """Patch both host main AND translated_runtime.h macro consistently."""
+def patch_dispatch(src: str, nl: str, label: str, required: bool = True) -> str:
+    """Patch a source's existing ordinal211 macro, never manufacture one.
+
+    Phase6 TrueTU sharding extracts the active RECOMP_ICALL_SAFE macro into
+    translated_runtime.h. A copy in host main.cpp is NOT guaranteed. The
+    shared header is mandatory; host is patched only when its D3 case exists.
+    """
     case = ("} else if (_phase4c_target == 0x800000D3u) { \\" + nl +
             "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\")
-    if src.count(case) != 1:
-        raise ValueError(
-            f"{label}: expected one original ordinal211 D3 dispatcher, "
-            f"got {src.count(case)}. No XDK."
-        )
-    # A native kernel helper definition may itself contain 0x800000CFu.
-    # Only a pre-existing ACTIVE dispatch branch is a duplicate.  The old
-    # broad "ordinal string AND helper name" guard rejected our own handler.
+    # A kernel helper BODY legitimately mentions 0x800000CFu. Reject only
+    # an already-routed active dispatcher, including on an optional host.
     if re.search(r"\b_phase4c_target\s*==\s*0x800000CFu\b", src):
         raise ValueError(label + ": ordinal207 dispatch already installed")
+    count = src.count(case)
+    if count == 0 and not required:
+        return src
+    if count != 1:
+        raise ValueError(
+            f"{label}: expected one original ordinal211 D3 dispatcher, "
+            f"got {count}. No XDK."
+        )
     src = insert_once(
         src,
         case,
@@ -479,8 +486,8 @@ def transform(src: str, header: str) -> tuple[str, str]:
 
     # The TRUE TU compiler consumes the shared HEADER macro. Updating only
     # main.cpp silently leaves the active translated callsites unmodified!
-    src = patch_dispatch(src, nl, "host main.cpp")
-    header = patch_dispatch(header, hn, "translated_runtime.h")
+    src = patch_dispatch(src, nl, "host main.cpp", required=False)
+    header = patch_dispatch(header, hn, "translated_runtime.h", required=True)
 
     if src.count(TAG) != 1 or src.count("K1NT207 REAL ENUM RESULT:") != 1:
         raise ValueError("Native handler marker/trace uniqueness failed")
@@ -563,6 +570,50 @@ def self_test():
                 pass
             else:
                 raise AssertionError("Repeated stage accepted")
+    # The real TrueTU host can lack RECOMP_ICALL_SAFE/D3 entirely; all
+    # translated callsites use the macro from the required shared header.
+    host_macro = (
+        "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
+        "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
+        "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
+        "    } else { \\\n"
+        "} while (0)\n"
+    )
+    assert real_host.count(host_macro) == 1
+    header_calls = "k1nt207_nt_query_directory_file((uint32_t)(saved_esp));"
+    for externalized in (False, True):
+        host = real_host.replace(host_macro, "")
+        if externalized:
+            host = host.replace(
+                "static uint32_t phase5b_native_handle_token",
+                "uint32_t phase5b_native_handle_token")
+        for newline in ("\n", "\r\n"):
+            original_host = host.replace("\n", newline)
+            original_header = shared_header.replace("\n", newline)
+            transformed_main, transformed_header = transform(
+                original_host, original_header)
+            assert TAG in transformed_main
+            assert header_calls not in transformed_main
+            assert transformed_header.count(header_calls) == 1
+            assert "K1NT207 REAL ENUM SUCCESS!!!" in transformed_main
+            try:
+                transform(transformed_main, transformed_header)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("No-macro host accepted double native stage")
+            print("[K1NT207-NATIVE] SELFTEST CASE: no host D3 macro "
+                  "externalized=" + str(externalized) +
+                  " CRLF=" + str(newline == "\r\n"), flush=True)
+    # Missing D3 in the mandatory shared header is NOT optional.
+    try:
+        transform(real_host, shared_header.replace(
+            "_phase4c_target == 0x800000D3u",
+            "_phase4c_target == 0x800000D4u"))
+    except ValueError as exc:
+        assert "translated_runtime.h" in str(exc)
+    else:
+        raise AssertionError("Missing shared-header D3 wrongly accepted")
     # A pre-existing dispatch really IS an unsafe double override and must
     # still be rejected; checking an unrelated helper body is not sufficient.
     preexisting = shared_header.replace(
@@ -636,6 +687,9 @@ def stage(a):
     headers=sorted(a.parent_shards.glob("*.h"))
     if len(files)!=64 or not (a.parent_shards/"translated_runtime.h").is_file():
         raise ValueError("Expected 64 parent TrueTUs and runtime header")
+    for tu in files:
+        if tu.read_bytes().count(b'#include "translated_runtime.h"') != 1:
+            raise ValueError("TrueTU not linked to shared runtime dispatcher: " + tu.name)
     a.out_shards.mkdir(parents=True,exist_ok=True)
     for p in files+headers:
         dest=a.out_shards/p.name
@@ -657,6 +711,9 @@ def stage(a):
         "parent_runtime_header_sha256":sha(old_header),
         "native_runtime_header_sha256":sha(header_blob),
         "changed_headers":["translated_runtime.h"],
+        "host_ordinal207_macro_patched":
+            "k1nt207_nt_query_directory_file((uint32_t)(saved_esp));" in new,
+        "true_tu_shared_dispatcher_includes":64,
         "out_main":str(a.out_main.resolve()),
         "out_shards":str(a.out_shards.resolve()),
         "source_original_ordinal":207,
@@ -682,7 +739,10 @@ def stage(a):
     print("[K1NT207-NATIVE] STAGE PASS: native Xbox360 FindFirst/Next directory enumeration source")
     print("[K1NT207-NATIVE] Native FILETIME/u64 guest writers are K1NT207-owned; Phase5N omitted helpers NOT needed")
     print("[K1NT207-NATIVE] ORIGINAL XBOX ABI: NtQueryDirectoryFile @40 RET44, class1, ANSI 64B header")
-    print("[K1NT207-NATIVE] 64 TrueTUs BYTE EXACT; shared translated_runtime.h ordinal207 dispatch patched")
+    print("[K1NT207-NATIVE] 64 TrueTUs BYTE EXACT, all 64 include patched translated_runtime.h")
+    print("[K1NT207-NATIVE] Host D3 macro: " +
+          ("patched" if "k1nt207_nt_query_directory_file((uint32_t)(saved_esp));" in new
+           else "absent; active shared-header dispatch patched"))
     print("[K1NT207-NATIVE] Existing XPP + original hard stop preserved; native NT207 is explicit exception")
     print("[K1NT207-NATIVE] SOURCE ONLY: no XDK, no Xbox execution, no guest display injected")
 
