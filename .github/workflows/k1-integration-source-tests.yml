@@ -40,6 +40,8 @@ jobs:
             --pc-manual ports/mercenaries/src/recomp_manual.c
       - name: K1 second retail CreateDevice source-only safety fixtures
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1D3DSecondCreateDevice.py --self-test
+      - name: K1 authentic D3D 00289E20 mandatory frontier source fixtures
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1D3DDirect289E20.py --self-test
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
