@@ -100,55 +100,7 @@ if($doc.status -ne "K1_TEXT_DIRECT_SOURCE_ONLY_NO_XDK" -or
    $doc.new_main_sha256 -ne $nextHash -or
    [int]$doc.compiled_tus_unchanged -ne 64 -or
    $doc.pc_checkpoint_name -ne "recomp_main_state_checkpoint" -or
-   -not ($doc.pc_checkpoint_definition_sha256 -match '^[0-9a-f]{64}
-   $doc.synthetic_guest_results -ne $false -or
-   $doc.unknown_mmio_fences_changed -ne $false -or
-   $doc.xdk_verified -ne $false -or
-   @($doc.promoted_vas) -notcontains "0x0017A0A0" -or
-   $nextText.Contains("case 0x0017A0A0u: return sub_0017A0A0;") -ne $true -or
-   $nextText.Contains("P6DQ ROCKET HARD STOP") -ne $true -or
-   $nextText.Contains("K1NV2A DAC PALETTE COMMIT:") -ne $true -or
-   $nextText.Contains("K1PERF WINDOW:") -ne $true -or
-   $nextText.Contains("K1PRESENT FRONTIER ROUTE:") -ne $true){
-    throw "[K1-TEXT] Source-stage output or safety-gate mismatch; XDK blocked"
-}
-$actualShards = @(Get-ChildItem -LiteralPath $shards -Filter "translated_???.cpp" -File)
-if($actualShards.Count -ne 64){
-    throw "[K1-TEXT] 64 true-TU source set changed before build; XDK blocked"
-}
-Write-Host "[K1-TEXT] PREFLIGHT PASS: authentic original .text 0017A0A0 + support-clean direct closure"
-Write-Host ("[K1-TEXT] Promoted={0} remaining_direct={1}; original 64 TrueTUs reused" -f [int]$doc.promoted_count,@($doc.remaining_direct_frontiers).Count)
-Write-Host "[K1-TEXT] PFIFO, DAC, K1PERF, presentation logger and all hard fences inherited"
-if(-not $Build){
-    Write-Host "[K1-TEXT] SOURCE ONLY (no XDK). Add -Build for one incremental XEX."
-    exit 0
-}
-
-New-Item -ItemType Directory -Force -Path $xdk | Out-Null
-$buildArgs = @{
-    GeneratedMain=$nextMain
-    GeneratedEnv=$envFile
-    GeneratedShardDir=$shards
-    ExpectedBuildTag="P6DQ-R51-MM173-FRAME-20261029-A"
-    ExpectedEnvCookie="phase6dq_env_build_cookie"
-    SolutionRoot=$SolutionRoot
-    Configuration="Release"
-    Platform="Xbox 360"
-    CleanLog=(Join-Path $xdk "xdk-clean.log")
-    BuildLog=(Join-Path $xdk "xdk-build.log")
-    PublishedXex=$xex
-    ShadowBuildRoot=$FastBuildRoot
-    SkipClean=$true
-}
-Write-Host "[K1-TEXT] ONE INCREMENTAL XDK BUILD: original 64 compiled TrueTUs reused, new source in main only"
-& $builder @buildArgs
-if($LASTEXITCODE -ne 0){ throw "[K1-TEXT] XDK build failed; see $($buildArgs.BuildLog)" }
-if(-not(Test-Path -LiteralPath $xex -PathType Leaf)){
-    throw "[K1-TEXT] XDK build did not publish expected XEX"
-}
-Write-Host "[K1-TEXT] XDK BUILD PASS: $xex"
-Write-Host "[K1-TEXT] Hardware not verified; next log must prove authentic 0017A0A0 execution"
-) -or
+   -not ($doc.pc_checkpoint_definition_sha256 -match '^[0-9a-f]{64}$') -or
    $doc.guest_state_write_replaced -ne $false -or
    -not $nextText.Contains("K1STATE MAIN CHECKPOINT:") -or
    $doc.synthetic_guest_results -ne $false -or
@@ -166,6 +118,7 @@ $actualShards = @(Get-ChildItem -LiteralPath $shards -Filter "translated_???.cpp
 if($actualShards.Count -ne 64){
     throw "[K1-TEXT] 64 true-TU source set changed before build; XDK blocked"
 }
+Write-Host "[K1-TEXT] HOST CAPTURE BRIDGE: verified PC-only checkpoint -> bounded Xbox telemetry; guest writes intact"
 Write-Host "[K1-TEXT] PREFLIGHT PASS: authentic original .text 0017A0A0 + support-clean direct closure"
 Write-Host ("[K1-TEXT] Promoted={0} remaining_direct={1}; original 64 TrueTUs reused" -f [int]$doc.promoted_count,@($doc.remaining_direct_frontiers).Count)
 Write-Host "[K1-TEXT] PFIFO, DAC, K1PERF, presentation logger and all hard fences inherited"
