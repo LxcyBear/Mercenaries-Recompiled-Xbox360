@@ -175,7 +175,7 @@ jobs:
           if (-not $content.Contains('Stage-K1NextICallBatch.py') -or
               -not $content.Contains('if(-not $Build)') -or
               -not $content.Contains('unknown_indirect_hard_fence_unchanged') -or
-              [regex]::Matches($content, '(?m)^& \$builder @buildArgs$').Count -ne 1) {
+              [regex]::Matches($content, '(?m)^& \$builder @buildArgs[ \t]*\r?$').Count -ne 1) {
               throw "K1 post-switch one-build and source/guest hard-fence gate changed"
           }
           Write-Host "[PS51] PASS: original two-body source preflight and one optional XDK build"
