@@ -96,12 +96,19 @@ def insert(parent: str, members: list[int], compiled: set[int],
     normalized = normalized.replace(original_on, placeholder)
     normalized += ('\n#pragma optimize("", off)\n'
                    '#pragma optimize("", on)\n')
-    p5bc.SWEEP_ROOT = 0xFFFFFFFF
+    # We are promoting a MANDATORY hardware-proven root, unlike the
+    # optional candidate sweeps in Phase6DQ. The old 0xFFFFFFFF sentinel
+    # silently pruned this root and emitted only 'lost all candidates'.
+    # Root-mode reports its actual missing helpers and local source lines.
+    p5bc.SWEEP_ROOT = ROOT
     new = list(members)
+    print("[K1-TEXT] MANDATORY ROOT: 0017A0A0; original source " +
+          str(generated[ROOT].get("file", "<unknown>")) +
+          "; candidate functions=" + str(len(new)))
     try:
         result, rendered, frontiers, pruned = p5bc.insert_pack_members(
             normalized, base, p5bb, generated, new, compiled | set(new),
-            require_sweep_root=False,
+            require_sweep_root=True,
         )
     finally:
         p5bc.SWEEP_ROOT = before_helpers
@@ -161,7 +168,27 @@ def self_test(base, p5bb, p5bc):
             pass
         else:
             raise AssertionError('Duplicate body admitted')
-    print('[K1-TEXT] SELFTEST PASS: genuine source body, 64-TU-safe lookup, bounded pack, unknowns fenced, LF/CRLF, duplicate rejected')
+    # Regression for the actual hardware failure: the required root has a
+    # genuinely unsupported helper. Report the symbol and source location,
+    # rather than replacing the function with a fake success or vague prune.
+    import contextlib
+    import io
+    unsupported = {ROOT: {'name': root_name,
+                          'source': ('void sub_0017A0A0(void)\n{\n'
+                                     'loc_0017A0A0: ;\n'
+                                     '    k1_missing_real_helper();\n}\n'),
+                          'file': 'recomp_test.c'}}
+    witness = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(witness):
+            insert(p, [ROOT], set(), unsupported, base, p5bb, p5bc)
+    except SystemExit as exc:
+        assert 'k1_missing_real_helper' in str(exc)
+        assert 'helper=k1_missing_real_helper' in witness.getvalue()
+        assert 'sweep root 0x0017A0A0 itself has unresolved support' in witness.getvalue()
+    else:
+        raise AssertionError('Mandatory real root with missing helper silently pruned')
+    print('[K1-TEXT] SELFTEST PASS: original root mandatory; missing support named with source lines; LF/CRLF, 64-TU lookup, fail-closed')
 
 
 def stage(a, base, p5bb, p5bc):
