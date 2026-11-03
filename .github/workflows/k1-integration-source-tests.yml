@@ -64,6 +64,8 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1PCCrossPortCoverage.py --self-test
       - name: Plan bounded support-clean original graphics/audio batch packets without compilation
         run: python ports/mercenaries/xbox360/integration_map/k1/Plan-K1BulkGraphicsPackets.py --self-test
+      - name: Verify r6 original-source bulk stage retains r4 hardware fences, r5 retails, 64 TrueTUs
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1BulkOriginalPackets.py --self-test
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -281,6 +283,29 @@ jobs:
               throw "K1 bulk source-only/retail/64 TrueTU safeguards lost"
           }
           Write-Host "[PS51] PASS: original 404 C-function no-XDK batch plan parser and safety gates"
+      - name: Parse original r6 source-only bulk stage and prohibit XEX deployment
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Stage-K1BulkOriginalPackets.ps1"
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) {
+              $errors | ForEach-Object { Write-Host $_ }
+              throw "K1 original r6 no-XDK stage Windows PowerShell 5.1 parse failed"
+          }
+          $body = Get-Content -LiteralPath $path.Path -Raw
+          if (-not $body.Contains('Stage-K1BulkOriginalPackets.py') -or
+              -not $body.Contains('unmodified_original_TrueTU_count') -or
+              -not $body.Contains('r4_hardware_proven_source_fences_preserved') -or
+              -not $body.Contains('safe_to_deploy -ne $false') -or
+              -not $body.Contains('r5_hardware_verified -ne $false') -or
+              $body.Contains('Invoke-VS17Xbox360Build.ps1') -or
+              $body.Contains('& $builder')) {
+              throw "K1 r6 original source-only, original 64 TrueTU, no XEX hard fence lost"
+          }
+          Write-Host "[PS51] PASS: original r6 bounded C-source batch, no XDK/XEX stage"
+
 
 
 
