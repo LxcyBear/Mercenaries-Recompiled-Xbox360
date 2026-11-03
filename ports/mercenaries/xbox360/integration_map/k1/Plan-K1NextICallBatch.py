@@ -313,7 +313,7 @@ def plan(a) -> None:
 
 def self_test() -> None:
     inventory = {
-        0x001F7600: {"start": 0x001F7600, "end": 0x001F7680,
+        0x001F7600: {"start": 0x001F7600, "end": 0x001F7610,
                      "name": "sub_001F7600"},
         0x001F7620: {"start": 0x001F7620, "end": 0x001F7630,
                      "name": "sub_001F7620"},
