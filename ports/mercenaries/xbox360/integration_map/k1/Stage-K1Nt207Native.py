@@ -441,13 +441,24 @@ def transform(src: str, header: str) -> tuple[str, str]:
     src = insert_once(
         src, close_stmt, "k1nt207_clear(handleToken);" + nl +
         "    " + close_stmt, "NtClose lifecycle")
-    src = insert_before_definition(
-        src,
-        r"^[ \t]*(?:static[ \t]+)?void[ \t]+"
-        r"phase5n_nt_query_information_file[ \t]*"
-        r"\([ \t]*uint32_t[ \t]+savedEsp[ \t]*\)[ \t\r\n]*(?=\{)",
-        HANDLER.replace("\n", nl) + nl,
-        "Phase5N native query handler owner")
+    # The Phase6 TrueTU generator may rewrite the signature/layout of the
+    # existing phase5n_nt_query_information_file support definition.  Its
+    # spelling and position are NOT an insertion contract.  Place our new
+    # top-level helper after ALL inherited host support definitions instead.
+    # Its dispatcher prototype is installed separately BEFORE the macro.
+    required_host_helpers = (
+        "phase5c_read_native_handle(",
+        "phase5b_read_handle_path(",
+        "phase5b_open_status_from_error(",
+        "phase5n_filetime_value(",
+        "phase5n_write_guest_u64(",
+    )
+    missing = [name for name in required_host_helpers if name not in src]
+    if missing:
+        raise ValueError(
+            "Host native directory dependencies missing: " + ", ".join(missing)
+            + ". Source stage fenced; NO XDK.")
+    src = src.rstrip("\r\n") + nl + HANDLER.replace("\n", nl) + nl
 
     # The TRUE TU compiler consumes the shared HEADER macro. Updating only
     # main.cpp silently leaves the active translated callsites unmodified!
@@ -471,6 +482,11 @@ def self_test():
         "static void phase5c_nt_close(uint32_t savedEsp){\n"
         "    nativeHandle = phase5c_take_native_handle(handleToken);\n}\n"
         "static void phase5n_nt_query_information_file(uint32_t savedEsp){}\n"
+        "static HANDLE phase5c_read_native_handle(uint32_t token){}\n"
+        "static const char* phase5b_read_handle_path(uint32_t token){}\n"
+        "static uint32_t phase5b_open_status_from_error(DWORD error){}\n"
+        "static uint64_t phase5n_filetime_value(const FILETIME* value){}\n"
+        "static void phase5n_write_guest_u64(uint32_t address,uint64_t value){}\n"
         "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
         "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
         "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
@@ -509,6 +525,23 @@ def self_test():
             assert main.count("k1nt207_clear(handleToken);") == 1
             assert "K1NT207 REAL ENUM SUCCESS!!!" in main
             assert "P6DQ ROCKET HARD STOP" in main
+            assert main.rfind("void k1nt207_nt_query_directory_file(") > main.find(
+                "phase5n_write_guest_u64("), label + " helper not appended after inherited support"
+            # The real TrueTU runtime may change the existing Phase5N support
+            # definition's argument type, keyword or layout.  This must NOT
+            # affect placement of the new native helper.
+            drifted = h0.replace(
+                "static void phase5n_nt_query_information_file(uint32_t savedEsp){}",
+                "void phase5n_nt_query_information_file(DWORD renamedFrame){}")
+            if drifted == h0:
+                drifted = h0.replace(
+                    "void phase5n_nt_query_information_file(uint32_t savedEsp){}",
+                    "void phase5n_nt_query_information_file(DWORD renamedFrame){}")
+            assert drifted != h0, label + " failed to construct Phase5N signature drift"
+            drift_main, drift_header = transform(drifted, s0)
+            assert drift_main.count(TAG) == 1, label + " signature drift was not handled"
+            assert drift_header.count(
+                "k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
             try:
                 transform(main, hdr)
             except ValueError:
@@ -530,6 +563,15 @@ def self_test():
         assert "ordinal207 dispatch already installed" in str(exc)
     else:
         raise AssertionError("Existing ordinal207 dispatcher accepted")
+    # Missing runtime dependencies must still be hard-fenced.  Broadening
+    # insertion placement is NOT permission to emit an unlinked native helper.
+    try:
+        transform(real_host.replace("phase5n_filetime_value(", "missing_time_helper("),
+                  shared_header)
+    except ValueError as exc:
+        assert "phase5n_filetime_value(" in str(exc)
+    else:
+        raise AssertionError("Missing native filetime support was accepted")
     for forbidden in ("fopen(", "CreateDirectory(", "return STATUS_SUCCESS"):
         assert forbidden not in HANDLER
     assert "GUEST_WRITE32(recordVa+60u,nameLen)" in HANDLER
