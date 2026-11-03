@@ -57,7 +57,7 @@ jobs:
       - name: New DIRECT_FRONTIER 002228C0 no-XDK exact 64-TU hardware-parent fixtures
         run: python ports/mercenaries/xbox360/integration_map/k1/Plan-K1PostTwoRootDirect.py --self-test
       - name: Pack original retail 002228C0 in one r5 unit with exact r4 two-body preservation
-        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1PostTwoRootDirect.py --self-test --previous-stage ports/mercenaries/xbox360/integration_map/k1/Stage-K1NextICallBatch.py
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1PostTwoRootDirect.py --self-test --previous-stage ports/mercenaries/xbox360/integration_map/k1/Stage-K1NextICallBatch.py --previous-planner ports/mercenaries/xbox360/integration_map/k1/Plan-K1NextICallBatch.py
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
