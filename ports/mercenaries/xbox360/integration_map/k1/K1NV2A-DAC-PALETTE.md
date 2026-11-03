@@ -116,3 +116,58 @@ A host compiler two-translation-unit test confirmed an external
 `--self-test` now also exercises guarded conversion of the old
 static-wrapper source to the new global wrapper, idempotence, and
 rejection of tampered generated files.
+
+## Real Xbox 360 hardware witness — 2026-11-03: DAC index crossed
+
+The first combined K1NV2A DAC + K1DQ quiet-mode XEX ran to its inherited
+hard-stop reporting and clean process shutdown. The boot banner confirmed
+`P6K1NV2A-DAC-PALETTE-20261103` and
+`P6K1DQ-QUIET-LOG-20261103`.
+
+The **previous** first hard-stop `WRITE8 FD6813C8 value=00` at
+56,902,779 ticks was eliminated. Hardware recorded:
+
+```text
+K1NV2A EXACT WRITE8: addr=FD6813C8 value=00 last_guest_block_va=0028ED48 ...
+K1NV2A DAC WRITE INDEX: index=0 count=1 guest_block=0028ED48
+FAULT ACCESS IMMEDIATE: READ width=4 guest=FD003240
+P6DQ ROCKET HARD STOP kind=6 caller=0023A3CE target=FD003240 ... ticks=56902781
+P6DQ VA[29]=0028ED48
+P6DQ VA[30]=0028ED63
+P6DQ VA[31]=0028ED6B
+```
+
+This exactly follows the **original retail XBE** sequence:
+`0028ED54` writes VGA DAC index, then `0028ED6B` reads
+`[ecx+0x3240]` with `ecx=FD000000`. The new fault is
+**NV_PFIFO_CACHE1_DMA_PUT**, NVIDIA PFIFO register offset 0x1240
+from PFIFO base `FD002000`, confirmed by
+[xqemu's NV2A register definitions](https://github.com/xqemu/xqemu/blob/master/hw/xbox/nv2a/nv2a_regs.h).
+
+Crucially, **no 0xFD6813C9 DAC RGB-component writes were reached**:
+the earlier expected PFIFO access occurs first. Do not invent
+completed palette entries or claim pixels. The final telemetry
+remains `display_calls=0`, `framebuffer=00000000`, and no verified
+guest Swap or PersistDisplay. This is a +2 tick step with an exact
+retail-source proof, NOT a meaningful execution-time speedup.
+
+The quiet logger emitted normal first-success pairs, 256-pair summaries,
+and hard-stop summaries while removing **4,286 repetitive success log
+lines** (about 45% of the estimated unfiltered 9,509 lines). A final
+summary showed `lower=493 raise=628 enter=513 leave=513`,
+with `muted_lines=4286`. The quiet logger preserves unusual IRQL
+transitions and errors, so some KfLowerIrql calls remain visible.
+
+Separately, `P6DQ HOT PROFILE: total=56902781 hot_001E=24862470`
+means 43.69% of translated ticks were attributed to the 001E hot
+region. Suppressing Watson log lines cannot accelerate that much
+translated execution on its own. Do not claim a speedup without
+comparable hardware wall-clock measurements.
+
+**Next graphics gate:** implement and test the documented PFIFO
+`CACHE1_DMA_PUT` register in the existing **stateful PFIFO model**
+with a proven initialization/reset basis and guest-write tracking.
+The original source `0028ED6B` and real Xbox `READ32 FD003240`
+must anchor the patch. Only this exact register/read width should be
+newly handled; preserve every unknown NV2A hard fence, retain the
+64 TrueTUs, and do not unconditionally fabricate a read value.
