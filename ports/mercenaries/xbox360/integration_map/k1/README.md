@@ -1923,10 +1923,16 @@ After the Xbox hardware-captured original ordinal207 10-DWORD frame
     ports/mercenaries/xbox360/integration_map/k1/Advance-K1Nt207Native.ps1
 
 The native stage inherits the proven K1NT207 frame witness, preserving
-64/64 TrueTUs byte-exact and keeping all existing MMIO/VP hard fences,
-input work and startup initialization. Its sole behavioral change is
-routing ORIGINAL XBOX NtQueryDirectoryFile ordinal207 through a
-conservative helper in generated main.cpp. Genuine Xbox 360
+64/64 translated_###.cpp TrueTUs byte-exact and keeping all existing
+MMIO/VP hard fences, input work and startup initialization. The
+Phase6 TrueTU emitter externalizes host support definitions (removes
+their original "static" linkage). The stage handles both forms rather
+than requiring the original pre-sharding signatures. The ONLY changed
+shared header is translated_runtime.h; ordinal207 is routed in BOTH
+generated main.cpp AND the active per-TrueTU macro dispatcher through
+an externally linked native helper. Skipping the shared header would
+leave the Xbox guest calling the original hard stop. The exception is
+exact retail ordinal207; all unknown ordinals remain fenced. Genuine Xbox 360
 FindFirstFileA/FindNextFileA on the original mounted game: backing
 directory supplies real filenames, attributes, size and FILETIME.
 Xbox FILE_DIRECTORY_INFORMATION class1 is a 64-byte fixed section plus
