@@ -139,6 +139,53 @@ def distances(roots: list[int], graph: dict, allowed: set,
     return visited
 
 
+def classify_compiled_without_generated_c(
+    compiled: dict[int, list[str]],
+    generated: dict,
+    by_va: dict,
+    lookup: set[int],
+    prior_planner,
+) -> list[dict]:
+    """Retain all actual compiled addresses without claiming source parity.
+
+    A compiled function can be a retail exact entry whose generated C is
+    missing, or an interior entry that the Xbox TrueTU deliberately stages.
+    Neither is a normal original generated-C function. Classification is
+    evidence, NOT permission to add them to pack lookups or drop hard fences.
+    """
+    extras = sorted(set(compiled) - set(generated))
+    result = []
+    for va in extras:
+        detail = prior_planner.classify(va, by_va, generated)
+        owner_hex = detail.get("owner")
+        owner = int(owner_hex, 16) if owner_hex else None
+        result.append({
+            "compiled_address": "0x%08X" % va,
+            "classification": detail["kind"],
+            "compiled_owners": list(compiled[va]),
+            "in_main_pack_lookup": va in lookup,
+            "retail_inventory_owner": owner_hex,
+            "retail_inventory_owner_generated_C": owner in generated if owner is not None else False,
+            "original_function_name": detail.get("original_name"),
+            "original_generated_C_file": detail.get("source_file"),
+            "source_provenance_status": (
+                "exact_retail_entry_no_original_generated_C"
+                if detail["kind"] == "exact_entry_without_original_generated_c"
+                else "interior_entry_not_standalone_function"
+                if detail["kind"] in ("interior_label", "interior_missing_label")
+                else "outside_or_overlapping_original_inventory"
+            ),
+            "safe_to_treat_as_normal_original_generated_C": False,
+            "safe_to_add_new_dispatch_case": False,
+            "required_followup": (
+                "Prove original XBE instruction/ABI/translation purpose; "
+                "inspect actual compiled owner and dispatch routing. "
+                "Do not add a duplicate or make a guessed fallback."
+            ),
+        })
+    return result
+
+
 def scan_pc_generated(optional_dir: Path | None, compiled: dict, base) -> dict:
     if optional_dir is None or not optional_dir.exists():
         return {
@@ -203,11 +250,12 @@ def analyze(a) -> None:
         raise ValueError("Original Xbox retail disassembler SHA mismatch")
     valid_source = set(generated)
     original_inv = set(by_va)
-    if not compiled_vas.issubset(valid_source):
-        bad = sorted(compiled_vas - valid_source)[:10]
-        raise ValueError(
-            "Compiled functions absent from original retail-generated C; "
-            "cannot silently call these normal original source: " + repr(bad))
+    # The runtime can intentionally compile noncanonical/interior bridge
+    # functions. Report those separately instead of aborting the complete
+    # coverage census or falsely marking them retail source functions.
+    unusual_compiled = classify_compiled_without_generated_c(
+        compiled, generated, by_va, in_lookup, previous)
+    compiled_original = compiled_vas & valid_source
     patches, host_helper_sites, unowned = build_patch_owners(
         pc_inventory.get("transformations", []), by_va)
     graph, callers = direct_graph(generated, base, by_va)
@@ -215,7 +263,6 @@ def analyze(a) -> None:
     known_critical = {va for va, _, _ in FRONTIERS}
     missing_exact_source = valid_source - compiled_vas
     source_missing_from_translator = original_inv - valid_source
-    text_span = lambda va: (0x00011000 <= va < 0x00255620)
     data = []
     risk = []
     all_indirect = Counter()
@@ -295,6 +342,7 @@ def analyze(a) -> None:
     a.outdir.mkdir(parents=True, exist_ok=True)
     csv_path = a.outdir / "original-retail-va-coverage.csv"
     risks_path = a.outdir / "missing-and-pc-patch-risks.csv"
+    outlier_path = a.outdir / "compiled-addresses-without-generated-retail-c.csv"
     with csv_path.open("w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=list(data[0]))
         writer.writeheader()
@@ -304,6 +352,22 @@ def analyze(a) -> None:
         writer = csv.DictWriter(file, fieldnames=columns)
         writer.writeheader()
         writer.writerows(risk)
+    # The seven (or any future) noncanonical compiled owners must never
+    # disappear from the audit simply because the PC generated C lacks them.
+    with outlier_path.open("w", encoding="utf-8", newline="") as file:
+        columns = [
+            "compiled_address", "classification", "compiled_owners",
+            "in_main_pack_lookup", "retail_inventory_owner",
+            "retail_inventory_owner_generated_C", "original_function_name",
+            "original_generated_C_file", "source_provenance_status",
+            "safe_to_treat_as_normal_original_generated_C",
+            "safe_to_add_new_dispatch_case", "required_followup",
+        ]
+        writer = csv.DictWriter(file, fieldnames=columns)
+        writer.writeheader()
+        for item in unusual_compiled:
+            writer.writerow({**item, "compiled_owners":
+                             "|".join(item["compiled_owners"])})
     summary = {
         "status": REPORT_STATUS,
         "provenance": {
@@ -322,12 +386,16 @@ def analyze(a) -> None:
         "coverage": {
             "retail_original_x86_inventory": len(original_inv),
             "original_generated_C_functions": len(valid_source),
-            "compiled_original_functions_in_r4": len(compiled_vas),
+            "compiled_original_functions_in_r4": len(compiled_original),
+            "compiled_total_function_addresses_in_r4": len(compiled_vas),
+            "compiled_without_original_generated_C_entries": len(unusual_compiled),
+            "compiled_without_generated_C_by_classification": dict(
+                Counter(item["classification"] for item in unusual_compiled)),
             "compiled_exact_original_entries_in_main_lookup": len(in_lookup),
             "original_generated_C_missing_from_r4_binary": len(missing_exact_source),
             "original_x86_functions_without_translated_C": len(source_missing_from_translator),
             "original_generated_C_compiled_percent": round(
-                100 * len(compiled_vas) / max(1, len(valid_source)), 2),
+                100 * len(compiled_original) / max(1, len(valid_source)), 2),
             "total_direct_original_C_edges": sum(map(len, graph.values())),
             "original_generated_C_dynamic_site_census": dict(all_indirect),
             "pc_reference_patch_inventory_transformations":
@@ -369,6 +437,7 @@ def analyze(a) -> None:
                 "bytes; NEVER create a return-false PC helper stub."
             ),
         },
+        "compiled_noncanonical_source_entries_require_separate_abi_proof": unusual_compiled,
         "top_missing_and_pc_patch_risks": risk[:MAX_LIST],
         "patch_sites_unowned_sample": unowned[:30],
         "limitations": [
@@ -379,12 +448,15 @@ def analyze(a) -> None:
             "PC patch inventory includes many optional port improvements; a patch site is not proof it executed.",
             "Current PC preview log reports renderer/audio milestones, not function-VAs or guest call ordering.",
             "Compiled body existence alone does not prove direct/indirect guest dispatch ABI correctness.",
+            "Compiled addresses without standalone generated retail C are a separate evidence class: neither a real coverage gain nor automatically faulty.",
+            "An original entry with no generated C cannot be silently treated as translated retail source.",
         ],
         "safe_to_build_from_report_alone": False,
         "xdk_invoked": False,
         "any_xex_modified": False,
         "coverage_csv": str(csv_path),
         "risks_csv": str(risks_path),
+        "noncanonical_compiled_csv": str(outlier_path),
     }
     json_path = a.outdir / "pc-to-xbox360-retail-coverage.json"
     json_path.write_text(json.dumps(summary, indent=2)+"\n", encoding="utf-8")
@@ -400,6 +472,14 @@ def analyze(a) -> None:
           (c["pc_reference_patch_inventory_transformations"],
            c["pc_function_sites_with_patch_inventory_entries"],
            c["functions_in_local_generated_C_using_PC_patch_helpers"]))
+    print("[K1-PC-AUDIT] COMPILED ADDRESS EXCEPTIONS=%d, NOT counted as generated retail C coverage" %
+          len(unusual_compiled))
+    for item in unusual_compiled:
+        print("[K1-PC-AUDIT] NONCANONICAL compiled=%s kind=%s retail_owner=%s true_tu=%s lookup=%s (ABI UNPROVEN)" %
+              (item["compiled_address"], item["classification"],
+               item["retail_inventory_owner"],
+               "|".join(item["compiled_owners"]),
+               item["in_main_pack_lookup"]))
     print("[K1-PC-AUDIT] Direct guest-call edges=%s, static seed reachable=%s" %
           (c["total_direct_original_C_edges"],
            c["static_call_graph_reachable_from_known_seeds"]))
@@ -414,6 +494,7 @@ def analyze(a) -> None:
     print("[K1-PC-AUDIT] NO XDK, NO XEX, no speculative imports or dummy pixels")
     print("[K1-PC-AUDIT] Full coverage CSV: "+str(csv_path))
     print("[K1-PC-AUDIT] Risk CSV: "+str(risks_path))
+    print("[K1-PC-AUDIT] Noncanonical original source exceptions CSV: "+str(outlier_path))
     print("[K1-PC-AUDIT] JSON: "+str(json_path))
 
 
@@ -436,12 +517,49 @@ def selftest() -> None:
     ], inventory)
     assert len(patches[0x1000]) == 1 and len(misses) == 1
     assert host["recomp_test_developer_only"][0]["original_function"] == "0x00001000"
+    class FixturePlanner:
+        @staticmethod
+        def classify(va, by_va, generated):
+            if va in by_va:
+                return {
+                    "kind": "exact_entry_without_original_generated_c"
+                            if va not in generated else "exact_source_entry",
+                    "owner": "0x%08X" % va,
+                    "original_name": "sub_%08X" % va,
+                    "source_file": generated.get(va, {}).get("file"),
+                }
+            owner = section_owner(va, sorted(by_va), by_va)
+            return {
+                "kind": "interior_label" if owner is not None else
+                        "absent_from_original_function_inventory",
+                "owner": "0x%08X" % owner if owner is not None else None,
+                "original_name": ("sub_%08X" % owner if owner is not None else None),
+                "source_file": generated.get(owner, {}).get("file"),
+            }
+    synthetic_owners = {
+        0x1000: ["translated_014.cpp"],
+        0x1080: ["translated_025.cpp"],
+        0x1200: ["translated_005.cpp"],
+        0x2000: ["main.cpp"],
+    }
+    classification = classify_compiled_without_generated_c(
+        synthetic_owners, {
+            0x1000: {"file": "recomp_0010.c"},
+        }, inventory, {0x1000}, FixturePlanner)
+    assert len(classification) == 3
+    assert {item["classification"] for item in classification} == {
+        "interior_label", "exact_entry_without_original_generated_c",
+        "absent_from_original_function_inventory"}
+    assert all(item["safe_to_add_new_dispatch_case"] is False and
+               item["safe_to_treat_as_normal_original_generated_C"] is False
+               for item in classification)
+    assert {0x1000} == set(synthetic_owners) & {0x1000}
     walk = distances([0x1000], {0x1000: [0x1200],
                                   0x1200: [0x1280],
                                   0x1280: [0x1000]},
                      set(inventory))
     assert walk[0x1280] == (2, 0x1000) and len(walk) == 3
-    print("[K1-PC-AUDIT] SELFTEST PASS: exact retail section ownership, developer patch risk, call graph closure, no XDK")
+    print("[K1-PC-AUDIT] SELFTEST PASS: exact retail ownership, noncanonical compiled exact/interior/outside classes, separate coverage, patch risk, graph, no XDK")
 
 
 def main():
