@@ -58,6 +58,10 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Plan-K1PostTwoRootDirect.py --self-test
       - name: Pack original retail 002228C0 in one r5 unit with exact r4 two-body preservation
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1PostTwoRootDirect.py --self-test --previous-stage ports/mercenaries/xbox360/integration_map/k1/Stage-K1NextICallBatch.py --previous-planner ports/mercenaries/xbox360/integration_map/k1/Plan-K1NextICallBatch.py
+      - name: Verify PC developer patch before/after exact original-retail hashes and no-stub rule
+        run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1PCRetailSource.py
+      - name: Verify original retail all-functions PC crossport static dependency/patch classifier
+        run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1PCCrossPortCoverage.py --self-test
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -224,6 +228,37 @@ jobs:
               throw "K1 DIRECT r5 original source/64 TrueTU/unknown hard fence/single-XDK contract changed"
           }
           Write-Host "[PS51] PASS: exact original 002228C0 one unit and optional one incremental XDK build"
+      - name: Parse pinned PC repository clone and whole-retail-function coverage runner
+        shell: powershell
+        run: |
+          foreach ($file in @(
+              ".\ports\mercenaries\xbox360\integration_map\k1\Prepare-K1PCReference.ps1",
+              ".\ports\mercenaries\xbox360\integration_map\k1\Run-K1PCCrossPortAudit.ps1"
+          )) {
+              $path = Resolve-Path $file
+              $tokens = $null
+              $errors = $null
+              [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+              if (@($errors).Count -ne 0) {
+                  $errors | ForEach-Object { Write-Host $_ }
+                  throw "Pinned PC reference/original-retail static coverage PS5.1 parse failed"
+              }
+          }
+          $ref = Get-Content ".\ports\mercenaries\xbox360\integration_map\k1\Prepare-K1PCReference.ps1" -Raw
+          $audit = Get-Content ".\ports\mercenaries\xbox360\integration_map\k1\Run-K1PCCrossPortAudit.ps1" -Raw
+          $builder = Get-Content ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1PostTwoRootDirect.ps1" -Raw
+          if (-not $ref.Contains('f513ae4e041401b7b032410016940971488d523b') -or
+              -not $ref.Contains('Mercenaries-Recompiled.git') -or
+              -not $audit.Contains('Audit-K1PCCrossPortCoverage.py') -or
+              -not $builder.Contains('Audit-K1PCRetailSource.py') -or
+              -not $builder.Contains('retail-xbe') -or
+              -not $builder.Contains('arbitrary_helper_stub_used') -or
+              $audit.Contains('Invoke-VS17Xbox360Build.ps1') -or
+              $audit.Contains('& $builder')) {
+              throw "Pinned PC retail evidence original 002228F0/no stub/full VA scan contracts broken"
+          }
+          Write-Host "[PS51] PASS: pinned PC clone, source-only global original VA audit, retail XBE r5 no-fake-helper build gate"
+
 
 
 
