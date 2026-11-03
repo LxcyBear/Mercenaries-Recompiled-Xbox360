@@ -66,8 +66,8 @@ def focused_guest_block(shards: Path, va: int) -> list[str]:
     a specific faulting x86 instruction from a bare matching address.
     """
     needle = re.compile(
-        r"(?m)^\\s*PHASE4C_BUDGET_TICK\\(0x" + f"{va:08X}" +
-        r"u\\);", flags=re.I)
+        r"(?m)^\s*PHASE4C_BUDGET_TICK\(0x" + f"{va:08X}" +
+        r"u\);", flags=re.I)
     out = [f"EXACT TRANSLATED BLOCK SEARCH: 0x{va:08X}"]
     found = 0
     for file in sorted(shards.glob("translated_???.cpp")):
