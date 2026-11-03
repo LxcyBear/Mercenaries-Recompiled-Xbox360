@@ -118,23 +118,98 @@ def verify_original_x86(xbe: Path, retail_auditor: Path) -> dict:
 
 
 def restore_exact_pc_patch(source: str, pc_root: Path, *, attest_x86: dict) -> tuple[str, dict]:
+    """Restore a proven retail branch across the PC MEM32/Xbox GUEST_READ32 dialect.
+
+    The PC inventory hashes prove the maintained patch's before and after
+    templates. Independently, retail XBE bytes prove the actual CMP/JNE
+    instruction sequence. Our original generated C uses GUEST_READ32 and
+    sometimes PHASE4C_BUDGET_TICK instrumentation; a literal multiline
+    PC MEM32 template will not occur byte-for-byte in this source.
+
+    Match exactly the instruction-equivalent branch within the two original
+    named labels. Do not replace every occurrence of a helper or fabricate
+    its return value. Do not modify code outside that single branch.
+    """
     before, after, item = read_templates(pc_root)
-    if attest_x86.get("original_002228f0_x86_cmp_jne") is not True:
-        raise ValueError("Original retail XBE x86 branch proof absent")
+    proof = attest_x86.get("original_002228f0_x86_cmp_jne")
+    if proof is not True or attest_x86.get("jmp_destination") != "0x00222947":
+        raise ValueError("Original retail XBE CMP/JNE site/target byte proof absent")
     source = source.replace("\r\n", "\n")
-    if (source.count(after) != 1 or source.count(before) != 0 or
-            source.count(HELPER + "()") != 1):
+    if source.count(HELPER + "()") != 1:
         raise ValueError(
-            "Generated 002228C0 developer patch does not match pinned PC template "
-            "(do NOT replace helper with a guessed constant). "
-            "After-template count=%d, before count=%d, host-helper calls=%d, source_sha=%s"
-            % (source.count(after), source.count(before),
-               source.count(HELPER + "()"), digest(source))
+            "PC developer helper must have exactly one original source call; "
+            "found %d, source_sha=%s" % (source.count(HELPER + "()"), digest(source))
         )
-    restored = source.replace(after, before, 1)
-    if (HELPER in restored or restored.count(before) != 1 or
-            len(restored) - len(source) != len(before) - len(after)):
-        raise ValueError("Exact PC-only developer branch reversal not complete")
+    labels = {}
+    for va in ("002228F0", "002228F6"):
+        matches = list(re.finditer(
+            r"(?m)^[ \t]*loc_" + va + r":[ \t]*;[ \t]*(?:\n|$)",
+            source))
+        if len(matches) != 1:
+            raise ValueError(
+                "Original 002228C0 translated source label %s found %d times, "
+                "expected exactly one; source_sha=%s"
+                % (va, len(matches), digest(source)))
+        labels[va] = matches[0]
+    head, tail = labels["002228F0"], labels["002228F6"]
+    if head.end() >= tail.start() or tail.start()-head.end() > 1200:
+        raise ValueError("Original developer branch label ownership/window changed")
+    window = source[head.end():tail.start()]
+
+    access = r"(?:MEM32|GUEST_READ32)\s*\(\s*ecx\s*\+\s*0x48\s*\)"
+    cond = (
+        r"if\s*\(\s*" + access + r"\s*!=\s*3\s*&&\s*"
+        r"!\s*\(\s*" + access + r"\s*==\s*4\s*&&\s*"
+        + HELPER + r"\s*\(\s*\)\s*\)\s*\)\s*"
+        r"goto\s+loc_00222947\s*;"
+    )
+    matched = list(re.finditer(cond, window, re.MULTILINE))
+    if len(matched) != 1:
+        excerpt = "\n".join(window.splitlines()[:12])
+        raise ValueError(
+            "Original translated developer branch did not match the "
+            "PC-maintained patch semantics, without guessing: matches=%d, "
+            "source_sha=%s, window=%r"
+            % (len(matched), digest(source), excerpt))
+    # Verify the branch is the ONLY substantive guest operation between the
+    # original x86 source labels. Instrumentation and the known PC developer
+    # explanatory comment can remain or be removed without guest mutation.
+    rest = window[:matched[0].start()] + window[matched[0].end():]
+    rest = re.sub(r"/\*.*?\*/", "", rest, flags=re.DOTALL)
+    rest = re.sub(r"//[^\n]*", "", rest)
+    rest = re.sub(
+        r"\bPHASE4C_BUDGET_TICK\s*\(\s*0x002228F0u\s*\)\s*;", "", rest)
+    if rest.strip():
+        raise ValueError(
+            "Source window contains non-retail statements other than "
+            "verified developer branch and optional budget instrumentation: %r"
+            % rest[:250])
+    if window.count("Developer chapter reloads") not in (0, 1):
+        raise ValueError("PC developer comment duplicated or modified")
+    if window.count(HELPER + "()") != 1:
+        raise ValueError("Matched branch does not uniquely own the PC helper")
+    # Source before-template was independently verified against PC inventory.
+    # Translate only the original memory-access macro dialect, not behavior.
+    original_expr = re.search(
+        r"(?m)^[ \t]*if[ \t]*\("
+        r"CMP_NE\(MEM32\(ecx \+ 0x48\), 3\)\)"
+        r"[ \t]*goto[ \t]+loc_00222947;[^\n]*", before)
+    if original_expr is None:
+        raise ValueError("Pinned PC retail before-template branch structure changed")
+    original_stmt = original_expr.group().strip().replace(
+        "MEM32(", "GUEST_READ32(")
+    # Remove the now-invalid PC developer-only comment, but preserve any
+    # exact original guest-budget instrumentation around the instruction.
+    stripped = re.sub(r"/\*.*?\*/", "", window[:matched[0].start()],
+                      flags=re.DOTALL)
+    end_section = window[matched[0].end():]
+    rebuilt = stripped + original_stmt + end_section
+    restored = source[:head.end()] + rebuilt + source[tail.start():]
+    if HELPER in restored or restored.count(original_stmt) != 1:
+        raise ValueError("PC developer hook not uniquely restored to original retail")
+    if source[:head.end()] != restored[:head.end()] or (
+        source[tail.start():] != restored[tail.start()+len(rebuilt)-len(window):]):
+        raise ValueError("Original source outside the retail patch window changed")
     return restored, {
         "status": "PINNED_PC_DEVELOPER_ONLY_PATCH_RESTORED_TO_RETAIL",
         "pc_reference_git_commit": PC_SHA,
@@ -144,11 +219,12 @@ def restore_exact_pc_patch(source: str, pc_root: Path, *, attest_x86: dict) -> t
         "pc_generated_patch_name": PATCH_NAME,
         "pc_patch_before_sha256": digest(before),
         "pc_patch_after_sha256": digest(after),
+        "verified_generated_source_style": "GUEST_READ32" if "GUEST_READ32" in matched[0].group() else "MEM32",
+        "original_002228f0_and_002228f6_labels_verified": True,
         "x86_retail_cmp_jne_proof": attest_x86,
         "arbitrary_helper_stub_used": False,
         "guest_register_abi_modified": False,
     }
-
 
 def selftest():
     # Copied fixture only; real PC source, retail .xbe and manifest are
