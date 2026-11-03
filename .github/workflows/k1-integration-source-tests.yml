@@ -42,6 +42,8 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1D3DSecondCreateDevice.py --self-test
       - name: K1 authentic D3D 00289E20 mandatory frontier source fixtures
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1D3DDirect289E20.py --self-test
+      - name: K1 D3D predictive-batch source-only fixtures
+        run: python ports/mercenaries/xbox360/integration_map/k1/Plan-K1D3DBatch.py --self-test
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -72,3 +74,22 @@ jobs:
               throw "K1D3D duplicated/truncated stage: build=$buildCount hash=$hashCount source-only-guard=$guardCount"
           }
           Write-Host "[PS51] PASS: real parser; one build, two complete hash checks, source-only gate intact"
+      - name: Parse source-only predictive D3D batch planner on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Plan-K1D3DBatch.ps1"
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) {
+              $errors | ForEach-Object { Write-Host $_ }
+              throw "K1 D3D predictive batch PowerShell 5.1 parse failed"
+          }
+          $source = Get-Content -LiteralPath $path.Path -Raw -Encoding UTF8
+          if ($source.Contains('& $builder') -or $source.Contains('Invoke-VS17Xbox360Build.ps1') -or
+              -not $source.Contains('Plan-K1D3DBatch.py') -or
+              -not $source.Contains('safe_to_build -ne $false')) {
+              throw "K1D3D source-only planner added unsafe build operation"
+          }
+          Write-Host "[PS51] PASS: predictive batch source-only; no XDK invocation"
+
