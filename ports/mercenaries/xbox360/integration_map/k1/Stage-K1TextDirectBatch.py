@@ -180,8 +180,8 @@ def insert(parent: str, members: list[int], compiled: set[int],
     # linkage after packing. Never change declarations or emitted linkage.
     lookup_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
     definition_re = re.compile(
-        r'(?m)^(?:static[ \\t]+)?recomp_func_t '
-        r'phase4c_lookup_pack_func\\(uint32_t xbox_va\\)\\n\\{'
+        r'(?m)^(?:static[ \t]+)?recomp_func_t '
+        r'phase4c_lookup_pack_func\(uint32_t xbox_va\)\n\{'
     )
     definitions = list(definition_re.finditer(normalized))
     if len(definitions) != 1:
