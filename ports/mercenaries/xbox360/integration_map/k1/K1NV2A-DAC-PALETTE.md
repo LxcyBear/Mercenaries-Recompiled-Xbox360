@@ -84,3 +84,35 @@ unverified on hardware until the user builds and deploys the new
 XEX.
 
 Live Xbox criteria: startup tag `P6K1NV2A-DAC-PALETTE-20261103`, DAC write-index event, RGB commit summaries if reached, and the actual next memory boundary. `display_calls=0` and `framebuffer=00000000` remain the latest measured values: purple by itself is not proof of guest rendering.
+
+## 2026-11-03 one-symbol Xbox link failure and guarded repair
+
+The first DAC + quiet XDK build reached the **linker**, then failed with
+63 `LNK2001` lines plus one `LNK2019` for precisely one C++ import,
+`?trace@@YAXPBD@Z` (`void __cdecl trace(char const*)`). All 64
+existing translated TrueTUs expected global external C++ linkage, but
+the quiet output wrapper was declared `static void trace(...)`. The
+compiler accepted `main.cpp` but could not export that symbol to
+the other translation units. This is *not* an NV2A/ABI game fault,
+and it is not evidence of 64 different bugs.
+
+The corrected stage emits **`void trace(const char* line)`** (global
+C++ symbol) while preserving the underlying output sink unchanged.
+An updated preflight checks exactly one global `trace` definition
+and zero static ones **before launching the XDK**. This prevents
+the same 64-object linker failure from recurring silently.
+
+Because the old source and manifest were already staged, the new
+Python stager includes a **narrow guarded restage**: it will replace
+the previous quiet `main.cpp` ONLY when the previous bytes match
+the exact static-wrapper variant of the new source AND the previous
+manifest's SHA-256/source/safety fields agree. The source remains
+isolated from the DAC parent and all 64 TrueTUs. Arbitrary drift,
+unknown output, and unsafe modifications still fail closed.
+This cannot certify the XDK itself until the user builds again.
+
+A host compiler two-translation-unit test confirmed an external
+`trace(char const*)` resolves with the global definition. The
+`--self-test` now also exercises guarded conversion of the old
+static-wrapper source to the new global wrapper, idempotence, and
+rejection of tampered generated files.
