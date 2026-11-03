@@ -21,8 +21,8 @@ PROBE = "K1NV2A EXACT WRITE8:"
 # Reuse the exact supported multiline signature accepted by the previously
 # hardware-proven K1NV2A probe stage. One declared function is required.
 WRITE8_SIGNATURE = re.compile(
-    r"(?m)^[ \t]*void[ \t]+recomp_guest_write8[ \t]*\([ \t]*"
-    r"uint32_t[ \t]+address[ \t]*,[ \t]*uint8_t[ \t]+value[ \t]*"
+    r"(?m)^[ \t]*void[ \t]+recomp_guest_write8[ \t]*\(\s*"
+    r"uint32_t[ \t]+address[ \t]*,\s*uint8_t[ \t]+value\s*"
     r"\)[ \t]*(?:\r?\n[ \t]*)?\{"
 )
 ANCHOR = "        trace(k1nv2aLine);\n    }\n"
