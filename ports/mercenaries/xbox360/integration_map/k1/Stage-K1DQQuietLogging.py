@@ -18,10 +18,18 @@ from pathlib import Path
 
 PARENT = "P6K1NV2A-DAC-PALETTE-20261103"
 MARK = "P6K1DQ-QUIET-LOG-20261103"
+# Real generated mains can use a different parameter name, place the
+# opening brace on the signature line, or use LF/CRLF around arguments.
+# Match a DEFINITION (not a prototype), then verify the actual body has all
+# three inherited Xbox debug/file sinks before changing anything.
 DECL = re.compile(
-    r"(?m)^([ \t]*static[ \t]+void[ \t]+)trace"
-    r"([ \t]*\([ \t]*const[ \t]+char[ \t]*\*[ \t]*line"
-    r"[ \t]*\)[ \t]*\r?\n[ \t]*\{)"
+    r"(?m)^([ \t]*(?:(?:static|inline|__forceinline)[ \t]+)*"
+    r"void[ \t]+)trace\b"
+    r"([ \t]*\(\s*const[ \t]+char[ \t]*\*\s*[A-Za-z_][A-Za-z_0-9]*"
+    r"\s*\)\s*\{)"
+)
+TRACE_CANDIDATE = re.compile(
+    r"(?m)^[ \t]*[^\r\n]{0,160}\btrace\s*\([^\r\n]{0,160}"
 )
 WRAPPER = r'''
 /* K1DQ quiet mode: coalesce only exact, verified successful log pairs.
@@ -164,7 +172,12 @@ def patch(src: str) -> str:
         raise ValueError("Unsupported mixed line endings")
     m = list(DECL.finditer(src))
     if len(m) != 1:
-        raise ValueError(f"Exactly one original central trace sink required, found {len(m)}")
+        suspects = [re.sub(r"\\s+", " ", x.group(0).strip())
+                    for x in TRACE_CANDIDATE.finditer(src)]
+        raise ValueError(
+            f"Exactly one original central trace sink required, found {len(m)}; "
+            f"nearby declarations/calls: {suspects[:12]}"
+        )
     marker = m[0]
     end = trace_end(src, marker.end() - 1)
     old_function = src[marker.start():end]
@@ -208,7 +221,17 @@ void test() {
   trace("P6DQ ROCKET HARD STOP");
 }
 """
-    for s in (fixture, fixture.replace("\n", "\r\n")):
+    variants = [
+        fixture,
+        fixture.replace("static void trace(const char* line)\\n{",
+                        "static void trace(const char* message) {"),
+        fixture.replace("static void trace(const char* line)\\n{",
+                        "void trace(\\n const char * msg\\n)\\n{"),
+        fixture.replace("static void trace(const char* line)\\n{",
+                        "static inline void trace(const char* output)\\n{"),
+    ]
+    for candidate in variants:
+        for s in (candidate, candidate.replace("\n", "\r\n")):
         out = patch(s)
         assert out.count("static void trace(const char* line)") == 1
         assert out.count("static void k1quiet_emit_unfiltered(const char* line)") == 1
