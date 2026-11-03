@@ -46,3 +46,29 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1DQQuietLogging.py --self-test
+
+  ps51-parser-gates:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Parse K1 D3D direct runner with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1D3DDirect289E20.ps1"
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) {
+              $errors | ForEach-Object { Write-Host $_ }
+              throw "K1D3D PowerShell 5.1 parse failed"
+          }
+          $source = Get-Content -LiteralPath $path.Path -Raw -Encoding UTF8
+          $buildCount = [regex]::Matches($source, '(?m)^& \$builder @buildArgs\s*$').Count
+          $hashCount = [regex]::Matches($source, "(?m)^\s*-not \(\`$doc\.pc_support_proof\.pc_.*_sha256 -match ").Count
+          $guardCount = [regex]::Matches($source, '(?m)^if\(-not \$Build\)\{').Count
+          if ($buildCount -ne 1 -or $hashCount -ne 2 -or $guardCount -ne 1) {
+              throw "K1D3D duplicated/truncated stage: build=$buildCount hash=$hashCount source-only-guard=$guardCount"
+          }
+          Write-Host "[PS51] PASS: real parser; one build, two complete hash checks, source-only gate intact"
