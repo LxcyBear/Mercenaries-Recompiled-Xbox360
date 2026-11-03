@@ -2,29 +2,29 @@
 
 ## Proven Xbox hardware boundary (2026-11-03)
 
-The genuine Xbox 360 run of \`Merc-K1NT207-RealDirectory.xex\` with native
+The genuine Xbox 360 run of `Merc-K1NT207-RealDirectory.xex` with native
 directory enumeration reached all four real class-1 directory results, native
 XInputGetState and XInputSetState, then stopped with the ORIGINAL hard fence:
 
-\`\`\`text
+```text
 FAULT ACCESS IMMEDIATE: WRITE width=1 guest=FD6813C8
 P6DQ D3D FAULT PROBE: step=10 a=00000000 b=00299380 c=00000000
 P6DQ ROCKET HARD STOP kind=6 caller=0023A3CE target=FD6813C8 esp=008BF3E8 ticks=56902779
 P6DQ ROCKET HARD REGS eax=00000001 ecx=FD000000 edx=0029B484 ebx=0029B484 esi=FFFFFF00 edi=0029B784
 P6DQ PIXEL CHASE ... display_calls=0 framebuffer=00000000
-\`\`\`
+```
 
-The \`caller=0023A3CE\` from the trace ring is **not** the exact translated
-instruction PC. \`EAX=00000001\` is also **not** proof that the byte argument
+The `caller=0023A3CE` from the trace ring is **not** the exact translated
+instruction PC. `EAX=00000001` is also **not** proof that the byte argument
 to the write was 01.
 
 ## GPU register identification
 
 This address is in the original Xbox NV2A MMIO BAR at
-\`FD000000 + 006813C8\`. xqemu's NV2A block table maps
-\`00681000..00681FFF\` to **PRMDIO**, making the block-local
-offset \`+03C8\`. This matches the classic VGA DAC write-index port
-\`0x3C8\`, but xqemu's \`nv2a_stubs.c\` currently treats PRMDIO as a
+`FD000000 + 006813C8`. xqemu's NV2A block table maps
+`00681000..00681FFF` to **PRMDIO**, making the block-local
+offset `+03C8`. This matches the classic VGA DAC write-index port
+`0x3C8`, but xqemu's `nv2a_stubs.c` currently treats PRMDIO as a
 **stub**. Do not invent PRMDIO palette semantics or permit this
 unknown MMIO write based solely on the port-number coincidence.
 Whether the transient purple screen was guest-rendered remains
@@ -39,48 +39,48 @@ Upstream code sources:
 
 From the Mercenaries repo root:
 
-\`\`\`powershell
+```powershell
 git pull --ff-only
 if ($LASTEXITCODE -ne 0) { throw "git pull failed" }
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1NV2APrmdioWrite8.ps1"
-\`\`\`
+```
 
 This runs Python syntax + synthetic stage tests, checks the last native
 K1NT207 main/header hashes and real XEX existence, stages a NEW copy
-of only \`main.cpp\`, and ranks the original Xbox WRITE8 candidate
+of only `main.cpp`, and ranks the original Xbox WRITE8 candidate
 sites in all 64 xboxrecomp-generated TrueTUs. If a matching SHA-256
-retail \`game_files\mercenaries-retail\default.xbe\` is available,
+retail `game_files\mercenaries-retail\default.xbe` is available,
 the optional Capstone path also disassembles the first eight candidate
 guest blocks (requires Capstone in the selected Python environment).
 
 Read the grounded source report:
-\`build\phase6_integration_map\k1_nv2a_prmdio_write8\k1nv2a-source-candidates.txt\`.
-A static \`block=...\` is a **candidate basic-block VA**, not a
+`build\phase6_integration_map\k1_nv2a_prmdio_write8\k1nv2a-source-candidates.txt`.
+A static `block=...` is a **candidate basic-block VA**, not a
 guaranteed byte-store instruction address, especially when the
 destination is computed dynamically.
 
 For full original disassembly using xboxrecomp's maintained XBE
 parser/disassembler, you can operate on your local legitimate XBE
-with \`python -m tools.xbe_parser <XBE> --json <analysis.json>\` and
-\`python -m tools.disasm <XBE>\` from the xboxrecomp project, or
-use its \`tools.recomp <XBE> --func <actual-function-VA>\` once
+with `python -m tools.xbe_parser <XBE> --json <analysis.json>` and
+`python -m tools.disasm <XBE>` from the xboxrecomp project, or
+use its `tools.recomp <XBE> --func <actual-function-VA>` once
 the candidate function is identified. Do not rerun the whole-game
 recompiler for this one fault; use the cached disassembly where
 possible. Never commit the retail XBE or generated game code.
 
 ## One incremental, protected native Xbox 360 build
 
-If the above preflight passes, add \`-Build\`:
+If the above preflight passes, add `-Build`:
 
-\`\`\`powershell
+```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1NV2APrmdioWrite8.ps1" -Build
-\`\`\`
+```
 
 The native builder uses the verified **same 64 TrueTUs** and
-\`translated_runtime.h\`, \`SkipClean\`, and persistent shadow
+`translated_runtime.h`, `SkipClean`, and persistent shadow
 intermediates. It publishes a **different XEX**:
 
-\`build\phase6_integration_map\k1_nv2a_prmdio_write8\xdk\Merc-K1NV2A-PRMDIO-Write8-Witness.xex\`
+`build\phase6_integration_map\k1_nv2a_prmdio_write8\xdk\Merc-K1NV2A-PRMDIO-Write8-Witness.xex`
 
 This avoids a 64-shard recompile for a header-only trace. It does
 NOT auto-deploy.
@@ -88,14 +88,14 @@ NOT auto-deploy.
 When testing that exact executable on the real Xbox, collect the
 following two messages together:
 
-\`\`\`text
+```text
 P6K1NV2A-PRMDIO-WRITE8-20261103
 K1NV2A EXACT WRITE8: addr=FD6813C8 value=?? last_guest_block_va=???????? ...
 FAULT ACCESS IMMEDIATE: WRITE width=1 guest=FD6813C8
-\`\`\`
+```
 
 The added conditional executes at the **entry** of the central
-\`recomp_guest_write8\` and logs the **actual uint8_t argument**
+`recomp_guest_write8` and logs the **actual uint8_t argument**
 plus register/ESP context *before* the original fault path executes.
 It never acknowledges, retries, redirects, clears, or performs the
 forbidden NV2A write. The provenance helper is the existing K1C
