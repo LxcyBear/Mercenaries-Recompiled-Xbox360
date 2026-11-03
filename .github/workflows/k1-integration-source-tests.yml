@@ -1,0 +1,35 @@
+name: K1 integration source self-tests
+
+on:
+  push:
+    branches:
+      - xbox360/phase6-native-graphics
+    paths:
+      - "ports/mercenaries/xbox360/integration_map/k1/**"
+      - ".github/workflows/k1-integration-source-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Python syntax check — all K1 stages
+        run: python -m compileall -q ports/mercenaries/xbox360/integration_map/k1
+      - name: 64-shard declaration/body scanner regression
+        run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1ThreeLaneFrontiers.py --self-test
+      - name: Three-lane runtime stage regression
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1ThreeLaneMain.py --self-test
+      - name: DAC indexed palette regression
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1NV2ADacPalette.py --self-test
+      - name: Quiet logger external ABI and restage regression
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1DQQuietLogging.py --self-test
