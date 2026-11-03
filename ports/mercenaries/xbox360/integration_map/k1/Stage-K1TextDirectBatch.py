@@ -168,6 +168,7 @@ def insert(parent: str, members: list[int], compiled: set[int],
     # Reuse precisely the same support-clean pruning and DIRECT_FRONTIER
     # rewriting machinery that assembled Phase6DQ. No altered return values.
     before_helpers = p5bc.SWEEP_ROOT
+    before_root_instrument = p5bc.instrument_root_entry
     newline = '\r\n' if '\r\n' in parent else '\n'
     normalized = parent.replace('\r\n', '\n')
     # Install the real-ABI port of the verified PC-only diagnostic before
@@ -190,6 +191,10 @@ def insert(parent: str, members: list[int], compiled: set[int],
     # silently pruned this root and emitted only 'lost all candidates'.
     # Root-mode reports its actual missing helpers and local source lines.
     p5bc.SWEEP_ROOT = ROOT
+    # Do not write the Phase5BC test seed global in the real game's
+    # source. This function is already source-authentic and the legacy
+    # seed-entry flag is unrelated to its control flow or ABI.
+    p5bc.instrument_root_entry = lambda rendered, name: rendered
     new = list(members)
     print("[K1-TEXT] MANDATORY ROOT: 0017A0A0; original source " +
           str(generated[ROOT].get("file", "<unknown>")) +
@@ -201,6 +206,7 @@ def insert(parent: str, members: list[int], compiled: set[int],
         )
     finally:
         p5bc.SWEEP_ROOT = before_helpers
+        p5bc.instrument_root_entry = before_root_instrument
     result = result.replace(placeholder, original_on)
     if ROOT not in new or ROOT in pruned:
         raise ValueError('0017A0A0 has unresolved support; refusing synthetic continuation: '
@@ -264,6 +270,7 @@ def self_test(base, p5bb, p5bc):
         assert result.count('P6DQ ROCKET HARD STOP') == 1
         assert MARK in result
         assert result.count("K1STATE MAIN CHECKPOINT:") == 1
+        assert "s_phase5bcSweepRootEntered = 1;" not in result
         assert result.count("recomp_main_state_checkpoint(GUEST_READ32(esp + 4), GUEST_READ32(esp + 8));") == 1
         assert result.count("GUEST_WRITE32(0x413F6C, eax);") == 1
         assert "MERCENARIES_CAPTURE_GAME_PATH" not in result
