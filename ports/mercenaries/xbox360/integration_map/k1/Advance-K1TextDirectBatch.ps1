@@ -25,13 +25,15 @@ $base = Join-Path $root "ports\mercenaries\xbox360\phase4c_native_startup\emit_p
 $p5bb = Join-Path $root "ports\mercenaries\xbox360\phase5_subsystem_bringup\emit_phase5bb_frontier22dda4.py"
 $p5bc = Join-Path $root "ports\mercenaries\xbox360\phase5_subsystem_bringup\emit_phase5bc_broad_sweep.py"
 $stage = Join-Path $PSScriptRoot "Stage-K1TextDirectBatch.py"
+$pcManual = Join-Path $root "ports\mercenaries\src\recomp_manual.c"
+$pcPrototype = Join-Path $root "ports\mercenaries\src\recomp\recomp_types.h"
 $parentRunner = Join-Path $PSScriptRoot "Advance-K1ThreeLaneGraphics.ps1"
 $envFile = Join-Path $root "build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp"
 $builder = Join-Path $root "ports\mercenaries\xbox360\phase6_native_graphics\Invoke-VS17Xbox360Build.ps1"
 $xdk = Join-Path $outRoot "xdk"
 $xex = Join-Path $xdk "Merc-K1Text-Direct0017A0A0.xex"
 
-foreach ($path in @($stage,$base,$p5bb,$p5bc,$parentRunner,$builder,$envFile,$functions,$cache)) {
+foreach ($path in @($stage,$base,$p5bb,$p5bc,$parentRunner,$builder,$envFile,$functions,$cache,$pcManual,$pcPrototype)) {
     if(-not(Test-Path -LiteralPath $path -PathType Leaf)){
         throw "[K1-TEXT] Missing real source/prior stage: $path"
     }
@@ -81,7 +83,11 @@ if($LASTEXITCODE -ne 0){ throw "[K1-TEXT] Python syntax failed; XDK blocked" }
 $moduleArgs = @("--base-module",$base,"--p5bb-module",$p5bb,"--p5bc-module",$p5bc)
 & $python -u $stage --self-test @moduleArgs
 if($LASTEXITCODE -ne 0){ throw "[K1-TEXT] Source-pack regression failed; XDK blocked" }
-$stageArgs = @("--parent",$parentMain,"--shards",$shards,"--functions",$functions,"--generated-root",$generated,"--out",$nextMain,"--manifest",$nextManifest)
+$pcPrototypeContents = Get-Content -LiteralPath $pcPrototype -Raw -Encoding UTF8
+if (-not $pcPrototypeContents.Contains("void recomp_main_state_checkpoint(uint32_t state, uint32_t substate);")) {
+    throw "[K1-TEXT] Maintained PC checkpoint ABI declaration drift; XDK blocked"
+}
+$stageArgs = @("--parent",$parentMain,"--shards",$shards,"--functions",$functions,"--generated-root",$generated,"--pc-manual",$pcManual,"--out",$nextMain,"--manifest",$nextManifest)
 & $python -u $stage @moduleArgs @stageArgs
 if($LASTEXITCODE -ne 0){ throw "[K1-TEXT] Exact original source pack failed; XDK blocked" }
 
@@ -93,6 +99,58 @@ if($doc.status -ne "K1_TEXT_DIRECT_SOURCE_ONLY_NO_XDK" -or
    $doc.parent_sha256 -ne $parentHash -or
    $doc.new_main_sha256 -ne $nextHash -or
    [int]$doc.compiled_tus_unchanged -ne 64 -or
+   $doc.pc_checkpoint_name -ne "recomp_main_state_checkpoint" -or
+   -not ($doc.pc_checkpoint_definition_sha256 -match '^[0-9a-f]{64}
+   $doc.synthetic_guest_results -ne $false -or
+   $doc.unknown_mmio_fences_changed -ne $false -or
+   $doc.xdk_verified -ne $false -or
+   @($doc.promoted_vas) -notcontains "0x0017A0A0" -or
+   $nextText.Contains("case 0x0017A0A0u: return sub_0017A0A0;") -ne $true -or
+   $nextText.Contains("P6DQ ROCKET HARD STOP") -ne $true -or
+   $nextText.Contains("K1NV2A DAC PALETTE COMMIT:") -ne $true -or
+   $nextText.Contains("K1PERF WINDOW:") -ne $true -or
+   $nextText.Contains("K1PRESENT FRONTIER ROUTE:") -ne $true){
+    throw "[K1-TEXT] Source-stage output or safety-gate mismatch; XDK blocked"
+}
+$actualShards = @(Get-ChildItem -LiteralPath $shards -Filter "translated_???.cpp" -File)
+if($actualShards.Count -ne 64){
+    throw "[K1-TEXT] 64 true-TU source set changed before build; XDK blocked"
+}
+Write-Host "[K1-TEXT] PREFLIGHT PASS: authentic original .text 0017A0A0 + support-clean direct closure"
+Write-Host ("[K1-TEXT] Promoted={0} remaining_direct={1}; original 64 TrueTUs reused" -f [int]$doc.promoted_count,@($doc.remaining_direct_frontiers).Count)
+Write-Host "[K1-TEXT] PFIFO, DAC, K1PERF, presentation logger and all hard fences inherited"
+if(-not $Build){
+    Write-Host "[K1-TEXT] SOURCE ONLY (no XDK). Add -Build for one incremental XEX."
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $xdk | Out-Null
+$buildArgs = @{
+    GeneratedMain=$nextMain
+    GeneratedEnv=$envFile
+    GeneratedShardDir=$shards
+    ExpectedBuildTag="P6DQ-R51-MM173-FRAME-20261029-A"
+    ExpectedEnvCookie="phase6dq_env_build_cookie"
+    SolutionRoot=$SolutionRoot
+    Configuration="Release"
+    Platform="Xbox 360"
+    CleanLog=(Join-Path $xdk "xdk-clean.log")
+    BuildLog=(Join-Path $xdk "xdk-build.log")
+    PublishedXex=$xex
+    ShadowBuildRoot=$FastBuildRoot
+    SkipClean=$true
+}
+Write-Host "[K1-TEXT] ONE INCREMENTAL XDK BUILD: original 64 compiled TrueTUs reused, new source in main only"
+& $builder @buildArgs
+if($LASTEXITCODE -ne 0){ throw "[K1-TEXT] XDK build failed; see $($buildArgs.BuildLog)" }
+if(-not(Test-Path -LiteralPath $xex -PathType Leaf)){
+    throw "[K1-TEXT] XDK build did not publish expected XEX"
+}
+Write-Host "[K1-TEXT] XDK BUILD PASS: $xex"
+Write-Host "[K1-TEXT] Hardware not verified; next log must prove authentic 0017A0A0 execution"
+) -or
+   $doc.guest_state_write_replaced -ne $false -or
+   -not $nextText.Contains("K1STATE MAIN CHECKPOINT:") -or
    $doc.synthetic_guest_results -ne $false -or
    $doc.unknown_mmio_fences_changed -ne $false -or
    $doc.xdk_verified -ne $false -or
