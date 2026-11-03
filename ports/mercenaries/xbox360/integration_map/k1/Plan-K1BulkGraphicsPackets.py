@@ -180,13 +180,22 @@ def plan(args):
     # Use map's whole original function risk census, but NEVER conflate
     # PC patch mentions with proof that a guest instruction was executed.
     priorities = {}
+    evidence_reachable = set()
+    for_row_critical = {va for va,_ in ROOTS}
     with args.map_csv.open("r", encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(f):
             va=int(row["va"],16)
             priorities[va] = int(row.get("static_risk_priority") or 0)
+            # Only stage source actually linked to a known graphics/audio/
+            # hardware frontier. Cold missing game logic is NOT evidence
+            # that it should be inserted just to inflate tick counts.
+            depth=row.get("original_call_graph_depth_from_seed", "").strip()
+            if (depth or va in for_row_critical):
+                evidence_reachable.add(va)
     for va,_ in ROOTS:
         priorities[va] = max(priorities.get(va,0), 10000 if va==0x002228C0 else 8000)
-    candidate_roots = sorted(missing, key=lambda va:(-priorities.get(va,0),va))
+    candidate_roots = sorted(missing & evidence_reachable,
+                             key=lambda va:(-priorities.get(va,0),va))
     selected = []
     reservations = set()
     blocked=[]
@@ -227,6 +236,8 @@ def plan(args):
         "original_r4_parent_main_sha256": sha(args.main.read_bytes()),
         "compiled_64_true_tus_reused": 64,
         "missing_original_functions": total,
+        "graph_seed_reachable_missing_candidates": len(missing & evidence_reachable),
+        "cold_original_missing_excluded_from_batch": len(missing - evidence_reachable),
         "bounded_source_clean_packet_candidates": shortlisted[:128],
         "source_clean_eligible_members_selected": [
             "0x%08X" % va for va in selected],
@@ -250,8 +261,9 @@ def plan(args):
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+"\n",encoding="utf-8")
     print("[K1-BULK] RETAIL ORIGINAL/PC SOURCE SHA PASS; source-only")
-    print("[K1-BULK] original missing=%d, source-clean eligible selected=%d, blocked seed analyses=%d" %
-          (total,len(selected),len(blocked)))
+    print("[K1-BULK] original missing=%d, seed-reachable candidates=%d, cold omitted=%d, source-clean selected=%d, blocked=%d" %
+          (total,len(missing & evidence_reachable),
+           len(missing - evidence_reachable),len(selected),len(blocked)))
     for item in shortlisted[:15]:
         print("[K1-BULK] ELIGIBLE seed=%s count=%d direct_frontiers=%s" %
               (item["seed"],item["member_count"],len(item["direct_original_frontiers"])))
