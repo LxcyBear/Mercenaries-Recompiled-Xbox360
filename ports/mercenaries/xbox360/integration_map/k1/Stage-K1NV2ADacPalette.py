@@ -12,11 +12,19 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 PARENT = "P6K1NV2A-PRMDIO-WRITE8-20261103"
 MARK = "P6K1NV2A-DAC-PALETTE-20261103"
 PROBE = "K1NV2A EXACT WRITE8:"
+# Reuse the exact supported multiline signature accepted by the previously
+# hardware-proven K1NV2A probe stage. One declared function is required.
+WRITE8_SIGNATURE = re.compile(
+    r"(?m)^[ \\t]*void[ \\t]+recomp_guest_write8[ \\t]*\\([ \\t]*"
+    r"uint32_t[ \\t]+address[ \\t]*,[ \\t]*uint8_t[ \\t]+value[ \\t]*"
+    r"\\)[ \\t]*(?:\\r?\\n[ \\t]*)?\\{"
+)
 ANCHOR = "        trace(k1nv2aLine);\n    }\n"
 # Insert after the hardware-proven diagnostic, before the original generic
 # write8 MMIO fence. Index must precede data. Shadow stores raw 8-bit RGB,
@@ -96,8 +104,12 @@ def patch(text: str) -> str:
         raise ValueError("Already staged DAC palette patch; refusing duplicate")
     if text.count(PARENT) != 1 or text.count(PROBE) != 1:
         raise ValueError("Missing unique hardware-proven PRMDIO parent/probe")
-    if text.count("void recomp_guest_write8(uint32_t address, uint8_t value)") != 1:
-        raise ValueError("Cannot locate exact central guest WRITE8 entry")
+    matches = list(WRITE8_SIGNATURE.finditer(text))
+    if len(matches) != 1:
+        raise ValueError(
+            "Expected exactly one central multiline guest WRITE8 definition, "
+            f"found {len(matches)}"
+        )
     if "static DWORD k1c_read_guest_va(void);" not in text:
         raise ValueError("Missing guest basic-block tracking function")
     if "FAULT ACCESS IMMEDIATE:" not in text or "P6DQ ROCKET HARD STOP" not in text:
@@ -108,6 +120,11 @@ def patch(text: str) -> str:
     source_anchor = ANCHOR.replace("\n", nl)
     if text.count(source_anchor) != 1:
         raise ValueError("Exact original diagnostic insertion anchor drift")
+    # The diagnostic was inserted immediately after the WRITE8 opening brace.
+    # Do not latch onto an unrelated trace(k1nv2aLine) or a second function.
+    anchor_at = text.index(source_anchor)
+    if not (matches[0].end() < anchor_at < matches[0].end() + 1400):
+        raise ValueError("Diagnostic anchor is not within central WRITE8 preamble")
     handler = HANDLER.replace("\n", nl)
     new = text.replace(source_anchor, source_anchor + handler, 1)
     new = new.replace(PARENT, PARENT + " | " + MARK, 1)
@@ -188,6 +205,23 @@ void boot() { trace("P6K1NV2A-PRMDIO-WRITE8-20261103"); }
                 raise AssertionError("Accepted duplicate or unsafe parent")
             except ValueError:
                 pass
+    # Match the real source generator's multiline entry declaration.
+    multiline = original.replace(
+        "void recomp_guest_write8(uint32_t address, uint8_t value)\\n{",
+        "void recomp_guest_write8(\\n    uint32_t address, uint8_t value)\\n{",
+    )
+    # Also ensure varying whitespace cannot cause a false declaration count.
+    assert patch(multiline).count("K1NV2A DAC PALETTE COMMIT:") == 1
+    for bad in (
+        original.replace("void recomp_guest_write8", "void another_write8"),
+        original.replace("void recomp_guest_write8", "void recomp_guest_write8(")
+    ):
+        try:
+            patch(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Invalid WRITE8 signature accepted")
     s = DacReference()
     for invalid_addr in (0xFD6813C9, 0xFD6813CA, 0xFD6813C7, 0xFD6813D0, 0xFE820010):
         try:
