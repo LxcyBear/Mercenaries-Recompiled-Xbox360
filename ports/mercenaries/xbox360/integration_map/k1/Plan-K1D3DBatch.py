@@ -574,6 +574,13 @@ def plan(a) -> None:
     elif target["classification"] == "interior_label":
         next_gate = ("INTERIOR LABEL: source-authentic entry-label control flow "
                      "and caller stack/register ABI required BEFORE XDK")
+    elif target["classification"] == "not_in_retail_function_inventory" and \
+         gap["target_is_predecessor_end_exclusive"]:
+        next_gate = (
+            "16-WAY ITAIL from original 00296550: verify raw jump-table slots "
+            "002965D4..00296613, code/data overlap at 002965F0 and guest "
+            "stack/target ABI. Do not build an invented function."
+        )
     else:
         next_gate = "NO SAFE ENTRY: resolve original XBE provenance/source before XDK"
     report = {
