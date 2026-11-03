@@ -48,6 +48,8 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Plan-K1D3DBatch.py --self-test
       - name: Original-XBE D3D six-way switch-case disassembler synthetic fixtures
         run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1D3DSwitchCases.py --self-test
+      - name: Six-case D3D original shared-tail integration fixtures (no XBE)
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1D3DSixCaseBatch.py --self-test
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -115,5 +117,26 @@ jobs:
               throw "K1D3D six-way audit broke source-only safety gate"
           }
           Write-Host "[PS51] PASS: original six-case source-only decoder, no XDK invocation"
+      - name: Parse six-case Xbox360 batch stage on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1D3DSixCaseBatch.ps1"
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) {
+              $errors | ForEach-Object { Write-Host $_ }
+              throw "K1 six-case batch PowerShell 5.1 parse failed"
+          }
+          $source = Get-Content -LiteralPath $path.Path -Raw -Encoding UTF8
+          if (-not $source.Contains('Stage-K1D3DSixCaseBatch.py') -or
+              -not $source.Contains('if(-not $Build)') -or
+              [regex]::Matches($source, '(?m)^& \$builder @buildArgs$').Count -ne 1 -or
+              -not $source.Contains('PreservesUnknownTailPlaceholder') -and
+              -not $source.Contains('preserves_unknown_tail_hard_fence')) {
+              throw "K1 six-case XDK build/source-only/unknown-ITAIL contract changed"
+          }
+          Write-Host "[PS51] PASS: one optional XDK build only, source ABI and hard-fence preflight"
+
 
 
