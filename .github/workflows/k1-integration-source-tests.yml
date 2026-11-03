@@ -36,7 +36,8 @@ jobs:
           python ports/mercenaries/xbox360/integration_map/k1/Stage-K1TextDirectBatch.py --self-test \
             --base-module ports/mercenaries/xbox360/phase4c_native_startup/emit_phase4c_startup_slice.py \
             --p5bb-module ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bb_frontier22dda4.py \
-            --p5bc-module ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bc_broad_sweep.py
+            --p5bc-module ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bc_broad_sweep.py \
+            --pc-manual ports/mercenaries/src/recomp_manual.c
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
