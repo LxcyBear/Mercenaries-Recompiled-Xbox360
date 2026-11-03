@@ -15,6 +15,7 @@ game_files/
 *.xiso
 
 # Local port bootstrap dependencies
+/.deps/
 .tools/
 .venv/
 
