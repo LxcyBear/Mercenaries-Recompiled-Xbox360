@@ -267,7 +267,112 @@ def inspect_unmapped_gap(address: int, by_va: dict, generated: dict) -> dict:
     }
 
 
-def inspect_verified_xbe_bytes(path: Path, target: int) -> dict:
+
+JUMP_TABLE_SOURCE = 0x00296550
+JUMP_TABLE_START = 0x002965D4
+JUMP_TABLE_COUNT = 16
+JUMP_TABLE_END = JUMP_TABLE_START + 4 * JUMP_TABLE_COUNT
+JUMP_TABLE_CODE = re.compile(
+    r'\bRECOMP_ITAIL\s*\(\s*GUEST_READ32\s*\(\s*eax\s*\*\s*4\s*\+\s*'
+    r'0x2965D4\s*\)\s*\)\s*;'
+)
+
+
+def prove_d3d_jump_table(by_va: dict, generated: dict) -> dict:
+    """Source-proven indexed indirect branch and inventory/code overlap.
+
+    This does NOT assert the table bytes are static pointers, because the
+    original D3D segment can be writable at runtime.
+    """
+    row = generated.get(JUMP_TABLE_SOURCE)
+    if not row:
+        raise ValueError("Retail 00296550 original translated source absent")
+    masked = row["source"]
+    if len(JUMP_TABLE_CODE.findall(masked)) != 1 or not re.search(
+        r'\beax\s*=\s*eax\s*&\s*0xF\s*;', masked
+    ) or not re.search(r'\bPUSH32\s*\(\s*esp\s*,\s*esi\s*\)', masked):
+        raise ValueError(
+            "Retail D3D 00296550 indexed-ITAIL/guest-stack contract changed"
+        )
+    overlaps = []
+    for row in by_va.values():
+        start, end = row["start"], row["end"]
+        if start < JUMP_TABLE_END and end > JUMP_TABLE_START:
+            overlaps.append({
+                "source_start": "0x%08X" % start,
+                "source_end_exclusive": "0x%08X" % end,
+                "source_name": row["name"],
+                "starts_inside_jump_table": JUMP_TABLE_START <= start < JUMP_TABLE_END,
+                "start_table_slot_index": ((start - JUMP_TABLE_START) // 4)
+                if (JUMP_TABLE_START <= start < JUMP_TABLE_END
+                    and (start - JUMP_TABLE_START) % 4 == 0) else None,
+                "generated_body_present": start in generated,
+                "overlap_start": "0x%08X" % max(start, JUMP_TABLE_START),
+                "overlap_end_exclusive": "0x%08X" % min(end, JUMP_TABLE_END),
+            })
+    return {
+        "verified_original_source_function": "0x%08X" % JUMP_TABLE_SOURCE,
+        "verified_original_source_file": generated[JUMP_TABLE_SOURCE]["file"],
+        "source_sha256": sha(generated[JUMP_TABLE_SOURCE]["source"].encode("utf-8")),
+        "indexed_dispatch_rule": "eax=(edi & 15); PUSH32(esp,esi); ITAIL=GUEST_READ32(0x002965D4+eax*4)",
+        "table_start": "0x%08X" % JUMP_TABLE_START,
+        "table_end_exclusive": "0x%08X" % JUMP_TABLE_END,
+        "entries": JUMP_TABLE_COUNT,
+        "bytes": JUMP_TABLE_COUNT * 4,
+        "observed_hardware_target": "0x%08X" % ITAIL,
+        "original_function_inventory_overlaps": overlaps,
+        "ambiguous_code_data_region": bool(overlaps),
+        "retail_source_proves_actual_table_values": False,
+        "guest_memory_table_could_be_modified_at_runtime": True,
+        "safe_to_reclassify_compiled_function_as_data": False,
+        "safe_to_emulate_tail_target": False,
+    }
+
+
+def read_verified_jump_table(blob: bytes, section_rows: list[tuple],
+                             by_va: dict, generated: dict) -> dict:
+    """Extract 16 original Xbox little-endian DWORDs with section bounds."""
+    import struct
+    sections = [r for r in section_rows if
+                r[1] <= JUMP_TABLE_START and
+                JUMP_TABLE_END <= r[1]+r[2] and
+                JUMP_TABLE_END <= r[1]+r[4]]
+    if len(sections) != 1:
+        raise ValueError("Jump-table 64 bytes do not fit unique original raw section")
+    _, va, _, raw, _ = sections[0]
+    off = raw + JUMP_TABLE_START - va
+    if off < 0 or off + JUMP_TABLE_COUNT*4 > len(blob):
+        raise ValueError("Retail XBE jump-table raw bytes out of bounds")
+    values = struct.unpack_from("<16I", blob, off)
+    rows = []
+    for idx, value in enumerate(values):
+        classified = classify(value, by_va, generated)
+        rows.append({
+            "index": idx,
+            "table_word_va": "0x%08X" % (JUMP_TABLE_START + 4*idx),
+            "raw_word_hex_little_endian": blob[off+4*idx:off+4*idx+4].hex(" "),
+            "value": "0x%08X" % value,
+            "destination_classification": classified["classification"],
+            "destination_inventory_owner": classified["owner_va"],
+            "destination_in_d3d_section": D3D_START <= value < D3D_END,
+            "destination_in_75_byte_gap": ITAIL <= value < 0x002965A8,
+            "matches_hardware_itail": value == ITAIL,
+        })
+    return {
+        "table_va": "0x%08X" % JUMP_TABLE_START,
+        "table_file_offset": "0x%08X" % off,
+        "entries": rows,
+        "hardware_target_match_indices": [
+            row["index"] for row in rows if row["matches_hardware_itail"]],
+        "matching_hardware_target_present_in_original_raw_bytes": ITAIL in values,
+        "table_entry_values_sha256": sha(blob[off:off+64]),
+        "static_file_table_is_not_a_runtime_memory_proof": True,
+    }
+
+
+def inspect_verified_xbe_bytes(path: Path, target: int,
+                               by_va: dict | None = None,
+                               generated: dict | None = None) -> dict:
     """Read a *user-local* exact-SHA original XBE, never copy it into repo."""
     import struct
     blob = path.read_bytes()
@@ -284,10 +389,12 @@ def inspect_verified_xbe_bytes(path: Path, target: int) -> dict:
     if count == 0 or count > 64 or table_off < 0 or \
        table_off+count*0x38 > len(blob):
         raise ValueError("Retail XBE section table missing/out of bounds")
+    section_rows = []
     sections = []
     for i in range(count):
         off = table_off+i*0x38
         va, virtual_size, raw, raw_size = struct.unpack_from("<IIII", blob, off+4)
+        section_rows.append((i, va, virtual_size, raw, raw_size))
         if va <= target < va+virtual_size:
             sections.append((i, va, virtual_size, raw, raw_size))
     if len(sections) != 1:
@@ -312,6 +419,10 @@ def inspect_verified_xbe_bytes(path: Path, target: int) -> dict:
         "window_end_va_exclusive": "0x%08X" % end,
         "original_128_byte_window_hex": blob[start_file:end_file].hex(" "),
         "disassembly_status": "raw exact bytes only; x86 instruction boundary not assumed",
+        "source_verified_jump_table": (
+            read_verified_jump_table(blob, section_rows, by_va, generated)
+            if by_va is not None and generated is not None else None
+        ),
     }
 
 
@@ -452,7 +563,8 @@ def plan(a) -> None:
         raise ValueError("Last observed hardware ITAIL is outside original D3D/XGRPH")
     owner_context = context_of_label(ITAIL, target, generated)
     gap = inspect_unmapped_gap(ITAIL, by_va, generated)
-    local_xbe = inspect_verified_xbe_bytes(a.xbe, ITAIL) if a.xbe else None
+    jump_table = prove_d3d_jump_table(by_va, generated)
+    local_xbe = inspect_verified_xbe_bytes(a.xbe, ITAIL, by_va, generated) if a.xbe else None
     seeds, selected, graph_metrics = select_graph(by_va, generated, base, existing)
     control_flow_contexts = inspect_tail_callers(by_va, generated, base, existing)
     graph_digest = sha(json.dumps(selected, sort_keys=True).encode("utf-8"))
@@ -481,6 +593,7 @@ def plan(a) -> None:
         "existing_packed_or_true_tu_count": len(existing),
         "itail_analysis": target,
         "itail_gap_provenance": gap,
+        "source_proven_16_entry_indirect_jump_table": jump_table,
         "verified_local_original_xbe_target_bytes": local_xbe,
         "itail_owner_original_source": owner_context,
         "related_original_c_control_flow": control_flow_contexts,
@@ -535,6 +648,21 @@ def plan(a) -> None:
     for item in selected:
         print("[K1D3D-BATCH] MISSING SOURCE CANDIDATE %s file=%s depth=%d from=%s" %
               (item["va"], item["source_file"], item["depth"], item["reason"]))
+    print("[K1D3D-BATCH] JUMPTABLE PROVEN: 00296550 -> GUEST_READ32(002965D4 + 4*(edi&15)); 16 entries; table end=%s" %
+          jump_table["table_end_exclusive"])
+    for overlap in jump_table["original_function_inventory_overlaps"]:
+        print("[K1D3D-BATCH] CODE/DATA CONFLICT: %s..%s overlaps table slot=%s source=%s" %
+              (overlap["source_start"], overlap["source_end_exclusive"],
+               overlap["start_table_slot_index"], overlap["source_name"]))
+    if local_xbe is not None:
+        proof = local_xbe["source_verified_jump_table"]
+        for slot in proof["entries"]:
+            print("[K1D3D-BATCH] TABLE[%02u] @%s -> %s (%s)%s" %
+                  (slot["index"], slot["table_word_va"], slot["value"],
+                   slot["destination_classification"],
+                   " [HARDWARE TARGET]" if slot["matches_hardware_itail"] else ""))
+        print("[K1D3D-BATCH] STATIC TABLE VS HARDWARE: matched_indices=%s; runtime data could differ" %
+              proof["hardware_target_match_indices"])
     print("[K1D3D-BATCH] Target literal in other original D3D source bodies: %u; exact local-XBE bytes: %s" %
           (len(gap["original_d3d_source_text_references"]), "YES" if local_xbe else "NOT SUPPLIED"))
     print("[K1D3D-BATCH] Original owner source=%s labels=%s itail_callsites=%s" %
@@ -578,6 +706,40 @@ def selftest() -> None:
     }
     cls = classify(ITAIL, by_va, generated)
     assert cls["classification"] == "interior_label"
+    generated[JUMP_TABLE_SOURCE] = {
+        "name": "sub_00296550",
+        "source": "void sub_00296550(void){ eax=edi; "
+                  "PUSH32(esp, esi); eax = eax & 0xF; "
+                  "RECOMP_ITAIL(GUEST_READ32(eax * 4 + 0x2965D4));}",
+        "file": "original.c",
+    }
+    jt = prove_d3d_jump_table(by_va, generated)
+    assert jt["entries"] == 16
+    assert jt["table_end_exclusive"] == "0x00296614"
+    assert jt["ambiguous_code_data_region"] and not jt["safe_to_emulate_tail_target"]
+    assert any(r["source_start"] == "0x002965F0" and
+               r["start_table_slot_index"] == 7
+               for r in jt["original_function_inventory_overlaps"])
+    import struct
+    sample_blob = bytearray(128)
+    values = [0x0029655D]+[0x002965A8]*15
+    struct.pack_into("<16I", sample_blob, 0, *values)
+    sample_table = read_verified_jump_table(
+        bytes(sample_blob), [(3, JUMP_TABLE_START, 128, 0, 128)],
+        by_va, generated)
+    assert sample_table["hardware_target_match_indices"] == [0]
+    assert sample_table["entries"][0]["destination_in_75_byte_gap"]
+    assert not sample_table["entries"][0]["destination_in_d3d_section"] is False
+    try:
+        prove_d3d_jump_table(by_va, {
+            **generated, JUMP_TABLE_SOURCE: {
+                "source": "void sub_00296550(void){RECOMP_ITAIL(0x2965D4);}",
+                "file": "changed.c"}})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Changed original jumptable code accepted")
+
     assert cls["owner_va"] == "0x00296550"
     assert not cls["can_route_via_plain_function_lookup"]
     assert context_of_label(ITAIL, cls, generated)["target_label_occurrences"] == 1
