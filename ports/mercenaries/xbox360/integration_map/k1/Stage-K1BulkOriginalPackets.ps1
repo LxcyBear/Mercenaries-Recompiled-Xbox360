@@ -52,7 +52,7 @@ $doc=Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json
 $hash=(Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
 if($doc.status -ne "K1_ORIGINAL_BULK_GRAPHICS_R6_SOURCE_ONLY_XDK_BLOCKED" -or
     $doc.r6_derived_main_sha256 -ne $hash -or
-    $doc.previous_hardware_good_source_preserved -ne $true -or
+    $doc.r4_hardware_proven_source_fences_preserved -ne $true -or
     $doc.original_r5_retail_branch_preserved -ne $true -or
     [int]$doc.unmodified_original_TrueTU_count -ne 64 -or
     [int]$doc.new_member_count -lt 1 -or
