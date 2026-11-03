@@ -34,6 +34,7 @@ typedef struct K1Nt207Cursor
     uint32_t exhausted;
     uint32_t nextFileIndex;
     uint32_t filtered;
+    char initialMask[129];
 } K1Nt207Cursor;
 static K1Nt207Cursor s_k1nt207Cursors[PHASE5B_HANDLE_CAP];
 static uint32_t s_k1nt207Calls=0u;
@@ -155,7 +156,14 @@ static void k1nt207_nt_query_directory_file(uint32_t savedEsp)
          * String layout: USHORT Length, USHORT MaximumLength, DWORD Buffer.
          */
         pattern[0]='*'; pattern[1]='\0';
-        if (maskVa!=0u)
+        if (cursor->active && restart)
+        {
+            /* NT captures the first search expression for this handle. */
+            memcpy(pattern,cursor->initialMask,sizeof(pattern));
+            pattern[sizeof(pattern)-1u]='\0';
+            maskBytes=cursor->filtered ? (uint32_t)strlen(pattern) : 0u;
+        }
+        if (!cursor->active && maskVa!=0u)
         {
             uint32_t nameVa, capacity;
             if (maskVa<0x00010000u || maskVa>0x04000000u-8u)
@@ -221,6 +229,7 @@ static void k1nt207_nt_query_directory_file(uint32_t savedEsp)
         error=GetLastError();
         cursor->active=1u;
         cursor->filtered=maskBytes>0u ? 1u : 0u;
+        memcpy(cursor->initialMask,pattern,sizeof(pattern));
         cursor->nextFileIndex=1u;
         if (cursor->search==INVALID_HANDLE_VALUE)
         {
