@@ -30,6 +30,9 @@ DISPLAY = re.compile(r"\bdisplay_calls=(\d+)")
 FB = re.compile(r"\bframebuffer=([0-9A-Fa-f]{8})")
 GSTATE = re.compile(r"XPP XINPUT state:.*?\bstatus=([0-9A-Fa-f]{8})")
 SSTATE = re.compile(r"XPP XINPUT setstate:.*?\bstatus=([0-9A-Fa-f]{8})")
+NATIVE_DIRECTORY = re.compile(
+    r"K1NT207 REAL ENUM RESULT:.*?\bstatus=([0-9A-Fa-f]{8}) "
+    r"rows=(\d+) bytes=(\d+)")
 FRAME = re.compile(r"\b(?:native_present_calls|xenos_present_calls)=(\d+)")
 # Runtime-specific evidence only. A static xref/compiled symbol is NOT an entry.
 SWAP_ENTRY = re.compile(
@@ -114,15 +117,33 @@ def summarize(raw: str, input_name: str, test: str = "auto"):
     nt207_captured = observed(r"K1NT207 FRAME CAPTURED:.*original_ordinal=207", lines)
     nt207_probe = observed(r"K1NT207 PROBE ONLY:.*hard stop preserved", lines)
     nt207_full = all((nt207_gate, nt207_raw0, nt207_raw1, nt207_captured, nt207_probe))
-    if test not in ("auto", "xpp", "nt207"):
+    native_dir = rsearch(NATIVE_DIRECTORY, lines)
+    native_dir_ok = (native_dir is not None and
+                     native_dir.group(1).upper() == "00000000" and
+                     int(native_dir.group(2)) > 0 and
+                     int(native_dir.group(3)) >= 64 and
+                     observed(r"K1NT207 REAL ENUM SUCCESS!!! genuine Xbox ANSI directory records returned", lines))
+    if test not in ("auto", "xpp", "nt207", "nt207native"):
         raise ValueError("Unknown test: " + test)
     if test == "auto":
-        test = "nt207" if nt207_probe or nt207_gate else "xpp"
+        test = ("nt207native" if native_dir is not None else
+                "nt207" if nt207_probe or nt207_gate else "xpp")
     # The milestone is "native GetState was actually called and returned".
     # A disconnected controller result is not a native-call failure; list
     # SUCCESS status separately. No state trace -> no success banner.
     input_ok = get_entry and get is not None
-    if test == "nt207":
+    if test == "nt207native":
+        if native_dir_ok:
+            verdict = "PASS"
+            reason = ("Real ordinal-207 native directory enumeration returned "
+                      "at least one class-1 Xbox ANSI record on hardware.")
+        elif stop and complete:
+            verdict = "BLOCKED"
+            reason = "No proven native directory result; game ended at a hard stop."
+        else:
+            verdict = "INCONCLUSIVE"
+            reason = "Native enumeration success and completed run not yet proven."
+    elif test == "nt207":
         if nt207_full:
             verdict = "PASS"
             reason = ("Original ordinal 207 ten-argument frame captured on Xbox. "
@@ -148,7 +169,9 @@ def summarize(raw: str, input_name: str, test: str = "auto"):
     details = {
         "kind": "Merc360 post-run HOST analysis, not emitted by Xbox runtime",
         "input_log": input_name,
-        "test": "NT207-FRAME-CAPTURE" if test == "nt207" else "XPP-INPUT-FAMILY-GETSTATE",
+        "test": ("NT207-NATIVE-ENUMERATION" if test == "nt207native" else
+                 "NT207-FRAME-CAPTURE" if test == "nt207" else
+                 "XPP-INPUT-FAMILY-GETSTATE"),
         "verdict": verdict,
         "reason": reason,
         "completed": complete,
@@ -166,7 +189,9 @@ def summarize(raw: str, input_name: str, test: str = "auto"):
             "xpp_setstate_native_return": set_call is not None,
             "xpp_close_guest_entry": close_entry,
             "nt207_original_directory_frame_capture": nt207_full,
-            "nt207_native_directory_enumeration": False,
+            "nt207_native_directory_enumeration": native_dir_ok,
+            "nt207_native_directory_rows": int(native_dir.group(2)) if native_dir else 0,
+            "nt207_native_directory_bytes": int(native_dir.group(3)) if native_dir else 0,
             "audio_code_path_reached_not_audible_proof": audio_path,
             "guest_av_display_call_reached": display_count > 0,
             "guest_display_calls_max": display_count,
@@ -192,19 +217,25 @@ def render(result: dict) -> str:
     stop = result["stop"]
     label = result["verdict"]
     frame_probe = result["test"] == "NT207-FRAME-CAPTURE"
+    native_dir_test = result["test"] == "NT207-NATIVE-ENUMERATION"
     lines = [BEGIN, BAR, BAR,
              "MERCENARIES 360  |  END-OF-RUN MILESTONE VERDICT",
              BAR, BAR]
     if label == "PASS":
         lines += ["", "!" * 72,
-                  ("!!!   SUCCESS!!!   ORDINAL 207 LIVE FRAME CAPTURED   !!!"
+                  ("!!!   SUCCESS!!!   REAL XBOX DIRECTORY ENUMERATION   !!!"
+                   if native_dir_test else
+                   "!!!   SUCCESS!!!   ORDINAL 207 LIVE FRAME CAPTURED   !!!"
                    if frame_probe else
                    "!!!   SUCCESS!!!   XPP INPUT GETSTATE NATIVE CALL PROVED   !!!"),
                   "!" * 72]
     else:
         lines += ["", "#" * 72,
-                  (f"###  {label}: ORDINAL 207 FRAME NOT PROVEN  ###" if frame_probe
-                   else f"###  {label}: XPP INPUT GETSTATE NOT PROVEN  ###"),
+                  (f"###  {label}: NATIVE DIRECTORY ENUMERATION NOT PROVEN  ###"
+                   if native_dir_test else
+                   f"###  {label}: ORDINAL 207 FRAME NOT PROVEN  ###"
+                   if frame_probe else
+                   f"###  {label}: XPP INPUT GETSTATE NOT PROVEN  ###"),
                   "#" * 72]
     lines += ["", "CURRENT TEST: " + result["test"],
               "RESULT: " + label, "WHY: " + result["reason"], "", BAR,
@@ -232,7 +263,9 @@ def render(result: dict) -> str:
     milestone(m["nt207_original_directory_frame_capture"],
               "Xbox original NtQueryDirectoryFile argument frame captured")
     milestone(m["nt207_native_directory_enumeration"],
-              "Native NtQueryDirectoryFile enumeration completed")
+              "Native NtQueryDirectoryFile enumeration completed",
+              " rows=" + str(m["nt207_native_directory_rows"])
+              + " bytes=" + str(m["nt207_native_directory_bytes"]))
     milestone(m["guest_av_display_call_reached"],
               "REAL guest AvSetDisplayMode / display call",
               " count=" + str(m["guest_display_calls_max"]))
@@ -256,9 +289,13 @@ def render(result: dict) -> str:
               "Completed log: " + ("YES" if result["completed"] else "NO"),
               "", "VERDICT RULE: success requires proof of selected TEST,",
               "not tick increases or static source coverage.",
-              ("Ordinal207 frame capture is DIAGNOSTIC ONLY; native directory"
+              ("Real directory success requires actual native status=00000000"
+               if native_dir_test else
+               "Ordinal207 frame capture is DIAGNOSTIC ONLY; native directory"
                if frame_probe else "XPP GetState success requires actual entry")
-              + (" enumeration still blocked." if frame_probe
+              + (" with rows>0, bytes>=64 and runtime success marker."
+                 if native_dir_test else
+                 " enumeration still blocked." if frame_probe
                  else " and native return."),
               "Tick increases alone never cause SUCCESS.",
               "This board is added by a PC log analyzer; it does not",
@@ -271,7 +308,7 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--log", type=Path, required=False,
                    help="Finished xbWatson text log")
-    p.add_argument("--test", choices=["auto", "xpp", "nt207"], default="auto",
+    p.add_argument("--test", choices=["auto", "xpp", "nt207", "nt207native"], default="auto",
                    help="Select expected hardware test; auto recognizes ordinal207 probe")
     p.add_argument("--self-test", action="store_true",
                    help="Run synthetic PASS/BLOCKED marker regressions without XDK")
@@ -347,7 +384,22 @@ def main() -> int:
         assert summarize(nt207_log.replace("guarded=1", "guarded=0"),
                          "synthetic", test="nt207")["verdict"] != "PASS"
         assert summarize(nt207_log, "synthetic", test="xpp")["verdict"] != "PASS"
-        print("[MERC360-VERDICT] SELFTEST PASS: BLOCKED, PASS, graphics anti-false-positive")
+        real = header + (
+            "[Merc360:P5] K1NT207 REAL ENUM RESULT: handle=48000001 "
+            "status=00000000 rows=2 bytes=176 calls=1 successes=1 "
+            "first=1 next=3 esp=008BF644\n"
+            "[Merc360:P5] K1NT207 REAL ENUM SUCCESS!!! genuine Xbox ANSI directory records returned\n"
+        ) + footer
+        out = summarize(real, "synthetic", test="auto")
+        assert out["test"] == "NT207-NATIVE-ENUMERATION"
+        assert out["verdict"] == "PASS"
+        assert out["milestones"]["nt207_native_directory_enumeration"]
+        assert "SUCCESS!!!   REAL XBOX DIRECTORY ENUMERATION" in render(out)
+        without_success = real.replace("REAL ENUM SUCCESS!!!","REAL ENUM UNVERIFIED")
+        assert summarize(without_success,"synthetic",test="nt207native")["verdict"] != "PASS"
+        zero_rows = real.replace("rows=2 bytes=176","rows=0 bytes=0")
+        assert summarize(zero_rows,"synthetic",test="nt207native")["verdict"] != "PASS"
+        print("[MERC360-VERDICT] SELFTEST PASS: XPP, NT207 frame, genuine native records, graphics anti-false-positive")
         return 0
     if args.log is None:
         p.error("--log is required except when --self-test is used")
