@@ -92,6 +92,13 @@ def stage(args):
     bc = load(args.bc_module, "k1_r5_direct_bc")
     previous = load(args.previous_planner, "k1_r5_direct_inventory")
     old_pack = load(args.previous_stage, "k1_r5_reuse_proven_pack")
+    pc_retail = load(args.pc_retail_module, "k1_r5_pc_original_retail_patch")
+    pc_commit = pc_retail.verify_pc_commit(args.pc_reference)
+    if pc_commit != pc_retail.PC_SHA:
+        raise ValueError("Pinned PC commit mismatch")
+    retail_proof = pc_retail.verify_original_x86(
+        args.retail_xbe, args.retail_auditor
+    )
     by_va, by_name = base.load_ranges(args.functions)
     generated = base.load_generated(args.generated, by_name)
 
@@ -117,6 +124,21 @@ def stage(args):
         raise ValueError("Original r4 two-body parent compiler provenance changed")
     missing, graph = verify_original_graph(
         previous, base, generated, by_va, info["compiled_in_64_or_main"])
+    # PC port adds optional developer-region completed-read reuse to
+    # original retail 002228C0. Restore precisely the original CMP/JNE
+    # branch from the pinned PC before-template; the verified retail XBE
+    # independently proves its x86 instruction and destination.
+    # Do not emit fake recomp_dev_region_import_active() == 0 or
+    # pretend the PC developer feature exists on Xbox 360.
+    restored_source, pc_patch_proof = pc_retail.restore_exact_pc_patch(
+        generated[TARGET]["source"], args.pc_reference,
+        attest_x86=retail_proof,
+    )
+    generated[TARGET] = dict(generated[TARGET])
+    generated[TARGET]["source"] = restored_source
+    if (pc_retail.HELPER in restored_source or
+            not pc_patch_proof["x86_retail_cmp_jne_proof"]["original_002228f0_x86_cmp_jne"]):
+        raise ValueError("PC-only developer hook still present after original retail restoration")
 
     # Reuse audited packer with a different exact original function. The
     # original packer fully localizes C guest registers and rewrites direct
@@ -178,6 +200,8 @@ def stage(args):
         "original_function_address": "0x002228C0",
         "original_function_sha256": digest(
             generated[TARGET]["source"].encode("utf-8")),
+        "pc_reference_git_commit": pc_commit,
+        "pc_developer_patch_reverted_to_original_retail": pc_patch_proof,
         "original_graph_missing_count": len(missing),
         "original_graph_missing_addresses": [i["va"] for i in missing],
         "original_graph_compiled_traversed": graph["original_compiled_nodes_traversed"],
@@ -221,7 +245,9 @@ def stage(args):
     print("[K1-DIRECT-R5] ORIGINAL RETAIL .text EXACT ENTRY 002228C0 from recomp_0011.c PASS")
     print("[K1-DIRECT-R5] SOURCE GRAPH: %d original missing, %d compiled traversed, truncated=%s" %
           (len(missing), graph["original_compiled_nodes_traversed"], graph["graph_truncated"]))
-    print("[K1-DIRECT-R5] PACKED: one original generated-C body + exact 002228C0 main lookup")
+    print("[K1-DIRECT-R5] PINNED PC PATCH 278: 002228F0 original retail CMP/JNE RESTORED with XBE bytes proof")
+    print("[K1-DIRECT-R5] NO PC developer-import hook/NO guessed helper or stub")
+    print("[K1-DIRECT-R5] PACKED: one retail-restored generated-C body + exact 002228C0 main lookup")
     print("[K1-DIRECT-R5] r4 ORIGINAL 001F7620/001F7520 + six-case owner %s preserved" %
           parent_proof["six_case_owner"])
     print("[K1-DIRECT-R5] ALL 64 TrueTUs unchanged, native Xenos Reset and unknown hard fences kept")
@@ -311,7 +337,9 @@ def main():
     p.add_argument("--self-test", action="store_true")
     for arg in (
         "base-module", "bb-module", "bc-module", "post-planner",
-        "previous-planner", "previous-stage", "functions", "generated",
+        "previous-planner", "previous-stage", "pc-retail-module",
+        "pc-reference", "retail-xbe", "retail-auditor",
+        "functions", "generated",
         "parent", "parent-manifest", "shards", "output", "manifest",
     ):
         p.add_argument("--"+arg, type=Path)
@@ -323,6 +351,7 @@ def main():
     else:
         for attr in ("base_module", "bb_module", "bc_module",
                      "post_planner", "previous_planner", "previous_stage",
+                     "pc_retail_module", "pc_reference", "retail_xbe", "retail_auditor",
                      "functions", "generated", "parent", "parent_manifest",
                      "shards", "output", "manifest"):
             if getattr(args, attr) is None:
