@@ -21,9 +21,9 @@ PROBE = "K1NV2A EXACT WRITE8:"
 # Reuse the exact supported multiline signature accepted by the previously
 # hardware-proven K1NV2A probe stage. One declared function is required.
 WRITE8_SIGNATURE = re.compile(
-    r"(?m)^[ \\t]*void[ \\t]+recomp_guest_write8[ \\t]*\\([ \\t]*"
-    r"uint32_t[ \\t]+address[ \\t]*,[ \\t]*uint8_t[ \\t]+value[ \\t]*"
-    r"\\)[ \\t]*(?:\\r?\\n[ \\t]*)?\\{"
+    r"(?m)^[ \t]*void[ \t]+recomp_guest_write8[ \t]*\([ \t]*"
+    r"uint32_t[ \t]+address[ \t]*,[ \t]*uint8_t[ \t]+value[ \t]*"
+    r"\)[ \t]*(?:\r?\n[ \t]*)?\{"
 )
 ANCHOR = "        trace(k1nv2aLine);\n    }\n"
 # Insert after the hardware-proven diagnostic, before the original generic
@@ -207,8 +207,8 @@ void boot() { trace("P6K1NV2A-PRMDIO-WRITE8-20261103"); }
                 pass
     # Match the real source generator's multiline entry declaration.
     multiline = original.replace(
-        "void recomp_guest_write8(uint32_t address, uint8_t value)\\n{",
-        "void recomp_guest_write8(\\n    uint32_t address, uint8_t value)\\n{",
+        "void recomp_guest_write8(uint32_t address, uint8_t value)\n{",
+        "void recomp_guest_write8(\n    uint32_t address, uint8_t value)\n{",
     )
     # Also ensure varying whitespace cannot cause a false declaration count.
     assert patch(multiline).count("K1NV2A DAC PALETTE COMMIT:") == 1
