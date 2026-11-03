@@ -118,7 +118,8 @@ def self_test(base, p5bb, p5bc):
     generated = {ROOT: {'name': root_name,
                         'source': 'void sub_0017A0A0(void)\n{\nloc_0017A0A0: ;\n}\n',
                         'file': 'recomp_test.c'}}
-    p = ('#define PHASE4C_BUDGET_TICK(va) ((void)0)\n'\n         'P6K1-THREELANE-20261103\n'
+    p = ('#define PHASE4C_BUDGET_TICK(va) ((void)0)\n'
+         'P6K1-THREELANE-20261103\n'
          'K1PFIFO DMA_PUT READ32:\nP6DQ ROCKET HARD STOP\n'
          'static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n'
          '{\n    switch (xbox_va) {\n    default: return (recomp_func_t)0;\n    }\n}\n'
