@@ -296,7 +296,7 @@ void test() {
         static_version = legacy_static_output(expected)
         assert static_version != expected
         assert static_version.count(b"static void trace(const char* line)") == 1
-        assert expected.count(b"\\nvoid trace(const char* line)\\n{") == 1
+        assert expected.count(b"\nvoid trace(const char* line)\n{") == 1
         output.write_bytes(static_version)
         m = {
             "marker": MARK,
