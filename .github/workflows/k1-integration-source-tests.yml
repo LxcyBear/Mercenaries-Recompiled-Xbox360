@@ -56,6 +56,8 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1NextICallBatch.py --self-test
       - name: New DIRECT_FRONTIER 002228C0 no-XDK exact 64-TU hardware-parent fixtures
         run: python ports/mercenaries/xbox360/integration_map/k1/Plan-K1PostTwoRootDirect.py --self-test
+      - name: Pack original retail 002228C0 in one r5 unit with exact r4 two-body preservation
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1PostTwoRootDirect.py --self-test --previous-stage ports/mercenaries/xbox360/integration_map/k1/Stage-K1NextICallBatch.py
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -201,6 +203,28 @@ jobs:
               throw "K1 post-two-root DIRECT source-only/TrueTU fence contract lost"
           }
           Write-Host "[PS51] PASS: post-two-root DIRECT retail source planner, no XDK invocation"
+      - name: Parse one-build original 002228C0 r5 source stage on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1PostTwoRootDirect.ps1"
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) {
+              $errors | ForEach-Object { Write-Host $_ }
+              throw "K1 original DIRECT 002228C0 r5 PowerShell 5.1 parse failed"
+          }
+          $source = Get-Content -LiteralPath $path.Path -Raw -Encoding UTF8
+          if (-not $source.Contains('Stage-K1PostTwoRootDirect.py') -or
+              -not $source.Contains('if(-not $Build)') -or
+              -not $source.Contains('original_graph_missing_addresses') -or
+              -not $source.Contains('original_true_tus_unchanged') -or
+              -not $source.Contains('unknown_direct_and_indirect_hard_fences_preserved') -or
+              [regex]::Matches($source, '(?m)^& \$builder @buildArgs[ \t]*\r?$').Count -ne 1) {
+              throw "K1 DIRECT r5 original source/64 TrueTU/unknown hard fence/single-XDK contract changed"
+          }
+          Write-Host "[PS51] PASS: exact original 002228C0 one unit and optional one incremental XDK build"
+
 
 
 
