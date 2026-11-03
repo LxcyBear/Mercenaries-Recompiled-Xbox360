@@ -20,12 +20,16 @@ $header=Join-Path $shards "translated_runtime.h"
 $main=Join-Path $next "main.cpp"
 $manifest=Join-Path $next "k1dac-palette-manifest.json"
 $stage=Join-Path $PSScriptRoot "Stage-K1NV2ADacPalette.py"
+$quietStage=Join-Path $PSScriptRoot "Stage-K1DQQuietLogging.py"
+$quietRoot=Join-Path $root "build\phase6_integration_map\k1_nv2a_dac_palette_quiet"
+$quietMain=Join-Path $quietRoot "main.cpp"
+$quietManifest=Join-Path $quietRoot "k1dq-quiet-manifest.json"
 $builder=Join-Path $root "ports\mercenaries\xbox360\phase6_native_graphics\Invoke-VS17Xbox360Build.ps1"
 $envFile=Join-Path $root "build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp"
-$xdk=Join-Path $next "xdk"
-$xex=Join-Path $xdk "Merc-K1NV2A-DAC-Palette.xex"
+$xdk=Join-Path $quietRoot "xdk"
+$xex=Join-Path $xdk "Merc-K1NV2A-DAC-Palette-Quiet.xex"
 $python=(Get-Command python -ErrorAction Stop).Source
-foreach($f in @($parentMain,$parentManifest,$sourceProof,$header,$stage,$builder,$envFile)){
+foreach($f in @($parentMain,$parentManifest,$sourceProof,$header,$stage,$quietStage,$builder,$envFile)){
     if(-not(Test-Path -LiteralPath $f -PathType Leaf)){throw "[K1DAC] Missing proven parent/tool: $f"}
 }
 $meta=Get-Content -LiteralPath $parentManifest -Raw -Encoding UTF8|ConvertFrom-Json
@@ -80,14 +84,37 @@ if($doc.marker -ne "P6K1NV2A-DAC-PALETTE-20261103" -or
    $doc.synthetic_pixels -ne $false){
     throw "[K1DAC] Bounded DAC manifest mismatch; no build"
 }
+# Quiet wrapper is built from the DAC source, not from a separate graphics
+# build. Still a single main.cpp change to XDK and no TrueTU rebuild.
+& $python -m py_compile $quietStage
+if($LASTEXITCODE -ne 0){throw "[K1QUIET] Python parser failed"}
+& $python -u $quietStage --self-test
+if($LASTEXITCODE -ne 0){throw "[K1QUIET] Trace-filter model tests failed"}
+& $python -u $quietStage --parent $main --out $quietMain --manifest $quietManifest
+if($LASTEXITCODE -ne 0){throw "[K1QUIET] Central trace sink stage failed"}
+$quiet=Get-Content -LiteralPath $quietManifest -Raw -Encoding UTF8|ConvertFrom-Json
+if($quiet.marker -ne "P6K1DQ-QUIET-LOG-20261103" -or
+   $quiet.status -ne "QUIET_SOURCE_STAGED_NO_XDK" -or
+   $quiet.parent_main_sha256 -ne $doc.new_main_sha256 -or
+   $quiet.new_main_sha256 -ne (Get-FileHash -LiteralPath $quietMain -Algorithm SHA256).Hash.ToLowerInvariant() -or
+   $quiet.first_success_pair_logged -ne $true -or
+   $quiet.all_other_logs_unchanged -ne $true -or
+   $quiet.guest_execution_changed -ne $false -or
+   $quiet.mmio_fences_changed -ne $false -or
+   [int]$quiet.translated_tus_changed -ne 0 -or
+   [int]$quiet.runtime_headers_changed -ne 0){
+    throw "[K1QUIET] Source provenance or preserved safety gates mismatch"
+}
 Write-Host "[K1DAC] SOURCE+ABI PREFLIGHT PASS; reused 64 TrueTUs and original fences"
+Write-Host "[K1QUIET] PREFLIGHT PASS: first frame/PASS + unusual/failures logged; repeats counted silently"
+Write-Host "[K1QUIET] CPU/kernel guest operations unchanged; GPU faults/Swap/Present always visible"
 if(-not $Build){
     Write-Host "[K1DAC] NO XDK. Add -Build for one incremental Release XEX."
     exit 0
 }
 New-Item -ItemType Directory -Force -Path $xdk|Out-Null
 $buildArgs=@{
-    GeneratedMain=$main
+    GeneratedMain=$quietMain
     GeneratedEnv=$envFile
     GeneratedShardDir=$shards
     ExpectedBuildTag="P6DQ-R51-MM173-FRAME-20261029-A"
@@ -101,12 +128,13 @@ $buildArgs=@{
     ShadowBuildRoot=$FastBuildRoot
     SkipClean=$true
 }
-Write-Host "[K1DAC] Main-only, 64 TrueTU unchanged, incremental XDK build"
+Write-Host "[K1DAC] Main-only DAC palette + Phase 6DQ quiet logging, 64 TrueTUs unchanged"
+Write-Host "[K1QUIET] Output GPU and fault provenance unmodified; quiet mode is LOG ONLY"
 & $builder @buildArgs
 if($LASTEXITCODE -ne 0){throw "[K1DAC] Xbox build failed: $($buildArgs.BuildLog)"}
 if(-not (Test-Path -LiteralPath $xex -PathType Leaf)){
     throw "[K1DAC] Missing expected XDK output XEX"
 }
 Write-Host "[K1DAC] BUILD PASS: $xex"
-Write-Host "[K1DAC] Xbox witness: both boot markers, DAC INDEX, DAC COMMIT, next hard stop/pixels"
+Write-Host "[K1DAC] Xbox witness: old PRMDIO + new DAC + quiet boot markers, palette summary, next hard stop/pixels"
 Write-Host "[K1DAC] Do not assume display_calls > 0 until hardware proves guest present"
