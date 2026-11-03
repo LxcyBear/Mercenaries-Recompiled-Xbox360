@@ -35,7 +35,11 @@ PFIFO_STATE = '''
  * Track subsequent valid guest PUT writes, never translate into a push.
  * Read is initially accepted ONLY from XBE instruction 0028ED6B.
  * The write gate accepts the same register ONLY from D3D code.
+ * K1C originally places the helper prototype immediately before WRITE8;
+ * this READ32 body may appear earlier in main.cpp, so forward-declare
+ * the same static helper before the new PFIFO read use.
  */
+static DWORD k1c_read_guest_va(void);
 static uint32_t s_k1PfifoDmaPut = 0u;
 static unsigned int s_k1PfifoDmaPutReads = 0u;
 static unsigned int s_k1PfifoDmaPutWrites = 0u;
@@ -254,6 +258,10 @@ void startup()
         assert result.count("K1PFIFO DMA_PUT READ32:") == 1
         assert result.count("K1PFIFO DMA_PUT WRITE32:") == 1
         assert "address == 0xFD003240u" in result
+        assert "static DWORD k1c_read_guest_va(void);" in result
+        assert result.index("static DWORD k1c_read_guest_va(void);",
+                            result.index("/* K1 PFIFO DMA_PUT:")) < result.index(
+                                "uint32_t recomp_guest_read32(uint32_t address)")
         assert "k1c_read_guest_va() == 0x0028ED6Bu" in result
         assert "GetTickCount()" in result
         assert "GUEST_WRITE32(address, value);" in result
