@@ -99,10 +99,25 @@ if($beforeHeaderHash -ne $meta.parent_runtime_header_sha256 -or
     throw "[K1NT207-NATIVE] Active TRUE TU dispatcher/header not staged correctly"
 }
 $nativeHeaderText=Get-Content -LiteralPath $nativeHeader -Encoding UTF8 -Raw
-if($nativeHeaderText -notmatch "k1nt207_nt_query_directory_file" -or
-   $nativeHeaderText -notmatch "_phase4c_target == 0x800000CFu"){
-    throw "[K1NT207-NATIVE] Native ordinal207 dispatch not visible to TrueTUs"
+$originalHeaderText=Get-Content -LiteralPath $parentHeader -Encoding UTF8 -Raw
+# K1NT207 now wraps the ORIGINAL ICALL_SAFE macro. The old
+# '_phase4c_target == 0x800000CFu' anchor is NOT part of the wrapper.
+# Require the exact CF guard, call, cross-TU declaration, and inherited
+# hard-stop fallback. The parent header must not already handle CF.
+$guardPattern='if\s*\(\s*\(uint32_t\)\s*\(xbox_va\)\s*==\s*0x800000CFu\s*\)\s*\{'
+$callPattern='k1nt207_nt_query_directory_file\s*\(\s*\(uint32_t\)\s*\(saved_esp\)\s*\)\s*;'
+$declPattern='void\s+k1nt207_nt_query_directory_file\s*\(\s*uint32_t\s+savedEsp\s*\)\s*;'
+$fallbackPattern='phase4c_escape\s*\('
+$guardMatches=[regex]::Matches($nativeHeaderText,$guardPattern).Count
+$callMatches=[regex]::Matches($nativeHeaderText,$callPattern).Count
+$declMatches=[regex]::Matches($nativeHeaderText,$declPattern).Count
+if($guardMatches -ne 1 -or $callMatches -ne 1 -or $declMatches -ne 1 -or
+   $nativeHeaderText -notmatch $fallbackPattern -or
+   $originalHeaderText -match $guardPattern -or
+   $originalHeaderText -match $callPattern){
+    throw "[K1NT207-NATIVE] TrueTU CF wrapper/source provenance mismatch: guard=$guardMatches call=$callMatches decl=$declMatches; no build"
 }
+Write-Host "[K1NT207-NATIVE] TRUE TU HEADER PASS: exact ordinal207 guard=1, call=1, declaration=1, fallback preserved"
 $all=@(Get-ChildItem -LiteralPath $shards -Filter "translated_???.cpp" -File)
 if($all.Count -ne 64){throw "[K1NT207-NATIVE] Expected 64 unchanged TrueTUs"}
 foreach($item in $all){
