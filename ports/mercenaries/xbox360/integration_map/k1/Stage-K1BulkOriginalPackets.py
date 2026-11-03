@@ -73,11 +73,15 @@ def verify_r5(meta, main: bytes, shards: dict[str, bytes]):
     for x in ("/* "+PARENT_MARK+" */",
               "case 0x001F7620u: return sub_001F7620;",
               "case 0x001F7520u: return sub_001F7520;",
-              "case 0x002228C0u: return sub_002228C0;",
-              "K1D3D SECOND: native Xenos Reset PASS",
-              "P6DQ ROCKET HARD STOP"):
+              "case 0x002228C0u: return sub_002228C0;"):
         if source.count(x)!=1:
-            raise ValueError("Original r5 source checkpoint/dispatch lost: "+x)
+            raise ValueError("Original r5 retail source/lookup lost or duplicated: "+x)
+    # Diagnostics are allowed to occur multiple times in the original
+    # hardware-working inherited source; never change their occurrence count.
+    for diagnostic in ("K1D3D SECOND: native Xenos Reset PASS",
+                       "P6DQ ROCKET HARD STOP", "K1STATE MAIN CHECKPOINT:"):
+        if source.count(diagnostic)<1:
+            raise ValueError("Original hardware diagnostic/fence lost: "+diagnostic)
     if "recomp_dev_region_import_active()" in source:
         raise ValueError("Unjustified PC developer hook has returned in r5 main")
     return source
@@ -241,6 +245,10 @@ def selftest():
     fake["original_true_tu_hashes_sha256"]={
         k:sha(v) for k,v in shards.items()}
     assert verify_r5(fake,source,shards)
+    repeated=source.replace(b"P6DQ ROCKET HARD STOP",
+                            b"P6DQ ROCKET HARD STOP\nP6DQ ROCKET HARD STOP")
+    fake_repeated={**fake,"new_main_sha256":sha(repeated)}
+    assert verify_r5(fake_repeated,repeated,shards)
     for broken in (
         {**fake,"new_main_sha256":"000"},
         {**fake,"new_hardware_verified":True},
