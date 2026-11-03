@@ -249,6 +249,9 @@ static void phase6dq_note_dispatch(
 }
 void startup()
 {
+    /* The real DAC parent has a guest-VA read at its hardware witness. */
+    uint32_t lastGuestBlock = k1c_read_guest_va();
+    if (lastGuestBlock == 0u) trace("guest-VA fixture");
     trace("P6K1DQ-QUIET-LOG-20261103");
     trace("K1QUIET MILESTONE SUMMARY:");
 }
