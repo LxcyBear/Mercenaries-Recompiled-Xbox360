@@ -86,3 +86,12 @@ symbol, or source hash drift stops before the build.
 
 No synthetic framebuffer, forced Swap, skipped startup loops, or
 unknown MMIO blanket exemptions.
+
+
+## Source-audit false-positive fixed (2026-11-03)
+
+The initial three-lane preflight halted before XDK with a duplicate translated display function definition error. The old scanner counted forward declarations together with genuine function bodies; multiple TrueTUs can legitimately reference the same function. The error is from audit classification, NOT an Xbox GPU fault.
+
+The revised audit counts declarations separately from real function definitions (signatures followed by a brace). Its 64-shard synthetic regression covers repeated forward declarations and a deliberate duplicate real body. Multiple real implementation or PFIFO block witnesses are reported with their file/line locations in JSON diagnostics; the audit no longer erases these facts or treats them as evidence of execution. The stage now checks the real DAC guest-VA function call instead of a fragile prototype spelling.
+
+No guest code, MMIO fences or original-XBE proof gates changed. Re-run source preflight before the optional -Build XDK operation. Actual 64 TrueTU/XDK success remains to be verified on the user's Windows PC.
