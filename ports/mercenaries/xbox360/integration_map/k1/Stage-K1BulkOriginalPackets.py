@@ -239,6 +239,7 @@ def selftest():
          "case 0x002228C0u: return sub_002228C0;",
          "K1D3D SECOND: native Xenos Reset PASS",
          "P6DQ ROCKET HARD STOP",
+         "K1STATE MAIN CHECKPOINT:",
         ]).encode("utf-8")
     shards={"translated_%03d.cpp"%i:b"test" for i in range(64)}
     fake["new_main_sha256"]=sha(source)
