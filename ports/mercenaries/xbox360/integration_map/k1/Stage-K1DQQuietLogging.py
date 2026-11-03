@@ -249,7 +249,7 @@ void test() {
         out = patch(s)
         assert out.count("void trace(const char* line)") == 1
         assert "static void trace(const char* line)" not in out
-        assert re.search(r"(?m)^void trace\\(const char\\* line\\)\\s*\\{", out) is not None
+        assert re.search(r"(?m)^void trace\(const char\* line\)\s*\{", out) is not None
         # Other TrueTUs declare a global C++ trace(char const*); never
         # silently give this replacement internal (static) linkage.
         # The original sink's qualifiers and argument name remain intact.
@@ -282,6 +282,38 @@ void test() {
     print("[K1QUIET] SELFTEST PASS: reversible trace sink, failures flushed, first successful pair visible, 256-pair summaries, all faults pass")
 
 
+def legacy_static_output(new_source: bytes) -> bytes:
+    """The one known previous linker-broken output: a static trace wrapper.
+
+    The known failed XDK build of 2026-11-03 produced a quiet main with
+    exactly this one-symbol visibility mistake. Guarded resync does NOT
+    accept arbitrary generated-file drift or silently delete game outputs.
+    """
+    nl = b"\r\n" if b"\r\n" in new_source else b"\n"
+    good = nl + b"void trace(const char* line)" + nl + b"{"
+    if new_source.count(good) != 1:
+        raise ValueError("Expected one global quiet wrapper in newly generated source")
+    return new_source.replace(
+        good, nl + b"static void trace(const char* line)" + nl + b"{", 1
+    )
+
+
+def valid_legacy_manifest(raw: bytes, parent_hash: str, old_hash: str) -> bool:
+    try:
+        m = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return False
+    return (m.get("marker") == MARK and
+            m.get("status") == "QUIET_SOURCE_STAGED_NO_XDK" and
+            m.get("parent_main_sha256") == parent_hash and
+            m.get("new_main_sha256") == old_hash and
+            m.get("guest_execution_changed") is False and
+            m.get("mmio_fences_changed") is False and
+            m.get("translated_tus_changed") == 0 and
+            m.get("runtime_headers_changed") == 0 and
+            m.get("hardware_verified") is False)
+
+
 def stage(args):
     parent, out = args.parent.resolve(), args.out.resolve()
     if parent == out or parent.parent == out.parent:
@@ -289,11 +321,17 @@ def stage(args):
     before = parent.read_bytes()
     after = patch(before.decode("utf-8")).encode("utf-8")
     out.parent.mkdir(parents=True, exist_ok=True)
-    if out.is_file():
-        if out.read_bytes() != after:
-            raise ValueError("Existing quiet main source drift")
-    else:
-        out.write_bytes(after)
+    original = out.read_bytes() if out.is_file() else None
+    legacy = legacy_static_output(after)
+    if original is not None and original not in (after, legacy):
+        raise ValueError("Existing quiet main is NOT the known static-wrapper variant; refusing overwrite")
+    if original == legacy:
+        if not args.manifest.is_file() or not valid_legacy_manifest(
+            args.manifest.read_bytes(), sha(before), sha(legacy)
+        ):
+            raise ValueError("Known static wrapper has no matching guarded manifest; refusing overwrite")
+    elif original is None and args.manifest.is_file():
+        raise ValueError("Quiet manifest exists without main.cpp; refusing unattended restage")
     if parent.read_bytes() != before:
         raise ValueError("DAC parent main was altered during quiet staging")
     record = {
@@ -315,11 +353,23 @@ def stage(args):
     }
     raw = (json.dumps(record, indent=2) + "\n").encode("utf-8")
     args.manifest.parent.mkdir(parents=True, exist_ok=True)
-    if args.manifest.is_file():
-        if args.manifest.read_bytes() != raw:
-            raise ValueError("Existing quiet manifest source drift")
+    if original == after:
+        if not args.manifest.is_file() or args.manifest.read_bytes() != raw:
+            raise ValueError("Current global-wrapper source has mismatched manifest")
+        print("[K1QUIET] REUSE PASS: global trace symbol and manifest already current")
     else:
+        # Allowed changes: a brand-new quiet source, or the *exact*
+        # pre-existing static-wrapper output backed by the old manifest.
+        tmp = out.with_name(out.name + ".k1quiet-new.tmp")
+        if tmp.exists():
+            raise ValueError("Unresolved prior staging tempfile; refuse overwrite")
+        tmp.write_bytes(after)
+        tmp.replace(out)
         args.manifest.write_bytes(raw)
+        if original == legacy:
+            print("[K1QUIET] SAFE RESTAGE PASS: known static trace wrapper -> global trace ABI")
+        else:
+            print("[K1QUIET] NEW STAGE PASS: external global trace ABI available to 64 TrueTUs")
     print("[K1QUIET] STAGE PASS: frame/PASS pairs coalesced only on 4 proven success paths")
     print("[K1QUIET] Unexpected/failure/mismatched trace flushes pending frame; all other messages pass")
     print("[K1QUIET] Periodic summary 256 pairs + D3D/fault/end milestones; 64 TrueTUs untouched")
