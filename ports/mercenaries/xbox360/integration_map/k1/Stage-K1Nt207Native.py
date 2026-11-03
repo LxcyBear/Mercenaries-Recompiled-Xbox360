@@ -79,7 +79,7 @@ static void k1nt207_nt_query_directory_file(uint32_t savedEsp)
     DWORD error=ERROR_SUCCESS;
     const char* path;
     HANDLE native;
-    K1Nt207Cursor* cursor;
+    K1Nt207Cursor* cursor=NULL;
     char search[PHASE5B_HANDLE_PATH_CAP + 136u];
     char pattern[129];
     char line[480];
@@ -226,7 +226,7 @@ static void k1nt207_nt_query_directory_file(uint32_t savedEsp)
         {
             cursor->exhausted=1u;
             status=(error==ERROR_FILE_NOT_FOUND || error==ERROR_NO_MORE_FILES) ?
-                (cursor->filtered ? 0xC0000034u : 0x80000006u) :
+                (cursor->filtered ? 0xC000000Fu : 0x80000006u) :
                 phase5b_open_status_from_error(error);
         }
         else
