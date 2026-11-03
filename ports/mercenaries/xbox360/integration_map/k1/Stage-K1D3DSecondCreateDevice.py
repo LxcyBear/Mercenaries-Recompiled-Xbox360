@@ -57,13 +57,6 @@ SECOND_BRANCH = r'''    /* Retail second request: same device/out identity, real
     }
 
 '''
-HELPER_ANCHOR = (
-    "static int phase6af_native_xenos_ready(void)\n"
-    "{\n"
-    "    return s_phase6bXenosReady && s_phase6bXenosDevice != NULL;\n"
-    "}\n\n"
-    "static int phase6b_xenos_create(void)\n"
-)
 NATIVE_HELPER = r'''/* Hardware-owned Xenos device: reconfigure swapchain, not a fake guest
  * success. Original Xbox quincunx 0x1121 maps to 2 native MSAA samples;
  * native resolve is not bit-exact quincunx.
@@ -122,16 +115,38 @@ def one(haystack: str, needle: str, label: str) -> None:
         raise ValueError(f"{label}: expected one, found {count}")
 
 
+# The 64-TrueTU emitter exports runtime support helpers (strips static)
+# and can separate their definitions. Match the actual body, not legacy
+# adjacency to phase6b_xenos_create. This is intentionally NOT a loose
+# string-token search: a declaration or comment cannot become the anchor.
+READY_DEFINITION = re.compile(
+    r'(?m)^(?:static[ \\t]+)?int[ \\t]+phase6af_native_xenos_ready'
+    r'[ \\t]*\\([ \\t]*void[ \\t]*\\)[ \\t]*\\n'
+    r'[ \\t]*\\{[ \\t]*\\n'
+    r'[ \\t]*return[ \\t]+s_phase6bXenosReady[ \\t]*&&[ \\t]*'
+    r's_phase6bXenosDevice[ \\t]*!=[ \\t]*NULL;[ \\t]*\\n'
+    r'[ \\t]*\\}'
+)
+
+
 def native_main(parent: str) -> str:
     one(parent, PARENT_MARK, "unique K1 TEXT parent marker")
     if MARK in parent:
         raise ValueError("K1 D3D second patch already installed")
     if HARD_FENCE not in parent:
         raise ValueError("Inherited renderer/fault hard fence missing")
-    one(parent, HELPER_ANCHOR, "native Xenos ready helper")
-    return parent.replace(HELPER_ANCHOR,
-                          HELPER_ANCHOR.replace("static int phase6b_xenos_create(void)\n",
-                                                NATIVE_HELPER + "static int phase6b_xenos_create(void)\n"), 1)
+    matches = list(READY_DEFINITION.finditer(parent))
+    if len(matches) != 1:
+        nearby = []
+        for m in list(re.finditer("phase6af_native_xenos_ready", parent))[:6]:
+            nearby.append(repr(parent[max(0, m.start()-60):m.start()+130]))
+        raise ValueError(
+            f"native Xenos ready definition missing/duplicated: matches={len(matches)} "
+            f"references={len(list(re.finditer('phase6af_native_xenos_ready', parent)))} "
+            f"contexts={nearby}"
+        )
+    at = matches[0].end()
+    return parent[:at] + "\n\n" + NATIVE_HELPER + parent[at:]
 
 
 def bridge_source(source: str, is_shard: bool) -> str:
@@ -202,24 +217,38 @@ def test() -> None:
     )
     for in_main in (False, True):
         for crlf in (False, True):
-            convert = lambda s: s.replace("\n", "\r\n") if crlf else s
-            m = main + (bridge if in_main else "")
-            ss = {"translated_001.cpp": "#include \"translated_runtime.h\"\n"} if in_main \
-                 else {"translated_001.cpp": bridge}
-            res_main, res_shards, owner = patch(convert(m), {k: convert(v) for k,v in ss.items()})
-            assert owner == ("main.cpp" if in_main else "translated_001.cpp")
-            assert res_main.count("D3DDevice_Reset(") == 1
-            assert res_shards["translated_001.cpp"].count(PROTOTYPE.strip()) == (0 if in_main else 1)
-            edited = res_main if in_main else res_shards["translated_001.cpp"]
-            assert "backBuffers == 2u && multisample == 0x1121u" in edited
-            assert "if (!phase6k1_native_xenos_reconfigure" in edited
-            assert "GUEST_READ32(out)" in edited
-            try:
-                patch(res_main, res_shards)
-            except ValueError:
-                pass
-            else:
-                raise AssertionError("Double patch accepted")
+            for true_tu_export in (False, True):
+                # The real 64-TU source has external runtime linkage, and its
+                # next function is not guaranteed to be phase6b_xenos_create.
+                convert = lambda s: s.replace("\n", "\r\n") if crlf else s
+                m = main + (bridge if in_main else "")
+                if true_tu_export:
+                    m = m.replace("static int phase6af_native_xenos_ready(void)",
+                                  "int phase6af_native_xenos_ready(void)")
+                    m = m.replace("static int phase6b_xenos_create(void)",
+                                  "int phase6b_xenos_create(void)")
+                    m = m.replace("int phase6b_xenos_create(void)",
+                                  "void unrelated_runtime_support(void);\n"
+                                  "int phase6b_xenos_create(void)")
+                ss = {"translated_001.cpp": "#include \"translated_runtime.h\"\n"} if in_main \
+                     else {"translated_001.cpp": bridge}
+                res_main, res_shards, owner = patch(
+                    convert(m), {k: convert(v) for k,v in ss.items()}
+                )
+                assert owner == ("main.cpp" if in_main else "translated_001.cpp")
+                assert res_main.count("D3DDevice_Reset(") == 1
+                assert res_shards["translated_001.cpp"].count(PROTOTYPE.strip()) == (0 if in_main else 1)
+                edited = res_main if in_main else res_shards["translated_001.cpp"]
+                assert "backBuffers == 2u && multisample == 0x1121u" in edited
+                assert "if (!phase6k1_native_xenos_reconfigure" in edited
+                assert "GUEST_READ32(out)" in edited
+                assert res_main.count("int phase6k1_native_xenos_reconfigure(") == 1
+                try:
+                    patch(res_main, res_shards)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("Double patch accepted")
     for bad in (main.replace(HARD_FENCE, ""), main.replace(PARENT_MARK, "")):
         try:
             patch(bad, {"translated_001.cpp": bridge})
