@@ -410,42 +410,92 @@ def insert_before_definition(src: str, pattern: str, injection: str, label: str)
     return src[:at] + injection + src[at:]
 
 
-def patch_dispatch(src: str, nl: str, label: str, required: bool = True) -> str:
-    """Patch a source's existing ordinal211 macro, never manufacture one.
+def patch_dispatch(src: str, nl: str, label: str,
+                   required: bool = True) -> str:
+    """Wrap the exact RECOMP_ICALL_SAFE macro; preserve its original body.
 
-    Phase6 TrueTU sharding extracts the active RECOMP_ICALL_SAFE macro into
-    translated_runtime.h. A copy in host main.cpp is NOT guaranteed. The
-    shared header is mandatory; host is patched only when its D3 case exists.
+    The Phase6 TrueTU emitter moves the macro into translated_runtime.h, and
+    later support stages can change its 211/D3 cases. Never require any one
+    historical ordinal case. Instead, gate ONLY the hardware-proven CF
+    target and execute the unmodified existing macro body for every other
+    target, retaining the pre-existing hard-stop fallback verbatim.
+
+    A macro-less sharded host is fine; the shared TrueTU header is mandatory.
     """
-    case = ("} else if (_phase4c_target == 0x800000D3u) { \\" + nl +
-            "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\")
-    # A kernel helper BODY legitimately mentions 0x800000CFu. Reject only
-    # an already-routed active dispatcher, including on an optional host.
-    if re.search(r"\b_phase4c_target\s*==\s*0x800000CFu\b", src):
-        raise ValueError(label + ": ordinal207 dispatch already installed")
-    count = src.count(case)
-    if count == 0 and not required:
+    lines = src.splitlines(keepends=True)
+    head = re.compile(
+        r"^[ \t]*#define[ \t]+RECOMP_ICALL_SAFE"
+        r"\(xbox_va,[ \t]*saved_esp\)[ \t]+do[ \t]*\{[ \t]*\\[ \t]*$"
+    )
+    positions = [
+        i for i, line in enumerate(lines)
+        if head.fullmatch(line.rstrip("\r\n"))
+    ]
+    if not positions:
+        if required:
+            matches = [
+                line.strip() for line in lines
+                if "define RECOMP_ICALL_SAFE" in line
+            ]
+            raise ValueError(
+                f"{label}: exact RECOMP_ICALL_SAFE do-brace macro missing; "
+                f"candidates={matches[:2]!r}. NO XDK."
+            )
+        if "define RECOMP_ICALL_SAFE" in src:
+            raise ValueError(
+                f"{label}: unexpected host ICALL macro shape. NO XDK."
+            )
         return src
-    if count != 1:
+    if len(positions) != 1:
         raise ValueError(
-            f"{label}: expected one original ordinal211 D3 dispatcher, "
-            f"got {count}. No XDK."
+            f"{label}: multiple original ICALL_SAFE macro definitions "
+            f"({len(positions)}); NO XDK."
         )
-    src = insert_once(
-        src,
-        case,
-        ("} else if (_phase4c_target == 0x800000CFu) { \\" + nl +
-         "        k1nt207_nt_query_directory_file((uint32_t)(saved_esp)); \\" + nl +
-         "    " + case),
-        label + " ordinal207 dispatch")
-    decl = "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\"
-    src = insert_once(
-        src, decl,
-        "void k1nt207_nt_query_directory_file(uint32_t savedEsp);" + nl + decl,
-        label + " cross-TU native function prototype")
-    if src.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") != 1:
-        raise ValueError(label + ": native dispatch not unique")
-    return src
+    first = positions[0]
+    last = first + 1
+    while last < len(lines):
+        line = lines[last].rstrip("\r\n")
+        if not line.rstrip().endswith("\\"):
+            break
+        last += 1
+    if last >= len(lines):
+        raise ValueError(f"{label}: unterminated original ICALL macro")
+    terminator = lines[last].rstrip("\r\n").strip()
+    if not re.fullmatch(r"}[ \t]*while[ \t]*\([ \t]*0[ \t]*\)[ \t]*;?", terminator):
+        raise ValueError(
+            f"{label}: unexpected ICALL macro terminator {terminator!r}; "
+            "NO XDK."
+        )
+    old_body = "".join(lines[first + 1:last])
+    # The original hard stop must remain available for all other ordinals.
+    if "phase4c_escape(" not in old_body:
+        raise ValueError(
+            f"{label}: original ICALL fallback not proven; NO XDK."
+        )
+    if ("k1nt207_nt_query_directory_file" in old_body
+        or re.search(r"==[ \t]*0x800000CFu\b", old_body)):
+        raise ValueError(
+            f"{label}: ordinal207 dispatch already installed; NO XDK."
+        )
+    native_branch = (
+        "    if ((uint32_t)(xbox_va) == 0x800000CFu) { \\" + nl
+        + "        k1nt207_nt_query_directory_file((uint32_t)(saved_esp)); \\" + nl
+        + "    } else { \\" + nl
+    )
+    # The original macro is not reinterpreted or rebuilt: original bytes
+    # between the do-brace and while terminator are copied exactly.
+    replacement = (
+        lines[first] + native_branch + old_body
+        + "    } \\" + nl + lines[last]
+    )
+    declaration = "void k1nt207_nt_query_directory_file(uint32_t savedEsp);" + nl
+    result = "".join(lines[:first]) + declaration + replacement \
+             + "".join(lines[last + 1:])
+    if (result.count(
+        "k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") != 1
+        or old_body not in result):
+        raise ValueError(f"{label}: ordinal207 wrapper/body proof failed")
+    return result
 
 
 def transform(src: str, header: str) -> tuple[str, str]:
@@ -487,8 +537,8 @@ def transform(src: str, header: str) -> tuple[str, str]:
             + ". Source stage fenced; NO XDK.")
     src = src.rstrip("\r\n") + nl + HANDLER.replace("\n", nl) + nl
 
-    # The TRUE TU compiler consumes the shared HEADER macro. Updating only
-    # main.cpp silently leaves the active translated callsites unmodified!
+    # The TRUE TU compiler consumes the shared HEADER macro. Do not assume
+    # any particular pre-existing ordinal case survives in that macro.
     src = patch_dispatch(src, nl, "host main.cpp", required=False)
     header = patch_dispatch(header, hn, "translated_runtime.h", required=True)
 
@@ -608,15 +658,24 @@ def self_test():
             print("[K1NT207-NATIVE] SELFTEST CASE: no host D3 macro "
                   "externalized=" + str(externalized) +
                   " CRLF=" + str(newline == "\r\n"), flush=True)
-    # Missing D3 in the mandatory shared header is NOT optional.
+    # Changes to old kernel ordinals must not affect our exact CF
+    # exception. This is the layout observed by the user's current build.
+    changed_old_dispatch = shared_header.replace(
+        "_phase4c_target == 0x800000D3u",
+        "_phase4c_target == 0x800000D4u")
+    assert changed_old_dispatch != shared_header
+    generic_main, generic_header = transform(real_host, changed_old_dispatch)
+    assert "k1nt207_nt_query_directory_file((uint32_t)(saved_esp));" in generic_header
+    assert "_phase4c_target == 0x800000D4u" in generic_header
+    assert "phase5n_nt_query_information_file((uint32_t)(saved_esp));" in generic_header
+    # The shared header itself must retain a recognizable original macro.
     try:
         transform(real_host, shared_header.replace(
-            "_phase4c_target == 0x800000D3u",
-            "_phase4c_target == 0x800000D4u"))
+            "#define RECOMP_ICALL_SAFE", "#define RECOMP_MISSING_ICALL"))
     except ValueError as exc:
         assert "translated_runtime.h" in str(exc)
     else:
-        raise AssertionError("Missing shared-header D3 wrongly accepted")
+        raise AssertionError("Missing shared-header macro wrongly accepted")
     # A pre-existing dispatch really IS an unsafe double override and must
     # still be rejected; checking an unrelated helper body is not sufficient.
     preexisting = shared_header.replace(
@@ -661,9 +720,9 @@ def self_test():
     assert "FindNextFileA(cursor->search,&cursor->entry)" in HANDLER
     assert "k1nt207_clear(handleToken);" not in HANDLER
     assert "phase4c_escape(PHASE4C_BOUNDARY_FILE_INFORMATION" in HANDLER
-    print("[K1NT207-NATIVE] SELFTEST PASS: static/externalized TrueTU "
-          "signatures, BOTH dispatch macros, CRLF, ANSI class1, RET44, "
-          "per-handle cursor and no fabricated files")
+    print("[K1NT207-NATIVE] SELFTEST PASS: TrueTU macro wrapper preserves "
+          "old dispatch and hard-stop fallback even without ordinal211/D3, "
+          "host macro optional, header mandatory, CRLF, RET44, ANSI class1")
 
 def stage(a):
     for p in (a.parent_main,a.parent_manifest,a.parent_shards):
