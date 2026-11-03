@@ -227,8 +227,9 @@ def restore_exact_pc_patch(source: str, pc_root: Path, *, attest_x86: dict) -> t
     }
 
 def selftest():
-    # Copied fixture only; real PC source, retail .xbe and manifest are
-    # independently checked at staging time. No XDK or retail bytes here.
+    # Fixture reproduces exact maintained PC patch hashes + the original
+    # generated-C dialect switch. The real x86 and PC HEAD are checked when
+    # Stage-K1PostTwoRootDirect.py runs on the user's original retail XBE.
     from tempfile import TemporaryDirectory
     before = ('loc_002228F0: ;\n'
               '    if (CMP_NE(MEM32(ecx + 0x48), 3)) '
@@ -251,6 +252,8 @@ def selftest():
             "after_sha256": digest(after),
         }],
     }
+    proof = {"original_002228f0_x86_cmp_jne": True,
+             "jmp_destination": "0x00222947"}
     with TemporaryDirectory() as tmp:
         pc = Path(tmp)
         a = pc / PC_PATCH_SCRIPT
@@ -261,30 +264,52 @@ def selftest():
                      '"""' + before + '""",\n"""' + after + '""",\n)\n',
                      encoding="utf-8")
         b.write_text(json.dumps(doc), encoding="utf-8")
-        result, meta = restore_exact_pc_patch(
-            "void sub_002228C0(void) {\n" + after + "\n}\n",
-            pc, attest_x86={"original_002228f0_x86_cmp_jne": True})
-        assert before in result and HELPER not in result
-        assert meta["arbitrary_helper_stub_used"] is False
-        for bad in (
-            after.replace(" == 4", " == 5"),
-            after.replace("recomp_dev_region_import_active()", "false"),
-            after + after,
-        ):
+        for style in ("MEM32", "GUEST_READ32"):
+            source_window = (
+                after.replace("MEM32(", style + "(") +
+                "loc_002228F6: ;\n"
+                "    GUEST_WRITE32(ecx + 0x48, 4);\n"
+            )
+            code = "void sub_002228C0(void) {\n" + source_window + "}\n"
+            result, meta = restore_exact_pc_patch(
+                code, pc, attest_x86=proof)
+            assert "CMP_NE(GUEST_READ32(ecx + 0x48), 3)" in result
+            assert "goto loc_00222947;" in result and HELPER not in result
+            assert meta["arbitrary_helper_stub_used"] is False
+            assert meta["original_002228f0_and_002228f6_labels_verified"]
+            assert meta["verified_generated_source_style"] == style
+            assert "GUEST_WRITE32(ecx + 0x48, 4);" in result
+            # An instrumented source may contain the legitimate budget
+            # checkpoint between the original labels; it is preserved.
+            if style == "GUEST_READ32":
+                with_budget = code.replace(
+                    "loc_002228F0: ;\n",
+                    "loc_002228F0: ;\n    PHASE4C_BUDGET_TICK(0x002228F0u);\n")
+                restored, _ = restore_exact_pc_patch(
+                    with_budget, pc, attest_x86=proof)
+                assert "PHASE4C_BUDGET_TICK(0x002228F0u);" in restored
+            for bad in (
+                code.replace(" == 4", " == 5"),
+                code.replace(HELPER + "()", "false"),
+                code.replace("loc_00222947", "loc_00222946"),
+                code.replace("loc_002228F6: ;", "loc_002228F7: ;"),
+                code.replace("loc_002228F6: ;", "GUEST_WRITE32(esp, eax);\nloc_002228F6: ;"),
+                code.replace("loc_002228F6: ;", "loc_002228F6: ;\nloc_002228F6: ;"),
+            ):
+                try:
+                    restore_exact_pc_patch(bad, pc, attest_x86=proof)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("Unsafe Xbox retail branch fixture accepted")
             try:
-                restore_exact_pc_patch("void f(){\n" + bad + "}", pc,
-                                        attest_x86={"original_002228f0_x86_cmp_jne": True})
+                restore_exact_pc_patch(code, pc,
+                                       attest_x86={"original_002228f0_x86_cmp_jne": True})
             except ValueError:
                 pass
             else:
-                raise AssertionError("Incorrect PC-only patch accepted")
-        try:
-            restore_exact_pc_patch(after, pc, attest_x86={})
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("Unproven original retail bytes accepted")
-    print("[K1-PC-RETAIL] SELFTEST PASS: exact hash-verified PC before/after, no invented helper, original x86 gate, no XDK")
+                raise AssertionError("Unproven retail destination accepted")
+    print("[K1-PC-RETAIL] SELFTEST PASS: MEM32 vs GUEST_READ32 exact verified branch, original labels, non-code telemetry, no fabricated helper, no XDK")
 
 
 if __name__ == "__main__":
