@@ -44,7 +44,7 @@ foreach($folder in @($generated,$shards)){
 }
 & $pythonExe -m py_compile $stage
 if($LASTEXITCODE -ne 0){throw "[K1-DIRECT-R5] Source syntax gate failed, NO XDK"}
-& $pythonExe -u $stage --self-test --previous-stage $previousStage
+& $pythonExe -u $stage --self-test --previous-stage $previousStage --previous-planner $previousPlanner
 if($LASTEXITCODE -ne 0){throw "[K1-DIRECT-R5] Original r4 source/one-root fixtures failed, NO XDK"}
 $sourceArgs = @(
     "--base-module",$base,
