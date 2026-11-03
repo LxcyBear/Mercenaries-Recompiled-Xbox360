@@ -28,7 +28,8 @@ HANDLER = '''
      * No palette -> Xenos display translation is claimed or performed.
      * Unknown/uninitialized MMIO still enters the ORIGINAL hard fence.
      */
-    static uint8_t k1DacPalette[256][3] = {{0}};
+    /* Volatile preserves real guest palette writes even under Release LTO. */
+    static volatile uint8_t k1DacPalette[256][3] = {{0}};
     static uint8_t k1DacStagingRGB[3] = {0};
     static uint8_t k1DacWriteIndex = 0u;
     static uint8_t k1DacSubIndex = 0u;
