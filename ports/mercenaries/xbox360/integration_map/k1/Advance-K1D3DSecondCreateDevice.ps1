@@ -17,13 +17,13 @@ $parentRoot = Join-Path $root "build\phase6_integration_map\k1_text_direct_batch
 $parentMain = Join-Path $parentRoot "main.cpp"
 $parentManifest = Join-Path $parentRoot "k1-text-direct-manifest.json"
 $originalShards = Join-Path $root "build\phase6_integration_map\k1_ntquerydirectory207_native\translated_shards"
-$outRoot = Join-Path $root "build\phase6_integration_map\k1_d3d_second_create"
+$outRoot = Join-Path $root "build\phase6_integration_map\k1_d3d_second_create_r2"
 $nextMain = Join-Path $outRoot "main.cpp"
 $nextShards = Join-Path $outRoot "translated_shards"
 $nextManifest = Join-Path $outRoot "k1-d3d-second-manifest.json"
 $envFile = Join-Path $root "build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp"
 $xdk = Join-Path $outRoot "xdk"
-$xex = Join-Path $xdk "Merc-K1D3D-SecondCreateDevice.xex"
+$xex = Join-Path $xdk "Merc-K1D3D-SecondCreateDevice-r2.xex"
 $python = (Get-Command python -ErrorAction Stop).Source
 
 foreach($file in @($parentRunner,$stage,$builder,$envFile)){
