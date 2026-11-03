@@ -123,3 +123,59 @@ No retail XBE bytes or game assets are committed to GitHub.
 There is still **no authorization to compile an ITAIL trampoline**
 without original instruction-boundary and guest stack/register proof.
 The latest known good native Reset/64 TrueTUs remain unchanged.
+
+
+## Source-proven D3D 16-way jump table (latest 2026-11-03 audit)
+
+The exact retail generated C function sub_00296550 spans
+0x00296550–0x0029655D (13 bytes, 4 original x86 instructions)
+and ends with:
+
+    eax = edi;
+    PUSH32(esp, esi);
+    eax = eax & 0xF;
+    g_seh_ebp = ebp;
+    RECOMP_ITAIL(GUEST_READ32(eax * 4 + 0x2965D4));
+
+This provides concrete *original C* evidence of a computed 16-way
+indirect tail jump, with ESI pushed onto the guest stack before the jump.
+The Xbox observed destination was 0x0029655D, exactly the previous
+function's end-exclusive boundary. It is **not** a recognized function
+start. The recognized next function starts at 0x002965A8, 75 bytes
+later.
+
+The indexed table reads 16 32-bit little-endian DWORD slots at
+0x002965D4 through 0x00296613, end-exclusive 0x00296614.
+This is significant: the function inventory claims sub_002965F0
+starts at 0x002965F0, *inside that table*, at slot 7
+(0x002965F0 - 0x002965D4 = 28 bytes = 7 DWORDs).
+
+Consequently, **code-versus-data provenance is now suspect** for
+this segment. The original function inventory and generated source
+do not independently prove that the 16 slots are ordinary immutable
+function addresses, nor that sub_002965F0 is truly safe compiled
+code at that overlapping address. D3D guest memory may be modified
+at runtime. Do not automatically prune or erase sub_002965F0 or
+invent guest execution at 0x0029655D.
+
+The K1 batch planner now validates the exact original 96550
+source instruction pattern and reports this table/code overlap.
+When a local exact-SHA retail default.xbe path is provided,
+it also extracts all 16 actual original XBE DWORDs and classifies
+each target relative to the retail inventory, flagging the
+hardware-observed destination and any branch targets in the gap.
+This is **static file** evidence, NOT a claim that those DWORDs
+were unchanged at the time of execution on Xbox 360.
+
+Run without a build:
+
+    cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
+    git pull --ff-only
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Plan-K1D3DBatch.ps1" -XbePath "C:\path\to\your\original\default.xbe"
+
+Or omit -XbePath for the original-source-only static table/overlap
+audit. Raw data stays entirely on the local PC; never commit
+or upload the game file. No additional XDK build is justified until
+we reconcile the 16-way table, its memory/code overlap, and the
+guest stack/register/target ABI. The known-good second Xenos Reset
+and original 64 TrueTUs remain untouched.
