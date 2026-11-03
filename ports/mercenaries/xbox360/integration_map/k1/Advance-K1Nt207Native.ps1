@@ -82,6 +82,27 @@ $mainHash=(Get-FileHash -LiteralPath $main -Algorithm SHA256).Hash.ToLowerInvari
 if($mainHash -ne $meta.native_main_sha256){
     throw "[K1NT207-NATIVE] Source main SHA mismatch; no build"
 }
+$parentHeader=Join-Path $parentShards "translated_runtime.h"
+$nativeHeader=Join-Path $shards "translated_runtime.h"
+foreach($p in @($parentHeader,$nativeHeader)){
+    if(-not (Test-Path -LiteralPath $p -PathType Leaf)){
+        throw "[K1NT207-NATIVE] Missing cross-TU runtime header: $p"
+    }
+}
+$beforeHeaderHash=(Get-FileHash -LiteralPath $parentHeader -Algorithm SHA256).Hash.ToLowerInvariant()
+$afterHeaderHash=(Get-FileHash -LiteralPath $nativeHeader -Algorithm SHA256).Hash.ToLowerInvariant()
+if($beforeHeaderHash -ne $meta.parent_runtime_header_sha256 -or
+   $afterHeaderHash -ne $meta.native_runtime_header_sha256 -or
+   $beforeHeaderHash -eq $afterHeaderHash -or
+   $meta.changed_headers.Count -ne 1 -or
+   $meta.changed_headers[0] -ne "translated_runtime.h"){
+    throw "[K1NT207-NATIVE] Active TRUE TU dispatcher/header not staged correctly"
+}
+$nativeHeaderText=Get-Content -LiteralPath $nativeHeader -Encoding UTF8 -Raw
+if($nativeHeaderText -notmatch "k1nt207_nt_query_directory_file" -or
+   $nativeHeaderText -notmatch "_phase4c_target == 0x800000CFu"){
+    throw "[K1NT207-NATIVE] Native ordinal207 dispatch not visible to TrueTUs"
+}
 $all=@(Get-ChildItem -LiteralPath $shards -Filter "translated_???.cpp" -File)
 if($all.Count -ne 64){throw "[K1NT207-NATIVE] Expected 64 unchanged TrueTUs"}
 foreach($item in $all){
@@ -92,6 +113,7 @@ foreach($item in $all){
     }
 }
 Write-Host "[K1NT207-NATIVE] SOURCE/ABI PREFLIGHT PASS: 64 byte-identical TrueTUs"
+Write-Host "[K1NT207-NATIVE] SUCCESS!!! TrueTU translated_runtime.h carries live ordinal207 dispatch"
 Write-Host "[K1NT207-NATIVE] Real Xbox directory enumeration staged in host main.cpp"
 Write-Host "[K1NT207-NATIVE] No synthetic display calls, no input or VP/MMIO relaxation"
 Write-Host "[K1NT207-NATIVE] Manifest: $manifest"
