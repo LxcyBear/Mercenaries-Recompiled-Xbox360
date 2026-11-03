@@ -120,12 +120,12 @@ def one(haystack: str, needle: str, label: str) -> None:
 # adjacency to phase6b_xenos_create. This is intentionally NOT a loose
 # string-token search: a declaration or comment cannot become the anchor.
 READY_DEFINITION = re.compile(
-    r'(?m)^(?:static[ \\t]+)?int[ \\t]+phase6af_native_xenos_ready'
-    r'[ \\t]*\\([ \\t]*void[ \\t]*\\)[ \\t]*\\n'
-    r'[ \\t]*\\{[ \\t]*\\n'
-    r'[ \\t]*return[ \\t]+s_phase6bXenosReady[ \\t]*&&[ \\t]*'
-    r's_phase6bXenosDevice[ \\t]*!=[ \\t]*NULL;[ \\t]*\\n'
-    r'[ \\t]*\\}'
+    r'(?m)^(?:static[ \t]+)?int[ \t]+phase6af_native_xenos_ready'
+    r'[ \t]*\([ \t]*void[ \t]*\)[ \t]*\n'
+    r'[ \t]*\{[ \t]*\n'
+    r'[ \t]*return[ \t]+s_phase6bXenosReady[ \t]*&&[ \t]*'
+    r's_phase6bXenosDevice[ \t]*!=[ \t]*NULL;[ \t]*\n'
+    r'[ \t]*\}'
 )
 
 
