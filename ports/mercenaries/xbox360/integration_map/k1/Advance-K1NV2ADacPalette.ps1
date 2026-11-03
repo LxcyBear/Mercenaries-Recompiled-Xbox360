@@ -116,9 +116,9 @@ $traceExportPattern='(?m)^[ \t]*void[ \t]+trace[ \t]*\([ \t]*const[ \t]+char[ \t
 # Fail before XDK if the C++ global symbol check itself regresses.
 $traceCases=@(
     @{Source="void trace(const char* line) {"; Expect=1},
-    @{Source="void trace(const char* line)" + [char]10 + "{"; Expect=1},
-    @{Source="void trace(const char* line)" + [char]13 + [char]10 + "{"; Expect=1},
-    @{Source="static void trace(const char* line)" + [char]10 + "{"; Expect=0},
+    @{Source="void trace(const char* line)`n{"; Expect=1},
+    @{Source="void trace(const char* line)`r`n{"; Expect=1},
+    @{Source="static void trace(const char* line)`n{"; Expect=0},
     @{Source="void trace(const char* line);"; Expect=0}
 )
 foreach($case in $traceCases){
