@@ -419,7 +419,9 @@ void sub_00296550(void)
     assert "RECOMP_ITAIL(k1_original_tail_target); return;" in updated
     assert "sub_002965A8();" in updated
     assert len(re.findall(r"case [0-5]u:", updated)) == 6
-    assert len(re.findall(r"\bPUSH32\s*\(\s*esp\s*,\s*esi\s*\)", updated)) == 1
+    # Documentation mentions PUSH32 too; count *executable code* only.
+    assert len(re.findall(r"\bPUSH32\s*\(\s*esp\s*,\s*esi\s*\)",
+                          Base.mask_noncode(updated))) == 1
     assert example not in updated
     for invalid in (
         example.replace("eax = eax & 0xF;", "eax = eax & 7;"),
