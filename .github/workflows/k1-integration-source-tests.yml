@@ -31,5 +31,11 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1ThreeLaneMain.py --self-test
       - name: DAC indexed palette regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1NV2ADacPalette.py --self-test
+      - name: Genuine 0017A0A0 text-direct pack regression (no XBE)
+        run: |
+          python ports/mercenaries/xbox360/integration_map/k1/Stage-K1TextDirectBatch.py --self-test \
+            --base-module ports/mercenaries/xbox360/phase4c_native_startup/emit_phase4c_startup_slice.py \
+            --p5bb-module ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bb_frontier22dda4.py \
+            --p5bc-module ports/mercenaries/xbox360/phase5_subsystem_bringup/emit_phase5bc_broad_sweep.py
       - name: Quiet logger external ABI and restage regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1DQQuietLogging.py --self-test
