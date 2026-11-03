@@ -50,7 +50,7 @@ New-Item -ItemType Directory -Force -Path $outRoot | Out-Null
 $parentLog = Join-Path $outRoot "inherited-source-preflight.log"
 $parentOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $parentRunner 2>&1)
 $parentExit = $LASTEXITCODE
-$parentOutput | Out-File -LiteralPath $parentLog -Encoding UTF8
+$parentOutput | Out-File -FilePath $parentLog -Encoding UTF8
 if($parentExit -ne 0) {
     Write-Host "[K1-TEXT] Inherited source preflight failed; last 25 lines:"
     $parentOutput | Select-Object -Last 25 | ForEach-Object { Write-Host $_ }
