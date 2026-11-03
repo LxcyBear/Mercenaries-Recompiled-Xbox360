@@ -135,6 +135,53 @@ def context_of_label(address: int, owner: dict, generated: dict) -> dict:
     }
 
 
+
+def inspect_tail_callers(by_va: dict, generated: dict, base,
+                         existing: set[int]) -> list[dict]:
+    """Original x86 caller/proximity addresses, with real C tail contexts."""
+    # 'caller' in the P6DQ log is a route owner, not proof it contains the
+    # exact indirect JMP instruction. Audit both the caller and D3D vicinity.
+    addresses = (0x0023A3CE, 0x00296550, 0x0029655D,
+                 0x002965F0, 0x00296614, 0x0029663F,
+                 0x00296670, 0x002966A0, 0x002966F8,
+                 0x0028E1C0)
+    result = []
+    owners_seen = set()
+    for address in addresses:
+        c = classify(address, by_va, generated)
+        if not c["owner_va"]:
+            continue
+        owner = int(c["owner_va"], 16)
+        if owner in owners_seen:
+            continue
+        owners_seen.add(owner)
+        if owner not in generated:
+            continue
+        source = generated[owner]["source"]
+        lines = source.splitlines()
+        sites = []
+        for i, line in enumerate(lines):
+            if ITAIL_CALL.search(base.mask_noncode(line)):
+                sites.append({
+                    "line": i + 1,
+                    "context": lines[max(0, i-6):min(len(lines), i+7)],
+                    "nearest_prior_label": next(
+                        (match.group(1)
+                         for prev in reversed(lines[:i])
+                         if (match := LABEL.match(prev))), None
+                    ),
+                })
+        result.append({
+            "owner_va": "0x%08X" % owner,
+            "original_file": generated[owner]["file"],
+            "compiled_in_main_or_64_tus": owner in existing,
+            "original_source_sha256": sha(source.encode("utf-8")),
+            "tail_site_count": len(sites),
+            "tail_sites": sites[:16],
+        })
+    return result
+
+
 def select_graph(by_va: dict, generated: dict, base, existing: set[int],
                  capacity: int = MAX_CANDIDATES) -> tuple[list[dict], list[dict]]:
     names = {entry["name"]: va for va, entry in generated.items()}
@@ -230,6 +277,7 @@ def plan(a) -> None:
         raise ValueError("Last observed hardware ITAIL is outside original D3D/XGRPH")
     owner_context = context_of_label(ITAIL, target, generated)
     seeds, selected = select_graph(by_va, generated, base, existing)
+    control_flow_contexts = inspect_tail_callers(by_va, generated, base, existing)
     graph_digest = sha(json.dumps(selected, sort_keys=True).encode("utf-8"))
     if target["classification"] == "exact_source_entry":
         next_gate = ("SOURCE ENTRY KNOWN; ITAIL tail-call ABI dispatch still "
@@ -256,6 +304,7 @@ def plan(a) -> None:
         "existing_packed_or_true_tu_count": len(existing),
         "itail_analysis": target,
         "itail_owner_original_source": owner_context,
+        "related_original_c_control_flow": control_flow_contexts,
         "seed_classification": seeds,
         "batch_candidate_count": len(selected),
         "source_authentic_candidates": selected,
@@ -282,6 +331,9 @@ def plan(a) -> None:
           (target["generated_source_file"],
            owner_context.get("target_label_occurrences", 0),
            owner_context.get("full_itail_callsite_count", 0)))
+    print("[K1D3D-BATCH] RELATED ORIGINAL CALLSITES: owners=%u itail_macro_sites=%u" %
+          (len(control_flow_contexts),
+           sum(item["tail_site_count"] for item in control_flow_contexts)))
     print("[K1D3D-BATCH] GRAPH: seeds=%d source-authentic candidate=%d max=%d depth=%d digest=%s" %
           (len(seeds), len(selected), MAX_CANDIDATES, MAX_DIRECT_DEPTH, graph_digest[:16]))
     for row in seeds:
@@ -322,6 +374,8 @@ def selftest() -> None:
     assert cls2["can_route_via_plain_function_lookup"]
     absent = classify(0x0029655E, by_va, generated)
     assert absent["classification"] == "interior_missing_label"
+    sites = inspect_tail_callers(by_va, generated, Base(), set())
+    assert any(row["owner_va"] == "0x00296550" for row in sites)
     chosen_after_compiled = select_graph(by_va, generated, Base(), {0x002965F0})[1]
     assert not any(x["va"] == "0x002965F0" for x in chosen_after_compiled)
     print("[K1D3D-BATCH] SELFTEST PASS: interior ITAIL fenced, exact roots only, deduplicated bounded graphics graph, no XDK")
