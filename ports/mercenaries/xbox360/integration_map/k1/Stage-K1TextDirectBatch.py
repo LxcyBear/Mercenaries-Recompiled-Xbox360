@@ -174,11 +174,27 @@ def insert(parent: str, members: list[int], compiled: set[int],
     # Install the real-ABI port of the verified PC-only diagnostic before
     # Phase5BC's support check and before the new translated callsite.
     # No blanket whitelist: only this exact helper is supplied.
+    # Phase6DQ's real TrueTU main exports the lookup without "static".
+    # Phase5BC's legacy inserter accepts only its static spelling, so
+    # temporarily canonicalize the *definition*, then restore its original
+    # linkage after packing. Never change declarations or emitted linkage.
     lookup_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
-    if normalized.count(lookup_marker) != 1:
-        raise ValueError("Pack-lookup insertion anchor missing/duplicated")
-    normalized = normalized.replace(lookup_marker,
-                                    X360_CHECKPOINT + "\n" + lookup_marker, 1)
+    definition_re = re.compile(
+        r'(?m)^(?:static[ \\t]+)?recomp_func_t '
+        r'phase4c_lookup_pack_func\\(uint32_t xbox_va\\)\\n\\{'
+    )
+    definitions = list(definition_re.finditer(normalized))
+    if len(definitions) != 1:
+        raise ValueError(
+            f"Pack-lookup definition missing/duplicated: matches={len(definitions)}"
+        )
+    definition = definitions[0]
+    original_lookup_marker = definition.group(0)
+    normalized = (normalized[:definition.start()] + lookup_marker
+                  + normalized[definition.end():])
+    normalized = normalized.replace(
+        lookup_marker, X360_CHECKPOINT + "\n" + lookup_marker, 1
+    )
     # Hide existing optimize-on directives from the Phase5BC first-match
     # insertion finder, then restore them byte-for-byte after injection.
     original_on = '#pragma optimize("", on)'
@@ -207,6 +223,9 @@ def insert(parent: str, members: list[int], compiled: set[int],
     finally:
         p5bc.SWEEP_ROOT = before_helpers
         p5bc.instrument_root_entry = before_root_instrument
+    if result.count(lookup_marker) != 1:
+        raise ValueError("Pack-lookup definition changed during packing")
+    result = result.replace(lookup_marker, original_lookup_marker, 1)
     result = result.replace(placeholder, original_on)
     if ROOT not in new or ROOT in pruned:
         raise ValueError('0017A0A0 has unresolved support; refusing synthetic continuation: '
@@ -261,8 +280,16 @@ def self_test(base, p5bb, p5bc, pc_manual: str):
          'static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n'
          '{\n    switch (xbox_va) {\n    default: return (recomp_func_t)0;\n    }\n}\n'
          '#pragma optimize("", on)\n')
+    # Include the actual exported Phase6DQ lookup and its forward
+    # declaration; synthetic-only static fixtures previously missed this.
+    p_exported = (
+        'recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va);\n'
+        + p.replace('static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{',
+                    'recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{')
+    )
     for text in (p, p.replace('\n', '\r\n'),
-                 p.replace('#pragma optimize("", on)\n', '')):
+                 p.replace('#pragma optimize("", on)\n', ''),
+                 p_exported, p_exported.replace('\n', '\r\n')):
         members = pick(generated, set(), base)
         assert members == [ROOT]
         result, retained, frontier, pruned = insert(text, members, set(), generated,
@@ -272,6 +299,11 @@ def self_test(base, p5bb, p5bc, pc_manual: str):
         assert result.count('PHASE4C_BUDGET_TICK(0x0017A0A0u)') == 1
         assert result.count('P6DQ ROCKET HARD STOP') == 1
         assert MARK in result
+        restored = result.replace('\r\n', '\n')
+        expected_lookup = ('static recomp_func_t' if text.startswith('#define')
+                           else 'recomp_func_t')
+        assert restored.count(expected_lookup + ' phase4c_lookup_pack_func(uint32_t xbox_va)\n{') == 1
+        assert restored.count('static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{') == (1 if text.startswith('#define') else 0)
         assert result.count("K1STATE MAIN CHECKPOINT:") == 1
         assert "s_phase5bcSweepRootEntered = 1;" not in result
         assert result.count("recomp_main_state_checkpoint(GUEST_READ32(esp + 4), GUEST_READ32(esp + 8));") == 1
