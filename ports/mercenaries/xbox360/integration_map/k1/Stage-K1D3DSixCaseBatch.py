@@ -159,6 +159,21 @@ def get_function(blob: str, va: int, base) -> tuple[str, int, int]:
     end = base.closing_brace(masked, open_brace)
     return blob[found.start():end], found.start(), end
 
+\ndef prove_original_common_tail(body: str) -> bool:
+    """Original 2965A8 joins six cases, pops original saved ESI and RETs.
+
+    The maintained Xbox recomp lifter's x86 POP32 signature is
+    POP32(esp, esi), not 'esi = POP32(esp)'.
+    """
+    if not re.search(r'loc_002965A8\\s*:\\s*;', body):
+        return False
+    if len(re.findall(r'\\bPOP32\\s*\\(\\s*esp\\s*,\\s*esi\\s*\\)\\s*;', body)) != 1:
+        return False
+    if not re.search(r'\\besp\\s*\\+=\\s*4\\s*;\\s*return\\s*;', body):
+        return False
+    return True
+
+
 
 def patch_owner(text: str, base, same_owner_common: bool,
                 allow_other_translation_unit: bool) -> str:
@@ -292,10 +307,8 @@ def stage(a):
     owner, owner_source = original_owners[0]
     common_owner, common_source = common_owners[0]
     common_body, _, _ = get_function(common_source, COMMON, base)
-    if (not re.search(r'loc_002965A8\s*:\s*;', common_body) or
-        not re.search(r'\besi\s*=', common_body) or
-        not re.search(r'\breturn\s*;', common_body)):
-        raise ValueError("Original compiled 2965A8 common return contract missing")
+    if not prove_original_common_tail(common_body):
+        raise ValueError("Original compiled 2965A8 POP ESI + guest RET contract missing")
     generated = base.load_generated(
         a.generated_root, base.load_ranges(a.functions)[1]
     )
@@ -401,7 +414,7 @@ def selftest():
             raise ValueError("Unterminated body")
     example = """
 #include "translated_runtime.h"
-void sub_002965A8(void) { loc_002965A8: ; esi = POP32(esp); return; }
+void sub_002965A8(void) { loc_002965A8: ; POP32(esp, esi); esp += 4; return; }
 void sub_00296550(void)
 {
     uint32_t ebp;
@@ -413,6 +426,9 @@ void sub_00296550(void)
     g_seh_ebp = ebp; RECOMP_ITAIL(GUEST_READ32(eax * 4 + 0x2965D4)); return; /* indirect tail jmp */
 }
 """
+    assert prove_original_common_tail(get_function(example, COMMON, Base)[0])
+    assert not prove_original_common_tail(example.replace("POP32(esp, esi)", "esi=0"))
+    assert not prove_original_common_tail(example.replace("esp += 4;", "esp += 8;"))
     updated = patch_owner(example, Base, same_owner_common=True,
                           allow_other_translation_unit=False)
     assert updated.count(MARK) == 1
