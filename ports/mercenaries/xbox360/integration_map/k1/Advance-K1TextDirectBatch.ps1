@@ -81,7 +81,7 @@ $python = (Get-Command python -ErrorAction Stop).Source
 & $python -m py_compile $stage
 if($LASTEXITCODE -ne 0){ throw "[K1-TEXT] Python syntax failed; XDK blocked" }
 $moduleArgs = @("--base-module",$base,"--p5bb-module",$p5bb,"--p5bc-module",$p5bc)
-& $python -u $stage --self-test @moduleArgs
+& $python -u $stage --self-test @moduleArgs --pc-manual $pcManual
 if($LASTEXITCODE -ne 0){ throw "[K1-TEXT] Source-pack regression failed; XDK blocked" }
 $pcPrototypeContents = Get-Content -LiteralPath $pcPrototype -Raw -Encoding UTF8
 if (-not $pcPrototypeContents.Contains("void recomp_main_state_checkpoint(uint32_t state, uint32_t substate);")) {
