@@ -181,8 +181,11 @@ def patch(src: str) -> str:
         raise ValueError("Missing unique verified DAC/quiet main parent")
     if MARK in src or "K1PFIFO DMA_PUT READ32:" in src:
         raise ValueError("Three-lane patch already installed")
-    if "P6DQ ROCKET HARD STOP" not in src or "k1c_read_guest_va(void);" not in src:
-        raise ValueError("Missing native guest VA/fault provenance")
+    # The DAC/PRMDIO parent already calls this guest-VA witness in its
+    # hardware-tested logging path. Do not assume whether the generated
+    # definition/prototype carries a semicolon, a modifier, or a line break.
+    if "P6DQ ROCKET HARD STOP" not in src or "k1c_read_guest_va()" not in src:
+        raise ValueError("Missing hardware-tested guest-VA call or original hard stop")
     if "\r" in src.replace("\r\n", ""):
         raise ValueError("Mixed end-of-line source")
     before = src
