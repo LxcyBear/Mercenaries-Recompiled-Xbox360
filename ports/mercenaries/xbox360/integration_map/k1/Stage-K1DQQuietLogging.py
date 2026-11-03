@@ -244,7 +244,14 @@ void test() {
     for s in variants + [v.replace("\n", "\r\n") for v in variants]:
         out = patch(s)
         assert out.count("static void trace(const char* line)") == 1
-        assert out.count("static void k1quiet_emit_unfiltered(const char* line)") == 1
+        # The original sink's qualifiers and argument name remain intact.
+        # Only the function symbol itself is renamed.
+        renamed = re.findall(
+            r"(?m)^\s*(?:(?:static|inline|__forceinline)\s+)*"
+            r"(?:void|VOID)\s+(?:__cdecl\s+)?"
+            r"k1quiet_emit_unfiltered\s*\(", out
+        )
+        assert len(renamed) == 1
         assert out.count("FlushFileBuffers(s_logFile)") == 1
         assert "k1qMutedLines[p] += 2u" in out
         assert 'strstr(line, "old=2 ") != NULL' in out
