@@ -35,17 +35,31 @@ SECOND_BRANCH = r'''    /* Retail second request: same device/out identity, real
      */
     if (backBuffers == 2u)
     {
-        if (s_phase6afCreateDeviceBridgeCount != 1u ||
-            s_phase6afGuestDevice != 0x00299380u ||
-            GUEST_READ32(out) != 0x00299380u)
-        {
-            trace("K1D3D SECOND: first-device ownership/out-pointer contract drift");
-            phase4c_escape(PHASE4C_BOUNDARY_RENDERER_FATAL, 0x80070057u, c);
-            return;
-        }
+        /* The game may clear its output slot before retrying the same
+         * CreateDevice. Preserve first-device identity separately and
+         * never treat an unknown/nonzero pointer as a valid retry.
+         */
+        uint32_t outBefore = GUEST_READ32(out);
         if (s_accessFault)
         {
             phase4c_escape(PHASE4C_BOUNDARY_GUEST_FAULT, out, c);
+            return;
+        }
+        sprintf(
+            line,
+            "K1D3D SECOND: ownership calls=%u device=%08X out=%08X out_before=%08X",
+            (unsigned int)s_phase6afCreateDeviceBridgeCount,
+            (unsigned int)s_phase6afGuestDevice,
+            (unsigned int)out,
+            (unsigned int)outBefore);
+        trace(line);
+        if (s_phase6afCreateDeviceBridgeCount != 1u ||
+            s_phase6afGuestDevice != 0x00299380u ||
+            out != 0x007AD604u ||
+            (outBefore != 0u && outBefore != 0x00299380u))
+        {
+            trace("K1D3D SECOND: first-device ownership/out-pointer contract drift");
+            phase4c_escape(PHASE4C_BOUNDARY_RENDERER_FATAL, 0x80070057u, c);
             return;
         }
         if (!phase6k1_native_xenos_reconfigure(backBuffers, multisample))
@@ -241,7 +255,11 @@ def test() -> None:
                 edited = res_main if in_main else res_shards["translated_001.cpp"]
                 assert "backBuffers == 2u && multisample == 0x1121u" in edited
                 assert "if (!phase6k1_native_xenos_reconfigure" in edited
-                assert "GUEST_READ32(out)" in edited
+                assert "uint32_t outBefore = GUEST_READ32(out);" in edited
+                assert "out != 0x007AD604u" in edited
+                assert "(outBefore != 0u && outBefore != 0x00299380u)" in edited
+                assert "K1D3D SECOND: ownership calls=" in edited
+                assert edited.index("if (s_accessFault)") < edited.index("out != 0x007AD604u")
                 assert res_main.count("int phase6k1_native_xenos_reconfigure(") == 1
                 try:
                     patch(res_main, res_shards)
