@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [string]$XbePath = ""
+)
 # Windows PowerShell 5.1. Zero XDK builds by design. Determine whether
 # 0029655D is an original function entry or an interior translated label;
 # batch source-authentic D3D/XGRPH functions in one report, not one XEX per VA.
@@ -57,6 +59,17 @@ New-Item -ItemType Directory -Force -Path $outRoot | Out-Null
 $argsList = @("--base-module", $base, "--functions", $functions,
     "--generated-root", $generated, "--parent", $parent,
     "--shards", $shards, "--output", $out)
+if(-not [string]::IsNullOrWhiteSpace($XbePath)) {
+    if(-not (Test-Path -LiteralPath $XbePath -PathType Leaf)) {
+        throw "[K1D3D-BATCH] Optional retail XBE path does not exist: $XbePath"
+    }
+    $fullXbe = (Resolve-Path -LiteralPath $XbePath).Path
+    $argsList += @("--xbe", $fullXbe)
+    Write-Host "[K1D3D-BATCH] Retail XBE raw byte audit enabled; exact SHA-256 enforced"
+} else {
+    Write-Host "[K1D3D-BATCH] No local XBE supplied: inventory-gap + original generated C audit only"
+    Write-Host "[K1D3D-BATCH] Optional: rerun with -XbePath 'C:\path\to\your\retail\default.xbe'"
+}
 & $python -u $planner @argsList
 if($LASTEXITCODE -ne 0) {
     throw "[K1D3D-BATCH] Original-XBE identity or source audit failed; no build"
@@ -74,6 +87,16 @@ Write-Host ""
 Write-Host "[K1D3D-BATCH] =================================================="
 Write-Host "[K1D3D-BATCH] GRAPHICS SOURCE AUDIT DONE; NO XDK/XBOX RUN"
 Write-Host ("[K1D3D-BATCH] ITAIL: {0} ({1}), owner={2}" -f $report.itail_analysis.address, $report.itail_analysis.classification, $report.itail_analysis.owner_va)
+Write-Host ("[K1D3D-BATCH] GAP: prev={0} end={1} delta={2}; next={3} distance={4}" -f `
+    $report.itail_gap_provenance.predecessor_start, `
+    $report.itail_gap_provenance.predecessor_end_exclusive, `
+    $report.itail_gap_provenance.target_minus_predecessor_end, `
+    $report.itail_gap_provenance.successor_start, `
+    $report.itail_gap_provenance.successor_start_minus_target)
+Write-Host ("[K1D3D-BATCH] Source graph: {0} original functions traversed; {1} compiled visited" -f `
+    $report.graph_metrics.total_original_functions_traversed, `
+    $report.graph_metrics.existing_original_functions_traversed)
+
 Write-Host ("[K1D3D-BATCH] Source-authentic batch candidates: {0}" -f [int]$report.batch_candidate_count)
 Write-Host ("[K1D3D-BATCH] Next proof: {0}" -f $report.next_gate)
 Write-Host "[K1D3D-BATCH] Report: $out"
