@@ -68,6 +68,8 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1BulkOriginalPackets.py --self-test
       - name: Verify honest PC-PGRAPH vs real-Xbox hardware trace without synthetic pixels
         run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1GraphicsMilestoneTrace.py --self-test
+      - name: Original Xbox retail r7 00222190 source batch and xbWatson fingerprint regression
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1R7NextOriginalFrontier.py --self-test
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -334,6 +336,33 @@ jobs:
               throw "K1 r5 + bounded source-only packet/safe fallback/real Xbox hardware evidence single-XDK contract lost"
           }
           Write-Host "[PS51] PASS: one command K1 r5+global-map+optional-original-r6 source packet+one XDK, hardware trace gate"
+      - name: Parse K1 original r7 fresh-binary proof and real Xbox hardware fingerprint runner
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1R7NextOriginalFrontier.ps1"
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) {
+              $errors | ForEach-Object { Write-Host $_ }
+              throw "K1 r7 Xbox 360 original direct frontier fresh-XEX PowerShell 5.1 parse failed"
+          }
+          $body = Get-Content -LiteralPath $path.Path -Raw
+          if (-not $body.Contains('Stage-K1R7NextOriginalFrontier.py') -or
+              -not $body.Contains('runtime_xex_fingerprint') -or
+              -not $body.Contains('phase6dq_note_hard_stop') -or
+              -not $body.Contains('0x00222190') -or
+              -not $body.Contains('Original retail 222190') -or
+              -not $body.Contains('64 TrueTUs') -or
+              -not $body.Contains('XDK did NOT compile a new binary') -or
+              -not $body.Contains('WRONG XEX / MISSING R7 RUNTIME FINGERPRINT') -or
+              -not $body.Contains('Published XEX is stale') -or
+              -not $body.Contains('XboxLog') -or
+              [regex]::Matches($body, '(?m)^\s*& \$builder @buildArgs[ \t]*\r?$').Count -ne 1) {
+              throw "K1 r7 original-source/true TU/fresh compile and real hardware fingerprint contract broken"
+          }
+          Write-Host "[PS51] PASS: one real r7 Xbox 360 compile with mandatory new-binary and runtime xbWatson proof"
+
 
 
 
