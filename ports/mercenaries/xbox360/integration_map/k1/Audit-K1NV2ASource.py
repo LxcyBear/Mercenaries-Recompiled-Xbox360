@@ -100,8 +100,15 @@ def main():
     p.add_argument("--xbe", type=Path)
     p.add_argument("--out", type=Path)
     p.add_argument("--max", type=int, default=32)
+    p.add_argument("--focus-va", type=lambda x: int(x, 0),
+                   help="Prior last_guest_block_va from Xbox log; prioritize its exact generated block")
     a = p.parse_args()
     findings = inspect(a.shards)
+    if a.focus_va is not None:
+        # The runtime tracker identifies a BASIC BLOCK, not the exact store
+        # instruction. Rank identical blocks first and keep other candidates
+        # for comparison; never silently assert an instruction match.
+        findings.sort(key=lambda x: (x[4] != a.focus_va, -x[0], x[1], x[2]))
     assembly = None
     if a.xbe:
         raw = a.xbe.read_bytes()
@@ -114,7 +121,11 @@ def main():
            f"Generated TrueTU WRITE8 call-site count: {len(findings)}",
            "IMPORTANT: candidate function/block VA != exact faulting instruction PC.",
            "Write8 may compute its target at runtime; no literal is required.",
-           "No original XBE bytes copied; code extraction limited to local audit.", ""]
+           "No original XBE bytes copied; code extraction limited to local audit.",
+           ("Focus guest block VA: %08X; matching sites=%d" %
+            (a.focus_va, sum(x[4] == a.focus_va for x in findings))
+            if a.focus_va is not None else "No hardware guest-block VA supplied yet."),
+           ""]
     for n, (score, file, line, func, block, source) in enumerate(findings[:a.max], 1):
         out += [f"CANDIDATE {n:02d} score={score} {file}:{line} function={func or 0:08X} block={block or 0:08X}", source]
         if assembly is not None and block is not None and n <= 8:
