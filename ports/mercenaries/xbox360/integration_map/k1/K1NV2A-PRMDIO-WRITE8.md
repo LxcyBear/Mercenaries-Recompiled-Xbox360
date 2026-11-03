@@ -124,3 +124,32 @@ followed by the **unchanged** hard stop, and a source-disassembly
 correlation to a plausible original Xbox byte-store instruction.
 Only then decide whether the PRMDIO operation can be safely
 implemented. Do not claim actual pixels from a purple screen alone.
+
+## PC-only, read-only log triage and future logging-speed work
+
+A read-only audit of the 2026-11-03 9,509-line xbWatson capture found
+**4,588 repeated successful IRQL/critical-section trace lines**
+(~48.2% of that capture). These are only text-output counts, not a
+wall-clock profiler or proof that suppressed logging would speed the
+translated CPU by the same percentage. Any future quiet-mode patch
+must retain first occurrences, real failures, unique startup markers,
+K1NT207 results, exact NV2A write values, and Swap/framebuffer counters.
+Do not reduce the IRQ/critical-section *operations*, only redundant
+success messages after hardware-validating a rate limit.
+
+After the current XDK build finishes, pull the branch and run this
+standalone diagnostic on a saved xbWatson text log:
+
+```powershell
+$k1 = ".\\ports\\mercenaries\\xbox360\\integration_map\\k1"
+python "$k1\\Summarize-K1NV2AWatson.py" --self-test
+$log = Read-Host "Full path to saved xbWatson .txt log"
+python "$k1\\Summarize-K1NV2AWatson.py" --log $log --out ".\\build\\phase6_integration_map\\k1_nv2a_prmdio_write8\\offline-watson-summary.txt"
+```
+
+This does no Xbox work, no game-file reads, and no source mutation.
+For a broader source study, run the existing
+`Audit-K1NV2ASource.py` with the 64 generated TrueTUs and optional
+verified retail XBE. Avoid running the larger source scan in parallel
+with an XDK build on memory-limited PCs: it may compete with the C++
+compiler and slow the current build.
