@@ -25,13 +25,13 @@ $parentRoot = Join-Path $root "build\phase6_integration_map\k1_d3d_second_create
 $parentMain = Join-Path $parentRoot "main.cpp"
 $parentManifest = Join-Path $parentRoot "k1-d3d-second-manifest.json"
 $shards = Join-Path $parentRoot "translated_shards"
-$outRoot = Join-Path $root "build\phase6_integration_map\k1_d3d_direct_289e20"
+$outRoot = Join-Path $root "build\phase6_integration_map\k1_d3d_direct_289e20_r2"
 $nextMain = Join-Path $outRoot "main.cpp"
 $nextManifest = Join-Path $outRoot "k1-d3d-direct-289e20-manifest.json"
 $builder = Join-Path $root "ports\mercenaries\xbox360\phase6_native_graphics\Invoke-VS17Xbox360Build.ps1"
 $envFile = Join-Path $root "build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp"
 $xdk = Join-Path $outRoot "xdk"
-$xex = Join-Path $xdk "Merc-K1D3D-Direct289E20.xex"
+$xex = Join-Path $xdk "Merc-K1D3D-Direct289E20-r2.xex"
 
 foreach($file in @($stage,$parentRunner,$base,$bb,$bc,$functions,$cache,$pcManual,$builder,$envFile)){
     if(-not(Test-Path -LiteralPath $file -PathType Leaf)){
@@ -95,6 +95,13 @@ if($doc.status -ne "K1_D3D_DIRECT_289E20_SOURCE_ONLY_NO_XDK" -or
    [int]$doc.modified_true_tus -ne 0 -or
    $doc.pc_supported_texture_hook_implemented -ne $true -or
    $doc.pc_stage23_telemetry_implemented -ne $true -or
+   $doc.pc_texture_diagnostic_caller_binding.diagnostic_caller_va -ne "0x00289E20" -or
+   $doc.pc_texture_diagnostic_caller_binding.binding -ne "original retail function VA as diagnostic caller only" -or
+   [int]$doc.pc_texture_diagnostic_caller_binding.diagnostic_callsite_rewrites -ne 1 -or
+   $doc.pc_texture_diagnostic_caller_binding.texture_validation_return_rule_unchanged -ne $true -or
+   $doc.pc_texture_diagnostic_caller_binding.original_source_sha256 -ne $doc.root_original_body_sha256 -or
+   -not $txt.Contains("recomp_validate_texture_bind(") -or
+   -not $txt.Contains("0x00289E20u") -or
    $doc.pc_support_proof.movie_hook_scope -ne "stage-23 read-only 128-sample diagnostics only" -or
    -not ($doc.pc_support_proof.pc_texture_validator_sha256 -match '^[0-9a-f]{64}$') -or
    -not ($doc.pc_support_proof.pc_movie_stage_23_sha256 -match '^[0-9a-f]{64}$') -or
@@ -113,6 +120,7 @@ if($doc.status -ne "K1_D3D_DIRECT_289E20_SOURCE_ONLY_NO_XDK" -or
 }
 Write-Host ("[K1D3D-DIRECT] PREFLIGHT PASS: authentic retail D3D 00289E20; packed={0}; 64 TrueTUs intact" -f @($doc.promoted_vas).Count)
 Write-Host "[K1D3D-DIRECT] Maintained PC hook implementations: texture validity preserved, movie stage-23 diagnostic-only, 64 TUs untouched"
+Write-Host "[K1D3D-DIRECT] ABI: PC-only g_recomp_current_func caller telemetry bound to proven D3D VA 00289E20 (one callsite only)"
 Write-Host "[K1D3D-DIRECT] Native second CreateDevice/Xenos Reset unchanged. No guest result fabricated."
 if(-not $Build){
     Write-Host "[K1D3D-DIRECT] SOURCE ONLY. Add -Build after source preflight succeeds."
