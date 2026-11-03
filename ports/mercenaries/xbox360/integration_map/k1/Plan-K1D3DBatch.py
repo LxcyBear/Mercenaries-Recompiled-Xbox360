@@ -29,6 +29,7 @@ SEEDS = (
     (0x002966A0, "recent D3D VA context"),
     (0x002966F8, "recent D3D VA context"),
     (0x00296550, "nearby D3D context; possible interior-owner entry"),
+    (0x002965A8, "first exact original function after ITAIL's 75-byte inventory gap"),
     (0x0028E1C0, "latest AV/display ICALL context"),
     (0x0028BDB0, "original D3DDevice_Swap identified by retail function scan"),
     (0x0028A530, "original D3DDevice_PersistDisplay identified by retail function scan"),
@@ -512,6 +513,28 @@ def plan(a) -> None:
            gap["target_minus_predecessor_end"],
            gap["successor_start"], gap["successor_start_minus_target"],
            gap["gap_width_bytes"]))
+    for item in gap["original_d3d_source_text_references"]:
+        for site in item["text_matches"][:8]:
+            print("[K1D3D-BATCH] EXACT TARGET C REFERENCE: function=%s file=%s line=%u text=%s" %
+                  (item["function_start"], item["source_file"],
+                   site["line"], site["text"][:240]))
+    if gap["target_is_predecessor_end_exclusive"]:
+        print("[K1D3D-BATCH] CRITICAL: hardware ITAIL equals exclusive END of %s, NOT valid function start" %
+              gap["predecessor_start"])
+    for item in gap["adjacent_original_function_sources"]:
+        if item["direction"] == "previous" and item["start"] == gap["predecessor_start"]:
+            print("[K1D3D-BATCH] PREVIOUS ORIGINAL SOURCE TAIL %s file=%s:" %
+                  (item["start"], item["source_file"]))
+            for line in item["ending_last_36_lines"][-24:]:
+                print("[K1D3D-BATCH]   " + line[:240])
+        if item["direction"] == "following" and item["start"] == gap["successor_start"]:
+            print("[K1D3D-BATCH] NEXT ORIGINAL SOURCE HEAD %s file=%s:" %
+                  (item["start"], item["source_file"]))
+            for line in item["entry_first_28_lines"][:18]:
+                print("[K1D3D-BATCH]   " + line[:240])
+    for item in selected:
+        print("[K1D3D-BATCH] MISSING SOURCE CANDIDATE %s file=%s depth=%d from=%s" %
+              (item["va"], item["source_file"], item["depth"], item["reason"]))
     print("[K1D3D-BATCH] Target literal in other original D3D source bodies: %u; exact local-XBE bytes: %s" %
           (len(gap["original_d3d_source_text_references"]), "YES" if local_xbe else "NOT SUPPLIED"))
     print("[K1D3D-BATCH] Original owner source=%s labels=%s itail_callsites=%s" %
@@ -578,6 +601,16 @@ def selftest() -> None:
     assert gap["target_minus_predecessor_end"] == 1
     assert gap["successor_start_minus_target"] == 0x93
     assert gap["gap_width_bytes"] == 0x94
+    assert gap["target_is_predecessor_end_exclusive"] is False
+    edge_gap = {
+        0x00296550: {"start": 0x00296550, "end": 0x0029655D, "name": "sub_00296550"},
+        0x002965A8: {"start": 0x002965A8, "end": 0x002965F0, "name": "sub_002965A8"},
+    }
+    edge = inspect_unmapped_gap(ITAIL, edge_gap, generated)
+    assert edge["target_is_predecessor_end_exclusive"]
+    assert edge["successor_start_minus_target"] == 75
+    assert edge["gap_width_bytes"] == 75
+
     assert not gap["safe_to_dispatch_as_function"]
     with_bad_xbe = Path(__file__).resolve()
     try:
