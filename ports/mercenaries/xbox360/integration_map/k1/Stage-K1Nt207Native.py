@@ -400,7 +400,11 @@ def patch_dispatch(src: str, nl: str, label: str) -> str:
             f"{label}: expected one original ordinal211 D3 dispatcher, "
             f"got {src.count(case)}. No XDK."
         )
-    original = src
+    # A native kernel helper definition may itself contain 0x800000CFu.
+    # Only a pre-existing ACTIVE dispatch branch is a duplicate.  The old
+    # broad "ordinal string AND helper name" guard rejected our own handler.
+    if re.search(r"\b_phase4c_target\s*==\s*0x800000CFu\b", src):
+        raise ValueError(label + ": ordinal207 dispatch already installed")
     src = insert_once(
         src,
         case,
@@ -415,8 +419,6 @@ def patch_dispatch(src: str, nl: str, label: str) -> str:
         label + " cross-TU native function prototype")
     if src.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") != 1:
         raise ValueError(label + ": native dispatch not unique")
-    if original.count("0x800000CFu") and "k1nt207_nt_query_directory_file" in original:
-        raise ValueError(label + ": existing 207 native override detected")
     return src
 
 
@@ -513,6 +515,21 @@ def self_test():
                 pass
             else:
                 raise AssertionError("Repeated stage accepted")
+    # A pre-existing dispatch really IS an unsafe double override and must
+    # still be rejected; checking an unrelated helper body is not sufficient.
+    preexisting = shared_header.replace(
+        "    } else if (_phase4c_target == 0x800000D3u) { \\\n",
+        "    } else if (_phase4c_target == 0x800000CFu) { \\\n"
+        "        prior_nt207_handler((uint32_t)(saved_esp)); \\\n"
+        "    } else if (_phase4c_target == 0x800000D3u) { \\\n",
+    )
+    assert preexisting != shared_header, "Duplicate-dispatch fixture missing"
+    try:
+        patch_dispatch(preexisting, "\n", "already-routed fixture")
+    except ValueError as exc:
+        assert "ordinal207 dispatch already installed" in str(exc)
+    else:
+        raise AssertionError("Existing ordinal207 dispatcher accepted")
     for forbidden in ("fopen(", "CreateDirectory(", "return STATUS_SUCCESS"):
         assert forbidden not in HANDLER
     assert "GUEST_WRITE32(recordVa+60u,nameLen)" in HANDLER
