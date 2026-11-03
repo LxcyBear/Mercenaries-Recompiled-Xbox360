@@ -116,7 +116,7 @@ def stage(args):
             "0x001F7620", "0x001F7520"]:
         raise ValueError("Original r4 two-body parent compiler provenance changed")
     missing, graph = verify_original_graph(
-        post, base, generated, by_va, info["compiled_in_64_or_main"])
+        previous, base, generated, by_va, info["compiled_in_64_or_main"])
 
     # Reuse audited packer with a different exact original function. The
     # original packer fully localizes C guest registers and rewrites direct
@@ -230,6 +230,11 @@ def stage(args):
 
 
 def selftest(args):
+    previous = load(args.previous_planner, "k1_r5_fixture_previous_planner")
+    if not (hasattr(previous, "walk_missing_graph") and
+            hasattr(previous, "owner_inventory") and
+            hasattr(previous, "classify")):
+        raise AssertionError("R5 original-source graph/inventory module invalid")
     old = load(args.previous_stage, "k1_r5_synthetic_old_packer")
     old.ROOT = TARGET
     old.MEMBERS = (TARGET,)
@@ -312,8 +317,8 @@ def main():
         p.add_argument("--"+arg, type=Path)
     args = p.parse_args()
     if args.self_test:
-        if args.previous_stage is None:
-            p.error("--previous-stage required for self-test")
+        if args.previous_stage is None or args.previous_planner is None:
+            p.error("--previous-stage and --previous-planner required for self-test")
         selftest(args)
     else:
         for attr in ("base_module", "bb_module", "bc_module",
