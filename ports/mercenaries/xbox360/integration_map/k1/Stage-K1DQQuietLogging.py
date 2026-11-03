@@ -14,6 +14,8 @@ import argparse
 import hashlib
 import json
 import re
+import tempfile
+from types import SimpleNamespace
 from pathlib import Path
 
 PARENT = "P6K1NV2A-DAC-PALETTE-20261103"
@@ -279,7 +281,50 @@ void test() {
             pass
         else:
             raise AssertionError("Changed logger accepted")
-    print("[K1QUIET] SELFTEST PASS: reversible trace sink, failures flushed, first successful pair visible, 256-pair summaries, all faults pass")
+    # Reproduce the exact real-world failure: source/manifest created by
+    # the previous static-wrapper stage, then a second preflight must
+    # accept ONLY the known ABI-only change, preserving parent hashes.
+    with tempfile.TemporaryDirectory(prefix="k1quiet-link-restage-") as td:
+        temp = Path(td)
+        parent = temp / "dac" / "main.cpp"
+        output = temp / "quiet" / "main.cpp"
+        manifest = temp / "quiet" / "quiet.json"
+        parent.parent.mkdir(parents=True)
+        output.parent.mkdir(parents=True)
+        parent.write_bytes(fixture.encode("utf-8"))
+        expected = patch(fixture).encode("utf-8")
+        static_version = legacy_static_output(expected)
+        assert static_version != expected
+        assert static_version.count(b"static void trace(const char* line)") == 1
+        assert expected.count(b"\\nvoid trace(const char* line)\\n{") == 1
+        output.write_bytes(static_version)
+        m = {
+            "marker": MARK,
+            "status": "QUIET_SOURCE_STAGED_NO_XDK",
+            "parent_main_sha256": sha(parent.read_bytes()),
+            "new_main_sha256": sha(static_version),
+            "guest_execution_changed": False,
+            "mmio_fences_changed": False,
+            "translated_tus_changed": 0,
+            "runtime_headers_changed": 0,
+            "hardware_verified": False,
+        }
+        manifest.write_text(json.dumps(m), encoding="utf-8")
+        args = SimpleNamespace(parent=parent, out=output, manifest=manifest)
+        stage(args)
+        assert output.read_bytes() == expected
+        assert json.loads(manifest.read_text(encoding="utf-8"))["new_main_sha256"] == sha(expected)
+        stage(args)  # idempotent reuse with matching new manifest
+        # Never overwrite another generated main, even if its quiet
+        # marker/manifest structure resembles our known old variant.
+        output.write_bytes(static_version + b"X")
+        try:
+            stage(args)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Unexpected stale quiet source was overwritten")
+    print("[K1QUIET] SELFTEST PASS: global cross-TU trace ABI, exact known linker-broken restage, idempotent manifest, unrelated drift fenced")
 
 
 def legacy_static_output(new_source: bytes) -> bytes:
