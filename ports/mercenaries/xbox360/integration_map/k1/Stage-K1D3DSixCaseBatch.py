@@ -159,7 +159,8 @@ def get_function(blob: str, va: int, base) -> tuple[str, int, int]:
     end = base.closing_brace(masked, open_brace)
     return blob[found.start():end], found.start(), end
 
-\ndef prove_original_common_tail(body: str) -> bool:
+
+def prove_original_common_tail(body: str) -> bool:
     """Original 2965A8 joins all cases, pops saved ESI and guest RET.
 
     The recomp lifter uses POP32(esp, esi), then esp += 4; return.
