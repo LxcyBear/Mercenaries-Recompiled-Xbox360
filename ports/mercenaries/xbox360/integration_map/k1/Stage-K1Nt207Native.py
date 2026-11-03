@@ -563,21 +563,27 @@ def self_test():
         "static const char* phase5b_read_handle_path(uint32_t token){}\n"
         "static uint32_t phase5b_open_status_from_error(DWORD error){}\n"
         "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
-        "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
+        "    uint32_t _phase4c_target = (uint32_t)(xbox_va); \\\n"
+        "    if (_phase4c_target == 0x800000D3u) { \\\n"
         "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
         "    } else { \\\n"
+        "        phase4c_escape(PHASE4C_BOUNDARY_ICALL_SAFE, _phase4c_target, (uint32_t)(saved_esp)); \\\n"
+        "    } \\\n"
         "} while (0)\n"
         "K1NT207 FRAME GATE:\nP6DQ ROCKET HARD STOP\n"
     )
     shared_header = (
         "#pragma once\n"
         "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
-        "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
+        "    uint32_t _phase4c_target = (uint32_t)(xbox_va); \\\n"
+        "    if (_phase4c_target == 0x800000D3u) { \\\n"
         "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
         "    } else { \\\n"
+        "        phase4c_escape(PHASE4C_BOUNDARY_ICALL_SAFE, _phase4c_target, (uint32_t)(saved_esp)); \\\n"
+        "    } \\\n"
         "} while (0)\n"
     )
-    print("[K1NT207-NATIVE] SELFTEST REV B: fixture includes TrueTU static/externalized host and active runtime header",flush=True)
+    print("[K1NT207-NATIVE] SELFTEST REV C: macro wraps original full ICALL hard-stop; old ordinal211 not required",flush=True)
     for externalized in (False, True):
         host = real_host
         if externalized:
@@ -595,6 +601,7 @@ def self_test():
             main, hdr = transform(h0, s0)
             assert main.count(TAG) == 1, label + " injected marker count mismatch"
             assert hdr.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
+            assert hdr.count("phase4c_escape(") == 1, label + " original fallback lost"
             assert main.count("k1nt207_nt_query_directory_file((uint32_t)(saved_esp));") == 1
             assert "void k1nt207_nt_query_directory_file(uint32_t savedEsp);" in hdr
             assert main.count("k1nt207_clear(handleToken);") == 1
@@ -627,9 +634,12 @@ def self_test():
     # translated callsites use the macro from the required shared header.
     host_macro = (
         "#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { \\\n"
-        "    } else if (_phase4c_target == 0x800000D3u) { \\\n"
+        "    uint32_t _phase4c_target = (uint32_t)(xbox_va); \\\n"
+        "    if (_phase4c_target == 0x800000D3u) { \\\n"
         "        phase5n_nt_query_information_file((uint32_t)(saved_esp)); \\\n"
         "    } else { \\\n"
+        "        phase4c_escape(PHASE4C_BOUNDARY_ICALL_SAFE, _phase4c_target, (uint32_t)(saved_esp)); \\\n"
+        "    } \\\n"
         "} while (0)\n"
     )
     assert real_host.count(host_macro) == 1
@@ -679,8 +689,8 @@ def self_test():
     # A pre-existing dispatch really IS an unsafe double override and must
     # still be rejected; checking an unrelated helper body is not sufficient.
     preexisting = shared_header.replace(
-        "    } else if (_phase4c_target == 0x800000D3u) { \\\n",
-        "    } else if (_phase4c_target == 0x800000CFu) { \\\n"
+        "    if (_phase4c_target == 0x800000D3u) { \\\n",
+        "    if (_phase4c_target == 0x800000CFu) { \\\n"
         "        prior_nt207_handler((uint32_t)(saved_esp)); \\\n"
         "    } else if (_phase4c_target == 0x800000D3u) { \\\n",
     )
