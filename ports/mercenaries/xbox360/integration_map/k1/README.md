@@ -1947,12 +1947,16 @@ their original "static" linkage). The stage handles both forms rather
 than requiring the original pre-sharding signatures. The ONLY changed
 shared header is translated_runtime.h, which MUST carry the ordinal207
 dispatcher and the externally linked native helper declaration for all
-64 TrueTUs. Sharding can remove the original ordinal211 macro case from
-generated host main.cpp; that host macro is patched only if present.
-Native K1NT207 support lives in host main.cpp regardless. Skipping the
-shared header would leave real translated callers reaching the old
-hard stop. The exception is exact retail ordinal207; all unknown
-ordinals remain fenced. Genuine Xbox 360
+64 TrueTUs. Sharding or later integration can change/remove the old ordinal211
+(0x800000D3) case in either source, so its presence is NOT a safe
+insertion anchor. K1NT207 now wraps the whole original
+RECOMP_ICALL_SAFE do-brace macro with an exact ordinal207 guard;
+for all other targets the entire original body (including its
+phase4c_escape hard-stop fallback) is preserved byte-for-byte.
+The host macro is optional; the TrueTU shared-header macro is
+mandatory. Native K1NT207 support lives in host main.cpp regardless.
+The exception is exact retail ordinal207; all unknown ordinals
+remain fenced. Genuine Xbox 360
 FindFirstFileA/FindNextFileA on the original mounted game: backing
 directory supplies real filenames, attributes, size and FILETIME.
 Xbox FILE_DIRECTORY_INFORMATION class1 is a 64-byte fixed section plus
