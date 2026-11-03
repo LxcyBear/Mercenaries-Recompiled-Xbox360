@@ -43,11 +43,21 @@ if(-not(Test-Path -LiteralPath $shards -PathType Container)){
     throw "[K1-TEXT] Missing original 64 TrueTUs: $shards"
 }
 
-# Re-run all inherited DAC+quiet+three-lane source gates, but NO XDK.
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $parentRunner
-if($LASTEXITCODE -ne 0) {
-    throw "[K1-TEXT] Three-lane parent preflight failed; XDK blocked"
+# Re-run inherited DAC+quiet+three-lane gates, but keep their verbose
+# repetition out of this console. Preserve EVERY raw preflight line on disk.
+# Child PowerShell exit code remains the sole pass/fail authority.
+New-Item -ItemType Directory -Force -Path $outRoot | Out-Null
+$parentLog = Join-Path $outRoot "inherited-source-preflight.log"
+$parentOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $parentRunner 2>&1)
+$parentExit = $LASTEXITCODE
+$parentOutput | Out-File -LiteralPath $parentLog -Encoding UTF8
+if($parentExit -ne 0) {
+    Write-Host "[K1-TEXT] Inherited source preflight failed; last 25 lines:"
+    $parentOutput | Select-Object -Last 25 | ForEach-Object { Write-Host $_ }
+    throw "[K1-TEXT] Three-lane parent preflight failed; XDK blocked. Full log: $parentLog"
 }
+Write-Host "[K1-TEXT] INHERITED CHECKS: SUCCESS (DAC + quiet + PFIFO + hotpath + presentation)"
+Write-Host "[K1-TEXT] Inherited full diagnostics preserved: $parentLog"
 foreach ($path in @($parentMain,$parentManifest)) {
     if(-not(Test-Path -LiteralPath $path -PathType Leaf)){
         throw "[K1-TEXT] Missing staged three-lane parent: $path"
