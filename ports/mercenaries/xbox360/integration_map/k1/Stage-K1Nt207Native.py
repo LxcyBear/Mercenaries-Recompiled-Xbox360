@@ -815,17 +815,57 @@ def stage(a):
     for tu in files:
         if tu.read_bytes().count(b'#include "translated_runtime.h"') != 1:
             raise ValueError("TrueTU not linked to shared runtime dispatcher: " + tu.name)
+
+    # A previous candidate was successfully staged and then rejected by the
+    # XDK. Allow regenerating it ONLY when the prior output manifest matches
+    # every inherited source and the on-disk previously generated hashes.
+    # Preserve the XDK build logs, all 64 TrueTUs, other generated headers,
+    # and the hardware-proven original K1NT207 parent without any rewrite.
+    prior_staged = False
+    if a.manifest.is_file():
+        try:
+            prev = json.loads(a.manifest.read_text(encoding="utf-8-sig"))
+        except (ValueError, UnicodeError) as exc:
+            raise ValueError("Existing native manifest cannot be trusted") from exc
+        old_staged_header = a.out_shards/"translated_runtime.h"
+        if (prev.get("marker") != TAG
+            or prev.get("status") != "NATIVE_DIRECTORY_SOURCE_STAGED_NO_XDK"
+            or prev.get("source_only") is not True
+            or prev.get("parent_main_sha256") != sha(a.parent_main.read_bytes())
+            or prev.get("parent_runtime_header_sha256") != sha(old_header)
+            or Path(prev.get("out_main","MISSING")).resolve() != a.out_main.resolve()
+            or Path(prev.get("out_shards","MISSING")).resolve() != a.out_shards.resolve()
+            or not a.out_main.is_file()
+            or not old_staged_header.is_file()
+            or prev.get("native_main_sha256") != sha(a.out_main.read_bytes())
+            or prev.get("native_runtime_header_sha256")
+               != sha(old_staged_header.read_bytes())):
+            raise ValueError(
+                "Native output drift or parent provenance mismatch; refusing restage"
+            )
+        prior_staged = True
+    # Validate *all* preexisting non-target files before updating either
+    # generated target, so one drifted TrueTU cannot cause half-restaging.
+    for p in files + headers:
+        dest = a.out_shards/p.name
+        if p.name != "translated_runtime.h" and dest.exists():
+            if dest.read_bytes() != p.read_bytes():
+                raise ValueError("Changed inherited TrueTU/header: " + p.name)
     a.out_shards.mkdir(parents=True,exist_ok=True)
     for p in files+headers:
         dest=a.out_shards/p.name
         new_blob=header_blob if p.name=="translated_runtime.h" else p.read_bytes()
         if dest.exists() and dest.read_bytes()!=new_blob:
-            raise ValueError("Refusing changed inherited file "+p.name)
+            if p.name!="translated_runtime.h" or not prior_staged:
+                raise ValueError("Refusing changed inherited file "+p.name)
+            dest.write_bytes(new_blob)
         if not dest.exists():dest.write_bytes(new_blob)
     blob=new.encode("utf-8")
     a.out_main.parent.mkdir(parents=True,exist_ok=True)
     if a.out_main.exists() and a.out_main.read_bytes()!=blob:
-        raise ValueError("Refusing drifted native handler main")
+        if not prior_staged:
+            raise ValueError("Refusing drifted native handler main")
+        a.out_main.write_bytes(blob)
     if not a.out_main.exists():a.out_main.write_bytes(blob)
     output={
         "marker":TAG,
@@ -859,8 +899,12 @@ def stage(a):
     manifest=(json.dumps(output,indent=2)+"\n").encode("utf-8")
     a.manifest.parent.mkdir(parents=True,exist_ok=True)
     if a.manifest.exists() and a.manifest.read_bytes()!=manifest:
-        raise ValueError("Refusing native manifest drift")
+        if not prior_staged:
+            raise ValueError("Refusing native manifest drift")
+        a.manifest.write_bytes(manifest)
     if not a.manifest.exists():a.manifest.write_bytes(manifest)
+    if prior_staged:
+        print("[K1NT207-NATIVE] VERIFIED RESTAGE PASS: inherited parent and previous output SHA proven; native main/header updated, logs + 64 TUs retained")
     print("[K1NT207-NATIVE] STAGE PASS: native Xbox360 FindFirst/Next directory enumeration source")
     print("[K1NT207-NATIVE] Native FILETIME/u64 guest writers are K1NT207-owned; Phase5N omitted helpers NOT needed")
     print("[K1NT207-NATIVE] ORIGINAL XBOX ABI: NtQueryDirectoryFile @40 RET44, class1, ANSI 64B header")
