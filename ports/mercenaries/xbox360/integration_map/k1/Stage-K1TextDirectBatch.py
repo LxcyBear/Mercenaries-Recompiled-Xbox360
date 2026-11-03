@@ -75,8 +75,12 @@ def insert(parent: str, members: list[int], compiled: set[int],
         raise ValueError('Text-direct patch already present')
     if 'P6DQ ROCKET HARD STOP' not in parent or 'phase4c_lookup_pack_func' not in parent:
         raise ValueError('Original fault/lookup path missing')
-    if '#pragma optimize("", on)' not in parent:
-        raise ValueError('Original translated-body insertion anchor missing')
+    # TrueTU main.cpp deliberately has no monolithic translated-code body.
+    # Phase5BC still expects optimize-on to delimit inserted translated
+    # functions. Make a *new* isolated region rather than assuming that the
+    # old monolithic pragma survived sharding.
+    if 'K1_TEXT_HIDDEN_OPT_ON_20261103' in parent:
+        raise ValueError('Inherited optimize placeholder already present')
     if '\r' in parent.replace('\r\n', ''):
         raise ValueError('Mixed line endings in generated main')
     base.STANDARD_CALLS.update(('sin', 'cos'))
@@ -85,6 +89,13 @@ def insert(parent: str, members: list[int], compiled: set[int],
     before_helpers = p5bc.SWEEP_ROOT
     newline = '\r\n' if '\r\n' in parent else '\n'
     normalized = parent.replace('\r\n', '\n')
+    # Hide existing optimize-on directives from the Phase5BC first-match
+    # insertion finder, then restore them byte-for-byte after injection.
+    original_on = '#pragma optimize("", on)'
+    placeholder = '/* K1_TEXT_HIDDEN_OPT_ON_20261103 */'
+    normalized = normalized.replace(original_on, placeholder)
+    normalized += ('\n#pragma optimize("", off)\n'
+                   '#pragma optimize("", on)\n')
     p5bc.SWEEP_ROOT = 0xFFFFFFFF
     new = list(members)
     try:
@@ -94,6 +105,7 @@ def insert(parent: str, members: list[int], compiled: set[int],
         )
     finally:
         p5bc.SWEEP_ROOT = before_helpers
+    result = result.replace(placeholder, original_on)
     if ROOT not in new or ROOT in pruned:
         raise ValueError('0017A0A0 has unresolved support; refusing synthetic continuation: '
                          + ', '.join(pruned.get(ROOT, [])))
@@ -124,7 +136,8 @@ def self_test(base, p5bb, p5bc):
          'static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n'
          '{\n    switch (xbox_va) {\n    default: return (recomp_func_t)0;\n    }\n}\n'
          '#pragma optimize("", on)\n')
-    for text in (p, p.replace('\n', '\r\n')):
+    for text in (p, p.replace('\n', '\r\n'),
+                 p.replace('#pragma optimize("", on)\n', '')):
         members = pick(generated, set(), base)
         assert members == [ROOT]
         result, retained, frontier, pruned = insert(text, members, set(), generated,
