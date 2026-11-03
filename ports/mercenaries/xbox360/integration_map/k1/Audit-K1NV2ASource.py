@@ -58,6 +58,44 @@ def inspect(shards: Path):
     return sorted(candidates, key=lambda x: (-x[0], x[1], x[2]))
 
 
+def focused_guest_block(shards: Path, va: int) -> list[str]:
+    """Show the actual translated block even when a callsite regex misses it.
+
+    A block may contain an inlined guest store, or the last-block tracker may
+    be stale across an indirect call. Present the original lines, don't infer
+    a specific faulting x86 instruction from a bare matching address.
+    """
+    needle = re.compile(
+        r"(?m)^\\s*PHASE4C_BUDGET_TICK\\(0x" + f"{va:08X}" +
+        r"u\\);", flags=re.I)
+    out = [f"EXACT TRANSLATED BLOCK SEARCH: 0x{va:08X}"]
+    found = 0
+    for file in sorted(shards.glob("translated_???.cpp")):
+        lines = file.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if not needle.search(line):
+                continue
+            found += 1
+            lo = max(0, i - 3)
+            # Stop before next translated basic block's budget tick, to
+            # avoid mistaking the next block's store for the focus block.
+            hi = min(len(lines), i + 85)
+            for j in range(i + 1, hi):
+                if BLOCK.search(lines[j]):
+                    hi = min(hi, j + 1)
+                    break
+            out += [f"MATCH {found}: {file.name}:{i+1} source lines {lo+1}..{hi}"]
+            out += [f" {j+1:6d} {lines[j]}" for j in range(lo, hi)]
+    out += [f"Matching basic-block markers: {found}"]
+    if not found:
+        out += [
+            "NO MATCH in this TrueTU set. The runtime's last-block tracker",
+            "may be stale, the block may live in host main.cpp, or these",
+            "sources may not match the XEX. Do NOT infer an exact store PC."
+        ]
+    return out
+
+
 def guest_to_offset(data: bytes, addr: int):
     base = struct.unpack_from("<I", data, 0x104)[0]
     count = struct.unpack_from("<I", data, 0x11C)[0]
@@ -126,6 +164,15 @@ def main():
             (a.focus_va, sum(x[4] == a.focus_va for x in findings))
             if a.focus_va is not None else "No hardware guest-block VA supplied yet."),
            ""]
+    if a.focus_va is not None:
+        out += ["", *focused_guest_block(a.shards, a.focus_va), ""]
+        if assembly is not None:
+            out += [
+                f"ORIGINAL XBE x86 from FOCUSED basic-block entry {a.focus_va:08X}:",
+                *disassemble(assembly, a.focus_va),
+                "Note: a block-entry disassembly is not the store PC.", ""
+            ]
+    out += ["", "RANKED WRITE8 CALL-SITE CANDIDATES", ""] 
     for n, (score, file, line, func, block, source) in enumerate(findings[:a.max], 1):
         out += [f"CANDIDATE {n:02d} score={score} {file}:{line} function={func or 0:08X} block={block or 0:08X}", source]
         if assembly is not None and block is not None and n <= 8:
