@@ -239,6 +239,58 @@ def verify_pc_hooks(manual: str, generated: dict, members: list[int]) -> dict:
     }
 
 
+
+# The maintained PC version passes g_recomp_current_func only as the
+# TEXTURE-BIND-INVALID diagnostic caller field. The Xbox 360 TrueTU runtime
+# does not export that mutable PC trace global. This exact translated
+# function has an immutable original VA, and the validator return value
+# depends ONLY on texture. Rebind that ONE reporting argument to its real
+# function VA. Never define a fabricated global or suppress validation.
+PC_CALLER_ARG = re.compile(
+    r'(\brecomp_validate_texture_bind\s*\(\s*)g_recomp_current_func(?=\s*,)'
+)
+PC_CURRENT_SYMBOL = re.compile(r'\bg_recomp_current_func\b')
+
+
+def bind_pc_diagnostic_caller(generated: dict, selected: list[int], base):
+    """Return a copy with exactly one provenance-checked telemetry arg."""
+    if ROOT not in selected or ROOT not in generated:
+        raise ValueError("Missing actual retail D3D caller root")
+    root_source = generated[ROOT]["source"]
+    masked = base.mask_noncode(root_source)
+    if len(PC_CURRENT_SYMBOL.findall(masked)) != 1 or \
+       len(PC_CALLER_ARG.findall(masked)) != 1:
+        raise ValueError(
+            "PC caller global used outside the unique texture-diagnostic arg "
+            "in original 0x00289E20; refusing guessed linkage"
+        )
+    for va in selected:
+        if va != ROOT and PC_CURRENT_SYMBOL.search(
+            base.mask_noncode(generated[va]["source"])
+        ):
+            raise ValueError(
+                "PC current-function global also used by 0x%08X; "
+                "cannot bind that diagnostic caller automatically" % va
+            )
+    rebound, count = PC_CALLER_ARG.subn(
+        lambda m: m.group(1) + "0x%08Xu" % ROOT, root_source
+    )
+    if count != 1 or "g_recomp_current_func" in base.mask_noncode(rebound):
+        raise ValueError("Unique caller telemetry rebind did not converge")
+    # Preserve the user-local original C by cloning only the packer's
+    # in-memory entry. Hash the original, not the single diagnostic rewrite.
+    derived = dict(generated)
+    derived[ROOT] = dict(generated[ROOT], source=rebound)
+    return derived, {
+        "binding": "original retail function VA as diagnostic caller only",
+        "diagnostic_caller_va": "0x%08X" % ROOT,
+        "original_source_sha256": sha(root_source.encode("utf-8")),
+        "rebound_source_sha256": sha(rebound.encode("utf-8")),
+        "diagnostic_callsite_rewrites": count,
+        "texture_validation_return_rule_unchanged": True,
+    }
+
+
 def choose(generated: dict, compiled: set[int], base) -> list[int]:
     if ROOT in compiled:
         raise ValueError("Root already compiled in TrueTU; audit lookup/linkage, do not duplicate")
@@ -377,6 +429,41 @@ def selftest() -> None:
     proof = verify_pc_hooks(real_proof_source, support_source, [ROOT])
     assert len(proof["pc_texture_validator_sha256"]) == 64
     assert len(proof["pc_movie_stage_23_sha256"]) == 64
+    rebound_fixture, binding = bind_pc_diagnostic_caller(
+        support_source, [ROOT], Base()
+    )
+    assert rebound_fixture[ROOT]["source"].count(
+        "recomp_validate_texture_bind(0x00289E20u,") == 1
+    assert "g_recomp_current_func" not in rebound_fixture[ROOT]["source"]
+    assert "recomp_movie_checkpoint(23u," in rebound_fixture[ROOT]["source"]
+    assert support_source[ROOT]["source"].count("g_recomp_current_func") == 1
+    assert binding["diagnostic_callsite_rewrites"] == 1
+    assert binding["diagnostic_caller_va"] == "0x00289E20"
+    for bad_source in (
+        "recomp_validate_texture_bind(g_recomp_current_func, 1u, 2u); "
+        "GUEST_WRITE32(8u, g_recomp_current_func);",
+        "recomp_validate_texture_bind(g_recomp_current_func, 1u, 2u); "
+        "recomp_validate_texture_bind(g_recomp_current_func, 2u, 3u);",
+        "recomp_movie_checkpoint(23u, 0u, 0u, 0u, 0u);",
+    ):
+        try:
+            bind_pc_diagnostic_caller(
+                {ROOT: {"source": bad_source}}, [ROOT], Base()
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Non-unique/misplaced PC caller global accepted")
+    try:
+        bind_pc_diagnostic_caller(
+            {**support_source, 0x00289E80: {
+                "source": "GUEST_WRITE32(4u, g_recomp_current_func);"}},
+            [ROOT, 0x00289E80], Base()
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Additional caller-global use accepted")
     for changed in ("recomp_movie_checkpoint(6u, 0u, 0u, 0u, 0u);",
                     "recomp_movie_checkpoint(0u, 0u, 0u, 0u, 0u);"):
         try:
@@ -443,6 +530,12 @@ def stage(a: argparse.Namespace, base, bb, bc) -> None:
 
     chosen = choose(generated, compiled, base)
     support_proof = verify_pc_hooks(a.pc_manual.read_text(encoding="utf-8"), generated, chosen)
+    # The true original source hash remains available as provenance. Only
+    # the diagnostic caller argument is rebound in the packer's copy.
+    original_root_sha256 = sha(generated[ROOT]["source"].encode("utf-8"))
+    generated, diagnostic_binding = bind_pc_diagnostic_caller(generated, chosen, base)
+    if diagnostic_binding["original_source_sha256"] != original_root_sha256:
+        raise ValueError("Original 289E20 source provenance changed")
     original_bytes = a.parent.read_bytes()
     result, retained, frontier, pruned = emit(
         original_bytes.decode("utf-8"), chosen, compiled, generated, base, bb, bc
@@ -459,7 +552,8 @@ def stage(a: argparse.Namespace, base, bb, bc) -> None:
         "root_va": "0x00289E20",
         "root_end": "0x%08X" % row["end"],
         "root_original_source_file": generated[ROOT]["file"],
-        "root_original_body_sha256": sha(generated[ROOT]["source"].encode("utf-8")),
+        "root_original_body_sha256": original_root_sha256,
+        "pc_texture_diagnostic_caller_binding": diagnostic_binding,
         "parent_sha256": sha(original_bytes),
         "new_main_sha256": sha(produced),
         "promoted_vas": ["0x%08X" % v for v in retained],
