@@ -95,3 +95,12 @@ The initial three-lane preflight halted before XDK with a duplicate translated d
 The revised audit counts declarations separately from real function definitions (signatures followed by a brace). Its 64-shard synthetic regression covers repeated forward declarations and a deliberate duplicate real body. Multiple real implementation or PFIFO block witnesses are reported with their file/line locations in JSON diagnostics; the audit no longer erases these facts or treats them as evidence of execution. The stage now checks the real DAC guest-VA function call instead of a fragile prototype spelling.
 
 No guest code, MMIO fences or original-XBE proof gates changed. Re-run source preflight before the optional -Build XDK operation. Actual 64 TrueTU/XDK success remains to be verified on the user's Windows PC.
+
+
+## Three-lane stage TrueTU relocation repair (2026-11-03)
+
+The user's read-only audit passed with one PFIFO source witness, four hot blocks, one real definition for each of Swap/PersistDisplay/CreateDevice and 8/1/2 direct callsites. The next stage then stopped before XDK because the old instrumentation assumed that the private Phase6DQ helper phase6dq_note_dispatch was defined inside generated main.cpp. In a 64-TrueTU layout, that helper's definition need not remain in main.cpp.
+
+The repaired stage now observes only existing real P6DQ ROCKET DISPATCH FIRST log messages inside the global external trace(char const*) function, matched to target=0028BDB0 or target=0028A530. It emits a bounded K1PRESENT FRONTIER ROUTE witness through the original unfiltered log sink. This does not call Swap, change direct guest dispatches, inject a framebuffer, or increase display_calls. It will not observe later repetitions after the P6DQ logger's deduplication; zero route messages is not proof of no direct compiled Swap.
+
+The source-only self-test now intentionally omits any phase6dq_note_dispatch definition; it tests this real TrueTU split. An additional forward declaration of the already-existing static K1C guest-block-VA reader is placed before the new central READ32 PFIFO probe; K1C's original prototype may appear only before WRITE8 and would otherwise be too late for MSVC name lookup. No implementation of that helper is duplicated. Parent DAC, quiet logger, 64 translated TrueTUs and unknown MMIO faults are unchanged. Actual XDK and hardware validation remain pending.
