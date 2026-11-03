@@ -174,13 +174,59 @@ def prove_original_common_tail(body: str) -> bool:
     return True
 
 
+
+BUDGET_TICK = re.compile(
+    r'\bPHASE4C_BUDGET_TICK\s*\(\s*0x00296550u\s*\)\s*;'
+)
+ANY_BUDGET_TICK = re.compile(r'\bPHASE4C_BUDGET_TICK\s*\(')
+
+
+def prove_original_index_prefix(body: str, base) -> dict:
+    """Honor the translator's one exact post-label budget tick.
+
+    Original retail C has contiguous loc/eax/PUSH32/eax instructions.
+    The existing 64 TrueTU compilation may insert
+    PHASE4C_BUDGET_TICK(0x00296550u) immediately AFTER the loc label.
+    It is bounded telemetry, not an original x86 instruction. Never
+    remove, reorder, or bypass it from the produced guest code.
+    """
+    executable = base.mask_noncode(body)
+    ticks = list(BUDGET_TICK.finditer(executable))
+    if len(ticks) > 1:
+        raise ValueError("Duplicated original-VA D3D budget instrumentation")
+    normalized, removed = BUDGET_TICK.subn("", executable)
+    if removed != len(ticks) or ANY_BUDGET_TICK.search(normalized):
+        raise ValueError("Unexpected D3D budget tick address or placement")
+    prefix_match = list(re.finditer(ORIGINAL_PREFIX, normalized))
+    if len(prefix_match) != 1:
+        label = re.search(r'loc_00296550\s*:\s*;', executable)
+        raise ValueError(
+            "Original D3D 296550 EDI/PUSH32/index sequence not matched "
+            "after exact budget-tick normalization; "
+            "label=%s, matched=%d, exact_budget_ticks=%d, body_sha256=%s"
+            % (bool(label), len(prefix_match), len(ticks),
+               digest(body.encode("utf-8"))))
+    if ticks:
+        # One tick is permitted only in its proven original-lifter position:
+        # after the label, before eax=edi. Never swallow different logic.
+        label = re.search(r'loc_00296550\s*:\s*;', executable)
+        eax_start = re.search(r'\beax\s*=\s*edi\s*;', executable)
+        if (label is None or eax_start is None or
+                not label.end() <= ticks[0].start() < ticks[0].end() <= eax_start.start()):
+            raise ValueError("D3D budget tick moved away from original 296550 entry label")
+    return {
+        "original_instruction_prefix_verified": True,
+        "exact_post_label_budget_ticks": len(ticks),
+        "original_stack_push_retained": True,
+    }
+
+
 def patch_owner(text: str, base, same_owner_common: bool,
                 allow_other_translation_unit: bool) -> str:
     original, start, end = get_function(text, ROOT, base)
     if MARK in text:
         raise ValueError("D3D switch already installed; no duplicate patch")
-    if len(re.findall(ORIGINAL_PREFIX, base.mask_noncode(original))) != 1:
-        raise ValueError("Original 296550 EDI/index/ESI PUSH contract changed")
+    prove_original_index_prefix(original, base)
     if len(ONE_TAIL.findall(original)) != 1:
         raise ValueError("Original 296550 indirect-tail body differs; refuse ABI guess")
     if original.count("RECOMP_ITAIL") != 1:
@@ -316,9 +362,13 @@ def stage(a):
        generated[COMMON]["file"] != "recomp_0013.c":
         raise ValueError("Retail original switch/common functions absent from generated corpus")
     retail_original = generated[ROOT]["source"]
-    if (len(re.findall(ORIGINAL_PREFIX, base.mask_noncode(retail_original))) != 1 or
-        len(ONE_TAIL.findall(retail_original)) != 1):
+    retail_prefix = prove_original_index_prefix(retail_original, base)
+    if retail_prefix["exact_post_label_budget_ticks"] != 0 or \
+       len(ONE_TAIL.findall(retail_original)) != 1:
         raise ValueError("Original retail-generated 296550 switch source changed")
+    compiled_prefix = prove_original_index_prefix(
+        get_function(owner_source, ROOT, base)[0], base
+    )
     if (owner != common_owner and re.search(
          r'(?m)^[ \t]*static[ \t]+void[ \t]+sub_002965A8', common_source
     )):
@@ -359,6 +409,9 @@ def stage(a):
         "original_common_tail_owner": common_owner,
         "real_original_common_tail_va": "0x002965A8",
         "original_indirect_tail_va": "0x00296550",
+        "retail_source_index_prefix_proof": retail_prefix,
+        "compiled_source_index_prefix_proof": compiled_prefix,
+        "exact_original_budget_tick_retained": True,
         "hardware_case_va": "0x0029655D",
         "preserves_unknown_tail_hard_fence": True,
         "original_64_tu_hashes": {n: digest(b) for n,b in original_shards.items()},
@@ -381,6 +434,8 @@ def stage(a):
     for path in shard_paths:
         if path.read_bytes() != original_shards[path.name]:
             raise ValueError("Original 64 TrueTU source unexpectedly mutated")
+    print("[K1D3D-SIX] Original guest EDI/PUSH/index sequence PASS; compiled budget-tick count=%u (retained)" %
+          compiled_prefix["exact_post_label_budget_ticks"])
     print("[K1D3D-SIX] RETAIL ORIGINAL XBE / SIX-CASE X86 BYTES PASS")
     print("[K1D3D-SIX] Original case targets 6/6; shared exact common tail 002965A8 -> pop esi; ret")
     print("[K1D3D-SIX] SOURCE OWNER %s; original shared common tail owner %s" %
@@ -428,6 +483,35 @@ void sub_00296550(void)
     assert prove_original_common_tail(get_function(example, COMMON, Base)[0])
     assert not prove_original_common_tail(example.replace("POP32(esp, esi)", "esi=0"))
     assert not prove_original_common_tail(example.replace("esp += 4;", "esp += 8;"))
+    assert prove_original_index_prefix(get_function(example, ROOT, Base)[0], Base)[
+        "exact_post_label_budget_ticks"] == 0
+    instrumented = example.replace(
+        "    loc_00296550: ;",
+        "    loc_00296550: ;\n    PHASE4C_BUDGET_TICK(0x00296550u);")
+    assert prove_original_index_prefix(
+        get_function(instrumented, ROOT, Base)[0], Base
+    )["exact_post_label_budget_ticks"] == 1
+    staged_instrumented = patch_owner(
+        instrumented, Base, same_owner_common=True,
+        allow_other_translation_unit=False
+    )
+    assert staged_instrumented.count(
+        "PHASE4C_BUDGET_TICK(0x00296550u);") == 1
+    for wrong in (
+        instrumented.replace("PHASE4C_BUDGET_TICK(0x00296550u)",
+                             "PHASE4C_BUDGET_TICK(0x0029655Du)"),
+        instrumented.replace("PHASE4C_BUDGET_TICK(0x00296550u);",
+                             "PHASE4C_BUDGET_TICK(0x00296550u);\n"
+                             "    PHASE4C_BUDGET_TICK(0x00296550u);"),
+        instrumented.replace("eax = edi;\n    PUSH32",
+                             "eax = edi;\n    esi = 0u;\n    PUSH32"),
+    ):
+        try:
+            patch_owner(wrong, Base, True, False)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Wrong injected instrumentation or guest ABI accepted")
     updated = patch_owner(example, Base, same_owner_common=True,
                           allow_other_translation_unit=False)
     assert updated.count(MARK) == 1
