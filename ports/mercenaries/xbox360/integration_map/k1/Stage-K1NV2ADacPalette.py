@@ -210,8 +210,9 @@ void boot() { trace("P6K1NV2A-PRMDIO-WRITE8-20261103"); }
         "void recomp_guest_write8(uint32_t address, uint8_t value)\n{",
         "void recomp_guest_write8(\n    uint32_t address, uint8_t value)\n{",
     )
-    # Also ensure varying whitespace cannot cause a false declaration count.
-    assert patch(multiline).count("K1NV2A DAC PALETTE COMMIT:") == 1
+    # Both actual LF and Windows CRLF multiline signatures are supported.
+    for candidate in (multiline, multiline.replace("\n", "\r\n")):
+        assert patch(candidate).count("K1NV2A DAC PALETTE COMMIT:") == 1
     for bad in (
         original.replace("void recomp_guest_write8", "void another_write8"),
         original.replace("void recomp_guest_write8", "void recomp_guest_write8(")
