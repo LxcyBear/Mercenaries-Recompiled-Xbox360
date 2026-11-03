@@ -35,7 +35,7 @@ WRAPPER = r'''
  * No kernel calls, guest operations, fault paths, or other loggers changed.
  * All other messages (incl. failures, MMIO, XInput, DAC, Present) pass.
  */
-static void trace(const char* line)
+void trace(const char* line)
 {
     static const char* k1qFrames[4] = {
         "KfLowerIrql LIVE FRAME:",
@@ -210,8 +210,12 @@ def patch(src: str) -> str:
                                 old_function, 1)
     if restored != src:
         raise ValueError("Quiet mode changed code outside central trace sink")
-    if new.count("static void trace(const char* line)") != 1:
+    if new.count("void trace(const char* line)") != 1:
         raise ValueError("Central trace wrapper missing or duplicated")
+    if "static void trace(const char* line)" in new:
+        raise ValueError("Quiet wrapper has internal linkage; cross-TU trace would fail LNK2001")
+    if new.count("k1quiet_emit_unfiltered") < 2:
+        raise ValueError("Original underlying output sink not reachable")
     if new.count("K1QUIET MILESTONE SUMMARY:") != 1 or new.count(MARK) != 1:
         raise ValueError("Quiet mode trace marker/summary drift")
     return new
@@ -243,7 +247,11 @@ void test() {
     ]
     for s in variants + [v.replace("\n", "\r\n") for v in variants]:
         out = patch(s)
-        assert out.count("static void trace(const char* line)") == 1
+        assert out.count("void trace(const char* line)") == 1
+        assert "static void trace(const char* line)" not in out
+        assert re.search(r"(?m)^void trace\\(const char\\* line\\)\\s*\\{", out) is not None
+        # Other TrueTUs declare a global C++ trace(char const*); never
+        # silently give this replacement internal (static) linkage.
         # The original sink's qualifiers and argument name remain intact.
         # Only the function symbol itself is renamed.
         renamed = re.findall(
