@@ -182,6 +182,138 @@ def inspect_tail_callers(by_va: dict, generated: dict, base,
     return result
 
 
+
+def inspect_unmapped_gap(address: int, by_va: dict, generated: dict) -> dict:
+    """Expose the exact original source inventory gap; do not guess a jump."""
+    previous = sorted((row for row in by_va.values()
+                       if row["start"] <= address),
+                      key=lambda row: row["start"], reverse=True)[:3]
+    following = sorted((row for row in by_va.values()
+                        if row["start"] > address),
+                       key=lambda row: row["start"])[:3]
+    rows = []
+    for direction, sample in (("previous", previous), ("following", following)):
+        for item in sample:
+            va = item["start"]
+            source = generated.get(va, {}).get("source")
+            lines = source.splitlines() if source else []
+            nearby = []
+            # Include exact generated-source evidence for this address only.
+            for i, line in enumerate(lines):
+                if ("%08X" % address).lower() in line.lower():
+                    nearby.append({
+                        "source_line": i+1,
+                        "context": lines[max(0, i-3):min(len(lines), i+4)],
+                    })
+            rows.append({
+                "direction": direction,
+                "start": "0x%08X" % va,
+                "end_exclusive": "0x%08X" % item["end"],
+                "length": item["end"]-va,
+                "name": item["name"],
+                "inventory_fields": sorted(item.keys()),
+                "source_file": generated.get(va, {}).get("file"),
+                "original_source_sha256": sha(source.encode("utf-8")) if source else None,
+                "entry_first_28_lines": lines[:28],
+                "ending_last_36_lines": lines[-36:],
+                "literal_target_references": nearby[:6],
+            })
+    predecessor = previous[0] if previous else None
+    successor = following[0] if following else None
+    prev_end = predecessor["end"] if predecessor else None
+    next_start = successor["start"] if successor else None
+    region_kind = (
+        "function_inventory_gap"
+        if prev_end is not None and next_start is not None
+           and prev_end <= address < next_start
+        else "overlap_or_unresolved_inventory_region"
+    )
+    # A 0x9655D pointer is not evidence of an instruction start.
+    # The exact boundary and source bytes must be checked first.
+    hits = []
+    needle = ("%08X" % address).lower()
+    for va, entry in generated.items():
+        if not is_graphics(va):
+            continue
+        source = entry["source"]
+        if needle in source.lower():
+            refs = []
+            for i, line in enumerate(source.splitlines()):
+                if needle in line.lower():
+                    refs.append({"line": i+1, "text": line.strip()})
+            hits.append({
+                "function_start": "0x%08X" % va,
+                "source_file": entry["file"],
+                "text_matches": refs[:8],
+            })
+            if len(hits) >= 32:
+                break
+    return {
+        "target": "0x%08X" % address,
+        "inventory_region_kind": region_kind,
+        "predecessor_start": ("0x%08X" % predecessor["start"]) if predecessor else None,
+        "predecessor_end_exclusive": ("0x%08X" % prev_end) if prev_end is not None else None,
+        "target_minus_predecessor_end": address-prev_end if prev_end is not None else None,
+        "successor_start": ("0x%08X" % next_start) if next_start is not None else None,
+        "successor_start_minus_target": next_start-address if next_start is not None else None,
+        "gap_width_bytes": next_start-prev_end if
+            prev_end is not None and next_start is not None else None,
+        "target_is_predecessor_end_exclusive": address == prev_end,
+        "adjacent_original_function_sources": rows,
+        "original_d3d_source_text_references": hits,
+        "raw_instruction_bytes_required": True,
+        "safe_to_dispatch_as_function": False,
+    }
+
+
+def inspect_verified_xbe_bytes(path: Path, target: int) -> dict:
+    """Read a *user-local* exact-SHA original XBE, never copy it into repo."""
+    import struct
+    blob = path.read_bytes()
+    digest = sha(blob).upper()
+    if digest != XBE_SHA:
+        raise ValueError("Local XBE SHA-256 does not match supported retail build: "
+                         + digest)
+    if len(blob) < 0x124 or blob[:4] != b"XBEH":
+        raise ValueError("Retail XBE has no valid XBEH header")
+    base = struct.unpack_from("<I", blob, 0x104)[0]
+    count = struct.unpack_from("<I", blob, 0x11C)[0]
+    table_va = struct.unpack_from("<I", blob, 0x120)[0]
+    table_off = table_va-base
+    if count == 0 or count > 64 or table_off < 0 or \
+       table_off+count*0x38 > len(blob):
+        raise ValueError("Retail XBE section table missing/out of bounds")
+    sections = []
+    for i in range(count):
+        off = table_off+i*0x38
+        va, virtual_size, raw, raw_size = struct.unpack_from("<IIII", blob, off+4)
+        if va <= target < va+virtual_size:
+            sections.append((i, va, virtual_size, raw, raw_size))
+    if len(sections) != 1:
+        raise ValueError("Target lacks unique retail-XBE section byte provenance")
+    number, va, virtual_size, raw, raw_size = sections[0]
+    start = max(va, target-32)
+    end = min(va+virtual_size, va+raw_size, target+96)
+    start_file = raw+(start-va)
+    end_file = raw+(end-va)
+    if end <= start or start_file < 0 or end_file > len(blob):
+        raise ValueError("Requested XBE window outside real raw section bytes")
+    return {
+        "exact_retail_xbe_sha256": digest,
+        "original_xbe_path_local_only": str(path),
+        "section_index": number,
+        "section_va": "0x%08X" % va,
+        "section_virtual_size": virtual_size,
+        "section_raw_offset": "0x%08X" % raw,
+        "section_raw_size": raw_size,
+        "target_raw_file_offset": "0x%08X" % (raw+target-va),
+        "window_start_va": "0x%08X" % start,
+        "window_end_va_exclusive": "0x%08X" % end,
+        "original_128_byte_window_hex": blob[start_file:end_file].hex(" "),
+        "disassembly_status": "raw exact bytes only; x86 instruction boundary not assumed",
+    }
+
+
 def select_graph(by_va: dict, generated: dict, base, existing: set[int],
                  capacity: int = MAX_CANDIDATES) -> tuple[list[dict], list[dict], dict]:
     """Traverse existing compiled functions to discover missing graph leaves.
@@ -318,6 +450,8 @@ def plan(a) -> None:
     if not is_graphics(ITAIL):
         raise ValueError("Last observed hardware ITAIL is outside original D3D/XGRPH")
     owner_context = context_of_label(ITAIL, target, generated)
+    gap = inspect_unmapped_gap(ITAIL, by_va, generated)
+    local_xbe = inspect_verified_xbe_bytes(a.xbe, ITAIL) if a.xbe else None
     seeds, selected, graph_metrics = select_graph(by_va, generated, base, existing)
     control_flow_contexts = inspect_tail_callers(by_va, generated, base, existing)
     graph_digest = sha(json.dumps(selected, sort_keys=True).encode("utf-8"))
@@ -345,6 +479,8 @@ def plan(a) -> None:
         "generated_original_c_functions": len(generated),
         "existing_packed_or_true_tu_count": len(existing),
         "itail_analysis": target,
+        "itail_gap_provenance": gap,
+        "verified_local_original_xbe_target_bytes": local_xbe,
         "itail_owner_original_source": owner_context,
         "related_original_c_control_flow": control_flow_contexts,
         "seed_classification": seeds,
@@ -370,6 +506,14 @@ def plan(a) -> None:
     print("[K1D3D-BATCH] ITAIL=%s classification=%s owner=%s .. %s label=%s" %
           (target["address"], target["classification"],
            target["owner_va"], target["owner_end"], target["original_label_present"]))
+    print("[K1D3D-BATCH] GAP PROVENANCE: type=%s prev=%s end=%s delta=%s next=%s distance=%s width=%s" %
+          (gap["inventory_region_kind"], gap["predecessor_start"],
+           gap["predecessor_end_exclusive"],
+           gap["target_minus_predecessor_end"],
+           gap["successor_start"], gap["successor_start_minus_target"],
+           gap["gap_width_bytes"]))
+    print("[K1D3D-BATCH] Target literal in other original D3D source bodies: %u; exact local-XBE bytes: %s" %
+          (len(gap["original_d3d_source_text_references"]), "YES" if local_xbe else "NOT SUPPLIED"))
     print("[K1D3D-BATCH] Original owner source=%s labels=%s itail_callsites=%s" %
           (target["generated_source_file"],
            owner_context.get("target_label_occurrences", 0),
@@ -420,6 +564,28 @@ def selftest() -> None:
     assert all(x["va"] != "0x0029655D" for x in selected)
     cls2 = classify(0x002965F0, by_va, generated)
     assert cls2["classification"] == "exact_source_entry"
+    # Exercise inventory-gap interpretation without inventing a function
+    # or claiming an instruction boundary.
+    with_gap = {
+        0x00296550: {"start": 0x00296550, "end": 0x0029655C,
+                     "name": "sub_00296550"},
+        0x002965F0: {"start": 0x002965F0, "end": 0x00296614,
+                     "name": "sub_002965F0"},
+    }
+    gap = inspect_unmapped_gap(ITAIL, with_gap, generated)
+    assert gap["inventory_region_kind"] == "function_inventory_gap"
+    assert gap["predecessor_end_exclusive"] == "0x0029655C"
+    assert gap["target_minus_predecessor_end"] == 1
+    assert gap["successor_start_minus_target"] == 0x93
+    assert gap["gap_width_bytes"] == 0x94
+    assert not gap["safe_to_dispatch_as_function"]
+    with_bad_xbe = Path(__file__).resolve()
+    try:
+        inspect_verified_xbe_bytes(with_bad_xbe, ITAIL)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Unverified source file accepted as retail XBE")
     assert cls2["can_route_via_plain_function_lookup"]
     absent = classify(0x0029655E, by_va, generated)
     assert absent["classification"] == "interior_missing_label"
@@ -443,6 +609,8 @@ def main() -> None:
     for arg in ("base-module", "functions", "generated-root", "parent",
                 "shards", "output"):
         ap.add_argument("--" + arg, type=Path)
+    ap.add_argument("--xbe", type=Path,
+                    help="Optional exact local retail default.xbe for raw instruction-window provenance")
     a = ap.parse_args()
     if a.self_test:
         selftest()
