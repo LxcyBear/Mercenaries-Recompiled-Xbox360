@@ -23,10 +23,9 @@ MARK = "P6K1DQ-QUIET-LOG-20261103"
 # Match a DEFINITION (not a prototype), then verify the actual body has all
 # three inherited Xbox debug/file sinks before changing anything.
 DECL = re.compile(
-    r"(?m)^([ \t]*(?:(?:static|inline|__forceinline)[ \t]+)*"
-    r"void[ \t]+)trace\b"
-    r"([ \t]*\(\s*const[ \t]+char[ \t]*\*\s*[A-Za-z_][A-Za-z_0-9]*"
-    r"\s*\)\s*\{)"
+    r"(?m)^[ \t]*(?:(?:static|inline|__forceinline)\s+)*"
+    r"(?:void|VOID)\s+(?:__cdecl\s+)?(?P<name>trace)\b\s*"
+    r"\((?P<args>[^(){};]{1,256})\)\s*\{"
 )
 TRACE_CANDIDATE = re.compile(
     r"(?m)^[ \t]*[^\r\n]{0,160}\btrace\s*\([^\r\n]{0,160}"
@@ -170,25 +169,37 @@ def patch(src: str) -> str:
         raise ValueError("Original hard-stop logger absent")
     if "\r" in src.replace("\r\n", ""):
         raise ValueError("Unsupported mixed line endings")
-    m = list(DECL.finditer(src))
-    if len(m) != 1:
+    candidates = list(DECL.finditer(src))
+    qualifying = []
+    for candidate in candidates:
+        args = re.sub(r"\s+", " ", candidate.group("args")).strip()
+        is_const_char = ("const char" in args and "*" in args)
+        is_pcstr = args.startswith("LPCSTR ")
+        # The wrapper uses trace(const char* line); do not silently alter a
+        # variadic or multi-argument ABI even if the implementation logs.
+        if not (is_const_char or is_pcstr) or "," in args:
+            continue
+        end = trace_end(src, candidate.end() - 1)
+        original = src[candidate.start():end]
+        if all(token in original for token in
+               ("OutputDebugStringA(", "WriteFile(", "FlushFileBuffers(")):
+            qualifying.append((candidate, end))
+    if len(qualifying) != 1:
         suspects = [re.sub(r"\s+", " ", x.group(0).strip())
                     for x in TRACE_CANDIDATE.finditer(src)]
         raise ValueError(
-            f"Exactly one original central trace sink required, found {len(m)}; "
-            f"nearby declarations/calls: {suspects[:12]}"
+            "Expected exactly one central trace DEFINITION with unchanged "
+            f"Xbox debug/file output, found {len(qualifying)} "
+            f"({len(candidates)} trace definitions); candidates: {suspects[:12]}"
         )
-    marker = m[0]
-    end = trace_end(src, marker.end() - 1)
+    marker, end = qualifying[0]
     old_function = src[marker.start():end]
-    if ("OutputDebugStringA(" not in old_function or
-        "WriteFile(" not in old_function or
-        "FlushFileBuffers(" not in old_function):
-        raise ValueError("Original trace sink output mechanisms changed")
     nl = "\r\n" if "\r\n" in src else "\n"
-    original_declaration = marker.group(0)
-    renamed_declaration = marker.group(1) + "k1quiet_emit_unfiltered" + marker.group(2)
-    raw_function = old_function.replace(original_declaration, renamed_declaration, 1)
+    # Rename only the actual *function name* token. Keeping all original
+    # argument names and whitespace avoids another generator-format issue.
+    rename_at = marker.start("name") - marker.start()
+    raw_function = (old_function[:rename_at] + "k1quiet_emit_unfiltered"
+                    + old_function[rename_at + len("trace"):])
     wrapper = WRAPPER.replace("\n", nl)
     new = (src[:marker.start()] + raw_function + "\n".replace("\n", nl) +
            wrapper + src[end:])
