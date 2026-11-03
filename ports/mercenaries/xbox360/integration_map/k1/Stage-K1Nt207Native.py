@@ -169,6 +169,9 @@ void k1nt207_nt_query_directory_file(uint32_t savedEsp)
     cursor=&s_k1nt207Cursors[slot];
     if (!cursor->active || restart)
     {
+        /* Clear unused mask bytes before storing the full 129-byte pattern.
+         * The old stage copied uninitialized stack tail into cursor state. */
+        ZeroMemory(pattern,sizeof(pattern));
         /* On initial enumeration capture and validate Xbox ANSI_STRING mask.
          * Later calls use the original filter even when caller passes a new one.
          * String layout: USHORT Length, USHORT MaximumLength, DWORD Buffer.
@@ -548,7 +551,7 @@ def self_test():
             assert "K1NT207 REAL ENUM SUCCESS!!!" in main
             assert "P6DQ ROCKET HARD STOP" in main
             assert main.rfind("void k1nt207_nt_query_directory_file(") > main.find(
-                "phase5n_write_guest_u64("), label + " helper not appended after inherited support"
+                "k1nt207_write_guest_u64("), label + " helper not appended after inherited support"
             # The real TrueTU runtime may change the existing Phase5N support
             # definition's argument type, keyword or layout.  This must NOT
             # affect placement of the new native helper.
@@ -648,6 +651,7 @@ def self_test():
     assert "static void k1nt207_write_guest_u64(uint32_t address, uint64_t value)" in CURSOR
     assert "((uint64_t)value->dwHighDateTime << 32)" in CURSOR
     assert "GUEST_WRITE32(address + 4u, (uint32_t)(value >> 32));" in CURSOR
+    assert "ZeroMemory(pattern,sizeof(pattern));" in HANDLER
     assert "GUEST_WRITE32(recordVa+60u,nameLen)" in HANDLER
     assert "GUEST_WRITE8(recordVa+64u+i," in HANDLER
     assert "void k1nt207_nt_query_directory_file(uint32_t savedEsp)\n{" in HANDLER
