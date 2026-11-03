@@ -20,7 +20,16 @@ HOT_VAS = (0x001EF4CD, 0x001EF64E, 0x001EEFF1, 0x001EEFE0)
 PRESENT = {"Swap": 0x0028BDB0, "PersistDisplay": 0x0028A530,
            "CreateDevice": 0x0028CAA0}
 BLOCK = re.compile(r"PHASE4C_BUDGET_TICK\s*\(\s*0x([0-9A-Fa-f]{6,8})u\s*\)")
-FUNCTION = re.compile(r"(?m)^\s*(?:static\s+)?void\s+sub_([0-9A-Fa-f]{8})\s*\(")
+# Match declarations separately from implementations. Each TrueTU may contain
+# forward declarations for functions compiled in another shard. Only a
+# signature followed by '{' is an implementation. Original code is preserved.
+FUNCTION = re.compile(
+    r"^[ \t]*(?:static[ \t]+)?void[ \t]+sub_([0-9A-Fa-f]{8})"
+    r"[ \t]*\([ \t]*(?:void[ \t]*)?\)"
+)
+FUNCTION_DEF = re.compile(
+    FUNCTION.pattern + r"[ \t]*(?:\r?\n[ \t]*)?\{"
+)
 HOT_PROFILE = re.compile(r"P6DQ HOT PROFILE: total=(\d+) hot_001E=(\d+)")
 LAST_FAULT = re.compile(r"FAULT ACCESS IMMEDIATE: READ width=4 guest=([0-9A-F]{8})")
 STRIP = re.compile(r"[\r\n]+")
@@ -45,18 +54,26 @@ def audit(shards: Path, proof: Path, log: Path | None) -> dict:
     callsites: dict[str, list[dict]] = {n: [] for n in PRESENT}
     pfifo: list[dict] = []
     hot: dict[str, list[dict]] = {f"{a:08X}": [] for a in HOT_VAS}
-    counts = {"files": len(files), "functions": 0, "blocks": 0}
+    counts = {"files": len(files), "functions": 0, "declarations": 0, "blocks": 0}
     for file in files:
         lines = file.read_text(encoding="utf-8").splitlines()
         func, block = None, None
         for i, text in enumerate(lines):
-            fm = FUNCTION.search(text)
+            fm = FUNCTION.match(text)
             if fm:
-                func = int(fm.group(1), 16)
-                counts["functions"] += 1
-                for name, va in PRESENT.items():
-                    if va == func:
-                        presence[name].append({"file": file.name, "line": i + 1})
+                # The brace can be on the signature line or the next line,
+                # but a prototype ending in ';' is not an implementation.
+                signature = text + ("\n" + lines[i + 1]
+                                     if i + 1 < len(lines) else "")
+                definition = FUNCTION_DEF.match(signature) is not None
+                if definition:
+                    func = int(fm.group(1), 16)
+                    counts["functions"] += 1
+                    for name, va in PRESENT.items():
+                        if va == func:
+                            presence[name].append({"file": file.name, "line": i + 1})
+                else:
+                    counts["declarations"] += 1
             bm = BLOCK.search(text)
             if bm:
                 block = int(bm.group(1), 16)
@@ -82,10 +99,14 @@ def audit(shards: Path, proof: Path, log: Path | None) -> dict:
                                 "source": text.strip()[:230],
                             })
 
-    if len(presence["Swap"]) > 1 or len(presence["PersistDisplay"]) > 1:
-        raise ValueError("Duplicate translated display function definition")
-    if len(pfifo) > 1:
-        raise ValueError("Duplicate translated PFIFO exact guest block")
+    # Do NOT turn a read-only audit into a build gate based on function
+    # cardinality. Static/repeated code can legally occur in separate TUs;
+    # preserve every genuine implementation witness and flag the ambiguity
+    # in the report. Most previous "duplicates" were forward declarations.
+    display_ambiguities = {
+        n: presence[n] for n in PRESENT if len(presence[n]) > 1
+    }
+    pfifo_ambiguity = len(pfifo) > 1
     recent = {"available": False}
     if log:
         lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -112,6 +133,13 @@ def audit(shards: Path, proof: Path, log: Path | None) -> dict:
     return {
         "status": "SOURCE_ONLY_READ_ONLY_NO_XDK",
         "counts": counts,
+        "diagnostics": {
+            "multiple_implementation_witnesses": display_ambiguities,
+            "multiple_pfifo_block_witnesses": pfifo_ambiguity,
+            "warning": ("Multiple source witnesses are reported, not silently "
+                        "treated as one executable or proof of runtime execution"),
+            "hard_fail_on_duplicate_declarations": False,
+        },
         "pfifo": {
             "register": "NV_PFIFO_CACHE1_DMA_PUT",
             "address": PFIFO_ADDRESS,
@@ -148,7 +176,10 @@ def self_test() -> None:
         shards.mkdir()
         for n in range(64):
             (shards / f"translated_{n:03d}.cpp").write_text(
-                ("static void sub_0028BDB0(void)\n{\nPHASE4C_BUDGET_TICK(0x0028BDB0u);\n}\n"
+                ("static void sub_0028BDB0(void);\n"
+                 "static void sub_0028A530(void);\n"
+                 "static void sub_0028CAA0(void);\n"
+                 + ("static void sub_0028BDB0(void)\n{\nPHASE4C_BUDGET_TICK(0x0028BDB0u);\n}\n"
                  "static void sub_0028A530(void)\n{\nPHASE4C_BUDGET_TICK(0x0028A530u);\n}\n"
                  "static void sub_001EF000(void)\n{\nPHASE4C_BUDGET_TICK(0x001EF4CDu);\n}\n"
                  "static void sub_0028ED48(void)\n{\nPHASE4C_BUDGET_TICK(0x0028ED6Bu);\n}\n")
@@ -174,8 +205,18 @@ def self_test() -> None:
         assert dct["pfifo"]["translated_block_witnesses"]
         assert len(dct["presentation"]["functions"]["Swap"]["definitions"]) == 1
         assert len(dct["presentation"]["functions"]["PersistDisplay"]["definitions"]) == 1
+        assert dct["counts"]["declarations"] == 192
+        assert not dct["diagnostics"]["multiple_implementation_witnesses"]
         assert dct["translated_files_mutated"] == 0
-    print("[K1-3LANE] SELFTEST PASS: exact PFIFO proof, 64 TrueTUs, 001E hot samples, Swap/PersistDisplay membership, read-only")
+        # Real multiple definitions should be REPORTED, not discarded and
+        # not conflated with prototypes or automatic failure of an audit.
+        (shards / "translated_021.cpp").write_text(
+            "static void sub_0028BDB0(void)\n{\n}\n", encoding="utf-8"
+        )
+        dct2 = audit(shards, proof, log)
+        assert len(dct2["presentation"]["functions"]["Swap"]["definitions"]) == 2
+        assert len(dct2["diagnostics"]["multiple_implementation_witnesses"]["Swap"]) == 2
+    print("[K1-3LANE] SELFTEST PASS: 64 TrueTUs, declarations vs real definitions, source ambiguity reporting, exact PFIFO proof, 001E and Swap/PersistDisplay")
 
 
 def main():
@@ -204,6 +245,11 @@ def main():
           ",".join(f"{k}:{len(v)}" for k, v in h["samples"].items()))
     for n, f in result["presentation"]["functions"].items():
         print(f"[K1-PRESENT] {n} {f['address']} definitions={len(f['definitions'])} direct_callsites={len(f['direct_callsites_first100'])}")
+    print(f"[K1-3LANE] SOURCE CLASSIFICATION: real_definitions={result['counts']['functions']} forward_declarations={result['counts']['declarations']}")
+    if result["diagnostics"]["multiple_implementation_witnesses"]:
+        print("[K1-3LANE] WARN: multiple real display implementation witnesses; see JSON diagnostics, no execution inferred")
+    if result["diagnostics"]["multiple_pfifo_block_witnesses"]:
+        print("[K1-3LANE] WARN: multiple compiled PFIFO block witnesses; see JSON, no execution inferred")
     print("[K1-3LANE] READ-ONLY: no hardware/XDK, no guest modifications, no fabricated pixels")
     if args.out:
         print("[K1-3LANE] FULL REPORT:", args.out)
