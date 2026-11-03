@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 
 PC_SHA = "f513ae4e041401b7b032410016940971488d523b"
@@ -27,6 +28,25 @@ PC_INVENTORY = "ports/mercenaries/data/generated-patch-inventory.json"
 
 def digest(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+def verify_pc_commit(pc_root: Path) -> str:
+    if not (pc_root / ".git").exists():
+        raise ValueError("Pinned PC source is not a Git checkout: " + str(pc_root))
+    result = subprocess.run(
+        ["git", "-C", str(pc_root), "rev-parse", "HEAD"],
+        text=True, capture_output=True, check=True)
+    commit = result.stdout.strip().lower()
+    if commit != PC_SHA:
+        raise ValueError(
+            "PC reference must be pinned at " + PC_SHA + "; actual " + commit)
+    status = subprocess.run(
+        ["git", "-C", str(pc_root), "status", "--porcelain",
+         "--", PC_PATCH_SCRIPT, PC_INVENTORY],
+        text=True, capture_output=True, check=True)
+    if status.stdout.strip():
+        raise ValueError("PC patch and inventory source have uncommitted edits")
+    return commit
 
 
 def read_templates(pc_root: Path) -> tuple[str, str, dict]:
