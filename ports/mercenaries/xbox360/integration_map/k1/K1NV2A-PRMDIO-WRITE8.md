@@ -94,6 +94,22 @@ K1NV2A EXACT WRITE8: addr=FD6813C8 value=?? last_guest_block_va=???????? ...
 FAULT ACCESS IMMEDIATE: WRITE width=1 guest=FD6813C8
 ```
 
+After the hardware log gives a concrete last guest block, rerun the
+existing read-only auditor without building or changing a shard:
+
+```powershell
+$k1 = ".\ports\mercenaries\xbox360\integration_map\k1"
+$shards = ".\build\phase6_integration_map\k1_ntquerydirectory207_native\translated_shards"
+$xbe = ".\game_files\mercenaries-retail\default.xbe"
+python "$k1\Audit-K1NV2ASource.py" --shards $shards --xbe $xbe --focus-va 0xYOUR_GUEST_BLOCK_VA --max 8
+```
+
+Replace `0xYOUR_GUEST_BLOCK_VA` with the observed 8-digit hex.
+The auditor ranks exact generated-block matches first and decodes the
+user's original XBE bytes locally if the verified XBE is available.
+Those matches still require source-level proof of the individual
+byte-store instruction.
+
 The added conditional executes at the **entry** of the central
 `recomp_guest_write8` and logs the **actual uint8_t argument**
 plus register/ESP context *before* the original fault path executes.
