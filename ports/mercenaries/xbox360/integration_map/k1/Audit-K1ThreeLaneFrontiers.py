@@ -174,17 +174,22 @@ def self_test() -> None:
         root = Path(d)
         shards = root / "t"
         shards.mkdir()
+        declarations = (
+            "static void sub_0028BDB0(void);\n"
+            "static void sub_0028A530(void);\n"
+            "static void sub_0028CAA0(void);\n"
+        )
+        bodies = (
+            "static void sub_0028BDB0(void)\n{\nPHASE4C_BUDGET_TICK(0x0028BDB0u);\n}\n"
+            "static void sub_0028A530(void)\n{\nPHASE4C_BUDGET_TICK(0x0028A530u);\n}\n"
+            "static void sub_001EF000(void)\n{\nPHASE4C_BUDGET_TICK(0x001EF4CDu);\n}\n"
+            "static void sub_0028ED48(void)\n{\nPHASE4C_BUDGET_TICK(0x0028ED6Bu);\n}\n"
+        )
         for n in range(64):
             (shards / f"translated_{n:03d}.cpp").write_text(
-                ("static void sub_0028BDB0(void);\n"
-                 "static void sub_0028A530(void);\n"
-                 "static void sub_0028CAA0(void);\n"
-                 + ("static void sub_0028BDB0(void)\n{\nPHASE4C_BUDGET_TICK(0x0028BDB0u);\n}\n"
-                 "static void sub_0028A530(void)\n{\nPHASE4C_BUDGET_TICK(0x0028A530u);\n}\n"
-                 "static void sub_001EF000(void)\n{\nPHASE4C_BUDGET_TICK(0x001EF4CDu);\n}\n"
-                 "static void sub_0028ED48(void)\n{\nPHASE4C_BUDGET_TICK(0x0028ED6Bu);\n}\n")
-                if n == 55 else "", encoding="utf-8"
+                declarations + (bodies if n == 55 else ""), encoding="utf-8"
             )
+
         proof = root / "focused.txt"
         proof.write_text("\n".join((
             "Focus guest block VA: 0028ED48",
