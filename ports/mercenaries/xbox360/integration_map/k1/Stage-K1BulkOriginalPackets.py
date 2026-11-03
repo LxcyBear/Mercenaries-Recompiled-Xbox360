@@ -170,7 +170,7 @@ def stage(a):
         "unmodified_original_TrueTU_hashes":{
             k:sha(v) for k,v in shard_blobs.items()},
         "unmodified_original_TrueTU_count":64,
-        "previous_hardware_good_source_preserved":True,
+        "r4_hardware_proven_source_fences_preserved":True,
         "six_case_true_tu_owner":"translated_052.cpp",
         "original_r5_retail_branch_preserved":True,
         "original_frontiers":["0x%08X"%va for va in frontiers],
