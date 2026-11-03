@@ -83,3 +83,36 @@ Hardware measured a large 160,170-ms interval for ticks
 a separate startup performance hotspot (possibly initialization
 work or waiting); it is not evidence that a source-only log
 formatter accelerates the Xbox.
+
+## Exact PC checkpoint dependency resolved (2026-11-03)
+
+The real source preflight identified a single missing helper at original
+0017A0A0 in recomp_0007.c: recomp_main_state_checkpoint takes the
+two guest stack arguments, followed by the genuine GUEST_WRITE32
+to address 0x413F6C. The original translated call and guest write
+remain intact in the new stage.
+
+The maintained PC implementation is in
+ports/mercenaries/src/recomp_manual.c, with its ABI declaration in
+ports/mercenaries/src/recomp/recomp_types.h. It performs
+environment-driven PC gameplay/shell-play capture, optional host
+frontend test automation, and state-transition tracing. It does not
+write guest registers or guest RAM. These PC capture modes do not
+run on the Xbox 360 port.
+
+The derived Xbox main.cpp now supplies the same two-argument void
+helper as bounded K1STATE MAIN CHECKPOINT telemetry. It logs first
+entry, state changes and every 1,024th repetition; it never alters
+guest RAM, registers, return values, framebuffer or control flow.
+Both the maintained PC helper body and the exact original retail
+callsite/guest-write sequence are checked before source promotion.
+The mandatory root remains fail-closed for any OTHER unresolved helper.
+
+Phase5BC's obsolete synthetic sweep-entry global assignment is
+not injected into the original root. Original 64 TrueTUs and prior
+graphics/PFIFO/DAC/presentation hard fences remain unchanged.
+
+Automated GitHub source-regression validation passed for commit
+0bdd7c1050655eb7738610d52b206cdcf5cb94ec. The real source
+stage, XDK compilation and Xbox hardware still require verification
+on the user's Windows machine.
