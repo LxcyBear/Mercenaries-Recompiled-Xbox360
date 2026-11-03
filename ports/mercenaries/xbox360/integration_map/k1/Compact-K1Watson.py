@@ -51,11 +51,12 @@ def group_pass(line: str) -> str:
     return head[0]
 
 
-def compress(lines: list[str]) -> str:
+def compress(lines: list[str], brief: bool = False) -> str:
     total = 0
     passes = collections.Counter()
     revisions = collections.Counter()
     rev_examples: dict[str, list[str]] = {}
+    other = collections.Counter()
     preserved: list[str] = []
     for text in lines:
         total += 1
@@ -83,11 +84,22 @@ def compress(lines: list[str]) -> str:
             if len(examples) < 2:
                 examples.append(clean)
             continue
-        # Retain nonmatching evidence, do not classify it as success.
-        preserved.append(clean)
+        # Optional brief view groups otherwise noisy diagnostics. The complete
+        # raw xbWatson file is NEVER changed, and serious/GPU/timing evidence
+        # was already preserved above.
+        if brief:
+            category = body.split(":", 1)[0].strip()
+            if len(category) > 70:
+                category = " ".join(category.split()[:3])
+            if not category:
+                category = "<empty>"
+            other[category] += 1
+        else:
+            preserved.append(clean)
 
     report = [
         "Mercenaries Xbox 360 — COMPACT xbWatson VIEW (original unchanged)",
+        "Mode: %s" % ("BRIEF — curated milestone evidence" if brief else "COMPLETE nonroutine view"),
         "Raw lines: %d | retained full lines: %d | grouped routine PASS: %d | grouped revision reports: %d"
         % (total, len(preserved), sum(passes.values()), sum(revisions.values())),
         "NOTE: counts are log-message occurrences, NOT proof of extra gameplay, pixels, or successful status.",
@@ -101,6 +113,10 @@ def compress(lines: list[str]) -> str:
         report.append("[R-PROBE] %-42s %d reports" % (key, count))
         if count <= 2:
             report.extend("  " + x for x in rev_examples[key])
+    if brief:
+        report += ["", "=== Other diagnostic categories (counts only; raw log authoritative) ==="]
+        report.extend("[OTHER] %-50s %d messages" % (name, count)
+                      for name, count in other.most_common())
     report += ["", "=== All retained non-routine evidence in chronological order ==="]
     report.extend(preserved)
     report.append("")
@@ -119,7 +135,12 @@ def self_test() -> None:
         PREFIX + "P6DQ AV FAMILY: display_calls=0 framebuffer=00000000",
     ]
     out = compress(rows)
+    brief = compress(rows, brief=True)
     assert "[SUCCESS] maintained RtlAllocateHeap" in out
+    assert "[SUCCESS] maintained RtlAllocateHeap" in brief
+    assert "NtCreateFile status=C000003A" in brief
+    assert "K1PERF WINDOW:" in brief
+    assert "HARD STOP target=0017A0A0" in brief
     assert "NtCreateFile status=C000003A" in out
     assert "DAC PALETTE COMMIT: entries=256" in out
     assert "K1PERF WINDOW:" in out
@@ -133,6 +154,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("log", nargs="?", type=Path)
     p.add_argument("--out", type=Path)
+    p.add_argument("--brief", action="store_true",
+                   help="Condense also unclassified routine diagnostics, leaving fatal/GPU/perf intact")
     p.add_argument("--self-test", action="store_true")
     a = p.parse_args()
     if a.self_test:
@@ -144,7 +167,8 @@ def main():
     out = a.out.resolve() if a.out else src.with_suffix(".compact.txt")
     if src == out:
         raise ValueError("Never overwrite original hardware log")
-    result = compress(src.read_text(encoding="utf-8-sig", errors="replace").splitlines())
+    result = compress(src.read_text(encoding="utf-8-sig", errors="replace").splitlines(),
+                      brief=a.brief)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(result, encoding="utf-8")
     print("[K1-LOG] COMPACT REPORT:", out)
