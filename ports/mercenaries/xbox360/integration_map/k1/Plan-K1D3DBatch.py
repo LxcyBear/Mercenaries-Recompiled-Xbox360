@@ -183,29 +183,49 @@ def inspect_tail_callers(by_va: dict, generated: dict, base,
 
 
 def select_graph(by_va: dict, generated: dict, base, existing: set[int],
-                 capacity: int = MAX_CANDIDATES) -> tuple[list[dict], list[dict]]:
+                 capacity: int = MAX_CANDIDATES) -> tuple[list[dict], list[dict], dict]:
+    """Traverse existing compiled functions to discover missing graph leaves.
+
+    Existing compiled seeds aren't candidates, but their *original* direct
+    calls may lead to novel, genuine D3D/XGRPH functions. Never stop the BFS
+    just because a seed is already in the parent lookup or original TrueTUs.
+    """
     names = {entry["name"]: va for va, entry in generated.items()}
     seed_report: list[dict] = []
     queue: deque[tuple[int, int, str]] = deque()
     for va, reason in SEEDS:
         classified = classify(va, by_va, generated)
         classified["observed_reason"] = reason
+        classified["compiled_in_parent_or_true_tu"] = va in existing
         seed_report.append(classified)
         if classified["classification"] == "exact_source_entry" and is_graphics(va):
             queue.append((va, 0, reason))
-        # Never silently turn an interior VA into its containing function's
-        # entry. That would execute the wrong original retail instructions.
-    chosen = []
-    seen = set()
-    while queue and len(chosen) < capacity:
+        # Never silently turn a mid-function VA into the owner's entry.
+    chosen: list[dict] = []
+    seen: set[int] = set()
+    traversed_existing = 0
+    traversed_original = 0
+    beyond_graphics = 0
+    skipped_missing_body = 0
+    truncated = False
+    # Bounded search, independent of count of *new* candidates.
+    while queue:
+        if len(chosen) >= capacity or len(seen) >= 1024:
+            truncated = True
+            break
         va, depth, reason = queue.popleft()
         if va in seen:
             continue
         seen.add(va)
-        if va in existing or va not in generated or not is_graphics(va):
+        if not is_graphics(va):
+            beyond_graphics += 1
+            continue
+        if va not in generated:
+            skipped_missing_body += 1
             continue
         row = by_va.get(va)
         if row is None or row["start"] != va or row["end"] <= va:
+            skipped_missing_body += 1
             continue
         source = generated[va]["source"]
         direct_names = set(base.CALL_RE.findall(base.mask_noncode(source)))
@@ -213,19 +233,41 @@ def select_graph(by_va: dict, generated: dict, base, existing: set[int],
             names[name] for name in direct_names
             if name in names and names[name] != va and is_graphics(names[name])
         })
-        chosen.append({
-            "va": "0x%08X" % va, "name": generated[va]["name"],
-            "source_file": generated[va]["file"],
-            "source_sha256": sha(source.encode("utf-8")),
-            "reason": reason, "depth": depth,
-            "generated_direct_graphics_callees": ["0x%08X" % dep for dep in deps],
-        })
+        traversed_original += 1
+        if va in existing:
+            traversed_existing += 1
+        else:
+            chosen.append({
+                "va": "0x%08X" % va, "name": generated[va]["name"],
+                "source_file": generated[va]["file"],
+                "source_sha256": sha(source.encode("utf-8")),
+                "reason": reason, "depth": depth,
+                "generated_direct_graphics_callees": [
+                    "0x%08X" % dep for dep in deps],
+            })
         if depth < MAX_DIRECT_DEPTH:
             for dep in deps:
                 if dep not in seen:
-                    queue.append((dep, depth + 1, "direct callee of 0x%08X" % va))
-    return seed_report, chosen
-
+                    queue.append((dep, depth+1,
+                                  "direct callee of 0x%08X" % va))
+    metrics = {
+        "observed_seed_count": len(SEEDS),
+        "observed_exact_source_seed_count": sum(
+            int(row["classification"] == "exact_source_entry")
+            for row in seed_report),
+        "already_compiled_exact_seed_count": sum(
+            int(row["classification"] == "exact_source_entry" and
+                row["compiled_in_parent_or_true_tu"])
+            for row in seed_report),
+        "existing_original_functions_traversed": traversed_existing,
+        "total_original_functions_traversed": traversed_original,
+        "source_missing_bodies_or_malformed_ranges": skipped_missing_body,
+        "outside_graphics_graph_count": beyond_graphics,
+        "visited_distinct_vas": len(seen),
+        "graph_truncated": truncated,
+        "candidate_count": len(chosen),
+    }
+    return seed_report, chosen, metrics
 
 def find_existing(main: str, shards: Path) -> tuple[set[int], list[dict]]:
     if not shards.is_dir() or not (shards / "translated_runtime.h").is_file():
@@ -276,7 +318,7 @@ def plan(a) -> None:
     if not is_graphics(ITAIL):
         raise ValueError("Last observed hardware ITAIL is outside original D3D/XGRPH")
     owner_context = context_of_label(ITAIL, target, generated)
-    seeds, selected = select_graph(by_va, generated, base, existing)
+    seeds, selected, graph_metrics = select_graph(by_va, generated, base, existing)
     control_flow_contexts = inspect_tail_callers(by_va, generated, base, existing)
     graph_digest = sha(json.dumps(selected, sort_keys=True).encode("utf-8"))
     if target["classification"] == "exact_source_entry":
@@ -306,6 +348,7 @@ def plan(a) -> None:
         "itail_owner_original_source": owner_context,
         "related_original_c_control_flow": control_flow_contexts,
         "seed_classification": seeds,
+        "graph_metrics": graph_metrics,
         "batch_candidate_count": len(selected),
         "source_authentic_candidates": selected,
         "batch_candidate_manifest_sha256": graph_digest,
@@ -334,6 +377,11 @@ def plan(a) -> None:
     print("[K1D3D-BATCH] RELATED ORIGINAL CALLSITES: owners=%u itail_macro_sites=%u" %
           (len(control_flow_contexts),
            sum(item["tail_site_count"] for item in control_flow_contexts)))
+    print("[K1D3D-BATCH] GRAPH WALK: compiled_seeds=%d traversed_original=%d traversed_compiled=%d truncated=%s" %
+          (graph_metrics["already_compiled_exact_seed_count"],
+           graph_metrics["total_original_functions_traversed"],
+           graph_metrics["existing_original_functions_traversed"],
+           graph_metrics["graph_truncated"]))
     print("[K1D3D-BATCH] GRAPH: seeds=%d source-authentic candidate=%d max=%d depth=%d digest=%s" %
           (len(seeds), len(selected), MAX_CANDIDATES, MAX_DIRECT_DEPTH, graph_digest[:16]))
     for row in seeds:
@@ -366,7 +414,8 @@ def selftest() -> None:
     assert cls["owner_va"] == "0x00296550"
     assert not cls["can_route_via_plain_function_lookup"]
     assert context_of_label(ITAIL, cls, generated)["target_label_occurrences"] == 1
-    seeds, selected = select_graph(by_va, generated, Base(), set())
+    seeds, selected, stats = select_graph(by_va, generated, Base(), set())
+    assert stats["total_original_functions_traversed"] >= 2
     assert any(x["va"] == "0x002965F0" for x in selected)
     assert all(x["va"] != "0x0029655D" for x in selected)
     cls2 = classify(0x002965F0, by_va, generated)
@@ -378,6 +427,13 @@ def selftest() -> None:
     assert any(row["owner_va"] == "0x00296550" for row in sites)
     chosen_after_compiled = select_graph(by_va, generated, Base(), {0x002965F0})[1]
     assert not any(x["va"] == "0x002965F0" for x in chosen_after_compiled)
+    # Regression: previously compiled start must be traversed, so its real
+    # uncompiled sub_00296670 callee remains discoverable.
+    compiled_graph = select_graph(
+        by_va, generated, Base(), {0x00296550, 0x002965F0})[1]
+    assert any(x["va"] == "0x00296670" for x in compiled_graph)
+    assert not any(x["va"] in ("0x00296550", "0x002965F0")
+                   for x in compiled_graph)
     print("[K1D3D-BATCH] SELFTEST PASS: interior ITAIL fenced, exact roots only, deduplicated bounded graphics graph, no XDK")
 
 
