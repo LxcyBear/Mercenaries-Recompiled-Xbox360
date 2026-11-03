@@ -59,11 +59,11 @@ static void trace(const char* line)
         /* Preserve unusual IRQL transition results, even on a PASS log. */
         if (expected && p <= 1)
         {
-            const int knownOld = strstr(line, "old=0") != NULL ||
-                                 strstr(line, "old=2") != NULL;
+            const int knownOld = strstr(line, "old=0 ") != NULL ||
+                                 strstr(line, "old=2 ") != NULL;
             const int knownNew = (p == 0)
-                ? (strstr(line, "new=0") != NULL)
-                : (strstr(line, "new=2") != NULL);
+                ? (strstr(line, "new=0 ") != NULL)
+                : (strstr(line, "new=2 ") != NULL);
             expected = knownOld && knownNew;
         }
         if (expected)
@@ -99,6 +99,12 @@ static void trace(const char* line)
     {
         if (strncmp(line, k1qFrames[k1q], strlen(k1qFrames[k1q])) == 0)
         {
+            /* A very long frame must be logged intact, not truncated. */
+            if (strlen(line) >= sizeof(k1qPendingLine))
+            {
+                k1quiet_emit_unfiltered(line);
+                return;
+            }
             strncpy(k1qPendingLine, line, sizeof(k1qPendingLine) - 1u);
             k1qPendingLine[sizeof(k1qPendingLine) - 1u] = '\0';
             k1qPendingKind = (int)k1q;
@@ -208,6 +214,8 @@ void test() {
         assert out.count("static void k1quiet_emit_unfiltered(const char* line)") == 1
         assert out.count("FlushFileBuffers(s_logFile)") == 1
         assert "k1qMutedLines[p] += 2u" in out
+        assert 'strstr(line, "old=2 ") != NULL' in out
+        assert "if (strlen(line) >= sizeof(k1qPendingLine))" in out
         assert "k1quiet_emit_unfiltered(k1qPendingLine);" in out
         assert "PHASE 6DQ INTERNAL D3D DEVICE RESULT" in out
         assert "K1NV2A DAC PALETTE COMMIT:" in out
