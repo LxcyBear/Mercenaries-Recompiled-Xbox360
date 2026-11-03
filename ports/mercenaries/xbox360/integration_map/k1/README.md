@@ -1913,3 +1913,47 @@ and attributes, IOSB length/status, NO_MORE_FILES semantics, and
 conservative hard fences for unsupported classes. Ensure original 44B
 frame and saved ESP are validated before any guest-visible changes,
 and add no-build tests before compiling an incremental XEX.
+
+### K1NT207 real native enumeration candidate (2026-11-02)
+
+After the Xbox hardware-captured original ordinal207 10-DWORD frame
+(see above), there is now a distinct source-only native bridge stage:
+
+    ports/mercenaries/xbox360/integration_map/k1/Stage-K1Nt207Native.py
+    ports/mercenaries/xbox360/integration_map/k1/Advance-K1Nt207Native.ps1
+
+The native stage inherits the proven K1NT207 frame witness, preserving
+64/64 TrueTUs byte-exact and keeping all existing MMIO/VP hard fences,
+input work and startup initialization. Its sole behavioral change is
+routing ORIGINAL XBOX NtQueryDirectoryFile ordinal207 through a
+conservative helper in generated main.cpp. Genuine Xbox 360
+FindFirstFileA/FindNextFileA on the original mounted game: backing
+directory supplies real filenames, attributes, size and FILETIME.
+Xbox FILE_DIRECTORY_INFORMATION class1 is a 64-byte fixed section plus
+OCHAR/ANSI filename bytes; NextEntryOffset 8-byte aligned. The handler
+maintains per-token enumeration cursors and frees native find handles
+when NtClose runs. Invalid guest spans, unrecognized classes/ABI,
+async event/APC requests and unsafe filename masks remain fenced. No
+dummy entries and no fabricated success.
+
+NO XDK by default:
+
+    cd "C:\Users\jorda\Mercenaries-Recompiled-Xbox360"
+    git pull --ff-only
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1Nt207Native.ps1"
+
+Only when source/ABI preflight PASS, explicitly invoke one incremental
+Xbox 360 XDK build with:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1Nt207Native.ps1" -Build
+
+Expected published XEX (not automatically deployed):
+
+    build\phase6_integration_map\k1_ntquerydirectory207_native\xdk\Merc-K1NT207-RealDirectory.xex
+
+At runtime, judge only genuine K1NT207 REAL ENUM START/RESULT,
+status=00000000, rows>0, bytes>=64 and the runtime success marker.
+The post-Watson verdict tool now recognizes NT207-NATIVE-ENUMERATION
+separately from source/ABI capture and XPP. XDK compilation or reaching
+the same 27,108,191 tick boundary is NOT a native service pass.
+The XDK compiler and on-Xbox file ordering/semantics must still be tested.
