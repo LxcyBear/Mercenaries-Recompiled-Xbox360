@@ -42,6 +42,45 @@ After preflight passes:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File './ports/mercenaries/xbox360/integration_map/k1/Advance-K1NV2ADacPalette.ps1' -Build
 ```
 
-Output: `build/phase6_integration_map/k1_nv2a_dac_palette/xdk/Merc-K1NV2A-DAC-Palette.xex`.
+The same runner now performs **K1DQ central logging quiet-mode staging**
+after the DAC source preflight. It builds only ONE XEX from the
+quiet-wrapper-derived main.cpp, not two separate builds. The derived
+source lives in `build/phase6_integration_map/k1_nv2a_dac_palette_quiet`
+and the 64 previous TrueTUs and runtime header are reused unchanged.
+
+Output: `build/phase6_integration_map/k1_nv2a_dac_palette_quiet/xdk/Merc-K1NV2A-DAC-Palette-Quiet.xex`.
+
+### Phase 6DQ quiet mode: narrowly scoped trace output
+
+The prior 9,499-line xbWatson log contained 4,588 repeated
+`KfLowerIrql`, `KfRaiseIrql`, `RtlEnterCriticalSection` and
+`RtlLeaveCriticalSection` success+live-frame message pairs.
+Those four **trace message families** are the only coalescing targets.
+
+`Stage-K1DQQuietLogging.py` renames the existing `trace` sink to an
+unfiltered emitter and installs a wrapper. It buffers an operation's
+`LIVE FRAME` record until the next message: only a matching,
+expected PASS causes coalescing. The first complete pair always
+logs. Afterward pairs increment counters without printing;
+an aggregate for that family logs every 256 successes. Unexpected
+IRQL status, any nonmatching or failed next message, and all
+unrelated messages flush the pending frame and log normally. On
+D3D-init / rocket-hard-stop / shutdown milestones it also emits a
+concise aggregate alongside the original milestone log.
+
+**Protected by design:** underlying guest/kernel calls are never
+skipped; register values, ABI, MMIO fences, framebuffers and all
+translated TrueTUs are unchanged. The original trace output
+mechanisms (`OutputDebugStringA`, file writes and flushes) are
+preserved inside the unfiltered emitter. The wrapper does not
+suppress actual NV2A witnesses, directory results, controller
+messages, failures, or Swap/Present logging.
+
+The reduction in log traffic may improve run time because the old
+logger writes and flushes each message, but hardware wall-time
+speedup is **not yet measured**. Compare two comparable console
+runs before making performance claims. The quiet source is still
+unverified on hardware until the user builds and deploys the new
+XEX.
 
 Live Xbox criteria: startup tag `P6K1NV2A-DAC-PALETTE-20261103`, DAC write-index event, RGB commit summaries if reached, and the actual next memory boundary. `display_calls=0` and `framebuffer=00000000` remain the latest measured values: purple by itself is not proof of guest rendering.
