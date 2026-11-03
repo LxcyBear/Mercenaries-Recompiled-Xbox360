@@ -23,6 +23,84 @@ MAX_DEPTH = 2
 DEF = re.compile(r'(?m)^\s*(?:static\s+)?void\s+sub_([0-9A-Fa-f]{8})\s*\(\s*void\s*\)\s*\{')
 
 
+
+# Maintained PC port source, not original game code:
+# ports/mercenaries/src/recomp_manual.c defines this checkpoint as a
+# PC-specific test capture and optional trace. Its two uint32_t arguments
+# are snapshots; it never mutates guest registers or guest RAM. On Xbox 360
+# those PC capture/export features do not exist, so preserve a bounded
+# observable checkpoint without implementing fake host captures.
+PC_CHECKPOINT = 'recomp_main_state_checkpoint'
+CALL_SITE = re.compile(
+    r'\brecomp_main_state_checkpoint\s*\(\s*'
+    r'GUEST_READ32\s*\(\s*esp\s*\+\s*4\s*\)\s*,\s*'
+    r'GUEST_READ32\s*\(\s*esp\s*\+\s*8\s*\)\s*\)\s*;'
+)
+X360_CHECKPOINT = """
+/* K1: PC-only Mercenaries capture hook adapted to Xbox 360 telemetry.
+ * The maintained recomp_manual.c original uses getenv-driven PC capture
+ * and optional fprintf tracing; not an original retail XBE function.
+ * No guest register, guest RAM, return, branch, or framebuffer is modified.
+ * Original translated call and the following retail GUEST_WRITE32 remain.
+ */
+static uint32_t s_k1MainCheckpointCalls = 0u;
+static uint32_t s_k1MainCheckpointLastState = 0u;
+static uint32_t s_k1MainCheckpointLastSubstate = 0u;
+static void recomp_main_state_checkpoint(uint32_t state, uint32_t substate)
+{
+    ++s_k1MainCheckpointCalls;
+    if (s_k1MainCheckpointCalls == 1u ||
+        state != s_k1MainCheckpointLastState ||
+        substate != s_k1MainCheckpointLastSubstate ||
+        (s_k1MainCheckpointCalls & 1023u) == 0u)
+    {
+        char line[192];
+        sprintf(line,
+            "K1STATE MAIN CHECKPOINT: calls=%u state=%08X substate=%08X",
+            (unsigned int)s_k1MainCheckpointCalls,
+            (unsigned int)state, (unsigned int)substate);
+        trace(line);
+    }
+    s_k1MainCheckpointLastState = state;
+    s_k1MainCheckpointLastSubstate = substate;
+}
+"""
+
+
+def verify_pc_checkpoint(manual: str, root_source: str) -> str:
+    """Prove this is the PC capture/trace hook, not an Xbox game function."""
+    start = manual.find('void recomp_main_state_checkpoint(uint32_t state, uint32_t substate)')
+    end = manual.find('void recomp_frontend_shell_loop_checkpoint(', start + 1)
+    if start < 0 or end < 0 or manual.count(
+        'void recomp_main_state_checkpoint(uint32_t state, uint32_t substate)'
+    ) != 1 or end <= start or end - start > 6000:
+        raise ValueError("Maintained PC checkpoint source definition missing/changed")
+    definition = manual[start:end]
+    required = (
+        'MERCENARIES_CAPTURE_GAME_PATH',
+        'MERCENARIES_CAPTURE_SHELL_PLAY_PATH',
+        'MERCENARIES_TRACE_STATE',
+        'd3d8_DebugArmFlipCapture(',
+        'd3d8_DebugCaptureFrameToPath(',
+        'guest_u32(0x00413F6Cu)',
+    )
+    absent = [marker for marker in required if marker not in definition]
+    if absent:
+        raise ValueError("PC-only capture checkpoint contract drift: " + ", ".join(absent))
+    # A helper that starts writing guest RAM or calling the original game's
+    # code can no longer be replaced by purely observational Xbox telemetry.
+    if re.search(r'\b(?:GUEST_WRITE\d*|guest_write\w*|recomp_guest_write\w*|MEM_WRITE\w*)\s*\(',
+                 definition, re.I):
+        raise ValueError("PC checkpoint now writes guest state; manual port audit required")
+    if len(CALL_SITE.findall(root_source)) != 1:
+        raise ValueError("Original 0017A0A0 checkpoint callsite/argument ABI drift")
+    if not re.search(
+        r'GUEST_WRITE32\s*\(\s*0x413F6C\s*,\s*eax\s*\)',
+        root_source,
+    ):
+        raise ValueError("Original retail main-state write after checkpoint not found")
+    return digest(definition.encode('utf-8'))
+
 def load(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -68,7 +146,7 @@ def pick(generated: dict, compiled: set[int], base) -> list[int]:
 
 
 def insert(parent: str, members: list[int], compiled: set[int],
-           generated: dict, base, p5bb, p5bc):
+           generated: dict, base, p5bb, p5bc, pc_manual: str):
     if parent.count(PARENT) != 1 or 'K1PFIFO DMA_PUT READ32:' not in parent:
         raise ValueError('Missing unique hardware-proven three-lane parent')
     if MARK in parent or 'case 0x0017A0A0u: return sub_0017A0A0;' in parent:
@@ -83,12 +161,23 @@ def insert(parent: str, members: list[int], compiled: set[int],
         raise ValueError('Inherited optimize placeholder already present')
     if '\r' in parent.replace('\r\n', ''):
         raise ValueError('Mixed line endings in generated main')
+    checkpoint_digest = verify_pc_checkpoint(pc_manual, generated[ROOT]['source'])
+    if "static void recomp_main_state_checkpoint(" in parent or             "K1STATE MAIN CHECKPOINT:" in parent:
+        raise ValueError("Already has a main-state checkpoint implementation")
     base.STANDARD_CALLS.update(('sin', 'cos'))
     # Reuse precisely the same support-clean pruning and DIRECT_FRONTIER
     # rewriting machinery that assembled Phase6DQ. No altered return values.
     before_helpers = p5bc.SWEEP_ROOT
     newline = '\r\n' if '\r\n' in parent else '\n'
     normalized = parent.replace('\r\n', '\n')
+    # Install the real-ABI port of the verified PC-only diagnostic before
+    # Phase5BC's support check and before the new translated callsite.
+    # No blanket whitelist: only this exact helper is supplied.
+    lookup_marker = "static recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{"
+    if normalized.count(lookup_marker) != 1:
+        raise ValueError("Pack-lookup insertion anchor missing/duplicated")
+    normalized = normalized.replace(lookup_marker,
+                                    X360_CHECKPOINT + "\n" + lookup_marker, 1)
     # Hide existing optimize-on directives from the Phase5BC first-match
     # insertion finder, then restore them byte-for-byte after injection.
     original_on = '#pragma optimize("", on)'
@@ -129,14 +218,32 @@ def insert(parent: str, members: list[int], compiled: set[int],
     result = result.replace(PARENT, PARENT + ' | ' + MARK, 1)
     if newline == '\r\n':
         result = result.replace('\n', '\r\n')
+    if result.count("K1STATE MAIN CHECKPOINT:") != 1:
+        raise ValueError("Checkpoint implementation duplicated or lost")
+    if checkpoint_digest is None:
+        raise ValueError("PC-only checkpoint proof missing")
     return result, new, sorted(frontiers), pruned
 
 
 def self_test(base, p5bb, p5bc):
     root_name = 'sub_0017A0A0'
     generated = {ROOT: {'name': root_name,
-                        'source': 'void sub_0017A0A0(void)\n{\nloc_0017A0A0: ;\n}\n',
+                        'source': ('void sub_0017A0A0(void)\n{\n'
+                                   'loc_0017A0A0: ;\n'
+                                   '    recomp_main_state_checkpoint(GUEST_READ32(esp + 4), GUEST_READ32(esp + 8));\n'
+                                   '    GUEST_WRITE32(0x413F6C, eax);\n'
+                                   '}\n'),
                         'file': 'recomp_test.c'}}
+    pc_fixture = (
+        'void recomp_main_state_checkpoint(uint32_t state, uint32_t substate)\n'
+        '{\n  getenv("MERCENARIES_CAPTURE_GAME_PATH");\n'
+        '  getenv("MERCENARIES_CAPTURE_SHELL_PLAY_PATH");\n'
+        '  getenv("MERCENARIES_TRACE_STATE");\n'
+        '  d3d8_DebugArmFlipCapture("test");\n'
+        '  d3d8_DebugCaptureFrameToPath("test");\n'
+        '  guest_u32(0x00413F6Cu);\n}\n'
+        'void recomp_frontend_shell_loop_checkpoint(void) {}\n'
+    )
     p = ('#define PHASE4C_BUDGET_TICK(va) ((void)0)\n'
          'P6K1-THREELANE-20261103\n'
          'K1PFIFO DMA_PUT READ32:\nP6DQ ROCKET HARD STOP\n'
@@ -148,15 +255,19 @@ def self_test(base, p5bb, p5bc):
         members = pick(generated, set(), base)
         assert members == [ROOT]
         result, retained, frontier, pruned = insert(text, members, set(), generated,
-                                                     base, p5bb, p5bc)
+                                                     base, p5bb, p5bc, pc_fixture)
         assert retained == [ROOT] and not pruned and not frontier
         assert result.count('case 0x0017A0A0u: return sub_0017A0A0;') == 1
         assert result.count('PHASE4C_BUDGET_TICK(0x0017A0A0u)') == 1
         assert result.count('P6DQ ROCKET HARD STOP') == 1
         assert MARK in result
+        assert result.count("K1STATE MAIN CHECKPOINT:") == 1
+        assert result.count("recomp_main_state_checkpoint(GUEST_READ32(esp + 4), GUEST_READ32(esp + 8));") == 1
+        assert result.count("GUEST_WRITE32(0x413F6C, eax);") == 1
+        assert "MERCENARIES_CAPTURE_GAME_PATH" not in result
         for bad in (result, text.replace('P6DQ ROCKET HARD STOP', 'NO HARD STOP')):
             try:
-                insert(bad, members, set(), generated, base, p5bb, p5bc)
+                insert(bad, members, set(), generated, base, p5bb, p5bc, pc_fixture)
             except ValueError:
                 pass
             else:
@@ -181,17 +292,42 @@ def self_test(base, p5bb, p5bc):
     witness = io.StringIO()
     try:
         with contextlib.redirect_stdout(witness):
-            insert(p, [ROOT], set(), unsupported, base, p5bb, p5bc)
+            # Change only the required PC-only helper to another true missing
+            # helper, so the mandatory root still fails with exact evidence.
+            unsupported[ROOT]['source'] = generated[ROOT]['source'].replace(
+                "recomp_main_state_checkpoint(", "k1_missing_real_helper("
+            )
+            # Explicitly inspect this case with the checkpoint shape restored
+            # to the genuine source and an additional unsupported call.
+            unsupported[ROOT]['source'] = (
+                generated[ROOT]['source'].replace(
+                    '    GUEST_WRITE32(0x413F6C, eax);',
+                    '    k1_missing_real_helper();\n    GUEST_WRITE32(0x413F6C, eax);'
+                )
+            )
+            insert(p, [ROOT], set(), unsupported, base, p5bb, p5bc, pc_fixture)
     except SystemExit as exc:
         assert 'k1_missing_real_helper' in str(exc)
         assert 'helper=k1_missing_real_helper' in witness.getvalue()
         assert 'sweep root 0x0017A0A0 itself has unresolved support' in witness.getvalue()
     else:
         raise AssertionError('Mandatory real root with missing helper silently pruned')
-    print('[K1-TEXT] SELFTEST PASS: original root mandatory; missing support named with source lines; LF/CRLF, 64-TU lookup, fail-closed')
+    for bad in (
+        pc_fixture.replace('MERCENARIES_TRACE_STATE', 'OTHER_TRACE_MODE'),
+        pc_fixture.replace('  guest_u32(0x00413F6Cu);',
+                           '  guest_u32(0x00413F6Cu);\n  GUEST_WRITE32(0x413F6C, 0u);'),
+    ):
+        try:
+            verify_pc_checkpoint(bad, generated[ROOT]['source'])
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Unverified/guest-writing host checkpoint allowed")
+    print('[K1-TEXT] SELFTEST PASS: host-only checkpoint proven and Xbox telemetry ABI guarded; original guest writes intact; unresolved real helpers still fenced')
 
 
 def stage(a, base, p5bb, p5bc):
+    manual = a.pc_manual.read_text(encoding='utf-8', errors='replace')
     shards = sorted(a.shards.glob('translated_???.cpp'))
     if len(shards) != 64 or not (a.shards / 'translated_runtime.h').is_file():
         raise ValueError('Need 64 complete existing TrueTUs and runtime header')
@@ -222,7 +358,7 @@ def stage(a, base, p5bb, p5bc):
         raise ValueError('Refuse parent-main in-place patch')
     original = a.parent.read_bytes()
     next_text, retained, frontiers, pruned = insert(original.decode('utf-8'), members, compiled,
-                                                    generated, base, p5bb, p5bc)
+                                                    generated, base, p5bb, p5bc, manual)
     updated = next_text.encode('utf-8')
     summary = {
         'status': 'K1_TEXT_DIRECT_SOURCE_ONLY_NO_XDK', 'parent_sha256': digest(original),
@@ -230,6 +366,11 @@ def stage(a, base, p5bb, p5bc):
         'original_root': '0x0017A0A0', 'original_function_end': '0x%08X' % row['end'],
         'original_body_sha256': digest(generated[ROOT]['source'].encode('utf-8')),
         'source_file_name': generated[ROOT]['file'],
+        'pc_checkpoint_name': PC_CHECKPOINT,
+        'pc_checkpoint_definition_sha256': verify_pc_checkpoint(
+            manual, generated[ROOT]['source']),
+        'checkpoint_scope': 'host-only PC capture/trace -> Xbox bounded telemetry',
+        'guest_state_write_replaced': False,
         'candidate_count': len(members), 'promoted_count': len(retained),
         'promoted_vas': ['0x%08X' % v for v in retained],
         'pruned_support_missing': {'0x%08X' % k: v for k, v in pruned.items()},
@@ -252,6 +393,7 @@ def stage(a, base, p5bb, p5bc):
         raise ValueError('Verified parent changed during staging')
     print('[K1-TEXT] SOURCE PROMOTION PASS: root=0017A0A0 candidate=%d retained=%d pruned=%d next_direct=%d' %
           (len(members), len(retained), len(pruned), len(frontiers)))
+    print('[K1-TEXT] PC-ONLY DIAGNOSTIC SUPPORT: verified recomp_main_state_checkpoint; no guest state mutation')
     print('[K1-TEXT] TRUE TUs UNCHANGED: 64; original helper/ABI and MMIO fences retained')
     print('[K1-TEXT] Main-only staged:', a.out)
     print('[K1-TEXT] SOURCE ONLY. XDK/hardware not yet verified')
@@ -260,7 +402,7 @@ def stage(a, base, p5bb, p5bc):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--self-test', action='store_true')
-    for k in ('base-module','p5bb-module','p5bc-module','parent','shards','functions','generated-root','out','manifest'):
+    for k in ('base-module','p5bb-module','p5bc-module','parent','shards','functions','generated-root','pc-manual','out','manifest'):
         ap.add_argument('--' + k, type=Path)
     a = ap.parse_args()
     for k in ('base_module','p5bb_module','p5bc_module'):
@@ -272,7 +414,7 @@ def main():
     if a.self_test:
         self_test(base, p5bb, p5bc)
         return
-    for k in ('parent','shards','functions','generated_root','out','manifest'):
+    for k in ('parent','shards','functions','generated_root','pc_manual','out','manifest'):
         if getattr(a, k) is None:
             ap.error('--' + k.replace('_','-') + ' required')
     stage(a, base, p5bb, p5bc)
