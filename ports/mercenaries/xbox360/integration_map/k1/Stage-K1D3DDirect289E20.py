@@ -178,7 +178,7 @@ def selftest() -> None:
             assert prepared.count(LOOKUP_CANON) == 1
             restored = restore_parent(prepared, original, nl)
             assert MARK in restored
-            assert original in restored
+            assert original.replace("\n", nl) in restored
             assert OPT_PLACEHOLDER not in restored
             assert '\r\n' in restored if windows else '\r\n' not in restored
             try:
