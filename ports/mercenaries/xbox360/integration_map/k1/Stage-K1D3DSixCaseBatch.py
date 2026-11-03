@@ -160,19 +160,17 @@ def get_function(blob: str, va: int, base) -> tuple[str, int, int]:
     return blob[found.start():end], found.start(), end
 
 \ndef prove_original_common_tail(body: str) -> bool:
-    """Original 2965A8 joins six cases, pops original saved ESI and RETs.
+    """Original 2965A8 joins all cases, pops saved ESI and guest RET.
 
-    The maintained Xbox recomp lifter's x86 POP32 signature is
-    POP32(esp, esi), not 'esi = POP32(esp)'.
+    The recomp lifter uses POP32(esp, esi), then esp += 4; return.
     """
-    if not re.search(r'loc_002965A8\\s*:\\s*;', body):
+    if not re.search(r'loc_002965A8\s*:\s*;', body):
         return False
-    if len(re.findall(r'\\bPOP32\\s*\\(\\s*esp\\s*,\\s*esi\\s*\\)\\s*;', body)) != 1:
+    if len(re.findall(r'\bPOP32\s*\(\s*esp\s*,\s*esi\s*\)\s*;', body)) != 1:
         return False
-    if not re.search(r'\\besp\\s*\\+=\\s*4\\s*;\\s*return\\s*;', body):
+    if not re.search(r'\besp\s*\+=\s*4\s*;\s*return\s*;', body):
         return False
     return True
-
 
 
 def patch_owner(text: str, base, same_owner_common: bool,
