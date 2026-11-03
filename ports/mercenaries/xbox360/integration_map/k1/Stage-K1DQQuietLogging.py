@@ -172,7 +172,7 @@ def patch(src: str) -> str:
         raise ValueError("Unsupported mixed line endings")
     m = list(DECL.finditer(src))
     if len(m) != 1:
-        suspects = [re.sub(r"\\s+", " ", x.group(0).strip())
+        suspects = [re.sub(r"\s+", " ", x.group(0).strip())
                     for x in TRACE_CANDIDATE.finditer(src)]
         raise ValueError(
             f"Exactly one original central trace sink required, found {len(m)}; "
@@ -223,15 +223,14 @@ void test() {
 """
     variants = [
         fixture,
-        fixture.replace("static void trace(const char* line)\\n{",
+        fixture.replace("static void trace(const char* line)\n{",
                         "static void trace(const char* message) {"),
-        fixture.replace("static void trace(const char* line)\\n{",
-                        "void trace(\\n const char * msg\\n)\\n{"),
-        fixture.replace("static void trace(const char* line)\\n{",
-                        "static inline void trace(const char* output)\\n{"),
+        fixture.replace("static void trace(const char* line)\n{",
+                        "void trace(\n const char * msg\n)\n{"),
+        fixture.replace("static void trace(const char* line)\n{",
+                        "static inline void trace(const char* output)\n{"),
     ]
-    for candidate in variants:
-        for s in (candidate, candidate.replace("\n", "\r\n")):
+    for s in variants + [v.replace("\n", "\r\n") for v in variants]:
         out = patch(s)
         assert out.count("static void trace(const char* line)") == 1
         assert out.count("static void k1quiet_emit_unfiltered(const char* line)") == 1
