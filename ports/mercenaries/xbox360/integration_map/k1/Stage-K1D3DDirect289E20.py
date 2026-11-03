@@ -365,7 +365,7 @@ def selftest() -> None:
         0x00289E80: {"name": "sub_00289E80", "source": "return;"},
     }
     assert choose(sources, set(), Base()) == [ROOT, 0x00289E80]
-    actual_pc_source = Path(__file__).resolve().parents[2] / "src" / "recomp_manual.c"
+    actual_pc_source = Path(__file__).resolve().parents[3] / "src" / "recomp_manual.c"
     if not actual_pc_source.is_file():
         raise AssertionError("Maintained PC hook implementations missing from checkout")
     real_proof_source = actual_pc_source.read_text(encoding="utf-8")
