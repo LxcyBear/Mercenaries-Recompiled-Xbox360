@@ -13,5 +13,7 @@ foreach($file in @($RetailXbe,$src,$r11)){
 $python=(Get-Command python -ErrorAction Stop).Source
 & $python -m py_compile $src
 if($LASTEXITCODE -ne 0){throw "[K1-R12] Syntax gate failed"}
+& $python -u $src --self-test
+if($LASTEXITCODE -ne 0){throw "[K1-R12] Capstone byte deduplication selftest failed"}
 & $python -u $src --retail-xbe $RetailXbe --r11-report $r11 --output $out
 if($LASTEXITCODE -ne 0){throw "[K1-R12] Embedded operand audit failed closed"}
