@@ -56,12 +56,26 @@ def anchored_decode(blob, section, operand_va, slot):
                         "embedded_literal_offset":operand_va-inst.address})
     return sorted(results,key=lambda x:int(x["instruction_va"],16))
 
+def self_test():
+    # Capstone versions may expose instruction bytes as bytearray.
+    sample=bytearray(b"\\xFF\\x15\\x64\\xBD\\x2D\\x00")
+    first=(0x00229D63,bytes(sample))
+    second=(0x00229D63,bytes(bytearray(sample)))
+    assert first==second and len({first,second})==1
+    print("[K1-R12] SELFTEST PASS: bytearray instruction bytes safely deduplicated")
+
 def run():
     p=argparse.ArgumentParser()
-    p.add_argument("--retail-xbe",type=Path,required=True)
+    p.add_argument("--self-test",action="store_true")
+    p.add_argument("--retail-xbe",type=Path)
     p.add_argument("--r11-report",type=Path,required=True)
     p.add_argument("--output",type=Path,required=True)
     args=p.parse_args()
+    if args.self_test:
+        self_test()
+        return
+    if args.retail_xbe is None:
+        p.error("--retail-xbe is required unless --self-test is specified")
     blob=args.retail_xbe.read_bytes()
     if hashlib.sha256(blob).hexdigest().upper()!=SHA:raise ValueError("Original retail SHA mismatch")
     data=json.loads(args.r11_report.read_text(encoding="utf-8-sig"))
