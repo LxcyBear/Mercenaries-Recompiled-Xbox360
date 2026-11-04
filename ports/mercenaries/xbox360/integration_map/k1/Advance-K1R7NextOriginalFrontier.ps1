@@ -61,7 +61,7 @@ function Read-Manifest {
        $m.pc_stream_idle_patch_279_restored_to_retail.pc_only_host_helper_removed -ne $true -or
        $m.pc_stream_idle_patch_279_restored_to_retail.mock_host_helper_or_guest_abi_used -ne $false -or
        $m.hard_stop_for_unproven_guest_targets_preserved -ne $true -or
-       $m.runtime_xex_fingerprint_location -ne "phase6dq_note_hard_stop" -or
+       $m.runtime_xex_fingerprint_location -ne "P6DQ ROCKET HARD STOP kind= runtime format" -or
        @($m.new_original_generated_C).Count -lt 1 -or
        @($m.new_original_generated_C).Count -gt 16 -or
        @($m.new_original_generated_C)[0] -ne "0x00222190" -or
