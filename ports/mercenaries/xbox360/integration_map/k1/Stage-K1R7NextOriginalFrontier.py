@@ -164,7 +164,7 @@ def add_hardware_fingerprint(source:str,parent_source:str)->tuple[str,str]:
     guest state, the hard-stop decision, D3D, audio, or the original C.
     """
     pattern=re.compile(
-        r'"P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X[^"\\r\\n]*"'
+        r'"P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X[^"\r\n]*"'
     )
     matches=list(pattern.finditer(source))
     if len(matches)!=1:
