@@ -96,7 +96,6 @@ def validate_instructions(insns:list)->dict:
             "Retail original 002221CD instruction MOV [esi+3B4] / ADD ebx,edi / "
             "CMP ebx,0x7D000 / JGE 00222236 not proven: "+repr(
                 [(i.address,i.mnemonic,i.op_str) for i in insns]))
-    )
     return {
         "retail_sha256":RETAIL_SHA,
         "original_002221cd_mov_add_cmp_jge":True,
