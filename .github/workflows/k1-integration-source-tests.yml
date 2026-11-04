@@ -352,7 +352,7 @@ jobs:
           $body = Get-Content -LiteralPath $path.Path -Raw
           if (-not $body.Contains('Stage-K1R7NextOriginalFrontier.py') -or
               -not $body.Contains('runtime_xex_fingerprint') -or
-              -not $body.Contains('phase6dq_note_hard_stop') -or
+              -not $body.Contains('P6DQ ROCKET HARD STOP kind= runtime format') -or
               -not $body.Contains('0x00222190') -or
               -not $body.Contains('Original retail 222190') -or
               -not $body.Contains('64 TrueTUs') -or
