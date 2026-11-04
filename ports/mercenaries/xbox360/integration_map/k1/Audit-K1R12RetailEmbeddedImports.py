@@ -58,7 +58,7 @@ def anchored_decode(blob, section, operand_va, slot):
 
 def self_test():
     # Capstone versions may expose instruction bytes as bytearray.
-    sample=bytearray(b"\\xFF\\x15\\x64\\xBD\\x2D\\x00")
+    sample=bytearray.fromhex("FF1564BD2D00")
     first=(0x00229D63,bytes(sample))
     second=(0x00229D63,bytes(bytearray(sample)))
     assert first==second and len({first,second})==1
@@ -68,14 +68,14 @@ def run():
     p=argparse.ArgumentParser()
     p.add_argument("--self-test",action="store_true")
     p.add_argument("--retail-xbe",type=Path)
-    p.add_argument("--r11-report",type=Path,required=True)
-    p.add_argument("--output",type=Path,required=True)
+    p.add_argument("--r11-report",type=Path)
+    p.add_argument("--output",type=Path)
     args=p.parse_args()
     if args.self_test:
         self_test()
         return
-    if args.retail_xbe is None:
-        p.error("--retail-xbe is required unless --self-test is specified")
+    if args.retail_xbe is None or args.r11_report is None or args.output is None:
+        p.error("--retail-xbe, --r11-report, and --output are required for the full audit")
     blob=args.retail_xbe.read_bytes()
     if hashlib.sha256(blob).hexdigest().upper()!=SHA:raise ValueError("Original retail SHA mismatch")
     data=json.loads(args.r11_report.read_text(encoding="utf-8-sig"))
