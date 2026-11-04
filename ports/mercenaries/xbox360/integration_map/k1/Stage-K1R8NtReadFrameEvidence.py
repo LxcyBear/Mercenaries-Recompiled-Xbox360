@@ -35,14 +35,23 @@ def sha(data:bytes)->str:
     return hashlib.sha256(data).hexdigest()
 
 def get_owner(source:str)->tuple[int,int]:
-    sig=re.compile(r'(?m)^static void phase5h_nt_read_file\(uint32_t savedEsp\)\s*\{')
+    # The maintained generated main defines this native helper as plain
+    # 'void', while small historical fixtures used 'static void'.
+    # Accept either linkage without weakening unique-owner validation.
+    sig=re.compile(r'(?m)^(?:static )?void phase5h_nt_read_file\(uint32_t savedEsp\)\s*\{')
     matches=list(sig.finditer(source))
     if len(matches)!=1:
         raise ValueError("Exact native NtReadFile implementation missing/duplicated")
     start=matches[0].start()
-    finish=source.find("\nstatic void ",start+len(PROC))
-    if finish<0:
-        raise ValueError("Native NtReadFile function end not uniquely bounded")
+    # Top-level function braces are at column zero; nested blocks are
+    # indented. Do not depend on the next function's return type/linkage.
+    closing=list(re.finditer(r'(?m)^\}[ \t]*(?=\r?$)',source[matches[0].end():]))
+    if not closing:
+        raise ValueError("Native NtReadFile closing brace not found")
+    finish=matches[0].end()+closing[0].end()
+    func=source[start:finish]
+    if func.count("phase5h_nt_read_file(")!=1:
+        raise ValueError("Native NtReadFile owner ambiguous")
     return start,finish
 
 def probe_only(source:str)->tuple[str,dict]:
@@ -235,6 +244,17 @@ def selftest():
         R7_TAG+"0123456789ABCDEF"+'";\n'
     )
     out,info=probe_only(src)
+    # Regression: actual r7 main.cpp owner uses plain 'void', not 'static void'.
+    plain=src.replace("static void phase5h_nt_read_file", "void phase5h_nt_read_file", 1)
+    plain_out,plain_info=probe_only(plain)
+    assert plain_info==info and plain_out.count(PROBE)==2
+    # A second owner must still fail closed, irrespective of linkage.
+    try:
+        probe_only(plain+"\n"+src)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Duplicate NtReadFile native owners accepted")
     assert info["capture_offsets_bytes"]==[0,4,8,12,16,20,24,28,32,36,40]
     assert out.count(PROBE)==2
     assert out.replace(out[out.index("        /* K1-R8:"):out.index("        sprintf(",out.index("        /* K1-R8:")+1)],"")!=src  # only explicit probe removal is permitted below
