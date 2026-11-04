@@ -211,6 +211,23 @@ def stage(a):
     entry=original_entry_proof(a.retail_xbe,a.retail_auditor,by_va)
     if generated[TARGET]["file"]!="recomp_0011.c":
         raise ValueError("Original 00222190 generated source file unexpectedly changed")
+    # The public pinned PC port's patch 279 changes the retail budget
+    # condition at 002221CD and calls a PC-only helper. We have original
+    # retail XBE bytes that prove MOV/ADD/CMP/JGE with a 00222236 target.
+    # Restore only that exact branch and never implement a fake helper.
+    pc_retail=load(a.pc_retail_module,"k1_r7_pinned_pc_identity")
+    if pc_retail.verify_pc_commit(a.pc_reference)!=PC_SHA:
+        raise ValueError("Pinned original PC patch reference commit changed")
+    stream=load(a.streaming_retail_module,"k1_r7_stream_idle_retail_patch")
+    stream_x86=stream.verify_x86(a.retail_xbe,a.retail_auditor)
+    restored_source,stream_proof=stream.restore(
+        generated[TARGET]["source"],a.pc_reference,proof=stream_x86)
+    generated[TARGET]=dict(generated[TARGET])
+    generated[TARGET]["source"]=restored_source
+    if (stream.HELPER in restored_source or
+        stream_proof["mock_host_helper_or_guest_abi_used"] is not False or
+        stream_proof["pc_patch_index"]!=279):
+        raise ValueError("PC streaming idle developer override was not retail-restored")
     _,info=previous.owner_inventory(parent,a.shards)
     compiled=info["compiled_in_64_or_main"]
     if (TARGET in compiled or TARGET in info["main_pack_lookup_vas"] or
@@ -245,6 +262,8 @@ def stage(a):
             raise ValueError("Original r5 previous retail lookup regression: "+lookup)
     if "recomp_dev_region_import_active()" in output:
         raise ValueError("Original r5 PC-only developer patch accidentally reintroduced")
+    if stream.HELPER in output:
+        raise ValueError("PC patch 279 streaming helper must not appear in any packed r7 source")
     if output.count("K1D3D SECOND: native Xenos Reset PASS")!=parent.count(
         "K1D3D SECOND: native Xenos Reset PASS"):
         raise ValueError("Native Xenos Reset source changed")
@@ -255,6 +274,7 @@ def stage(a):
         "marker":R7_MARKER,
         "retail_sha256":RETAIL_SHA,
         "original_entry_proof":entry,
+        "pc_stream_idle_patch_279_restored_to_retail":stream_proof,
         "r5_source_sha256":digest(parent_blob),
         "r5_manifest_sha256":digest(parent_meta_blob),
         "r7_source_sha256":digest(blob),
@@ -295,6 +315,8 @@ def stage(a):
     if any(p.read_bytes()!=shard_blobs[p.name] for p in shard_files):
         raise ValueError("An original 64 TrueTU was modified")
     print("[K1-R7] RETAIL 00222190 exact original .text/XBE instruction proof PASS")
+    print("[K1-R7] PINNED PC PATCH 279: streaming idle budget 002221CD original x86 CMP/JGE RESTORED")
+    print("[K1-R7] NO recomp_stream_admit_idle PC-only helper, mock return, or modified guest ABI")
     print("[K1-R7] Original C packed members=%d, direct guarded exits=%d" %
           (len(members),len(meta["new_source_direct_frontiers"])))
     print("[K1-R7] Original six-case D3D/Xenos Reset/audio plus all 64 TrueTUs unchanged")
@@ -388,6 +410,7 @@ def main():
     p.add_argument("--self-test",action="store_true")
     for key in ("parent","parent-manifest","shards","base","bb","bc",
                 "previous","packer","retail-xbe","retail-auditor",
+                "pc-reference","pc-retail-module","streaming-retail-module",
                 "functions","generated","output","manifest"):
         p.add_argument("--"+key,type=Path)
     a=p.parse_args()
@@ -396,6 +419,7 @@ def main():
         return
     for key in ("parent","parent_manifest","shards","base","bb","bc",
                 "previous","packer","retail_xbe","retail_auditor",
+                "pc_reference","pc_retail_module","streaming_retail_module",
                 "functions","generated","output","manifest"):
         if getattr(a,key) is None:
             p.error("Missing --"+key.replace("_","-"))
