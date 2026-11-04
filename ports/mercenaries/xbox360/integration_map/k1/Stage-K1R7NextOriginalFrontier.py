@@ -154,36 +154,44 @@ def direct_closure(generated:dict,compiled:set[int],base)->tuple[list[int],list[
 
 
 def add_hardware_fingerprint(source:str,parent_source:str)->tuple[str,str]:
-    """Only new operation outside the source pack: an inert diagnostic trace.
+    """Bind a candidate fingerprint to the actual rocket hard-stop log.
 
-    Place the tag INSIDE the maintained hard-stop function (not a
-    metadata string or a dead const). The Xbox emits this at a hard stop.
-    No changes to original guest registers, return values, D3D or APU.
+    The r4/r5 main contains the original rocket diagnostic string but does
+    not necessarily expose the rocket logger as a 'static void' definition:
+    some maintained build stages relocate/wrap it. Updating its *existing*
+    printf format, without changing any call or arguments, is a narrower
+    and fully verifiable instrumentation point. This has no effect on
+    guest state, the hard-stop decision, D3D, audio, or the original C.
     """
-    start_pat=re.compile(r"static void phase6dq_note_hard_stop\s*\(")
-    matches=list(start_pat.finditer(source))
+    pattern=re.compile(
+        r'"P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X[^"\\r\\n]*"'
+    )
+    matches=list(pattern.finditer(source))
     if len(matches)!=1:
-        raise ValueError("Original rocket hard-stop logger not uniquely found")
-    loc=matches[0].end()
-    opener=source.find("{",loc)
-    if opener<0 or opener-loc>180:
-        raise ValueError("Hard-stop logger body signature changed")
-    close=source.find("static void ",opener+1)
-    if close<0:
-        close=len(source)
-    body=source[opener+1:close]
-    if body.count("P6DQ ROCKET HARD STOP kind=")!=1:
-        raise ValueError("Original hardware hard-stop logger no longer matches verified format")
-    if body.count("trace(line);")<2:
-        raise ValueError("Original hard-stop logger no longer reports both trace records")
+        raise ValueError(
+            "Original rocket hard-stop runtime format not uniquely found: "
+            "count=%d; refusing unproven XEX instrumentation" % len(matches))
+    original_literal=matches[0].group()
+    if parent_source.count(original_literal)!=1:
+        raise ValueError("Original r5 hard-stop diagnostic differs from packed r7")
     seed=digest(source.encode("utf-8"))[:16].upper()
     marker="K1-R7-222190-XEX-PROOF-"+seed
-    injection="\n    trace(\""+marker+"\"); /* K1-R7 real hardware build fingerprint */"
-    output=source[:opener+1]+injection+source[opener+1:]
-    if output.count(marker)!=1 or parent_source.count(marker)!=0:
-        raise ValueError("Runtime proof string duplicate or leaked to r5")
-    if source[:opener+1]!=output[:opener+1] or source[opener+1:]!=output[opener+1+len(injection):]:
-        raise ValueError("Non-logger source changed during fingerprint instrumentation")
+    if marker in source or marker in parent_source:
+        raise ValueError("Fingerprint is already staged in original retail source")
+    new_literal=original_literal[:-1]+" r7_xex="+marker+'"'
+    # Existing line buffer is 448 bytes. The worst-case expansion of %u
+    # to 10 digits and %08X to 8 digits must fit, including the suffix.
+    worst=re.sub(r'%08X', 'F'*8, new_literal[1:-1])
+    worst=re.sub(r'%u', '4294967295', worst)
+    if "%" in worst or len(worst)+1>448:
+        raise ValueError("Rocket hard-stop line exceeds original 448-byte trace buffer")
+    output=(source[:matches[0].start()]+new_literal+
+            source[matches[0].end():])
+    if (output.count(marker)!=1 or
+        output.count("P6DQ ROCKET HARD STOP kind=")!=
+            source.count("P6DQ ROCKET HARD STOP kind=") or
+        output.replace(new_literal,original_literal,1)!=source):
+        raise ValueError("Unintended guest/logger source changed while fingerprinting")
     return output,marker
 
 
@@ -287,7 +295,7 @@ def stage(a):
             "0x%08X"%va for va in sorted(set(
                 [int(x,16) for x in frontier]+list(rewritten_frontiers)))],
         "runtime_xex_fingerprint":fingerprint,
-        "runtime_xex_fingerprint_location":"phase6dq_note_hard_stop",
+        "runtime_xex_fingerprint_location":"P6DQ ROCKET HARD STOP kind= runtime format",
         "original_64_true_tu_sha256":{n:digest(b) for n,b in shard_blobs.items()},
         "original_64_true_tus_unchanged":True,
         "original_sixcase_owner":"translated_052.cpp",
@@ -359,7 +367,7 @@ def selftest():
         "static void phase6dq_note_hard_stop(uint32_t kind)\n"
         "{\n"
         "    char line[448];\n"
-        "    sprintf(line, \"P6DQ ROCKET HARD STOP kind=%u\",kind);\n"
+        "    sprintf(line, \"P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X ticks=%u\",kind,0u,0u,0u);\n"
         "    trace(line);\n"
         "    trace(line);\n"
         "}\n"
@@ -372,6 +380,30 @@ def selftest():
     out,mark=add_hardware_fingerprint(txt,txt)
     assert mark.startswith("K1-R7-222190-XEX-PROOF-")
     assert out.count(mark)==1 and out.count("trace(line);")==2
+    assert out.count("P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X")==1
+    assert out.replace(" r7_xex="+mark,"",1)==txt
+    # A real r4/r5 run can have extra copies of unrelated diagnostics.
+    doubled=txt+"\n// P6DQ ROCKET HARD STOP\n"
+    tagged,tag=add_hardware_fingerprint(doubled,doubled)
+    assert tagged.count(tag)==1
+    for invalid in (
+        txt.replace("P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X",
+                    "P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X foo=BAD"),
+        txt.replace("P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X",
+                    "P6DQ ROCKET HARD STOP kind=%u caller=%08X tgt=%08X"),
+        txt.replace("    trace(line);\n", "    trace(line);\n",1)+
+            'static void d() { printf("P6DQ ROCKET HARD STOP kind=%u caller=%08X target=%08X", 0u,0u,0u); }',
+    ):
+        try:
+            if invalid.endswith("foo=BAD") or 'foo=BAD' in invalid:
+                # Original-parent runtime format must match exactly.
+                add_hardware_fingerprint(invalid,txt)
+            else:
+                add_hardware_fingerprint(invalid,txt)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Unverified original hard-stop source accepted")
     for broken in (
         {**parent,"new_main_sha256":"not verified"},
         {**parent,"dummy_guest_data":True},
