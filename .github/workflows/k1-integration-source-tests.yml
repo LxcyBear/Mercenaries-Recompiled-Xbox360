@@ -70,6 +70,8 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1GraphicsMilestoneTrace.py --self-test
       - name: Original Xbox retail r7 00222190 source batch and xbWatson fingerprint regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1R7NextOriginalFrontier.py --self-test
+      - name: Original PC patch 279 real 002221CD retail MOV ADD CMP JGE restoration fixtures
+        run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1R7RetailStreamingPatch.py
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -362,6 +364,22 @@ jobs:
               throw "K1 r7 original-source/true TU/fresh compile and real hardware fingerprint contract broken"
           }
           Write-Host "[PS51] PASS: one real r7 Xbox 360 compile with mandatory new-binary and runtime xbWatson proof"
+      - name: Parse pinned PC patch 279 retail streaming guard in r7 Windows runner
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1R7NextOriginalFrontier.ps1"
+          $body = Get-Content -LiteralPath $path.Path -Raw -Encoding UTF8
+          if (-not $body.Contains('Audit-K1R7RetailStreamingPatch.py') -or
+              -not $body.Contains('pc_stream_idle_patch_279_restored_to_retail') -or
+              -not $body.Contains('original_002221cd_mov_add_cmp_jge') -or
+              -not $body.Contains('mock_host_helper_or_guest_abi_used -ne $false') -or
+              -not $body.Contains('streaming patch 279 proof self-test failed') -or
+              -not $body.Contains('"--streaming-retail-module",$streamRetail') -or
+              -not $body.Contains('NO XDK')) {
+              throw "R7 original retail patch 279/PC idle streaming helper fail-closed gate changed"
+          }
+          Write-Host "[PS51] PASS: original 221CD PC-only streaming patch 279 branch reverted with real x86 guard"
+
 
 
 
