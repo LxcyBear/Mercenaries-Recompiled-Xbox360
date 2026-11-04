@@ -46,7 +46,7 @@ def anchored_decode(blob, section, operand_va, slot):
                 elif op.type==X86_OP_MEM and op.mem.base==X86_REG_INVALID and op.mem.index==X86_REG_INVALID and (op.mem.disp&0xffffffff)==slot:
                     ok=True; reasons.append("absolute_memory_operand")
             if ok:
-                key=(inst.address,inst.bytes)
+                key=(inst.address,bytes(inst.bytes))
                 if key not in seen:
                     seen.add(key)
                     results.append({"instruction_va":"%08X"%inst.address,
