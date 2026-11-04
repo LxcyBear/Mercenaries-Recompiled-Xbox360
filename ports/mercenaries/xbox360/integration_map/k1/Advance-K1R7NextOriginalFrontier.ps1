@@ -21,6 +21,9 @@ $bc = Join-Path $root "ports\mercenaries\xbox360\phase5_subsystem_bringup\emit_p
 $previous = Join-Path $PSScriptRoot "Plan-K1NextICallBatch.py"
 $packer = Join-Path $PSScriptRoot "Stage-K1NextICallBatch.py"
 $retailAuditor = Join-Path $PSScriptRoot "Audit-K1D3DSwitchCases.py"
+$pcReference = Join-Path $root ".deps\mercenaries-pc-reference"
+$pcRetail = Join-Path $PSScriptRoot "Audit-K1PCRetailSource.py"
+$streamRetail = Join-Path $PSScriptRoot "Audit-K1R7RetailStreamingPatch.py"
 $original = Join-Path $root "build\phase3n_final_abi_scale"
 $functions = Join-Path $original "analysis\disasm\functions.json"
 $generated = Join-Path $original "runtime\gen"
@@ -51,6 +54,12 @@ function Read-Manifest {
        $m.previous_r4_hardware_fences_preserved -ne $true -or
        $m.retail_002228F0_branch_restoration_preserved -ne $true -or
        $m.no_dummy_abi_or_pc_helper_stubs -ne $true -or
+       $m.pc_stream_idle_patch_279_restored_to_retail.status -ne "PINNED_PC_PATCH_279_RESTORED_TO_ORIGINAL_RETAIL" -or
+       [int]$m.pc_stream_idle_patch_279_restored_to_retail.pc_patch_index -ne 279 -or
+       $m.pc_stream_idle_patch_279_restored_to_retail.x86_retail_proof.original_002221cd_mov_add_cmp_jge -ne $true -or
+       $m.pc_stream_idle_patch_279_restored_to_retail.x86_retail_proof.jge_target -ne "0x00222236" -or
+       $m.pc_stream_idle_patch_279_restored_to_retail.pc_only_host_helper_removed -ne $true -or
+       $m.pc_stream_idle_patch_279_restored_to_retail.mock_host_helper_or_guest_abi_used -ne $false -or
        $m.hard_stop_for_unproven_guest_targets_preserved -ne $true -or
        $m.runtime_xex_fingerprint_location -ne "phase6dq_note_hard_stop" -or
        @($m.new_original_generated_C).Count -lt 1 -or
@@ -84,18 +93,20 @@ if($XboxLog){
     return
 }
 
-foreach($file in @($stage,$base,$bb,$bc,$previous,$packer,$retailAuditor,$functions,$RetailXbe,$parent,$parentManifest)){
+foreach($file in @($stage,$base,$bb,$bc,$previous,$packer,$retailAuditor,$pcRetail,$streamRetail,$functions,$RetailXbe,$parent,$parentManifest)){
     if(-not(Test-Path -LiteralPath $file -PathType Leaf)){
         throw "$tag Original retail evidence or source-only r5 absent: $file"
     }
 }
-foreach($dir in @($generated,$shards)){
+foreach($dir in @($generated,$shards,$pcReference)){
     if(-not(Test-Path -LiteralPath $dir -PathType Container)){
         throw "$tag Original generated C/64 TrueTU directory missing: $dir"
     }
 }
-& $python -m py_compile $stage
+& $python -m py_compile $stage $streamRetail
 if($LASTEXITCODE -ne 0){throw "$tag Python syntax failed. NO XDK."}
+& $python -u $streamRetail
+if($LASTEXITCODE -ne 0){throw "$tag Original retail streaming patch 279 proof self-test failed. NO XDK."}
 & $python -u $stage --self-test
 if($LASTEXITCODE -ne 0){throw "$tag Retail r5/ABI/diagnostic fixtures failed. NO XDK."}
 $stageArgs = @(
@@ -109,6 +120,9 @@ $stageArgs = @(
     "--packer",$packer,
     "--retail-xbe",$RetailXbe,
     "--retail-auditor",$retailAuditor,
+    "--pc-reference",$pcReference,
+    "--pc-retail-module",$pcRetail,
+    "--streaming-retail-module",$streamRetail,
     "--functions",$functions,
     "--generated",$generated,
     "--output",$outMain,
@@ -124,6 +138,7 @@ if($m.r7_source_sha256 -ne $sourceSha -or
     throw "$tag Original r5/r7 hash or run-on-Xbox fingerprint source mismatch"
 }
 Write-Host "$tag ORIGINAL RETAIL SOURCE STAGE PASS new funcs=$(@($m.new_original_generated_C).Count)"
+Write-Host "$tag PC patch 279 -> retail CMP/JGE RESTORED at 0x002221CD (no PC-only streaming helper)"
 Write-Host "$tag Hardware fingerprint that MUST appear in xbWatson: $($m.runtime_xex_fingerprint)"
 Write-Host "$tag Original 64 TrueTUs untouched. No speculative PC helper."
 if($SourceOnly){
