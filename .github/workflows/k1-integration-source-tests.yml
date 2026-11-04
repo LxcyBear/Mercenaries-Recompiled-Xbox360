@@ -72,6 +72,9 @@ jobs:
         run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1R7NextOriginalFrontier.py --self-test
       - name: Original PC patch 279 real 002221CD retail MOV ADD CMP JGE restoration fixtures
         run: python ports/mercenaries/xbox360/integration_map/k1/Audit-K1R7RetailStreamingPatch.py
+      - name: K1 R8 NtReadFile 44 byte read-only ABI stack probe with hard fence and 36-byte compatibility
+        run: python ports/mercenaries/xbox360/integration_map/k1/Stage-K1R8NtReadFrameEvidence.py --self-test
+
       - name: Offline Watson compact view safety regression
         run: python ports/mercenaries/xbox360/integration_map/k1/Compact-K1Watson.py --self-test
       - name: Quiet logger external ABI and restage regression
@@ -379,6 +382,33 @@ jobs:
               throw "R7 original retail patch 279/PC idle streaming helper fail-closed gate changed"
           }
           Write-Host "[PS51] PASS: original 221CD PC-only streaming patch 279 branch reverted with real x86 guard"
+      - name: Parse K1 R8 read-only 44-byte NtReadFile evidence single-XDK/real-hardware-fingerprint runner
+        shell: powershell
+        run: |
+          $path = Resolve-Path ".\ports\mercenaries\xbox360\integration_map\k1\Advance-K1R8NtReadFrameEvidence.ps1"
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path.Path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -ne 0) {
+              $errors | ForEach-Object { Write-Host $_ }
+              throw "R8 NtReadFile stack evidence runner PS5.1 parse error"
+          }
+          $body = Get-Content -LiteralPath $path.Path -Raw -Encoding UTF8
+          if (-not $body.Contains('Stage-K1R8NtReadFrameEvidence.py') -or
+              -not $body.Contains('original_64_true_tus_unchanged') -or
+              -not $body.Contains('no_guest_stack_adjustment -ne $true') -or
+              -not $body.Contains('r8_ntread_44_byte_frame_handled -ne $false') -or
+              -not $body.Contains('K1-R8 NTREAD 44-RAW A:') -or
+              -not $body.Contains('K1-R8 NTREAD 44-RAW B:') -or
+              -not $body.Contains('BOUNDARY: kind=KERNEL_FRAME') -or
+              -not $body.Contains('WRONG XEX / NO R8 RUNTIME FINGERPRINT') -or
+              -not $body.Contains('XDK reused an up-to-date XEX') -or
+              -not $body.Contains('NO 44-byte bypass') -or
+              [regex]::Matches($body, '(?m)^\s*& \$builder @argsForXdk[ \t]*\r?$').Count -ne 1) {
+              throw "R8 44byte no-bypass evidence / Xbox hardware fingerprint / fresh-XDK safety contract broken"
+          }
+          Write-Host "[PS51] PASS: original r7 frame behavior and hard-fence preserved, real R8 44-byte evidence single-XDK"
+
 
 
 
