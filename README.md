@@ -4,9 +4,36 @@
 >
 > **Platform:** modified Xbox 360 · Xenon PowerPC · Xbox 360 XDK / VS17 · native `default.xex`
 >
-> **Last roadmap review:** October 26, 2026 · **Current focus:** Phase 6 — native Xbox 360 graphics (Xenos), now in the late bring-up / hardware-handshake stage. The retail path has a live 640×480 guest D3D device, proven NV2A PFIFO/PGRAPH/PFB state traffic, repeated D3D/XGRPH frontier execution, XACT/DSOUND/APU initialization, and the 6DQ ROCKET pack (13,516 translated members) running on hardware. 6DQ crossed the former VP `WRITE32 FE8202A4` frontier plus seven additional VP writes, then R12 proved `READ32 FEC0012C -> 0`; the next operation was the matching `WRITE32 FEC0012C` one translated tick later. R13 is prepared to model that exact write as a no-op while keeping all unrelated FEC/MMIO accesses fenced. No Mercenaries-generated framebuffer/present has appeared yet; the current orange surface remains diagnostic, not game-rendered pixels.
+> **Last roadmap review:** November 4, 2026 · **Current focus:** Phase 6 native Xenos first game-rendered frame and Phase 7 streaming/audio/input groundwork. Real Xbox 360 hardware has verified the retail XBE, guest D3D device creation, translated D3D/XGRPH and XACT/DSOUND/APU initialization, game file reads, and two experimental guest APC completions under local V6b testing. The latest V6b run stopped safely at `DIRECT_FRONTIER caller=0x0023A3CE target=0x0020EB00`, with `fault=0`. No guest game framebuffer or present has been demonstrated; blue/orange surfaces remain diagnostic. Phase 6 is NOT complete and gameplay is NOT yet playable.
 >
 > **Active development:** [Phase 6 — native Xenos graphics](https://github.com/LxcyBear/Mercenaries-Recompiled-Xbox360/tree/xbox360/phase6-native-graphics). Phase 5 is frozen on its completed hardware-proven branch; `master` keeps the public roadmap/status current until reviewed work is merged.
+
+## November 4, 2026 — Phase 6/7 integration checkpoint (hardware evidence)
+
+This is the current progress snapshot. Earlier R12/R13 and 6DQ log entries below remain historical evidence, **not the current frontier**. Source-only checks, successful XDK builds, and hardware proof are different evidence levels. The most recent V6b experiment was locally staged and tested on a modified Xbox 360; this README update does **not** merge V6b-generated runtime code into `master`.
+
+- **Phase 6 remains IN PROGRESS.** Native Xenos `Direct3D_CreateDevice` succeeds, the retail D3D guest device is published at `0x00299380`, NV2A state initialization and translated D3D/XGRPH paths execute, and XACT/DSOUND/APU setup has progressed. The milestone is still **first repeatable game-origin frame, functional title/menu graphics, and reproducible 3D scene**. Observed `display_calls=0`, `framebuffer=00000000`: diagnostic colors are **not** game pixels.
+- **Streaming/APC breakthrough (Phase 7 groundwork, not Gate 7):** V5c proved a real 151,552-byte read with a pending APC-form completion. V6 executed guest function `sub_00221F00` at an alertable wait and returned with a balanced `ret 12` guest stack. V6b delivered **two** bounded completions for real 151,552-byte and 147,456-byte reads, with no recurrence of the prior zero-duration alertable-wait loop. This is an **experimental observed continuation**, not complete/general Xbox APC semantics.
+- **Latest native stop (Nov 4 V6b):** `DIRECT_FRONTIER caller=0x0023A3CE target=0x0020EB00 esp=0x008BF834 fault=0`. The next work item is to audit the original `0x0020EB00` function, translated TrueTU ownership, direct-call closure and ABI before adding it to the packed runtime. Do **not** replace a missing translated function with an empty stub or silently remove the hard fence.
+- **Phase 7 is NOT formally started/completed**, but startup I/O, audio initialization, controller-input source staging and timers are being worked on in advance. Phase 7 exit requires real startup media/menu audio, functioning native controller input, and repeatable, correctly ordered streaming/timing behavior.
+- **Development discipline:** batch root-cause fixes, source/selftest gates, incremental VS2017 Xbox 360 TrueTU builds, hardware verification, and no tick-count-as-progress claims. Keep the frozen Phase-5 and known-good Phase-6 baseline intact.
+- **Next objective:** close the proven `0x0020EB00` direct frontier and measure genuine guest `D3DDevice_Swap`/`PersistDisplay` and nonzero presentation state. Begin Phase 7 integration in parallel where it does not interfere with Phase 6; do not declare Gate 6 passed before its actual graphics criteria.
+
+### Updated Phase 6 and Phase 7 acceptance checklist
+
+| Check | Evidence status |
+| --- | --- |
+| Retail XBE identity and translated startup | **HARDWARE PASS** |
+| Native Xenos device; game D3D CreateDevice guest handoff | **HARDWARE PASS** |
+| D3D/XGRPH state initialization, XACT/DSOUND/APU setup | **HARDWARE-OBSERVED partial integration** |
+| First and second bounded APC-form streaming completions | **EXPERIMENTAL HARDWARE PASS** (V6/V6b, exact observed sequence only) |
+| Direct translated target `0x0020EB00` and its closure | **BLOCKED — next source/ABI validation target** |
+| First real game frame / guest Swap / nonzero framebuffer | **NOT PROVEN** |
+| Functional title/menu and reproducible 3D scene | **NOT PROVEN — Phase 6 exit gate** |
+| Startup media/audio, controls, stable streaming/timing | **NOT PROVEN — Phase 7 exit gate** |
+| Playable scenarios, saves, missions | **NOT PROVEN — Phase 8** |
+
+---
 
 ## The mission
 
@@ -49,8 +76,7 @@ emulator running inside an XEX. `default.xex` is the intended native output.
 Progress is based on **tested exit criteria**, not invented percentage values.
 Each phase has independently checkable checkpoints below. As an internal planning
 estimate only, Phase 6 bring-up is now considered **more complete than incomplete**
-and roughly **75–80% through bring-up**; that estimate is not a substitute for the
-formal Phase-6 exit criteria.
+and historically estimated at **75–80% through bring-up** on October 26; this is a stale planning estimate, **not a newly measured percentage**. The November 4 snapshot above is authoritative for the current hardware frontier and neither Gate 6 nor Gate 7 is complete.
 
 | Phase | State | Exit criterion |
 | --- | --- | --- |
@@ -60,8 +86,8 @@ formal Phase-6 exit criteria.
 | **3 — PPC recompilation + x86 guest ABI** | **COMPLETE — Gate 3 / 3N-B PASS on modified Xbox 360 hardware** | 128-function audited translated-code scale pack, loaded-XEX anchors, x87 checks and six independent-reference retail-function runs PASS |
 | **4 — Native platform + kernel services** | **COMPLETE — Gate 4 / Phase 4C-AF PASS on modified Xbox 360 hardware** | Real retail-derived translated startup executes through the migrated Xenon service layer with deterministic hardware checkpoints |
 | **5 — Subsystem bring-up under native game execution** | **COMPLETE — repeatability 3/3 PASS + exit reconnaissance READY/PASS** | Stable translated/runtime path, classified endpoint, subsystem inventory, first-touch baseline, risk map and ordered Phase-6 handoff |
-| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — late bring-up; 6DQ ROCKET hardware-proven through VP command writes and exact `FEC0012C` IOAPIC read; R13 matching write bridge prepared** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
-| 7 — Audio, movies, input and streaming integration | Not started | Functional startup media/menu audio/input with stable timing and storage streaming |
+| **6 — Native Xbox 360 graphics (Xenos)** | **IN PROGRESS — V6b hardware crossed two APC streaming completions; current stop DIRECT_FRONTIER `0x0020EB00`; zero guest presents** | Repeatable native Xenos first game-rendered frame, functional title/menu graphics and reproducible 3D scene |
+| 7 — Audio, movies, input and streaming integration | **Not formally started — integration groundwork underway** (XACT/DSOUND/APU setup, staged XPP input, V6b bounded async reads/APC) | Functional startup media/menu audio/input with stable timing and storage streaming |
 | 8 — Gameplay and compatibility hardening | Not started | Repeated playable scenarios, save/load, mission progression and documented compatibility |
 
 **Verified foundation:** the VS17/XDK bootstrap, 64 MiB guest RAM contract,
@@ -79,7 +105,7 @@ executed the real retail startup path on hardware through 23 translated
 entries, including live thread/TLS/kernel/VM continuations, and reached
 ordinal 202 `NtOpenFile` with `fault=0`, closing Gate 4.
 
-**Present blockers:** Phase 5 is complete and frozen. Phase 6 is no longer blocked on basic startup, D3D device creation, the original NV2A PFIFO/PGRAPH/PFB initialization chain, or the earlier ordinal-357 / DeviceQueue issue. The current hardware path has a live guest D3D device, working graphics-pool/tile/ZCOMP state, repeated D3D/XGRPH execution, active XACT/DSOUND/APU setup, and a broad translated closure capable of hundreds of thousands of indirect dispatches per run.
+**Historical October 26 blocker report (superseded by the November 4 checkpoint above):** Phase 5 is complete and frozen. Phase 6 is no longer blocked on basic startup, D3D device creation, the original NV2A PFIFO/PGRAPH/PFB initialization chain, or the earlier ordinal-357 / DeviceQueue issue. The current hardware path has a live guest D3D device, working graphics-pool/tile/ZCOMP state, repeated D3D/XGRPH execution, active XACT/DSOUND/APU setup, and a broad translated closure capable of hundreds of thousands of indirect dispatches per run.
 
 The immediate blocker is now a narrow hardware handshake inside the audio/APIC-side path. 6DQ crossed the former VP boundary at `FE8202A4` and seven more VP writes. R12 then handled exact `READ32 FEC0012C` as a modeled zero; the very next translated operation was `WRITE32 FEC0012C`, which remained fenced and stopped the run at tick 26,712,265. R13 models only that exact matching write as a no-op, preserving hard fences for every unrelated FEC/MMIO access.
 
