@@ -29,6 +29,47 @@ def main():
     require(sha(raw)==m['original_recomp_0010_sha256'],'Original generated source hash mismatch')
     source=raw.decode('utf-8-sig').replace('\r\n','\n')
     decoded=parent.decode('utf-8-sig'); eol='\r\n' if '\r\n' in decoded else '\n'
+    # The PC recompiler adds optional user-configurable camera changes.
+    # Xbox 360 retains original retail projection: reverse only tracked,
+    # exact patch-generator insertions, never approximate camera helpers.
+    patcher=(ROOT/'ports/mercenaries/scripts/Patch-Generated.py').read_text(encoding='utf-8-sig').replace('\r\n','\n')
+    perspective_new=('loc_001F8F10: ;\n'
+      '    esp = esp - 0x10;\n'
+      '    { float recomp_options_camera_far_plane(uint32_t,float);\n'
+      '      MEMF(esp + 0x18u) = recomp_options_camera_far_plane(ecx,MEMF(esp + 0x18u)); }\n'
+      '    {\n'
+      '        const float _recomp_guest_aspect = MEMF(esp + 0x20);\n'
+      '        MEMF(esp + 0x1C) = recomp_options_perspective_fov(\n'
+      '            MEMF(esp + 0x1C), _recomp_guest_aspect);\n'
+      '        MEMF(esp + 0x20) = recomp_options_perspective_aspect(\n'
+      '            _recomp_guest_aspect);\n'
+      '    }\n'
+      '    fp_push(MEMF(esp + 0x1C)); /* fld float */')
+    perspective_old=('loc_001F8F10: ;\n'
+      '    esp = esp - 0x10;\n'
+      '    fp_push(MEMF(esp + 0x1C)); /* fld float */')
+    fov_new=('    { float recomp_options_camera_fov(uint32_t,float);\n'
+      '      MEMF(esp + 0x1Cu) = recomp_options_camera_fov(ecx, MEMF(esp + 0x1Cu)); }\n'
+      '    fp_push(MEMF(esp + 0x1C)); /* fld float */\n'
+      '    recomp_xmm_loadss(xmm0v, esp + 0x14);')
+    fov_old=('    fp_push(MEMF(esp + 0x1C)); /* fld float */\n'
+      '    recomp_xmm_loadss(xmm0v, esp + 0x14);')
+    for old,new in ((perspective_old,perspective_new),(fov_old,fov_new)):
+        require(patcher.count(old)>=1 and patcher.count(new)>=1,
+                'Tracked PC camera patch provenance unavailable')
+    def reverse_camera_hooks(name,fn):
+        if name!='sub_001F8F10':return fn
+        require(fn.count(perspective_new)==1,
+                'Original generated camera injection drift; cannot safely reverse retail projection hook')
+        fn=fn.replace(perspective_new,perspective_old,1)
+        require(fn.count(fov_new)==1,
+                'Original generated camera FOV injection drift; cannot safely reverse retail FOV hook')
+        fn=fn.replace(fov_new,fov_old,1)
+        for x in ('recomp_options_camera_far_plane','recomp_options_camera_fov',
+                  'recomp_options_perspective_fov','recomp_options_perspective_aspect'):
+            require(x not in fn,'Injected camera hook still present: '+x)
+        return fn
+
     base=decoded.replace('\r\n','\n')
     # Expand only translated functions whose exact original definitions can be
     # proved in this frozen source. Calls to already-compiled TrueTU functions
@@ -52,7 +93,7 @@ def main():
         if name in compiled or name in staged:continue
         require(len(staged)<24,'Closure cap 24 exceeded near '+name)
         require(name in definitions,'Original definition unavailable for '+name)
-        fn=definitions[name]
+        fn=reverse_camera_hooks(name,definitions[name])
         require('return;' in fn,'Unrecognized return in '+name)
         calls=set(re.findall(r'\b(sub_[0-9A-Fa-f]{8})\s*\(',fn))
         calls.discard(name)
@@ -92,6 +133,7 @@ def main():
         'retail_sha256':RET,'parent_v6e_sha256':sha(parent),
         'original_recomp_0010_sha256':sha(raw),'source_sha256':sha(payload),
         'translated_dependencies':translated_calls,'runtime_helpers':sorted(helper_calls),
+        'pc_camera_hooks_reversed_to_tracked_retail_instructions':True,
         'true_tu_count':64,'true_tu_sha256':h,'marker':MARKER,
         'guest_tick_semantics_unchanged':True,'existing_apc_and_hard_fences_unchanged':True,
         'speedup_claimed':False,'hardware_tested':False}
@@ -113,6 +155,7 @@ def main():
         if not path.exists():path.write_bytes(data)
     require((PARENT/'main.cpp').read_bytes()==parent,'Parent source modified during run')
     print(TAG+' SOURCE PASS: original 0x001F8F10 with bounded closure '+', '.join(sorted(staged)))
+    print(TAG+' PASS: original retail perspective/FOV instructions restored from tracked PC patch pairs')
     print(TAG+' PASS: dispatch, 64 TrueTUs, five-read APC and hard fences preserved')
     print(TAG+' PERF AUDIT: slowdown is real; NO UNSAFE TICK SKIP, acceleration not applied')
     print(TAG+' MAIN: '+str(DEST/'main.cpp'))
