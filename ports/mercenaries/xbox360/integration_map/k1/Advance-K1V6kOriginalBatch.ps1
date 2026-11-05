@@ -24,7 +24,7 @@ try {
         throw 'V6k generated main.cpp integrity mismatch'
     }
     Write-Host "[K1-V6k] SOURCE READY: $($manifest.dispatch_count) real functions across $($manifest.generated_files_scanned) generated C files" -ForegroundColor Green
-    Write-Host "[K1-V6k] OPTIONAL REJECTED: $($manifest.optional_rejected.PSObject.Properties.Count)" -ForegroundColor Yellow
+    Write-Host "[K1-V6k] OPTIONAL REJECTED: $(@($manifest.optional_rejected.PSObject.Properties).Count)" -ForegroundColor Yellow
     if ($StageOnly) {
         Write-Host '[K1-V6k] STAGE ONLY. No XDK build/hardware run.' -ForegroundColor Cyan
         return
