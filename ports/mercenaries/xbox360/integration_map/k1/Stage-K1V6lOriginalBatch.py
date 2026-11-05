@@ -18,6 +18,14 @@ SHARDS=ROOT/"build/phase6_integration_map/k1_pixel_ntread_apc_stream_v6b/transla
 RETAIL="AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
 MARK="K1-V6L-RETAIL-SOURCE-CLOSURE-001FE7D0-20261105"
 XBE=ROOT/"game_files/mercenaries-retail/default.xbe"
+# SHA-pinned source and original Xbox retail function identity.
+ROOT_GEN_FILE="recomp_0010.c"
+ROOT_GEN_SHA="bf21064bf05c69974031e822ae39b8ea4b2e6519c35f08b0b6c708b9f4fdde1e"
+RETAIL_ENTRY_BYTES=bytes.fromhex(
+    "56 8B 35 54 0B 69 00 68 F0 3D 2E 00 6A 00 46 6A "
+    "10 89 35 54 0B 69 00 E8 F4 89 FF FF"
+)
+CHECKPOINT="    recomp_xact_managed_checkpoint(10u, GUEST_READ32(esp + 4), GUEST_READ32(0x690ACC), GUEST_READ32(0x690AD0));\n"
 MAX_FUNCS=256
 # Prioritize genuine source-neighbors to the witnessed math/camera call path;
 # candidates outside these zones can still enter through required dependencies.
@@ -56,6 +64,39 @@ def function_inventory():
     require(FRONTIER in definitions,"Hardware frontier 001FE7D0 not found in generated C definitions")
     return definitions,sources,len(files)
 
+def restore_retail_xact_root(fn):
+    """Strip only the proven PC-side XACT entry checkpoint."""
+    import struct
+    raw=XBE.read_bytes()
+    require(sha(raw).upper()==RETAIL,"Retail XBE SHA-256 mismatch")
+    require(raw[:4]==b"XBEH","Retail XBE magic mismatch")
+    d=lambda off:struct.unpack_from("<I",raw,off)[0]
+    base=d(0x104);count=d(0x11C);table=d(0x120)-base
+    require(0<count<64 and 0<=table and table+count*0x38<=len(raw),
+            "Invalid retail XBE section table")
+    va=0x001FE7D0
+    matches=[]
+    for i in range(count):
+        h=table+i*0x38
+        addr,vsize,offset,size=d(h+4),d(h+8),d(h+12),d(h+16)
+        if addr<=va and va+0x88<=addr+min(vsize,size):
+            at=offset+(va-addr)
+            if at+0x88<=len(raw):matches.append(raw[at:at+0x88])
+    require(len(matches)==1,"Expected one retail XBE text mapping for 001FE7D0")
+    require(matches[0].startswith(RETAIL_ENTRY_BYTES),
+            "Retail 001FE7D0 entry bytes mismatch")
+    require(matches[0][0x86:0x88]==bytes.fromhex("5E C3"),
+            "Retail 001FE7D0 return bytes mismatch")
+    require(fn.count(CHECKPOINT)==1,"Exact XACT entry checkpoint changed")
+    require(fn.count("recomp_xact_managed_checkpoint(")==1,
+            "Extra XACT checkpoint in required root")
+    require(fn.count("loc_001FE7D0: ;\n")==1,
+            "Original frontier label changed")
+    fixed=fn.replace(CHECKPOINT,"",1)
+    require("recomp_xact_managed_checkpoint(" not in fixed,
+            "XACT checkpoint remained after retail restoration")
+    return fixed
+
 def main():
     v6i=json.loads((PARENT/"v6k-manifest.json").read_text(encoding="utf-8-sig"))
     parent=(PARENT/"main.cpp").read_bytes()
@@ -68,6 +109,10 @@ def main():
     hashes={p.name:sha(p.read_bytes()) for p in tus}
     require(hashes==v6i["true_tu_sha256"],"64 TrueTU source hashes changed")
     defs,sources,filecount=function_inventory()
+    require(sources[FRONTIER]==ROOT_GEN_FILE,"Required root source owner changed")
+    require(sha((GEN/ROOT_GEN_FILE).read_bytes())==ROOT_GEN_SHA,
+            "Required source SHA-256 changed; refusing unknown checkpoint patch")
+    defs[FRONTIER]=restore_retail_xact_root(defs[FRONTIER])
 
     base=parent.decode("utf-8-sig").replace("\r\n","\n")
     eol="\r\n" if b"\r\n" in parent else "\n"
@@ -182,6 +227,9 @@ def main():
                 "Inherited debug fence / guest owner drift: "+legacy)
     out_bytes=output.replace("\n",eol).encode("utf-8")
     report={
+        "retail_xact_checkpoint_restore_001fe7d0":True,
+        "retail_root_generated_owner":ROOT_GEN_FILE,
+        "retail_root_generated_sha256":ROOT_GEN_SHA,
         "inherited_v6k_retail_checkpoint_patch":True,
         "stage":"V6L_RETAIL_SOURCE_BATCH_HARDWARE_UNTESTED",
         "retail_sha256":RETAIL,
@@ -212,6 +260,7 @@ def main():
     for target,data in payloads:
         if not target.exists(): target.write_bytes(data)
     require((PARENT/"main.cpp").read_bytes()==parent,"V6k parent modified")
+    print(TAG+" RETAIL PASS: single PC XACT checkpoint removed from 001FE7D0")
     print(TAG+" INHERITED RETAIL V6k source hash PASS")
     print(TAG+" SOURCE PASS: 001FE7D0 plus %d dependency-closed real functions" % (len(names)-1))
     print(TAG+" SOURCE CORPUS: %d generated files; stage cap %d" % (filecount,MAX_FUNCS))
