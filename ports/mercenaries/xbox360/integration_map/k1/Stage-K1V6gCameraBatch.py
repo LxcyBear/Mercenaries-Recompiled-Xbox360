@@ -86,10 +86,22 @@ def main():
     manual_sin = "sub_001F9D70"
     manual_witness = "entered manual PblMath sin 001F9D70"
     manual_target = "0x001F9D70u"
+    manual_handler = "phase6cc_pbl_sin_001f9d70"
+    manual_dispatch = "case 0x001F9D70u: return phase6cc_pbl_sin_001f9d70;"
+    # This exact invocation is already present twice in the hardware-tested
+    # V6f parent (sub_0020EB00). It preserves the pushed guest return word,
+    # guest ESP and FPU return as the runtime dispatcher owns the call.
+    trusted_call = "PUSH32(esp, 0); phase4c_direct_frontier(0x001F9D70u); /* call 0x001F9D70 */"
+    generated_call = "PUSH32(esp, 0); sub_001F9D70(); /* call 0x001F9D70 */"
     require(base.count(manual_witness) == 1,
             "Manual PblMath sin handler witness absent or duplicated in V6f")
-    require(manual_target in base,
-            "Manual PblMath sin dispatch address absent in V6f")
+    require(base.count(manual_dispatch) == 1,
+            "Manual PblMath sine dispatch handler absent or altered in V6f")
+    require(base.count(trusted_call) >= 2,
+            "Existing V6f translated/manual sine call pattern absent")
+    require(base.count("void " + manual_handler + "(void)") == 1,
+            "Manual PblMath sine implementation missing in V6f")
+
     require(manual_sin not in defs,
             "PblMath sin unexpectedly generated; re-audit ownership")
     manual_owners = [manual_sin]
@@ -100,37 +112,25 @@ def main():
     staged, issue = inspect(SEED, defs, known, {}, set())
     require(issue is None, "REQUIRED " + SEED + " BLOCKED: " + str(issue))
     require(SEED in staged, "Root not included")
-    # A runtime-dispatch witness does not provide a C++ symbol. Never
-    # silently declare a nonexistent translated function. Until its ABI is
-    # bridged, emit the handler/callsite evidence and block staging/build.
-    references = [n for n, fn in staged.items() if manual_sin in calls_in(fn)]
-    if references:
-        lines = base.splitlines()
-        matches = [i for i, line in enumerate(lines)
-                   if manual_witness in line or manual_target in line]
-        excerpts = []
-        for i in matches[:16]:
-            lo, hi = max(0, i - 18), min(len(lines), i + 23)
-            excerpts.append("--- V6f runtime line " + str(i + 1) + " ---\n" +
-                            "\n".join("%d: %s" % (j + 1, lines[j])
-                                      for j in range(lo, hi)))
-        call_excerpts = []
-        for name in references:
-            f_lines = staged[name].splitlines()
-            for i, line in enumerate(f_lines):
-                if manual_sin in line:
-                    lo, hi = max(0, i - 12), min(len(f_lines), i + 13)
-                    call_excerpts.append("--- " + name + " call ---\n" +
-                       "\n".join("%d: %s" % (j + 1, f_lines[j])
-                                 for j in range(lo, hi)))
-        path = ROOT / "build/phase6_integration_map/k1_v6g_manual_sin_abi_audit.txt"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            "PblMath manual handler is runtime dispatch, NOT a C++ symbol.\n"
-            "Callers: " + ", ".join(references) + "\n" +
-            "\n\n".join(excerpts + call_excerpts) + "\n", encoding="utf-8")
-        raise RuntimeError("Manual PblMath sin requires a verified C++/runtime ABI bridge; "
-                           "audit: " + str(path))
+    # Verified from the V6f runtime and V6g ABI audit:
+    # both generated sites carry the same PUSH32(esp, 0) call frame used in
+    # existing successfully compiled translated callers. Send these through
+    # the already installed guest direct-dispatch path, not a phantom symbol.
+    # Do not call the manual sine handler directly or change FPU/ESP semantics.
+    manual_call_sites = {}
+    for name, fn in list(staged.items()):
+        if manual_sin not in calls_in(fn):
+            continue
+        count = fn.count(generated_call)
+        seen = len(re.findall(r"\\bsub_001F9D70\\s*\\(", fn))
+        require(count == seen and count > 0,
+                "Manual PblMath sine callsite ABI differs in " + name)
+        staged[name] = fn.replace(generated_call, trusted_call)
+        manual_call_sites[name] = count
+        require(manual_sin not in calls_in(staged[name]),
+                "Unconverted manual PblMath sine call in " + name)
+    require(manual_call_sites.get(SEED) == 2,
+            "Expected two audited camera sine calls in " + SEED)
     optional_skips = {}
     candidates = [name for name in sorted(defs)
                   if NEIGHBOR_LOW <= int(name[4:], 16) < NEIGHBOR_HIGH
@@ -143,6 +143,18 @@ def main():
             staged.update(added)
         else:
             optional_skips[name] = "cap"
+    # An optional function may also call the manual sine owner. It may only
+    # join the batch if its exact call frame can be converted the same way.
+    for name, fn in list(staged.items()):
+        if manual_sin in calls_in(fn):
+            count = fn.count(generated_call)
+            seen = len(re.findall(r"\\bsub_001F9D70\\s*\\(", fn))
+            require(count == seen and count > 0,
+                    "Non-audited optional manual sine ABI in " + name)
+            staged[name] = fn.replace(generated_call, trusted_call)
+            manual_call_sites[name] = count
+    require(all(manual_sin not in calls_in(fn) for fn in staged.values()),
+            "Unconverted manual sine call remains in closure")
     require(len(staged) <= MAX_FUNCS, "Batch cap exceeded")
 
     # Explicit declaration and dispatch coverage, not just dead-code packing.
@@ -191,6 +203,7 @@ def main():
         "true_tu_count": 64, "true_tu_sha256": hashes,
         "included": sorted(staged),
         "verified_manual_dependencies": manual_owners,
+        "manual_dispatch_converted_call_sites": manual_call_sites,
         "optional_skipped": optional_skips,
         "dispatch_count": len(staged),
         "marker": MARK,
@@ -211,7 +224,8 @@ def main():
     require((PARENT / "main.cpp").read_bytes() == parent, "V6f parent mutated")
     print(TAG + " SOURCE PASS: root " + SEED + " plus " + str(len(staged)-1) + " original camera/support functions")
     print(TAG + " STAGED: " + ", ".join(sorted(staged)))
-    print(TAG + " VERIFIED MANUAL OWNER: " + manual_sin + " (runtime handler already staged in V6f)")
+    print(TAG + " VERIFIED MANUAL OWNER: " + manual_sin + " -> " + manual_handler)
+    print(TAG + " MANUAL DISPATCH BRIDGES: " + str(manual_call_sites))
     print(TAG + " OPTIONAL SKIPPED: " + str(len(optional_skips)) + " (manifest contains reasons)")
     print(TAG + " PASS: all dispatches, 64 TrueTUs, APC and hard fences preserved")
     print(TAG + " MAIN: " + str(DEST / "main.cpp"))
