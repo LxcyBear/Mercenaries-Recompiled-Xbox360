@@ -76,17 +76,17 @@ def main():
             # guessing another representation of the generated camera code.
             excerpt=fn[:7000]
             diagnostic=(
-                'V6f original camera hook exact-match audit\\n'
-                'perspective_new_count='+str(fn.count(perspective_new))+'\\n'
-                'perspective_old_count='+str(fn.count(perspective_old))+'\\n'
-                'fov_new_count='+str(fn.count(fov_new))+'\\n'
-                'fov_old_count='+str(fn.count(fov_old))+'\\n'
-                'camera_far_plane_count='+str(fn.count('recomp_options_camera_far_plane'))+'\\n'
-                'perspective_fov_count='+str(fn.count('recomp_options_perspective_fov'))+'\\n'
-                'perspective_aspect_count='+str(fn.count('recomp_options_perspective_aspect'))+'\\n'
-                'camera_fov_count='+str(fn.count('recomp_options_camera_fov'))+'\\n'
-                '--- actual generated function excerpt ---\\n'+excerpt+'\\n'
-                '--- end excerpt ---\\n')
+                'V6f original camera hook exact-match audit\n'
+                'perspective_new_count='+str(fn.count(perspective_new))+'\n'
+                'perspective_old_count='+str(fn.count(perspective_old))+'\n'
+                'fov_new_count='+str(fn.count(fov_new))+'\n'
+                'fov_old_count='+str(fn.count(fov_old))+'\n'
+                'camera_far_plane_count='+str(fn.count('recomp_options_camera_far_plane'))+'\n'
+                'perspective_fov_count='+str(fn.count('recomp_options_perspective_fov'))+'\n'
+                'perspective_aspect_count='+str(fn.count('recomp_options_perspective_aspect'))+'\n'
+                'camera_fov_count='+str(fn.count('recomp_options_camera_fov'))+'\n'
+                '--- actual generated function excerpt ---\n'+excerpt+'\n'
+                '--- end excerpt ---\n')
             report=ROOT/'build/phase6_integration_map/k1_v6f_camera_source_audit.txt'
             report.parent.mkdir(parents=True,exist_ok=True)
             report.write_text(diagnostic,encoding='utf-8')
