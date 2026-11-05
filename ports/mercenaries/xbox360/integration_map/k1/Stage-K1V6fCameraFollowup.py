@@ -54,9 +54,21 @@ def main():
       '    recomp_xmm_loadss(xmm0v, esp + 0x14);')
     fov_old=('    fp_push(MEMF(esp + 0x1C)); /* fld float */\n'
       '    recomp_xmm_loadss(xmm0v, esp + 0x14);')
-    for old,new in ((perspective_old,perspective_new),(fov_old,fov_new)):
-        require(patcher.count(old)>=1 and patcher.count(new)>=1,
-                'Tracked PC camera patch provenance unavailable')
+    # The patch-generator has multiple quoting/placement styles. Verify the
+    # patch *provenance* by its named edits and distinctive injected statements,
+    # then match the generated function exactly before removing any bytes.
+    # Requiring the full generated multiline source inside the Python source
+    # produces false negatives for quotes/line breaks and separate patch sites.
+    provenance=(
+      'RedCamera SetPerspective recomp aspect option',
+      'Recomp FOV on gameplay camera only',
+      'recomp_options_camera_far_plane(ecx,MEMF(esp + 0x18u))',
+      'recomp_options_perspective_fov(',
+      'recomp_options_perspective_aspect(',
+      'recomp_options_camera_fov(ecx, MEMF(esp + 0x1Cu))')
+    missing=[item for item in provenance if item not in patcher]
+    require(not missing,
+        'Tracked PC camera patch provenance unavailable: '+', '.join(missing))
     def reverse_camera_hooks(name,fn):
         if name!='sub_001F8F10':return fn
         require(fn.count(perspective_new)==1,
