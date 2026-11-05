@@ -33,26 +33,27 @@ def main():
     # Xbox 360 retains original retail projection: reverse only tracked,
     # exact patch-generator insertions, never approximate camera helpers.
     patcher=(ROOT/'ports/mercenaries/scripts/Patch-Generated.py').read_text(encoding='utf-8-sig').replace('\r\n','\n')
+    # Exact transformed code witnessed in V6f 2026-11-05 local camera audit.
+    # Remove ONLY the PC-injected statements, restoring the retail operation
+    # sequence unchanged. The PC Patch-Generated.py still proves provenance.
     perspective_new=('loc_001F8F10: ;\n'
       '    esp = esp - 0x10;\n'
       '    { float recomp_options_camera_far_plane(uint32_t,float);\n'
-      '      MEMF(esp + 0x18u) = recomp_options_camera_far_plane(ecx,MEMF(esp + 0x18u)); }\n'
+      '      GUEST_WRITEF32(esp + 0x18u, recomp_options_camera_far_plane(ecx,GUEST_READF32(esp + 0x18u))); }\n'
       '    {\n'
-      '        const float _recomp_guest_aspect = MEMF(esp + 0x20);\n'
-      '        MEMF(esp + 0x1C) = recomp_options_perspective_fov(\n'
-      '            MEMF(esp + 0x1C), _recomp_guest_aspect);\n'
-      '        MEMF(esp + 0x20) = recomp_options_perspective_aspect(\n'
-      '            _recomp_guest_aspect);\n'
-      '    }\n'
-      '    fp_push(MEMF(esp + 0x1C)); /* fld float */')
+      '        const float _recomp_guest_aspect = GUEST_READF32(esp + 0x20);\n'
+      '        GUEST_WRITEF32(esp + 0x1C, recomp_options_perspective_fov(\n'
+      '            GUEST_READF32(esp + 0x1C), _recomp_guest_aspect));\n'
+      '        GUEST_WRITEF32(esp + 0x20, recomp_options_perspective_aspect(\n'
+      '            _recomp_guest_aspect));\n'
+      '    }\n')
     perspective_old=('loc_001F8F10: ;\n'
-      '    esp = esp - 0x10;\n'
-      '    fp_push(MEMF(esp + 0x1C)); /* fld float */')
+      '    esp = esp - 0x10;\n')
     fov_new=('    { float recomp_options_camera_fov(uint32_t,float);\n'
-      '      MEMF(esp + 0x1Cu) = recomp_options_camera_fov(ecx, MEMF(esp + 0x1Cu)); }\n'
-      '    fp_push(MEMF(esp + 0x1C)); /* fld float */\n'
+      '      GUEST_WRITEF32(esp + 0x1Cu, recomp_options_camera_fov(ecx, GUEST_READF32(esp + 0x1Cu))); }\n'
+      '    fp_push(GUEST_READF32(esp + 0x1C)); /* fld float */\n'
       '    recomp_xmm_loadss(xmm0v, esp + 0x14);')
-    fov_old=('    fp_push(MEMF(esp + 0x1C)); /* fld float */\n'
+    fov_old=('    fp_push(GUEST_READF32(esp + 0x1C)); /* fld float */\n'
       '    recomp_xmm_loadss(xmm0v, esp + 0x14);')
     # The patch-generator has multiple quoting/placement styles. Verify the
     # patch *provenance* by its named edits and distinctive injected statements,
