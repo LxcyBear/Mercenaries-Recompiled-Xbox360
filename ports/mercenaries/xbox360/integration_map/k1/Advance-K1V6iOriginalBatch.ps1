@@ -8,7 +8,7 @@ try {
     $python = (Get-Command python.exe -ErrorAction Stop).Source
     & $python (Join-Path $here 'Stage-K1V6iOriginalBatch.py')
     if ($LASTEXITCODE -ne 0) { throw 'V6i original source batch staging BLOCKED. No XDK build attempted.' }
-    $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_camera_batch_v6i'
+    $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_camera_batch_v6i_helperfenced'
     $manifest = Get-Content -LiteralPath (Join-Path $stage 'v6i-manifest.json') -Raw | ConvertFrom-Json
     if ($manifest.stage -ne 'V6I_ORIGINAL_SOURCE_ONLY_HARDWARE_UNTESTED' -or
         $manifest.hardware_seed -ne '0x001FA000' -or
@@ -22,7 +22,7 @@ try {
     $envSource = Join-Path $repo 'build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp'
     $builder = Join-Path $repo 'ports\mercenaries\xbox360\phase6_native_graphics\Invoke-VS17Xbox360Build.ps1'
     $out = Join-Path $stage 'xdk'
-    $xex = Join-Path $out 'Merc-K1-V6i-OriginalBatch.xex'
+    $xex = Join-Path $out 'Merc-K1-V6i-HelperFenced.xex'
     New-Item -ItemType Directory -Force -Path $out | Out-Null
     $buildArgs = @{
         GeneratedMain = $src
