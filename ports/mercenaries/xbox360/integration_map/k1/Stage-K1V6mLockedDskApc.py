@@ -18,9 +18,12 @@ OLD_HANDLE="handleToken == 0x48000003u"
 NEW_HANDLE=("((handleToken == 0x48000003u) ||\n"
             "     (handleToken == 0x48000006u && offsetLow == 0x00003800u &&\n"
             "      length == 262144u && bufferVa == 0x01B18300u))")
-OLD_OFFSET=("(offsetLow == 0x0ACE8000u && length == 153600u &&\n"
+# V6d offset predicate includes original window AND the third-read exception.
+OLD_OFFSET=("((offsetLow >= 0x08000000u && offsetLow <= 0x09000000u) ||\n"
+            "     (offsetLow == 0x0ACE8000u && length == 153600u &&\n"
             "      bufferVa == 0x01B32B00u)) &&")
-NEW_OFFSET=("(offsetLow == 0x0ACE8000u && length == 153600u &&\n"
+NEW_OFFSET=("((offsetLow >= 0x08000000u && offsetLow <= 0x09000000u) ||\n"
+            "     (offsetLow == 0x0ACE8000u && length == 153600u &&\n"
             "      bufferVa == 0x01B32B00u) ||\n"
             "     (offsetLow == 0x00003800u && length == 262144u &&\n"
             "      bufferVa == 0x01B18300u && handleToken == 0x48000006u)) &&")
@@ -57,6 +60,8 @@ def stage():
         need(required in old,"Inherited APC safety/delivery invariant missing: "+required)
     need(MARK not in old,"V6m patch already present")
     # Ensure both modifications touch the same bounded APC admission function.
+    need(old.count(OLD_HANDLE)==1 and old.count(OLD_OFFSET)==1,
+         'Inherited V6d handle or two-case offset predicate changed')
     first=old.index(OLD_HANDLE)
     second=old.index(OLD_OFFSET)
     need(abs(first-second)<2000,"Handle and offset guards are not in the same bounded admission predicate")
