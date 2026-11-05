@@ -8,7 +8,7 @@ try {
     $python = (Get-Command python.exe -ErrorAction Stop).Source
     & $python (Join-Path $here 'Stage-K1V6gCameraBatch.py')
     if ($LASTEXITCODE -ne 0) { throw 'V6g source staging BLOCKED. No XDK build attempted.' }
-    $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_camera_batch_v6g'
+    $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_camera_batch_v6g_sinebridge'
     $manifest = Get-Content -LiteralPath (Join-Path $stage 'v6g-manifest.json') -Raw | ConvertFrom-Json
     if ($manifest.stage -ne 'V6G_SOURCE_ONLY_NOT_BUILT_OR_HARDWARE_TESTED') { throw 'Stage marker mismatch' }
     if ($manifest.hardware_frontier -ne '0x001F8B30') { throw 'Frontier mismatch' }
@@ -19,7 +19,7 @@ try {
     $envSource = Join-Path $repo 'build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp'
     $builder = Join-Path $repo 'ports\mercenaries\xbox360\phase6_native_graphics\Invoke-VS17Xbox360Build.ps1'
     $out = Join-Path $stage 'xdk'
-    $xex = Join-Path $out 'Merc-K1-V6g-CameraBatch.xex'
+    $xex = Join-Path $out 'Merc-K1-V6g-SineBridge.xex'
     New-Item -ItemType Directory -Force -Path $out | Out-Null
     $args = @{
         GeneratedMain = (Join-Path $stage 'main.cpp')
