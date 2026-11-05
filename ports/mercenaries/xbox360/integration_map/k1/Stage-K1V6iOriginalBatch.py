@@ -10,7 +10,7 @@ import hashlib, json, re, sys
 ROOT=Path.cwd()
 TAG="[K1-V6i]"
 PARENT=ROOT/"build/phase6_integration_map/k1_pixel_camera_vec3_v6h"
-DEST=ROOT/"build/phase6_integration_map/k1_pixel_camera_batch_v6i_helperfenced"
+DEST=ROOT/"build/phase6_integration_map/k1_pixel_camera_batch_v6i_sseallowed"
 SRC=ROOT/"build/phase3n_final_abi_scale/runtime/gen/recomp_0010.c"
 SHARDS=ROOT/"build/phase6_integration_map/k1_pixel_ntread_apc_stream_v6b/translated_shards"
 V6G=ROOT/"build/phase6_integration_map/k1_pixel_camera_batch_v6g_sinebridge/v6g-manifest.json"
@@ -34,11 +34,14 @@ def definitions(src):
 def calls(fn):
     return set(re.findall(r"\b(sub_[0-9A-Fa-f]{8})\s*\(",fn))
 
+def host_helpers(fn):
+    return set(re.findall(r"\b(recomp_[A-Za-z_0-9]+)\s*\(",fn))
+
 def close(name,defs,known,staged,trail):
     if name in known or name in staged or name in trail: return {},None
     if name not in defs: return {},"source_missing:"+name
     fn=defs[name]
-    unsafe=sorted(set(re.findall(r"\b(recomp_[A-Za-z_0-9]+)\s*\(",fn)))
+    unsafe=sorted(h for h in host_helpers(fn) if not h.startswith("recomp_xmm_"))
     if unsafe: return {},name+" unsupported host helper: "+",".join(unsafe)
     if "return;" not in fn: return {},name+" missing translator return"
     result={name:fn}
@@ -115,9 +118,12 @@ def main():
     require(len(selected)<=MAX_FUNCS,"Batch exceeded cap")
     # A missing host-side recomp_* hook must never be faked on Xbox.
     # Fail source staging before invoking MSBuild if any escaped the closure filter.
-    forbidden=sorted(set(re.findall(r"\b(recomp_[A-Za-z_0-9]+)\s*\(",
-                                    "\n".join(selected.values()))))
+    all_helpers=host_helpers("\n".join(selected.values()))
+    forbidden=sorted(h for h in all_helpers if not h.startswith("recomp_xmm_"))
     require(not forbidden,"Unsupported PC-only recomp helper(s) in staged batch: "+", ".join(forbidden))
+    xmm_helpers=sorted(h for h in all_helpers if h.startswith("recomp_xmm_"))
+    # These calls emulate SSE instructions. Do not stub or change their data semantics.
+    # Their availability is ultimately checked by the existing XDK compiler.
     for name in selected:
         require(name not in known,"Duplicate compiled symbol "+name)
         require("case 0x"+name[4:].upper()+"u:" not in base,
@@ -156,6 +162,7 @@ def main():
         "true_tu_count":64,"true_tu_sha256":hashes,
         "included":sorted(selected),"dispatch_count":len(selected),
         "manual_bridges":bridge_counts,
+        "xmm_helper_calls":xmm_helpers,
         "optional_skipped":skipped,
         "marker":MARK,"hardware_tested":False,
         "guest_state_or_tick_skipped":False,
@@ -171,6 +178,7 @@ def main():
     print(TAG+" SOURCE PASS: 001FA000 + "+str(len(selected)-1)+" original functions")
     print(TAG+" INCLUDED: "+", ".join(sorted(selected)))
     print(TAG+" MANUAL BRIDGES: "+str(bridge_counts))
+    print(TAG+" SSE HELPERS (must resolve at XDK compile): "+", ".join(xmm_helpers))
     print(TAG+" OPTIONAL SKIPS: "+str(len(skipped))+" (manifest)")
     print(TAG+" 64 TrueTUs, hard fences and V6h vector path unchanged")
     print(TAG+" SOURCE: "+str(DEST/"main.cpp"))
