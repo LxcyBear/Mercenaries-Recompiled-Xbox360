@@ -77,6 +77,23 @@ def main():
     for tu in tus:
         known.update(re.findall(r"(?m)^\s*void (sub_[0-9A-Fa-f]{8})\(void\)\s*\{",
                      tu.read_text(encoding="utf-8-sig", errors="replace")))
+    # PblMath sin 0x001F9D70 is an existing manually maintained runtime
+    # target, not an emitted recomp_0010.c function. The V6f hardware log
+    # proves it executed. Accept ONLY this exact support-owned dependency,
+    # and only if the inherited compiled main retains its recognizable
+    # manual execution handler and target literal. Do not broadly whitelist
+    # every undefined function.
+    manual_sin = "sub_001F9D70"
+    manual_witness = "entered manual PblMath sin 001F9D70"
+    manual_target = "0x001F9D70u"
+    require(base.count(manual_witness) == 1,
+            "Manual PblMath sin handler witness absent or duplicated in V6f")
+    require(manual_target in base,
+            "Manual PblMath sin dispatch address absent in V6f")
+    require(manual_sin not in defs,
+            "PblMath sin unexpectedly generated; re-audit ownership")
+    manual_owners = [manual_sin]
+    known.add(manual_sin)
     require(SEED not in known, "Hardware frontier already implemented")
     require(SEED in defs, "Hardware frontier missing from verified recomp_0010.c")
 
@@ -142,6 +159,7 @@ def main():
         "source_sha256": sha(output),
         "true_tu_count": 64, "true_tu_sha256": hashes,
         "included": sorted(staged),
+        "verified_manual_dependencies": manual_owners,
         "optional_skipped": optional_skips,
         "dispatch_count": len(staged),
         "marker": MARK,
@@ -162,6 +180,7 @@ def main():
     require((PARENT / "main.cpp").read_bytes() == parent, "V6f parent mutated")
     print(TAG + " SOURCE PASS: root " + SEED + " plus " + str(len(staged)-1) + " original camera/support functions")
     print(TAG + " STAGED: " + ", ".join(sorted(staged)))
+    print(TAG + " VERIFIED MANUAL OWNER: " + manual_sin + " (runtime handler already staged in V6f)")
     print(TAG + " OPTIONAL SKIPPED: " + str(len(optional_skips)) + " (manifest contains reasons)")
     print(TAG + " PASS: all dispatches, 64 TrueTUs, APC and hard fences preserved")
     print(TAG + " MAIN: " + str(DEST / "main.cpp"))
