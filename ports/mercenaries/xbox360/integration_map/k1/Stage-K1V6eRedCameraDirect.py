@@ -66,8 +66,8 @@ def main():
     require(source.count(dispatch)==1,"V6c dispatch not unique")
     case_pos=source.index(dispatch)
     lookup_headers=list(re.finditer(
-        r"(?m)^[ \\t]*(?:(?:static|inline)\\s+)*recomp_func_t\\s+"
-        r"[A-Za-z_][A-Za-z_0-9]*\\s*\\([^;{}]*\\)\\s*\\{",
+        r"(?m)^[ \t]*(?:(?:static|inline)\s+)*recomp_func_t\s+"
+        r"[A-Za-z_][A-Za-z_0-9]*\s*\([^;{}]*\)\s*\{",
         source[:case_pos]))
     require(bool(lookup_headers),"Could not identify enclosing lookup function")
     lookup=lookup_headers[-1]
