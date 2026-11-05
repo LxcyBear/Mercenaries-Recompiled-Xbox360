@@ -1,0 +1,57 @@
+[CmdletBinding()]
+param(
+    [switch]$StageOnly
+)
+$ErrorActionPreference = 'Stop'
+$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repo = (Resolve-Path (Join-Path $here '..\..\..\..\..')).Path
+Push-Location $repo
+try {
+    $python = (Get-Command python.exe -ErrorAction Stop).Source
+    & $python (Join-Path $here 'Stage-K1V6mLockedDskApc.py')
+    if ($LASTEXITCODE -ne 0) { throw 'V6m source/authenticity gate BLOCKED; no XDK build attempted.' }
+    $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_locked_dsk_apc_v6m'
+    $manifest = Get-Content -LiteralPath (Join-Path $stage 'v6m-manifest.json') -Raw | ConvertFrom-Json
+    if ($manifest.stage -ne 'V6M_EXACT_LOCKED_DSK_APC_SOURCE_UNTESTED' -or
+        $manifest.original_true_tu_count -ne 64 -or
+        $manifest.unmatched_async_reads_still_fenced -ne $true -or
+        $manifest.apc_callback_delivery_unmodified -ne $true) {
+        throw 'V6m source/authenticity/APC safety gate failed'
+    }
+    $src = Join-Path $stage 'main.cpp'
+    if ((Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash -ne $manifest.source_sha256.ToUpperInvariant()) {
+        throw 'V6m generated main.cpp integrity mismatch'
+    }
+    Write-Host "[K1-V6m] SOURCE READY: one exact locked.dsk APC read added; previous five preserved" -ForegroundColor Green
+
+    if ($StageOnly) {
+        Write-Host '[K1-V6m] STAGE ONLY. No XDK build/hardware run.' -ForegroundColor Cyan
+        return
+    }
+    $shards = Join-Path $repo 'build\phase6_integration_map\k1_pixel_ntread_apc_stream_v6b\translated_shards'
+    $envSource = Join-Path $repo 'build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp'
+    $builder = Join-Path $repo 'ports\mercenaries\xbox360\phase6_native_graphics\Invoke-VS17Xbox360Build.ps1'
+    $out = Join-Path $stage 'xdk'
+    $xex = Join-Path $out 'Merc-K1-V6m-LockedDskApc.xex'
+    New-Item -ItemType Directory -Force -Path $out | Out-Null
+    $buildArgs = @{
+        GeneratedMain = $src
+        GeneratedEnv = $envSource
+        GeneratedShardDir = $shards
+        ExpectedBuildTag = 'P6DQ-R51-MM173-FRAME-20261029-A'
+        ExpectedEnvCookie = 'phase6dq_env_build_cookie'
+        Configuration = 'Release'
+        Platform = 'Xbox 360'
+        SkipClean = $true
+        CleanLog = (Join-Path $out 'xdk-clean.log')
+        BuildLog = (Join-Path $out 'xdk-build.log')
+        PublishedXex = $xex
+    }
+    Write-Host '[K1-V6m] BUILD: Release | Xbox 360' -ForegroundColor Cyan
+    & $builder @buildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'V6m XDK compilation failed' }
+    if (!(Test-Path -LiteralPath $xex)) { throw 'V6m XEX was not published' }
+    Write-Host '[K1-V6m] BUILD PASS — hardware execution remains UNTESTED' -ForegroundColor Green
+    Get-Item -LiteralPath $xex | Select-Object FullName,Length,LastWriteTime | Format-List
+    Get-FileHash -LiteralPath $xex -Algorithm SHA256 | Format-List
+} finally { Pop-Location }
