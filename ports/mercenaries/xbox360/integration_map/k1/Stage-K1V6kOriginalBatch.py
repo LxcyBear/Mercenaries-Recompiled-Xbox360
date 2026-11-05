@@ -17,6 +17,20 @@ GEN=ROOT/"build/phase3n_final_abi_scale/runtime/gen"
 SHARDS=ROOT/"build/phase6_integration_map/k1_pixel_ntread_apc_stream_v6b/translated_shards"
 RETAIL="AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
 MARK="K1-V6K-RETAIL-SOURCE-CLOSURE-002033E0-20261105"
+XBE=ROOT/"game_files/mercenaries-retail/default.xbe"
+# Hardware frontier 002033E0: generated recomp_0010.c and original
+# retail XBE are independently pinned by the 2026-11-05 provenance audit.
+ROOT_GEN_FILE="recomp_0010.c"
+ROOT_GEN_SHA="bf21064bf05c69974031e822ae39b8ea4b2e6519c35f08b0b6c708b9f4fdde1e"
+RETAIL_ROOT_BYTES=bytes.fromhex(
+    "68 00 00 80 42 68 00 00 80 42 68 00 08 00 00 "
+    "B9 2C 22 69 00 E8 87 20 02 00 68 00 40 1C 46 "
+    "68 80 00 00 00 B9 2C 22 69 00 E8 13 18 02 00 "
+    "6A 00 B9 18 22 69 00 E8 C7 62 00 00 C3"
+)
+CHECKPOINT_ENTRY="    recomp_redscene_checkpoint(4u, 0x692218u, 0u, 0u, 0u);\n"
+CHECKPOINT_EXIT="    recomp_redscene_checkpoint(5u, 0x692218u, 0u, 0u, 0u);\n"
+
 MAX_FUNCS=192
 # Prioritize genuine source-neighbors to the witnessed math/camera call path;
 # candidates outside these zones can still enter through required dependencies.
@@ -55,6 +69,35 @@ def function_inventory():
     require(FRONTIER in definitions,"Hardware frontier 002033E0 not found in generated C definitions")
     return definitions,sources,len(files)
 
+def restore_retail_root(fn):
+    """Delete only two proven PC-side checkpoints, never retail instructions."""
+    import struct
+    raw=XBE.read_bytes()
+    require(sha(raw).upper()==RETAIL,"Retail XBE SHA-256 drift")
+    require(raw[:4]==b"XBEH","Retail XBE identity missing")
+    d=lambda off: struct.unpack_from("<I",raw,off)[0]
+    base=d(0x104);count=d(0x11C);table=d(0x120)-base
+    require(0<count<=64 and 0<=table and table+count*0x38<=len(raw),
+            "Retail section headers invalid")
+    va=0x002033E0
+    owners=[]
+    for i in range(count):
+        h=table+i*0x38
+        mem,vs,off,size=d(h+4),d(h+8),d(h+12),d(h+16)
+        if mem<=va and va+len(RETAIL_ROOT_BYTES)<=mem+min(vs,size):
+            p=off+va-mem
+            if p+len(RETAIL_ROOT_BYTES)<=len(raw):
+                owners.append(raw[p:p+len(RETAIL_ROOT_BYTES)])
+    require(owners==[RETAIL_ROOT_BYTES],"Original retail 002033E0 instructions mismatch")
+    require(fn.count(CHECKPOINT_ENTRY)==1,"Unexpected stage-4 checkpoint shape")
+    require(fn.count(CHECKPOINT_EXIT)==1,"Unexpected stage-5 checkpoint shape")
+    require(fn.count("recomp_redscene_checkpoint(")==2,
+            "Extra unproven checkpoint within retail root")
+    cleaned=fn.replace(CHECKPOINT_ENTRY,"",1).replace(CHECKPOINT_EXIT,"",1)
+    require("recomp_redscene_checkpoint(" not in cleaned,
+            "Checkpoint call survived retail restoration")
+    return cleaned
+
 def main():
     v6i=json.loads((PARENT/"v6j-manifest.json").read_text(encoding="utf-8-sig"))
     parent=(PARENT/"main.cpp").read_bytes()
@@ -65,6 +108,10 @@ def main():
     hashes={p.name:sha(p.read_bytes()) for p in tus}
     require(hashes==v6i["true_tu_sha256"],"64 TrueTU source hashes changed")
     defs,sources,filecount=function_inventory()
+    require(sources[FRONTIER]==ROOT_GEN_FILE,"Root generated owner changed")
+    require(sha((GEN/ROOT_GEN_FILE).read_bytes())==ROOT_GEN_SHA,
+            "Root generated file SHA-256 changed: retail restore refused")
+    defs[FRONTIER]=restore_retail_root(defs[FRONTIER])
 
     base=parent.decode("utf-8-sig").replace("\r\n","\n")
     eol="\r\n" if b"\r\n" in parent else "\n"
@@ -179,6 +226,10 @@ def main():
                 "Inherited debug fence / guest owner drift: "+legacy)
     out_bytes=output.replace("\n",eol).encode("utf-8")
     report={
+        "retail_checkpoint_restore_002033e0":True,
+        "retail_root_generated_owner":ROOT_GEN_FILE,
+        "retail_root_generated_sha256":ROOT_GEN_SHA,
+        "retail_root_guest_calls":["0x00225480","0x00224C20","0x002096E0"],
         "retail_v6j_fix_inherited":True,
         "stage":"V6K_RETAIL_SOURCE_BATCH_HARDWARE_UNTESTED",
         "retail_sha256":RETAIL,
@@ -209,6 +260,7 @@ def main():
     for target,data in payloads:
         if not target.exists(): target.write_bytes(data)
     require((PARENT/"main.cpp").read_bytes()==parent,"V6j parent modified")
+    print(TAG+" RETAIL PASS: removed precisely two PC redscene checkpoints from 002033E0")
     print(TAG+" INHERITED RETAIL V6j source hash PASS")
     print(TAG+" SOURCE PASS: 002033E0 plus %d dependency-closed real functions" % (len(names)-1))
     print(TAG+" SOURCE CORPUS: %d generated files; stage cap %d" % (filecount,MAX_FUNCS))
