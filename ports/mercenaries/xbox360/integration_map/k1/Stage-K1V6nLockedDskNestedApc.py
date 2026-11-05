@@ -28,7 +28,7 @@ def run():
     h_old="""((handleToken == 0x48000003u) ||
      (handleToken == 0x48000006u && offsetLow == 0x00003800u &&
       length == 262144u && bufferVa == 0x01B18300u))"""
-    h_new=h_old[:-2]+""" ||
+    h_new=h_old[:-1]+""" ||
      (handleToken == 0x48000006u && offsetLow == 0x00040000u &&
       length == 57344u && bufferVa == 0x01B0A300u))"""
     o_old="""((offsetLow >= 0x08000000u && offsetLow <= 0x09000000u) ||
@@ -36,7 +36,7 @@ def run():
       bufferVa == 0x01B32B00u) ||
      (offsetLow == 0x00003800u && length == 262144u &&
       bufferVa == 0x01B18300u && handleToken == 0x48000006u)) &&"""
-    o_new=o_old[:-5]+""" ||
+    o_new=o_old[:-4]+""" ||
      (offsetLow == 0x00040000u && length == 57344u &&
       bufferVa == 0x01B0A300u && handleToken == 0x48000006u)) &&"""
     end_old="((unsigned __int64)bufferVa + (unsigned __int64)length) == 0x01B58300ui64;"
