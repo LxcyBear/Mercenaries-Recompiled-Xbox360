@@ -71,8 +71,27 @@ def main():
         'Tracked PC camera patch provenance unavailable: '+', '.join(missing))
     def reverse_camera_hooks(name,fn):
         if name!='sub_001F8F10':return fn
-        require(fn.count(perspective_new)==1,
-                'Original generated camera injection drift; cannot safely reverse retail projection hook')
+        if fn.count(perspective_new)!=1:
+            # Fail safely, but expose the precise differences once instead of
+            # guessing another representation of the generated camera code.
+            excerpt=fn[:7000]
+            diagnostic=(
+                'V6f original camera hook exact-match audit\\n'
+                'perspective_new_count='+str(fn.count(perspective_new))+'\\n'
+                'perspective_old_count='+str(fn.count(perspective_old))+'\\n'
+                'fov_new_count='+str(fn.count(fov_new))+'\\n'
+                'fov_old_count='+str(fn.count(fov_old))+'\\n'
+                'camera_far_plane_count='+str(fn.count('recomp_options_camera_far_plane'))+'\\n'
+                'perspective_fov_count='+str(fn.count('recomp_options_perspective_fov'))+'\\n'
+                'perspective_aspect_count='+str(fn.count('recomp_options_perspective_aspect'))+'\\n'
+                'camera_fov_count='+str(fn.count('recomp_options_camera_fov'))+'\\n'
+                '--- actual generated function excerpt ---\\n'+excerpt+'\\n'
+                '--- end excerpt ---\\n')
+            report=ROOT/'build/phase6_integration_map/k1_v6f_camera_source_audit.txt'
+            report.parent.mkdir(parents=True,exist_ok=True)
+            report.write_text(diagnostic,encoding='utf-8')
+            raise RuntimeError('Generated camera code differs from source literal; wrote focused exact-source audit: '+str(report))
+
         fn=fn.replace(perspective_new,perspective_old,1)
         require(fn.count(fov_new)==1,
                 'Original generated camera FOV injection drift; cannot safely reverse retail FOV hook')
