@@ -10,7 +10,7 @@ import hashlib, json, re, sys
 ROOT=Path.cwd()
 TAG="[K1-V6i]"
 PARENT=ROOT/"build/phase6_integration_map/k1_pixel_camera_vec3_v6h"
-DEST=ROOT/"build/phase6_integration_map/k1_pixel_camera_batch_v6i"
+DEST=ROOT/"build/phase6_integration_map/k1_pixel_camera_batch_v6i_helperfenced"
 SRC=ROOT/"build/phase3n_final_abi_scale/runtime/gen/recomp_0010.c"
 SHARDS=ROOT/"build/phase6_integration_map/k1_pixel_ntread_apc_stream_v6b/translated_shards"
 V6G=ROOT/"build/phase6_integration_map/k1_pixel_camera_batch_v6g_sinebridge/v6g-manifest.json"
@@ -38,7 +38,7 @@ def close(name,defs,known,staged,trail):
     if name in known or name in staged or name in trail: return {},None
     if name not in defs: return {},"source_missing:"+name
     fn=defs[name]
-    unsafe=sorted(set(re.findall(r"\b(recomp_(?:options|crt)_[A-Za-z_0-9]+)\s*\(",fn)))
+    unsafe=sorted(set(re.findall(r"\b(recomp_[A-Za-z_0-9]+)\s*\(",fn)))
     if unsafe: return {},name+" unsupported host helper: "+",".join(unsafe)
     if "return;" not in fn: return {},name+" missing translator return"
     result={name:fn}
@@ -113,6 +113,11 @@ def main():
         require(not (calls(fn)&set(manual)),"Unconverted manual call in "+name)
         selected[name]=fn
     require(len(selected)<=MAX_FUNCS,"Batch exceeded cap")
+    # A missing host-side recomp_* hook must never be faked on Xbox.
+    # Fail source staging before invoking MSBuild if any escaped the closure filter.
+    forbidden=sorted(set(re.findall(r"\b(recomp_[A-Za-z_0-9]+)\s*\(",
+                                    "\n".join(selected.values()))))
+    require(not forbidden,"Unsupported PC-only recomp helper(s) in staged batch: "+", ".join(forbidden))
     for name in selected:
         require(name not in known,"Duplicate compiled symbol "+name)
         require("case 0x"+name[4:].upper()+"u:" not in base,
