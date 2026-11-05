@@ -11,7 +11,7 @@ import hashlib, json, re, sys
 TAG = "[K1-V6g]"
 ROOT = Path.cwd()
 PARENT = ROOT / "build/phase6_integration_map/k1_pixel_camera_followup_v6f"
-DEST = ROOT / "build/phase6_integration_map/k1_pixel_camera_batch_v6g"
+DEST = ROOT / "build/phase6_integration_map/k1_pixel_camera_batch_v6g_sinebridge"
 SRC = ROOT / "build/phase3n_final_abi_scale/runtime/gen/recomp_0010.c"
 SHARDS = ROOT / "build/phase6_integration_map/k1_pixel_ntread_apc_stream_v6b/translated_shards"
 MARK = "K1-V6G-RETAIL-CAMERA-BATCH-20261105"
