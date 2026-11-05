@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """V6k root provenance audit. Does not modify, compile, or run game code.
 
-Reports full generated sub_002033E0, all options_* call contexts, option
+Reports full generated sub_002033E0, the redscene checkpoint call context, helper
 helper definitions, and SHA-pinned retail bytes/disassembly. The goal is to
 identify precisely which code was added for PC recompilation versus which
 retail x86 operations must be preserved on Xbox 360.
@@ -9,10 +9,10 @@ retail x86 operations must be preserved on Xbox 360.
 from pathlib import Path
 import hashlib, re, struct, sys
 ROOT=Path.cwd()
-TAG="[K1-V6k-OPTIONS]"
+TAG="[K1-V6k-REDSCENE]"
 GEN=ROOT/"build/phase3n_final_abi_scale/runtime/gen"
 XBE=ROOT/"game_files/mercenaries-retail/default.xbe"
-REPORT=ROOT/"build/phase6_integration_map/k1_v6k_002033e0_options_audit.txt"
+REPORT=ROOT/"build/phase6_integration_map/k1_v6k_002033e0_checkpoint_audit.txt"
 EXPECTED="AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
 TARGET=0x002033E0
 HELPERS=(
