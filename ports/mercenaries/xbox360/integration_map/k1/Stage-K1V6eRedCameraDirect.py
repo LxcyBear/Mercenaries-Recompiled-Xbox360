@@ -59,11 +59,21 @@ def main():
     require("case 0x001F89F0u:" not in source,"V6e dispatch already staged")
     require("case 0x0020EB00u: return sub_0020EB00;" in source,"V6c dispatch unavailable")
     require("K1-V6D-THIRD-APC-0ACE8000-20261104" in source,"V6d read evidence missing")
-    # Insert ahead of the working V6c function. Both are top-level translated
-    # functions and this also guarantees a declaration exists for the dispatcher.
-    anchor="void sub_0020EB00(void)"
-    require(source.count(anchor)==1,"Cannot uniquely locate existing V6c function")
-    source=once(source,anchor,fn+"\n\n"+anchor)
+    # V6c's implementation may live in translated shards, rather than main.cpp.
+    # Insert before the *lookup function* that owns its dispatch case, ensuring
+    # the added function is a top-level definition visible to that lookup.
+    dispatch="    case 0x0020EB00u: return sub_0020EB00;"
+    require(source.count(dispatch)==1,"V6c dispatch not unique")
+    case_pos=source.index(dispatch)
+    lookup_headers=list(re.finditer(
+        r"(?m)^[ \\t]*(?:(?:static|inline)\\s+)*recomp_func_t\\s+"
+        r"[A-Za-z_][A-Za-z_0-9]*\\s*\\([^;{}]*\\)\\s*\\{",
+        source[:case_pos]))
+    require(bool(lookup_headers),"Could not identify enclosing lookup function")
+    lookup=lookup_headers[-1]
+    require("switch" in source[lookup.end():case_pos],
+            "V6c dispatch is not within selected lookup")
+    source=source[:lookup.start()]+fn+"\n\n"+source[lookup.start():]
     source=once(source,"    case 0x0020EB00u: return sub_0020EB00;",
         "    case 0x0020EB00u: return sub_0020EB00;\n    case 0x001F89F0u: return sub_001F89F0;")
     require(source.count(MARKER)==1,"V6e marker count mismatch")
