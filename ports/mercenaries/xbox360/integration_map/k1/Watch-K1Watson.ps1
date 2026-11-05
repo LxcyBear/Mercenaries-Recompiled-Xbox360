@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference='Stop'
 $lines=Get-Content -LiteralPath $Path
 $ticks=[long]0;$reads=0;$display=0;$frame='00000000';$fault=0
-$blocked=$false;$present=$false;$seen=@{}
+$blocked=$false;$present=$false;$seen=@{};$nextFrontier=''
 function Show($key,$message) {
   if (!$seen.ContainsKey($key)) { $seen[$key]=$true; Write-Host "[MERC360] $message" }
 }
@@ -26,8 +26,8 @@ for($i=0;$i -lt $lines.Count;$i++){
   if($line -match 'entered DSOUND owner'){Show 'sound' 'DSOUND hardware initialization reached'}
   if($line -match 'K1-V6 APC DELIVER:'){Show 'apc' 'Translated APC callback reached'}
   if($line -match 'K1-V6b APC QUEUED:'){Show 'queue' 'Async stream completion queued'}
-  if($line -match 'ASYNC STREAM READ:'){
-    $v=Field $line 'successes';if($null -ne $v){$reads=[int]$v}
+  if($line -match 'XACT async NtReadFile immediate completion.*calls=(\d+)'){\n    $reads=[Math]::Max($reads,[int]$Matches[1])\n    if($reads -eq 7){Show 'seventh' 'Seventh locked.dsk 57,344-byte read completed (V6o breakthrough)'}\n  }\n  if($line -match 'ASYNC STREAM READ:'){
+    if($line -match 'successes=(\d+)'){$reads=[Math]::Max($reads,[int]$Matches[1])}
     Write-Host ('[STREAM] '+($line -replace '^.*?ASYNC STREAM READ:\s*',''))
   }
   if($line -match 'PRESENT PROXIMITY:|PIXEL CHASE:'){
@@ -61,5 +61,5 @@ Write-Host ""
 Write-Host "STATUS $grade | $reason"
 Write-Host "Ticks: $ticks | Baseline: $BaselineTicks | Delta: $delta"
 Write-Host "Async reads: $reads | Faults: $fault | Display calls: $display | Framebuffer: $frame"
-if($blocked){Write-Host 'A blocking boundary was recorded'}
+if($nextFrontier){Write-Host ('Next direct frontier: '+$nextFrontier)}\nif($blocked){Write-Host 'A blocking boundary was recorded'}
 if(!$PixelsConfirmed){Write-Host 'Pixels NOT visually confirmed'}
