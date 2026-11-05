@@ -10,7 +10,7 @@ try {
     $python = (Get-Command python.exe -ErrorAction Stop).Source
     & $python (Join-Path $here 'Stage-K1V6jOriginalBatch.py')
     if ($LASTEXITCODE -ne 0) { throw 'V6j source/authenticity gate BLOCKED; no XDK build attempted.' }
-    $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_camera_source_batch_v6j'
+    $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_camera_source_batch_v6j_retail'
     $manifest = Get-Content -LiteralPath (Join-Path $stage 'v6j-manifest.json') -Raw | ConvertFrom-Json
     if ($manifest.stage -ne 'V6J_RETAIL_SOURCE_BATCH_HARDWARE_UNTESTED' -or
         $manifest.hardware_frontier -ne '0x001ED160' -or
@@ -33,7 +33,7 @@ try {
     $envSource = Join-Path $repo 'build\phase6_native_graphics\rocket_frontier_journal_xdk\phase5_env.cpp'
     $builder = Join-Path $repo 'ports\mercenaries\xbox360\phase6_native_graphics\Invoke-VS17Xbox360Build.ps1'
     $out = Join-Path $stage 'xdk'
-    $xex = Join-Path $out 'Merc-K1-V6j-OriginalBatch.xex'
+    $xex = Join-Path $out 'Merc-K1-V6j-RetailBatch.xex'
     New-Item -ItemType Directory -Force -Path $out | Out-Null
     $buildArgs = @{
         GeneratedMain = $src
