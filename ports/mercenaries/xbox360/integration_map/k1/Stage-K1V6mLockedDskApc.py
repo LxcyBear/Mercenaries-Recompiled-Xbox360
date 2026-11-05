@@ -60,6 +60,11 @@ def stage():
     first=old.index(OLD_HANDLE)
     second=old.index(OLD_OFFSET)
     need(abs(first-second)<2000,"Handle and offset guards are not in the same bounded admission predicate")
+    context=old[min(first,second)-1500:max(first,second)+1500]
+    need("apcRoutine == 0x800000E8u" in context and
+         "apcContext == 0x00221F00u" in context and
+         "ioStatusVa == 0x00424DA8u" in context,
+         "Callback/context/IOSB signature not colocated with the bounded handle/offset predicates")
     modified=replace_once(old,OLD_HANDLE,NEW_HANDLE)
     modified=replace_once(modified,OLD_OFFSET,NEW_OFFSET)
     modified=replace_once(modified,
