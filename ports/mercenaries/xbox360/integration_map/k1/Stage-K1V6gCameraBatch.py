@@ -100,6 +100,37 @@ def main():
     staged, issue = inspect(SEED, defs, known, {}, set())
     require(issue is None, "REQUIRED " + SEED + " BLOCKED: " + str(issue))
     require(SEED in staged, "Root not included")
+    # A runtime-dispatch witness does not provide a C++ symbol. Never
+    # silently declare a nonexistent translated function. Until its ABI is
+    # bridged, emit the handler/callsite evidence and block staging/build.
+    references = [n for n, fn in staged.items() if manual_sin in calls_in(fn)]
+    if references:
+        lines = base.splitlines()
+        matches = [i for i, line in enumerate(lines)
+                   if manual_witness in line or manual_target in line]
+        excerpts = []
+        for i in matches[:16]:
+            lo, hi = max(0, i - 18), min(len(lines), i + 23)
+            excerpts.append("--- V6f runtime line " + str(i + 1) + " ---\n" +
+                            "\n".join("%d: %s" % (j + 1, lines[j])
+                                      for j in range(lo, hi)))
+        call_excerpts = []
+        for name in references:
+            f_lines = staged[name].splitlines()
+            for i, line in enumerate(f_lines):
+                if manual_sin in line:
+                    lo, hi = max(0, i - 12), min(len(f_lines), i + 13)
+                    call_excerpts.append("--- " + name + " call ---\n" +
+                       "\n".join("%d: %s" % (j + 1, f_lines[j])
+                                 for j in range(lo, hi)))
+        path = ROOT / "build/phase6_integration_map/k1_v6g_manual_sin_abi_audit.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "PblMath manual handler is runtime dispatch, NOT a C++ symbol.\n"
+            "Callers: " + ", ".join(references) + "\n" +
+            "\n\n".join(excerpts + call_excerpts) + "\n", encoding="utf-8")
+        raise RuntimeError("Manual PblMath sin requires a verified C++/runtime ABI bridge; "
+                           "audit: " + str(path))
     optional_skips = {}
     candidates = [name for name in sorted(defs)
                   if NEIGHBOR_LOW <= int(name[4:], 16) < NEIGHBOR_HIGH
