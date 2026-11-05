@@ -12,11 +12,29 @@ ROOT=Path.cwd()
 TAG="[K1-V6j]"
 FRONTIER="sub_001ED160"
 PARENT=ROOT/"build/phase6_integration_map/k1_pixel_camera_batch_v6i_sseallowed"
-DEST=ROOT/"build/phase6_integration_map/k1_pixel_camera_source_batch_v6j"
+DEST=ROOT/"build/phase6_integration_map/k1_pixel_camera_source_batch_v6j_retail"
 GEN=ROOT/"build/phase3n_final_abi_scale/runtime/gen"
 SHARDS=ROOT/"build/phase6_integration_map/k1_pixel_ntread_apc_stream_v6b/translated_shards"
 RETAIL="AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
 MARK="K1-V6J-RETAIL-SOURCE-CLOSURE-001ED160-20261105"
+# Retail and generated-code identity pinned by the 2026-11-05 source audit.
+XBE=ROOT/"game_files/mercenaries-retail/default.xbe"
+ROOT_GEN_SHA="b6b075e2c0f199ac8b0a8abb6264bbc6aa3e688f5cb4f44ab605796bc9b3411e"
+ROOT_GEN_FILE="recomp_0009.c"
+# Retail instructions at 001ED240: push 320.0f, push 120.0f,
+# push 0x1000, call 001EC880. No PC options behavior exists in retail.
+RETAIL_PUSH_BYTES=bytes.fromhex("68 00 00 A0 43 68 00 00 F0 42 68 00 10 00 00 E8 2C F6 FF FF")
+PC_HOOK=(
+    "    { int recomp_options_begin_world_load(void);\n"
+    "      void recomp_options_refresh_retail_camera_projection(void);\n"
+    "      if (recomp_options_begin_world_load())\n"
+    "          recomp_options_refresh_retail_camera_projection(); }\n"
+)
+PC_DISTANCE=(
+    "    esp -= 4u;\n"
+    "    GUEST_WRITEF32(esp, 300.0f * recomp_options_object_distance_multiplier() + 20.0f); /* largest scenery radius + grid margin */"
+)
+
 MAX_FUNCS=192
 # Prioritize genuine source-neighbors to the witnessed math/camera call path;
 # candidates outside these zones can still enter through required dependencies.
@@ -55,6 +73,35 @@ def function_inventory():
     require(FRONTIER in definitions,"Hardware frontier 001ED160 not found in generated C definitions")
     return definitions,sources,len(files)
 
+def retail_root_restore(fn):
+    """Restore exactly two PC-injected sites; no generic stripping allowed."""
+    xbe=XBE.read_bytes()
+    require(sha(xbe).upper()==RETAIL,"Retail XBE SHA mismatch; abort")
+    require(xbe[:4]==b"XBEH","Retail XBE magic mismatch")
+    import struct
+    word=lambda off:struct.unpack_from("<I",xbe,off)[0]
+    base=word(0x104); count=word(0x11C); table=word(0x120)-base
+    require(0<count<=64 and table>=0 and table+count*0x38<=len(xbe),
+            "Retail XBE section-table malformed")
+    owners=[]
+    va=0x001ED240
+    for i in range(count):
+        h=table+i*0x38
+        mem,vs,raw,rs=word(h+4),word(h+8),word(h+12),word(h+16)
+        if mem<=va and va+len(RETAIL_PUSH_BYTES)<=mem+min(vs,rs):
+            off=raw+(va-mem)
+            if off+len(RETAIL_PUSH_BYTES)<=len(xbe):
+                owners.append(xbe[off:off+len(RETAIL_PUSH_BYTES)])
+    require(len(owners)==1 and owners[0]==RETAIL_PUSH_BYTES,
+            "Retail 001ED240 push/call bytes drifted")
+    require(fn.count(PC_HOOK)==1,"Expected PC world-load block exactly once")
+    require(fn.count(PC_DISTANCE)==1,"Expected PC distance expression exactly once")
+    fn=fn.replace(PC_HOOK,"",1)
+    fn=fn.replace(PC_DISTANCE,"    PUSH32(esp, 0x43A00000); /* retail push 320.0f */",1)
+    require(not any(x.startswith("recomp_options_") for x in helpers(fn)),
+            "PC options helper survived retail restoration")
+    return fn
+
 def main():
     v6i=json.loads((PARENT/"v6i-manifest.json").read_text(encoding="utf-8-sig"))
     parent=(PARENT/"main.cpp").read_bytes()
@@ -65,6 +112,14 @@ def main():
     hashes={p.name:sha(p.read_bytes()) for p in tus}
     require(hashes==v6i["true_tu_sha256"],"64 TrueTU source hashes changed")
     defs,sources,filecount=function_inventory()
+    require(sources[FRONTIER]==ROOT_GEN_FILE,"Root generated owner changed")
+    require(sha((GEN/ROOT_GEN_FILE).read_bytes())==ROOT_GEN_SHA,
+            "Generated recomp_0009.c SHA mismatch: do not patch unknown source")
+    root_original=defs[FRONTIER]
+    defs[FRONTIER]=retail_root_restore(root_original)
+    require(sha((GEN/ROOT_GEN_FILE).read_bytes())==ROOT_GEN_SHA,
+            "Generated original mutated during staging")
+
     base=parent.decode("utf-8-sig").replace("\r\n","\n")
     eol="\r\n" if b"\r\n" in parent else "\n"
     known=set(KNOWN_RE.findall(base))
@@ -178,6 +233,9 @@ def main():
                 "Inherited debug fence / guest owner drift: "+legacy)
     out_bytes=output.replace("\n",eol).encode("utf-8")
     report={
+        "retail_restored_pc_options_at_root":True,
+        "retail_root_original_generated_sha256":ROOT_GEN_SHA,
+        "retail_root_push_001ed240":"0x43A00000 (320.0f)",
         "stage":"V6J_RETAIL_SOURCE_BATCH_HARDWARE_UNTESTED",
         "retail_sha256":RETAIL,
         "hardware_frontier":"0x001ED160",
@@ -207,6 +265,7 @@ def main():
     for target,data in payloads:
         if not target.exists(): target.write_bytes(data)
     require((PARENT/"main.cpp").read_bytes()==parent,"V6i parent modified")
+    print(TAG+" RETAIL RESTORE PASS: PC camera hooks removed; 001ED240 PUSH 320.0f exact XBE bytes")
     print(TAG+" SOURCE PASS: 001ED160 plus %d dependency-closed real functions" % (len(names)-1))
     print(TAG+" SOURCE CORPUS: %d generated files; stage cap %d" % (filecount,MAX_FUNCS))
     print(TAG+" SSE HELPERS (XDK must resolve): "+", ".join(remaining))
