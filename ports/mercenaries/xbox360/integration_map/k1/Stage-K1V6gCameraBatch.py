@@ -122,7 +122,7 @@ def main():
         if manual_sin not in calls_in(fn):
             continue
         count = fn.count(generated_call)
-        seen = len(re.findall(r"\\bsub_001F9D70\\s*\\(", fn))
+        seen = len(re.findall(r"\bsub_001F9D70\s*\(", fn))
         require(count == seen and count > 0,
                 "Manual PblMath sine callsite ABI differs in " + name)
         staged[name] = fn.replace(generated_call, trusted_call)
@@ -148,7 +148,7 @@ def main():
     for name, fn in list(staged.items()):
         if manual_sin in calls_in(fn):
             count = fn.count(generated_call)
-            seen = len(re.findall(r"\\bsub_001F9D70\\s*\\(", fn))
+            seen = len(re.findall(r"\bsub_001F9D70\s*\(", fn))
             require(count == seen and count > 0,
                     "Non-audited optional manual sine ABI in " + name)
             staged[name] = fn.replace(generated_call, trusted_call)
