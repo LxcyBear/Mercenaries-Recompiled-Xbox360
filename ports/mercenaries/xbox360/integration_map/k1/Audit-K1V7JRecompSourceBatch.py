@@ -34,6 +34,8 @@ def main():
     ap.add_argument("--generated",required=True,type=Path,help="original generated C folder")
     ap.add_argument("--emitter",required=True,type=Path,help="original load_ranges/load_generated reader")
     ap.add_argument("--shards",required=True,type=Path,help="64 TrueTU folder")
+    ap.add_argument("--current-main",required=True,type=Path,help="V7I verified generated main.cpp")
+    ap.add_argument("--current-manifest",required=True,type=Path,help="V7I source manifest")
     ap.add_argument("--out",type=Path,default=Path("build/phase6_integration_map/k1_v7j_source_batch"))
     ap.add_argument("--depth",type=int,default=3)
     ap.add_argument("--cap",type=int,default=400)
@@ -53,6 +55,13 @@ def main():
     need(len(sources)>=10000,"Generated C inventory incomplete")
     shard_files=sorted(args.shards.glob("translated_???.cpp"))
     need(len(shard_files)==64,"64 original TrueTU shards required, found "+str(len(shard_files)))
+    current_bytes=args.current_main.read_bytes()
+    current_manifest=json.loads(args.current_manifest.read_text(encoding="utf-8-sig"))
+    need(current_manifest.get("stage")=="V7I_HARDWARE_OBSERVED_APC_IOSB_ALLOWLIST_SOURCE_ONLY" and
+         current_manifest.get("source_sha256")==hashlib.sha256(current_bytes).hexdigest(),
+         "V7I main/manifest identity drift")
+    current_text=current_bytes.decode("utf-8",errors="replace")
+    main_defs={int(x,16) for x in FUNC.findall(current_text)}
     staged={}
     for shard in shard_files:
         for hit in FUNC.finditer(shard.read_text(encoding="utf-8",errors="replace")):
@@ -83,6 +92,8 @@ def main():
             "generated_body_present":bool(generated),
             "generated_source_sha256":hashlib.sha256(body.encode()).hexdigest() if body else None,
             "in_true_tus":staged.get(at,[]),
+            "in_current_main":at in main_defs,
+            "already_compiled":bool(staged.get(at)) or at in main_defs,
             "actual_generated_direct_calls":[hx(v) for v in sorted(src_calls)][:100],
             "cached_recomp_callees":[hx(v) for v in sorted(cached_calls)][:100],
             "graph_edges_basis":"generated_source" if generated else "cached_inventory_only",
@@ -93,19 +104,21 @@ def main():
             for v in sorted(edges):
                 if v not in done and v in inventory:todo.append((v,level+1,root))
     candidates=sorted(done.values(),key=lambda r:(
-        0 if r["generated_body_present"] and not r["in_true_tus"] else
+        0 if r["generated_body_present"] and not r["already_compiled"] else
         1 if r["missing_source"] and r["retail_present"] else 2,
         r["depth"],r["va"]))
     counts={
         "visited":len(done),
         "generated_missing":sum(x["missing_source"] for x in done.values()),
-        "generated_present_not_true_tu":sum(x["generated_body_present"] and not x["in_true_tus"] for x in done.values()),
+        "generated_present_not_staged":sum(x["generated_body_present"] and not x["already_compiled"] for x in done.values()),
         "already_staged_true_tu":sum(bool(x["in_true_tus"]) for x in done.values()),
+        "already_in_main":sum(x["in_current_main"] for x in done.values()),
         "remaining_queue":len(todo),
     }
     report={
         "phase":"K1_V7J_RETAIL_XBOXRECOMP_TRUE_TU_SOURCE_BATCH_READ_ONLY",
-        "retail_sha256":RETAIL,"xboxrecomp_functions":len(inventory),
+        "retail_sha256":RETAIL,"v7i_main_sha256":hashlib.sha256(current_bytes).hexdigest(),
+        "xboxrecomp_functions":len(inventory),
         "generated_source_functions":len(sources),"true_tus":len(shard_files),
         "roots":[hx(v) for v in SEEDS],"depth":args.depth,"budget":args.cap,
         "counts":counts,"candidate_priority":candidates,
@@ -119,10 +132,10 @@ def main():
     path=args.out/"v7j_batch_frontiers.json"
     path.write_text(json.dumps(report,indent=2,default=str)+"\n",encoding="utf-8")
     print("[K1-V7J] VERIFIED retail / xboxrecomp / generated C / 64 TrueTUs")
-    print("[K1-V7J] scanned=%(visited)d new_generated_not_staged=%(generated_present_not_true_tu)d missing_body=%(generated_missing)d staged=%(already_staged_true_tu)d" % counts)
+    print("[K1-V7J] scanned=%(visited)d new_generated_not_staged=%(generated_present_not_staged)d missing_body=%(generated_missing)d TrueTU=%(already_staged_true_tu)d main=%(already_in_main)d" % counts)
     print("[K1-V7J] PRIORITY CANDIDATES (NO ABI CLAIM):")
     for c in candidates[:20]:
-        if c["generated_body_present"] and not c["in_true_tus"] or c["missing_source"]:
+        if (c["generated_body_present"] and not c["already_compiled"]) or c["missing_source"]:
             print("[K1-V7J] %s depth=%d generated=%s TrueTU=%s root=%s"%(
                   c["va"],c["depth"],c["generated_body_present"],bool(c["in_true_tus"]),c["root"]))
     print("[K1-V7J] REPORT "+str(path))
