@@ -62,7 +62,9 @@ def stage():
     generated=base.load_generated(ORIG/"runtime/gen",by_name)
     origin=planner.classify(TARGET,by_va,generated)
     print("[K1-V6r] RETAIL target class=%s owner=%s source=%s"%(origin["kind"],origin["owner"],origin["source_file"]))
-    require(origin["kind"]=="exact_source_entry","Not an exact function entry; interior VA requires separate ABI/label repair")
+    require(origin["kind"]=="exact_source_entry",
+            "Retail target 0022FA9E is an EXACT function entry, but its original translated C body is absent. "
+            "Do not infer an interior-label/ABI error or synthesize a stub; recover translation from pinned retail XBE first.")
     require(0x00011000<=TARGET<by_va[TARGET]["end"]<=0x00255620,"Function outside original retail .text")
     original=raw.decode("utf-8").replace("\r\n","\n")
     owner,info=planner.owner_inventory(original,SHARDS)
