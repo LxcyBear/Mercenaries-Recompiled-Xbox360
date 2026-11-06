@@ -61,20 +61,24 @@ try {
                 # unrelated/invalid ZIP; do not interpret it as a source inventory
             }
         }
-        if ($found.Count -ne 1) {
-            Write-Host "$tag Cached inventory ZIP matches: $($found.Count)"
-            $found | ForEach-Object { Write-Host "$tag candidate: $_" }
-            throw "$tag Supply -ReconZip 'C:\path\to\original_xboxrecomp_inventory.zip' (exact archive containing xboxrecomp_manifest.json). No XDK run."
+        if ($found.Count -eq 1) {
+            $ReconZip = $found[0]
+            Write-Host "$tag Found original xboxrecomp inventory ZIP: $ReconZip"
+        } elseif ($found.Count -eq 0) {
+            Write-Host "$tag No archived xboxrecomp manifest found. Using existing disasm/functions.json with accurate lower-confidence provenance."
+            $ReconZip = ""
+        } else {
+            Write-Host "$tag Multiple cached xboxrecomp archives; using local disassembly ranges without selecting an arbitrary ZIP."
+            $ReconZip = ""
         }
-        $ReconZip = $found[0]
     }
-    if (-not (Test-Path -LiteralPath $ReconZip -PathType Leaf)) {
-        throw "$tag Missing original xboxrecomp inventory: $ReconZip"
+    if (-not [string]::IsNullOrWhiteSpace($ReconZip) -and
+        -not (Test-Path -LiteralPath $ReconZip -PathType Leaf)) {
+        throw "$tag Explicit xboxrecomp archive missing: $ReconZip"
     }
     $out = Join-Path $repo "build\phase6_integration_map\k1_v7j_source_batch"
     $args = @(
         "-u", $py,
-        "--recon", $ReconZip,
         "--ranges", $ranges,
         "--generated", $generated,
         "--emitter", $emitter,
@@ -86,7 +90,12 @@ try {
         "--cap", [string]$Cap
     )
     Write-Host "$tag STARTING OFFLINE SOURCE-DEPENDENCY BATCH; depth=$Depth cap=$Cap"
-    Write-Host "$tag Inventory: $ReconZip"
+    if (-not [string]::IsNullOrWhiteSpace($ReconZip)) {
+        $args += @("--recon", $ReconZip)
+        Write-Host "$tag Inventory: original xboxrecomp ZIP $ReconZip"
+    } else {
+        Write-Host "$tag Inventory: local original XBE disassembly functions.json (ZIP absent)"
+    }
     & $python @args
     if ($LASTEXITCODE -ne 0) {
         throw "$tag Source inventory failed closed. No XDK or Xbox touched."
