@@ -78,8 +78,18 @@ def main():
          "V7E baseline or retail/TrueTU integrity drift")
     newline="\r\n" if b"\r\n" in original else "\n"
     src=original.decode("utf-8").replace("\r\n","\n")
-    need(SIGN in src and src.count(SIGN)==1,
-         "Translated-pack lookup definition shape drift")
+    # V7E inherits a non-static dispatcher definition in some builds and may
+    # also contain its forward declaration. Match only the complete definition,
+    # including its opening brace, without changing its linkage.
+    lookup_re=re.compile(
+        r'(?m)^[ \t]*(?:static[ \t]+)?recomp_func_t[ \t]+'
+        r'phase4c_lookup_pack_func\([ \t]*uint32_t[ \t]+xbox_va[ \t]*\)'
+        r'[ \t]*\n[ \t]*\{'
+    )
+    definitions=list(lookup_re.finditer(src))
+    need(len(definitions)==1,
+         "Expected one translated-pack lookup definition; found %d"%(len(definitions),))
+    lookup_definition=definitions[0].group(0)
     need(MARK not in src and "phase6bt_ke_delay_execution_thread(" not in src,
          "V7G handler already present; refuse duplicate")
     historic=OLD.read_bytes()
@@ -98,8 +108,9 @@ def main():
                    "SwitchToThread();"):
         need(marker in handler,"Historic Phase6BT safety contract missing: "+marker)
     patched,dispatch=patch_macro(src)
-    need(patched.count(SIGN)==1,"Lookup definition drift")
-    patched=patched.replace(SIGN,handler+SIGN,1)
+    need(len(list(lookup_re.finditer(patched)))==1,
+         "Lookup definition drift after ICALL_SAFE patch")
+    patched=patched.replace(lookup_definition,handler+lookup_definition,1)
     patched="/* "+MARK+" */\n"+patched
     # Invariants: V7E exact body remains except for the one bounded
     # handler insertion and ICALL_SAFE dispatch; no wholesale replacements.
