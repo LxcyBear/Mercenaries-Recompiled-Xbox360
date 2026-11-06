@@ -32,9 +32,9 @@ def dispatch_body(src):
     # Multiple mentions/declarations of the same signature are legal.
     # Only a complete function DEFINITION anchored to its opening brace counts.
     definition_re = re.compile(
-        r'(?m)^[ \\t]*(?:static[ \\t]+)?recomp_func_t[ \\t]+'
-        r'phase4c_lookup_pack_func\\([ \\t]*uint32_t[ \\t]+xbox_va[ \\t]*\\)'
-        r'[ \\t]*\\n[ \\t]*\\{'
+        r'(?m)^[ \t]*(?:static[ \t]+)?recomp_func_t[ \t]+'
+        r'phase4c_lookup_pack_func\([ \t]*uint32_t[ \t]+xbox_va[ \t]*\)'
+        r'[ \t]*\n[ \t]*\{'
     )
     matches=list(definition_re.finditer(src))
     need(len(matches)==1,
