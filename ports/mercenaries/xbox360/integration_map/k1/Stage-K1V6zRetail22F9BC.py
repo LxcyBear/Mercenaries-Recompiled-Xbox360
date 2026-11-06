@@ -113,12 +113,18 @@ def emit(ins, state):
         need(state["esp"]==0 and state["fp"]==0,"Unbalanced x86/x87 at return")
         stm=["esp += 12u; return; /* ret 8 */"]
     else:need(False,"Unsupported retail opcode %s %s at %s"%(op,operand,v))
+    need(0 <= state["fp"] <= 8,"Retail x87 stack depth outside eight registers at "+v)
     return ["    "+part+" /* "+v+" "+op+" "+operand+" */" for part in stm]
 
 def lifter(e):
     ins=e["control_flow"]["instructions"]
     need(len(ins)==87 and not e["control_flow"]["hazards"],
          "Expected 87 original CFG-safe instructions")
+    need(sum(i["mnemonic"].startswith("f") for i in ins)==80 and
+         not any(i["mnemonic"] in ("call","jmp","je","jne","retf") for i in ins) and
+         ins[-2]["mnemonic"]=="leave" and ins[-1]["mnemonic"]=="ret" and
+         ins[-1]["operands"]=="8",
+         "V6z x87 instruction count, linear CFG or ret8 changed")
     # For a linear function, sorted instruction addresses must cover all
     # 226 bytes. This also rejects data holes / unseen cold branch paths.
     cursor=TARGET
