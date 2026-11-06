@@ -1,3 +1,5 @@
+> **Current Mercenaries development policy (2026-11-06):** [Batch-first, hardware-last](BATCH_FIRST_HARDWARE_LAST_POLICY.md). Offline XBE/xboxrecomp/generated-C/TrueTU recovery is the default. Do not XDK-build or Xbox-test every individual fix; consolidate meaningful source-proven changes and validate one milestone-oriented build. The V7I runner now stages by default and requires explicit `-BuildBatch` to compile. Historical build scripts may behave differently.
+
 # K1A — genuine native kernel clock/date implementation
 
 **Status (2026-10-29): portable clock conversion and guest-memory bridge implemented;
