@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""K1-V7U: insert two absent retail TLS helpers into V7I with their original x86.
+"""K1-V7U: replace two existing maintained TLS shims in V7I with original x86 bodies.
 
 Works on a local V7I main.cpp only; leaves parent and all TrueTUs untouched.
 Requires original retail ABI (V7N), V7I manifest, and Phase2E TIB contract.
@@ -11,14 +11,42 @@ from pathlib import Path
 
 RETAIL="AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7"
 MARK="K1-V7U-RETAIL-TLS-X86-PAIR-20261106"
-OLD_GET="""static void sub_0022B150(void)
+OLD_GET="""void sub_0022B150(void)
 {
+    char phase6cuLine[320];
+
+    RECOMP_TRACE_FUNC(0x0022B150u);
+    ++s_phase6cuGetLastErrorCalls;
+    s_phase6cuGetLastErrorLastValue = s_phase4cLastError;
+
+    sprintf(
+        phase6cuLine,
+        "PASS: Phase 6DQ maintained GetLastError value=%08X calls=%u new_esp=%08X",
+        (unsigned int)s_phase4cLastError,
+        (unsigned int)s_phase6cuGetLastErrorCalls,
+        (unsigned int)(g_esp + 4u));
+    trace(phase6cuLine);
+
     g_eax = s_phase4cLastError;
     g_esp += 4u;
 }"""
-OLD_SET="""static void sub_0022B178(void)
+OLD_SET="""void sub_0022B178(void)
 {
+    char line[256];
+
+    RECOMP_TRACE_FUNC(0x0022B178u);
     s_phase4cLastError = GUEST_READ32(g_esp + 4u);
+    s_phase5ahXboxLastError = s_phase4cLastError;
+    ++s_phase5ahSetLastErrorCount;
+
+    sprintf(
+        line,
+        "PASS: Phase 6DQ maintained SetLastError value=%08X calls=%u new_esp=%08X",
+        (unsigned int)s_phase4cLastError,
+        (unsigned int)s_phase5ahSetLastErrorCount,
+        (unsigned int)(g_esp + 8u));
+    trace(line);
+
     g_esp += 8u;
 }"""
 # Exact x86 register/guest-memory order. The conditional FS28 read is
@@ -28,8 +56,9 @@ OLD_SET="""static void sub_0022B178(void)
 # As with the old translated functions, g_esp includes the return slot.
 # We retain existing guest-access wrappers and their hard fences.
 NEW_GET="""/* K1-V7U retail 0022B150: full FS/TLS getter, ret (4-byte return slot). */
-static void sub_0022B150(void)
+void sub_0022B150(void)
 {
+    RECOMP_TRACE_FUNC(0x0022B150u);
     const uint8_t selector = GUEST_READ8(0x24u);
     const uint8_t diff = (uint8_t)(selector - 2u);
     const uint32_t oldflags = g_eflags;
@@ -53,8 +82,9 @@ static void sub_0022B150(void)
     g_esp += 4u;
 }"""
 NEW_SET="""/* K1-V7U retail 0022B178: full FS/TLS setter, ret 4 (8 bytes total). */
-static void sub_0022B178(void)
+void sub_0022B178(void)
 {
+    RECOMP_TRACE_FUNC(0x0022B178u);
     const uint8_t selector = GUEST_READ8(0x24u);
     const uint8_t diff = (uint8_t)(selector - 2u);
     const uint32_t oldflags = g_eflags;
@@ -82,7 +112,7 @@ def need(ok,msg):
     if not ok:raise ValueError(msg)
 def sha(b):return hashlib.sha256(b).hexdigest()
 def fetch_func(code,name):
-    pattern=r"(?m)^[ \t]*static void "+re.escape(name)+r"\(void\)\s*\{\s*"
+    pattern=r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+"+re.escape(name)+r"\(void\)\s*\{\s*"
     match=list(re.finditer(pattern,code))
     need(len(match)==1,"Missing or duplicate original helper definition: "+name)
     opening=code.index("{",match[0].start(),match[0].end())
@@ -121,45 +151,37 @@ def check_provenance(parent,manifest,abi,phase2):
         "TLS index readback",
     ):need(s in phase2,"Phase2E guest FS/TLS low-memory contract absent: "+s)
 def patch(src):
-    """Insert the missing retail pair into the one real V7I pack lookup."""
-    need(MARK not in src, "V7U marker already present")
+    """Replace the exact two existing V7I maintained shims in place.
+
+    Both existing routes are retained verbatim; no new code is inserted into
+    the lookup and no other last-error state is silently synchronized.
+    """
+    need(MARK not in src,"V7U marker already present")
     for sym in ("g_eflags","g_eax","g_ecx","g_esp","GUEST_READ8",
-                "GUEST_READ32","GUEST_WRITE32"):
+                "GUEST_READ32","GUEST_WRITE32","RECOMP_TRACE_FUNC"):
         need(sym in src,"Missing translated runtime primitive "+sym)
-    for va in (0x22B150,0x22B178):
+    for va,old in ((0x22B150,OLD_GET),(0x22B178,OLD_SET)):
         name="sub_%08X"%va
-        definitions=re.findall(
-            r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+"+name+
-            r"\s*\(\s*void\s*\)\s*\{",src)
-        need(not definitions,
-             "Existing TLS function needs manual reconciliation: "+name)
-        need(not re.search(r"\bcase\s+0x%08X[uUlL]*\s*:"%va,src,re.I),
-             "Pre-existing TLS switch case "+name)
-        need(not re.search(r"\bif\s*\(\s*xbox_va\s*==\s*0x%08X[uUlL]*"%va,src,re.I),
-             "Pre-existing TLS lookup route "+name)
-    pattern=(r"(?m)^[ \t]*recomp_func_t[ \t]+phase4c_lookup_pack_func"
-             r"\(uint32_t xbox_va\)\s*\{")
-    matches=list(re.finditer(pattern,src))
-    need(len(matches)==1,
-         "Expected exactly one full packed lookup; found %d"%len(matches))
-    definition=matches[0]
-    anchor=definition.group(0)
-    routes=(
-        "    /* K1-V7U: unique original retail TLS lookup routes. */\n"
-        "    if (xbox_va == 0x0022B150u) return sub_0022B150;\n"
-        "    if (xbox_va == 0x0022B178u) return sub_0022B178;\n"
-    )
-    inserted=NEW_GET+"\n\n"+NEW_SET+"\n\n"+anchor+"\n"+routes
-    result=src[:definition.start()]+inserted+src[definition.end():]
-    need(result.replace(inserted,anchor,1)==src,
-         "Unexpected modification outside TLS functions and lookup routes")
-    for va in (0x22B150,0x22B178):
+        body=fetch_func(src,name)
+        need(body==old,
+             "Existing maintained V7I TLS function body differs: "+name)
+        # Exact single original route; another route would create ambiguity.
+        route="case 0x%08Xu: return %s;"%(va,name)
+        need(src.count(route)==1,"Expected exactly one existing lookup case: "+name)
+        labels=re.findall(r"\bcase\s+0x%08X[uUlL]*\s*:"%va,src,re.I)
+        need(len(labels)==1,"Duplicate TLS switch labels: "+name)
+        need(not re.search(
+            r"\bif\s*\(\s*xbox_va\s*==\s*0x%08X[uUlL]*"%va,src,re.I),
+            "Duplicate TLS direct lookup route: "+name)
+    patched=src.replace(OLD_GET,NEW_GET,1).replace(OLD_SET,NEW_SET,1)
+    need(patched.replace(NEW_GET,OLD_GET,1).replace(NEW_SET,OLD_SET,1)==src,
+         "Changes outside two verified V7I maintained function bodies")
+    for va,new in ((0x22B150,NEW_GET),(0x22B178,NEW_SET)):
         name="sub_%08X"%va
-        need(len(re.findall(r"\bstatic void "+name+r"\(void\)\s*\{",result))==1,
-             "New TLS function definition not unique "+name)
-        need(result.count("if (xbox_va == 0x%08Xu) return %s;"%(va,name))==1,
-             "New TLS lookup route not unique "+name)
-    return "/* "+MARK+" */\n"+result
+        need(fetch_func(patched,name)==new,"Output definition differs: "+name)
+        need(patched.count("case 0x%08Xu: return %s;"%(va,name))==1,
+             "Existing lookup route changed: "+name)
+    return "/* "+MARK+" */\n"+patched
 def main():
     p=argparse.ArgumentParser()
     for n in ("parent","manifest","abi","phase2e","out","out_manifest"):
@@ -184,7 +206,8 @@ def main():
         "fs_guest_low_address_mapping_proven_in_phase2e":True,
         "fs24_selector_source":"guest RAM byte at FS-relative 0x24 (no invented value)",
         "flags_mask":"0x08D5",
-        "inserted_missing_tls_helpers_and_lookup_routes":True,
+        "replaced_two_exact_v7i_maintained_tls_shims":True,
+        "original_lookup_routes_preserved":True,
         "apc_and_storage_fences_unchanged":True,
         "source_only":True,"xdk_compiled":False,"xbox_verified":False,
     })
@@ -197,10 +220,10 @@ def main():
         path.parent.mkdir(parents=True,exist_ok=True)
         if not path.exists():path.write_bytes(data)
     need(a.parent.read_bytes()==original,"Parent changed during stage")
-    print("[K1-V7U] SOURCE PATCH PASS: original retail TLS pair inserted into V7I lookup")
+    print("[K1-V7U] SOURCE PATCH PASS: replaced two exact V7I TLS shims with retail x86 behavior")
     print("[K1-V7U] Original Phase2E FS4/FS28/negative-index mapping + V7N ret0/ret4 PASS")
     print("[K1-V7U] Preserve guest FS24 conditional read, EAX/ECX, CMP flags, 4/8 stack advances")
-    print("[K1-V7U] Unique new lookup routes; V7I APC/stream/graphics unchanged")
+    print("[K1-V7U] Original lookup routes preserved; V7I APC/stream/graphics unchanged")
     print("[K1-V7U] SOURCE OUTPUT "+str(a.out))
     print("[K1-V7U] NO XDK / NO XBOX; BUILD NOT YET AUTHORISED")
 if __name__=="__main__":
