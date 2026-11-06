@@ -59,6 +59,19 @@ def stage():
     planner=load(K1/"Plan-K1NextICallBatch.py","k1v6p_owner")
     by_va,by_name=base.load_ranges(ORIG/"analysis/disasm/functions.json")
     generated=base.load_generated(ORIG/"runtime/gen",by_name)
+    # PC developer patch #429 injects a host-only checkpoint into this retail
+    # function. Require the pinned source template AND SHA-verified original
+    # XBE LEA/PUSH before restoring those exact two retail instructions.
+    asset=load(K1/"Audit-K1V6pRetailAssetCheckpoint.py","k1v6p_asset_retail")
+    default_xbe=Path.home()/"OneDrive/Desktop/My Xbox/default.xbe"
+    fallback_xbe=Path.home()/"Desktop/My Xbox/default.xbe"
+    retail_xbe=default_xbe if default_xbe.is_file() else fallback_xbe
+    require(retail_xbe.is_file(),"Original retail XBE not found: "+str(default_xbe))
+    proof=asset.xbe_proof(retail_xbe,K1/"Audit-K1D3DSwitchCases.py")
+    cleaned,asset_record=asset.restore(generated[TARGET]["source"],ROOT,proof)
+    generated[TARGET]=dict(generated[TARGET])
+    generated[TARGET]["source"]=cleaned
+    print("[K1-V6p] RETAIL PATCH 429 RESTORED: original XBE LEA/PUSH; no fake host helper")
     origin=planner.classify(TARGET,by_va,generated)
     print("[K1-V6p] RETAIL target class=%s owner=%s source=%s"%(origin["kind"],origin["owner"],origin["source_file"]))
     require(origin["kind"]=="exact_source_entry","Not an exact function entry; interior VA requires separate ABI/label repair")
@@ -134,7 +147,7 @@ def stage():
     report={"stage":"V6P_RETAIL_DIRECT_0017A120_SOURCE_UNTESTED",
             "target":"0x0017A120","hardware_ticks_before":BASELINE,
             "parent_v6o_sha256":sha(raw),"source_sha256":sha(result),
-            "retail_sha256":RETAIL,"true_tu_sha256":hashes,
+            "retail_sha256":RETAIL,"true_tu_sha256":hashes,\n            "retail_asset_checkpoint_429_restore":asset_record,
             "original_generated_functions":["0x%08X"%v for v in members],
             "source_files":{("0x%08X"%v):generated[v]["file"] for v in members},
             "original_source_sha256":{("0x%08X"%v):sha(generated[v]["source"].encode()) for v in members},
