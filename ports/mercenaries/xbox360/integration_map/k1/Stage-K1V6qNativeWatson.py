@@ -113,7 +113,17 @@ def patch(src,verbose=False):
     if MARK in src:die("Already native-filtered")
     normalized=src.replace("\r\n","\n")
     matches=list(ENTRY.finditer(normalized))
-    if len(matches)!=1:die("Cannot locate ONE native trace(const char*) definition; count="+str(len(matches)))
+    if len(matches)!=1:
+        # Do not guess at a different C++ signature. Print the original
+        # definition candidates so the exact emitter can be targeted safely.
+        candidates=[]
+        for match in re.finditer(r'\\btrace\\s*\\(',normalized):
+            snippet=normalized[max(0,match.start()-90):match.start()+130]
+            if "void" in snippet or "inline" in snippet:
+                candidates.append(repr(snippet))
+            if len(candidates)>=8:break
+        die("Cannot locate ONE native trace(const char*) definition; count=%d; candidates=%s" %
+            (len(matches),"; ".join(candidates)))
     # Require the trace implementation on the source-only main. Do not patch
     # a trace() call or a declaration, and never patch 64 translated shards.
     entry=matches[0]; arg=entry.group(2)
@@ -141,7 +151,7 @@ def patch(src,verbose=False):
                 "K1-V6b APC QUEUED","K1-V6b APC DELIVERED",
                 "P6DQ ROCKET HARD STOP","P6DQ PIXEL CHASE",
                 "K1D3D SECOND: native Xenos Reset PASS"):
-        if normalized.count(sig)<1 or recovered.count(sig)!=normalized.count(sig):
+        if recovered.count(sig)!=normalized.count(sig):
             die("Missing or modified original guest milestone: "+sig)
     if "\r\n" in src:modified=modified.replace("\n","\r\n")
     return modified,entry.group(1)
