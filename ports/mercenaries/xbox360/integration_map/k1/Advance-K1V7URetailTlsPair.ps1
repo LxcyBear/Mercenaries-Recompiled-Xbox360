@@ -14,6 +14,8 @@ try {
     $py=(Get-Command python.exe -ErrorAction Stop).Source
     & $py -m py_compile $script
     if($LASTEXITCODE -ne 0){throw '[K1-V7U] Python syntax gate failed'}
+    & $py -u (Join-Path $PSScriptRoot 'Test-K1V7URetailTlsPair.py')
+    if($LASTEXITCODE -ne 0){throw '[K1-V7U] Synthetic integration regression failed'}
     $argsList=@(
         '-u',$script,
         '--parent',(Join-Path $parent 'main.cpp'),
