@@ -22,7 +22,49 @@ if($clang){
 }elseif($cl){
     & $cl.Source '/nologo' '/EHsc' '/W4' $source "/Fe:$exe" "/Fo:$(Join-Path $out 'k1_v7p_tls_test.obj')"
 }else{
-    throw "[K1-V7P] No host C++ compiler in PATH. Use VS Developer Command Prompt (cl) or clang++/g++; no XDK attempted."
+    # Use the already installed desktop Visual Studio C++ toolchain through
+    # its environment bootstrap. No change to the invoking PowerShell session.
+    $vswhereCandidates=@(
+        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'),
+        (Join-Path $env:ProgramFiles 'Microsoft Visual Studio\Installer\vswhere.exe')
+    )
+    $vswhere=@($vswhereCandidates | Where-Object {
+        $_ -and (Test-Path -LiteralPath $_ -PathType Leaf)
+    } | Select-Object -First 1)
+    $vsPath=''
+    if($vswhere.Count -gt 0){
+        $vsPath=((& $vswhere[0] -products '*' -latest -property installationPath) | Select-Object -First 1)
+        if($LASTEXITCODE -ne 0){$vsPath=''}
+    }
+    $devCmd=''
+    if(-not [string]::IsNullOrWhiteSpace($vsPath)){
+        $candidate=Join-Path $vsPath 'Common7\Tools\VsDevCmd.bat'
+        if(Test-Path -LiteralPath $candidate -PathType Leaf){$devCmd=$candidate}
+    }
+    if([string]::IsNullOrWhiteSpace($devCmd)){
+        $fallbacks=@(
+            (Join-Path $env:ProgramFiles 'Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat'),
+            (Join-Path $env:ProgramFiles 'Microsoft Visual Studio\2026\Community\Common7\Tools\VsDevCmd.bat'),
+            (Join-Path $env:ProgramFiles 'Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat')
+        )
+        $hits=@($fallbacks | Where-Object {Test-Path -LiteralPath $_ -PathType Leaf})
+        if($hits.Count -gt 0){$devCmd=$hits[0]}
+    }
+    if([string]::IsNullOrWhiteSpace($devCmd)){
+        throw "[K1-V7P] No host C++ compiler found, and no VS C++ Developer Environment detected. Install Desktop development with C++ in Visual Studio; no XDK attempted."
+    }
+    Write-Host "[K1-V7P] Found Visual Studio host environment: $devCmd"
+    $cmdFile=Join-Path $out 'k1_v7p_host_compile.cmd'
+    $obj=Join-Path $out 'k1_v7p_tls_test.obj'
+    $lines=@(
+        '@echo off',
+        ('call "' + $devCmd + '" -no_logo -arch=x64 -host_arch=x64 >nul'),
+        'if errorlevel 1 exit /b 1',
+        ('cl.exe /nologo /EHsc /W4 "'+$source+'" /Fe:"'+$exe+'" /Fo:"'+$obj+'"'),
+        'exit /b %errorlevel%'
+    )
+    Set-Content -LiteralPath $cmdFile -Value $lines -Encoding ASCII
+    & $env:ComSpec /d /c ('"' + $cmdFile + '"')
 }
 if($LASTEXITCODE -ne 0){throw "[K1-V7P] HOST compilation failed"}
 & $exe
