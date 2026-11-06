@@ -130,6 +130,87 @@ def stage():
     replacement=old[:-1]+" v6r_xex="+finger+'"'
     packed=packed.replace(old,replacement,1)
     require(len(replacement)<350,"Fingerprint risks overflowing hard-stop trace buffer")
+    # Native-only summary after the existing END line. Never touches guest
+    # registers/control flow; sample the already-emitted boundary tick text.
+    summary_hook=r"""
+#include <stdio.h>
+#include <stdlib.h>
+static unsigned int s_v6r_last_boundary_ticks = 0;
+static unsigned int s_v6r_last_boundary_kind = 0;
+static bool s_v6r_summary_busy = false;
+static void k1v6r_runtime_summary(const char* line) {
+    if (!line || s_v6r_summary_busy) return;
+    if (strstr(line, "BOUNDARY:")) {
+        const char* tick = strstr(line, "ticks=");
+        const char* kind = strstr(line, "kind=");
+        if (tick) s_v6r_last_boundary_ticks = (unsigned int)strtoul(tick + 6, 0, 10);
+        if (kind) {
+            s_v6r_last_boundary_kind =
+                strstr(kind, "DIRECT_FRONTIER") == kind+5 ? 4u :
+                strstr(kind, "ICALL") == kind+5 ? 6u : 8u;
+        }
+    }
+    if (strstr(line, "PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF END")) {
+        char buffer[180];
+        s_v6r_summary_busy = true;
+        trace(line);
+        trace("OLD TICK COUNT: 61948779");
+        if (s_v6r_last_boundary_ticks) {
+            snprintf(buffer,sizeof(buffer),"NEW TICK COUNT: %u",s_v6r_last_boundary_ticks);
+        } else {
+            snprintf(buffer,sizeof(buffer),"NEW TICK COUNT: UNAVAILABLE (no runtime boundary)");
+        }
+        trace(buffer);
+        if (s_v6r_last_boundary_kind) {
+            snprintf(buffer,sizeof(buffer),
+                "SCALE 1-10 ON NEXT APPEARED PROBLEM: %u/10 (heuristic, boundary category only)",
+                s_v6r_last_boundary_kind);
+        } else {
+            snprintf(buffer,sizeof(buffer),
+                "SCALE 1-10 ON NEXT APPEARED PROBLEM: N/A (no boundary evidence)");
+        }
+        trace(buffer);
+        s_v6r_summary_busy = false;
+    }
+}
+"""
+    # Already-proven V6q trace ingress. Build a hook that intercepts END once
+    # to emit END itself, then three summary lines, without duplicate END.
+    trace_entry=re.compile(
+        r'(?m)^([ \t]*(?:(?:static|inline)[ \t]+)*void[ \t]+trace[ \t]*'
+        r'\([ \t]*(?:const[ \t]+)?char[ \t]*\*[ \t]*(\w+)[ \t]*\)'
+        r'[ \t\r\n]*\{)')
+    entries=list(trace_entry.finditer(packed))
+    require(len(entries)==1,"V6q trace source entry no longer unique")
+    tr=entries[0];arg=tr.group(2)
+    filter_call="if (!k1v6q_native_watson_allow("+arg+")) return;"
+    require(packed.count(filter_call)==1,"V6q native filtering call drift")
+    require("K1-V6Q-NATIVE-WATSON-MUX-20261105" in packed,"V6q native logger missing")
+    # Skip the native-filter branch when generating *only* these three summary
+    # lines. During nested trace calls, the original writer still executes.
+    packed=packed.replace(filter_call,
+        "if (!s_v6r_summary_busy && !k1v6q_native_watson_allow("+arg+")) return;",1)
+    # Full function prototype is needed before recursive trace() inside helper.
+    # Instead, add a same-scope hook in trace itself and call trace recursively.
+    # Global summary state is placed above the trace definition.
+    helper=summary_hook.replace('static void k1v6r_runtime_summary(const char* line) {',
+                               'static bool k1v6r_runtime_summary(const char* line) {')
+    helper=helper.replace('if (!line || s_v6r_summary_busy) return;',
+                          'if (!line || s_v6r_summary_busy) return false;')
+    helper=helper.replace('        s_v6r_summary_busy = false;\n    }\n}',
+                          '        s_v6r_summary_busy = false;\n        return true;\n    }\n    return false;\n}')
+    helper=helper.replace('static bool k1v6r_runtime_summary', 'static bool k1v6r_runtime_summary')
+    helper='static void trace(const char* line);\n'+helper
+    trace_marker="if (k1v6r_runtime_summary("+arg+")) return;"
+    pos=packed.index(tr.group(1))+len(tr.group(1))
+    packed=packed[:pos]+"\n    "+trace_marker+"\n"+packed[pos:]
+    # Insert native helper immediately before trace definition, not inside it.
+    head=packed.index(tr.group(1))
+    packed=packed[:head]+helper+"\n"+packed[head:]
+    require(packed.count("OLD TICK COUNT: 61948779")==1,"Summary injected incorrectly")
+    require(packed.count(trace_marker)==1 and packed.count("PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF END")==2,
+            "END summary hook invariant differs")
+
     packed="/* "+MARK+" */\n"+packed
     result=packed.replace("\n","\r\n").encode("utf-8") if b"\r\n" in raw else packed.encode("utf-8")
     report={"stage":"V6R_RETAIL_DIRECT_0022FA9E_SOURCE_UNTESTED",
