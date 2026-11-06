@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param([switch]$StageOnly)
+param([switch]$StageOnly, [switch]$BuildBatch)
+# Hardware-last policy: staging is default; an XDK build requires explicit opt-in.
+if ($StageOnly -and $BuildBatch) { throw '[K1-V7I] Choose StageOnly or BuildBatch, not both' }
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = (Resolve-Path (Join-Path $here '..\..\..\..\..')).Path
@@ -54,10 +56,12 @@ try {
         throw '[K1-V7I] main.cpp hash changed after staging'
     }
     Write-Host '[K1-V7I] SOURCE/RETAIL/TRUE-TU BATCH GATE PASS: five functions, 197 x86 instructions, 64 TrueTUs'
-    if ($StageOnly) {
-        Write-Host '[K1-V7I] STAGE ONLY; XDK not invoked'
+    if (-not $BuildBatch) {
+        Write-Host '[K1-V7I] DEFAULT SOURCE-ONLY: XDK not invoked. Batch future fixes before the next build.'
+        Write-Host '[K1-V7I] Explicit -BuildBatch is required for a deliberate XDK compile; it never runs an Xbox.'
         return
     }
+    Write-Host '[K1-V7I] EXPLICIT BATCH BUILD REQUESTED: compiling V7I only; no hardware launch.'
     $out = Join-Path $stage 'xdk'
     New-Item -ItemType Directory -Force -Path $out | Out-Null
     $buildArgs = @{
