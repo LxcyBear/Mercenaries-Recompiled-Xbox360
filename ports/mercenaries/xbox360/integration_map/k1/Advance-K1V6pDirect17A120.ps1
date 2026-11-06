@@ -6,7 +6,7 @@ $repo = (Resolve-Path (Join-Path $here '..\..\..\..\..')).Path
 Push-Location $repo
 try {
   & python.exe (Join-Path $here 'Stage-K1V6pDirect17A120.py')
-  if ($LASTEXITCODE -ne 0) { throw 'V6p exact nested APC source guard blocked the build' }
+  if ($LASTEXITCODE -ne 0) { throw 'V6p retail source or dependency proof blocked the build' }
   $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_direct_17a120_v6p'
   $manifest = Get-Content (Join-Path $stage 'v6p-manifest.json') -Raw | ConvertFrom-Json
   if ($manifest.stage -ne 'V6P_RETAIL_DIRECT_0017A120_SOURCE_UNTESTED' -or
