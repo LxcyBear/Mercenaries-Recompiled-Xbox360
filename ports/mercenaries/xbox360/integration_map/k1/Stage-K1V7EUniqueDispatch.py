@@ -29,10 +29,18 @@ def need(ok,msg):
     if not ok:raise ValueError(msg)
 def sha(data):return hashlib.sha256(data).hexdigest()
 def dispatch_body(src):
-    need(src.count(DISPATCH_SIGNATURE)==1,"Expected a single original pack dispatcher")
-    start=src.index(DISPATCH_SIGNATURE)
-    open_brace=src.find("{",start+len(DISPATCH_SIGNATURE))
-    need(open_brace>=0,"Dispatcher opening brace missing")
+    # Multiple mentions/declarations of the same signature are legal.
+    # Only a complete function DEFINITION anchored to its opening brace counts.
+    definition_re = re.compile(
+        r'(?m)^[ \\t]*(?:static[ \\t]+)?recomp_func_t[ \\t]+'
+        r'phase4c_lookup_pack_func\\([ \\t]*uint32_t[ \\t]+xbox_va[ \\t]*\\)'
+        r'[ \\t]*\\n[ \\t]*\\{'
+    )
+    matches=list(definition_re.finditer(src))
+    need(len(matches)==1,
+         "Expected exactly one pack dispatcher definition, found %d "
+         "(declarations and calls are allowed)"%len(matches))
+    open_brace=src.index("{",matches[0].start(),matches[0].end())
     depth=0
     for i in range(open_brace,len(src)):
         if src[i]=="{":depth+=1
