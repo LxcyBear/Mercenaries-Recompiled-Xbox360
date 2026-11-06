@@ -13,15 +13,26 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'V6p retail source or dependency proof blocked the build' }
   $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_direct_17a120_v6p'
   $manifest = Get-Content (Join-Path $stage 'v6p-manifest.json') -Raw | ConvertFrom-Json
+  # V6p uses its own manifest schema. Validate actual emitted fields,
+  # not the inherited V6o-only names.
   if ($manifest.stage -ne 'V6P_RETAIL_DIRECT_0017A120_SOURCE_UNTESTED' -or
-      $manifest.original_true_tu_count -ne 64 -or
-      $manifest.callback_delivery_unchanged -ne $true -or
-      $manifest.unknown_apc_reads_fenced -ne $true) { throw 'V6p manifest guard failed' }
+      $manifest.target -ne '0x0017A120' -or
+      $manifest.retail_sha256 -ne 'AA08EA21D952AC35F49C02C7E2ED08AA25AD7535FBBBCCC95636775F37BE99D7' -or
+      $manifest.unknown_frontiers_fenced -ne $true -or
+      $manifest.apc_reads_7_preserved_in_source -ne $true -or
+      $manifest.hardware_tested -ne $false -or
+      $manifest.retail_asset_checkpoint_429_restore.retail_original_guest_instructions_restored -ne $true -or
+      $manifest.retail_asset_checkpoint_429_restore.no_fabricated_helper -ne $true -or
+      @($manifest.true_tu_sha256.PSObject.Properties).Count -ne 64) {
+    throw 'V6p manifest integrity guard failed'
+  }
   $src = Join-Path $stage 'main.cpp'
   if ((Get-FileHash $src -Algorithm SHA256).Hash -ne $manifest.source_sha256.ToUpperInvariant()) {
     throw 'V6p main.cpp SHA-256 mismatch'
   }
-  if ($manifest.target -ne '0x0017A120' -or @($manifest.original_generated_functions).Count -lt 1 -or @($manifest.original_generated_functions).Count -gt 16) { throw 'V6p original source closure guard failed' }\n  Write-Host ('[K1-V6p] Expected XEX fingerprint: '+$manifest.runtime_fingerprint)\n  if ($StageOnly) { Write-Host '[K1-V6p] STAGE PASS, XDK not invoked'; return }
+  if (@($manifest.original_generated_functions).Count -lt 1 -or @($manifest.original_generated_functions).Count -gt 16) { throw 'V6p original source closure guard failed' }
+  Write-Host ('[K1-V6p] Expected XEX fingerprint: '+$manifest.runtime_fingerprint)
+  if ($StageOnly) { Write-Host '[K1-V6p] STAGE PASS, XDK not invoked'; return }
   $out = Join-Path $stage 'xdk'
   New-Item -ItemType Directory -Force -Path $out | Out-Null
   $args = @{
