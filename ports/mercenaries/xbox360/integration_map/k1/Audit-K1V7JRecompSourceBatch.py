@@ -78,6 +78,17 @@ def main():
         need(("case 0x%08Xu: return sub_%08X;"%(va,va)) in current_text,
              "Recovered function lacks current main dispatch route "+hx(va))
     main_defs |= recovered
+    pack_entries=re.findall(r'case\s+0x([0-9A-Fa-f]{8})u\s*:\s*return\s+sub_([0-9A-Fa-f]{8})\s*;', current_text)
+    pack_routes=set()
+    for va_text,callee_text in pack_entries:
+        need(va_text.lower()==callee_text.lower(),
+             "Malformed original function dispatch route "+va_text)
+        va=int(va_text,16)
+        need(va not in pack_routes,"Duplicate original function dispatch "+hx(va))
+        pack_routes.add(va)
+    need(recovered.issubset(pack_routes),
+         "V7E recovered functions absent from original dispatch")
+    main_defs |= pack_routes
     staged={}
     for shard in shard_files:
         for hit in FUNC.finditer(shard.read_text(encoding="utf-8",errors="replace")):
