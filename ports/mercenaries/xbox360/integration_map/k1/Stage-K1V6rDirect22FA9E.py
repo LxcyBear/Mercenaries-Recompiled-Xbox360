@@ -235,6 +235,7 @@ static bool k1v6r_native_run_summary(const char* line) {
             "original_source_sha256":{("0x%08X"%v):sha(generated[v]["source"].encode()) for v in members},
             "unpacked_next_frontiers":["0x%08X"%v for v in sorted(frontiers)],
             "runtime_fingerprint":finger,"unknown_frontiers_fenced":True,
+            "native_end_summary":["old_ticks","new_ticks","next_problem_score_estimate","guest_display_calls","display_calls_gt_zero"],
             "apc_reads_7_preserved_in_source":True,"hardware_tested":False}
     files=[(OUT/"main.cpp",result),
            (OUT/"v6r-manifest.json",(json.dumps(report,indent=2)+"\n").encode())]
