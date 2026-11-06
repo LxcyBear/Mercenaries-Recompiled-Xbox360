@@ -60,6 +60,8 @@ static bool k1v6q_native_watson_allow(const char* line) {
         strstr(line,"P6DQ D3D DEVICE:") ||
         strstr(line,"K1QUIET MILESTONE SUMMARY:") ||
         strstr(line,"K1PERF LAST_TO_FAULT:") ||
+        strstr(line,"P6DQ SPIN SAMPLE tick=") ||
+        strstr(line,"K1PERF WINDOW:") ||
         strstr(line,"PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF END"))
         return true;
     ++s_k1v6q_muted_lines;
