@@ -72,6 +72,12 @@ def main():
          "V7I main/manifest identity drift")
     current_text=current_bytes.decode("utf-8",errors="replace")
     main_defs={int(x,16) for x in FUNC.findall(current_text)}
+    recovered={int(x,16) for x in current_manifest.get("functions",[])}
+    need(len(recovered)==5,"V7E recovered function inventory missing")
+    for va in recovered:
+        need(("case 0x%08Xu: return sub_%08X;"%(va,va)) in current_text,
+             "Recovered function lacks current main dispatch route "+hx(va))
+    main_defs |= recovered
     staged={}
     for shard in shard_files:
         for hit in FUNC.finditer(shard.read_text(encoding="utf-8",errors="replace")):
