@@ -178,7 +178,8 @@ def patch(src):
          "Changes outside two verified V7I maintained function bodies")
     for va,new in ((0x22B150,NEW_GET),(0x22B178,NEW_SET)):
         name="sub_%08X"%va
-        need(fetch_func(patched,name)==new,"Output definition differs: "+name)
+        need(fetch_func(patched,name)==new.split("*/\n",1)[1],
+             "Output definition differs: "+name)
         need(patched.count("case 0x%08Xu: return %s;"%(va,name))==1,
              "Existing lookup route changed: "+name)
     return "/* "+MARK+" */\n"+patched
