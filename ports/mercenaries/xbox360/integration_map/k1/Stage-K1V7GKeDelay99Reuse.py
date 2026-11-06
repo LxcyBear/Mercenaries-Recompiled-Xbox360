@@ -97,18 +97,19 @@ def main():
         r'phase6bt_ke_delay_execution_thread\([ \t]*uint32_t[ \t]+savedEsp[ \t]*\)'
         r'[ \t]*\n[ \t]*\{'
     )
-    need(MARK not in src and not delay_def.search(src),
-         "V7G handler DEFINITION already installed; refuse duplicate")
+    need(MARK not in src,"V7G marker already installed; refuse repeated staging")
+    existing_defs=list(delay_def.finditer(src))
+    need(len(existing_defs)<=1,
+         "Multiple existing KeDelayExecutionThread handler definitions: %d"%len(existing_defs))
     icall_start=src.find("#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do {")
     icall_end=src.find("#define RECOMP_ITAIL",icall_start)
     need(icall_start>=0 and icall_end>icall_start,
          "Cannot locate ICALL_SAFE dispatch macro")
     current_macro=src[icall_start:icall_end]
-    need("_phase4c_target == 0x80000063u" not in current_macro and
-         "phase6bt_ke_delay_execution_thread((uint32_t)(saved_esp))" not in current_macro,
+    need("_phase4c_target == 0x80000063u" not in current_macro,
          "V7G ordinal-99 dispatch already installed; refuse duplicate")
     mentions=len(re.findall(r'\bphase6bt_ke_delay_execution_thread[ \t]*\(',src))
-    print("[K1-V7G] Existing function-name mentions=%d; confirmed handler definitions=0"%mentions)
+    print("[K1-V7G] Existing handler-name mentions=%d, definitions=%d"%(mentions,len(existing_defs)))
     historic=OLD.read_bytes()
     module=load(OLD)
     # Use existing historical handler without duplicating or reinterpreting C++.
@@ -124,10 +125,49 @@ def main():
                    "Sleep(milliseconds);",
                    "SwitchToThread();"):
         need(marker in handler,"Historic Phase6BT safety contract missing: "+marker)
-    patched,dispatch=patch_macro(src)
-    need(len(list(lookup_re.finditer(patched)))==1,
-         "Lookup definition drift after ICALL_SAFE patch")
-    patched=patched.replace(lookup_definition,handler+lookup_definition,1)
+    if existing_defs:
+        # Reuse the preexisting full definition; never create a second one.
+        definition=existing_defs[0]
+        brace=src.find("{",definition.start(),definition.end())
+        need(brace>=0,"Existing handler opening brace not found")
+        depth=0
+        close=None
+        for i in range(brace,len(src)):
+            if src[i]=="{":depth+=1
+            elif src[i]=="}":
+                depth-=1
+                if depth==0:
+                    close=i+1
+                    break
+        need(close is not None,"Existing handler closing brace not found")
+        already=src[definition.start():close]
+        required=("savedEsp != callEsp + 16u",
+                  "milliseconds64 > 10000ui64",
+                  "PHASE4C_BOUNDARY_KERNEL_FRAME",
+                  "PHASE4C_BOUNDARY_ICALL_SAFE",
+                  "g_esp = savedEsp;",
+                  "Sleep(milliseconds);",
+                  "SwitchToThread();",
+                  "waitMode > 1u","alertable > 1u")
+        for marker in required:
+            need(marker in already,
+                 "Existing handler is NOT verified equivalent/safe: missing "+marker)
+        # Reuse existing C++ function verbatim; source-only integration inserts
+        # the single missing dispatch arm.
+        patched,dispatch=patch_macro(src)
+        need(len(list(delay_def.finditer(patched)))==1,
+             "Existing delay handler changed/duplicated during dispatch patch")
+        handler_origin="existing_V7E_definition"
+        existing_handler_sha256=sha(already.encode("utf-8"))
+        print("[K1-V7G] REUSE: existing verified 16-byte bounded KeDelay99 handler (no graft)")
+    else:
+        patched,dispatch=patch_macro(src)
+        need(len(list(lookup_re.finditer(patched)))==1,
+             "Lookup definition drift after ICALL_SAFE patch")
+        patched=patched.replace(lookup_definition,handler+lookup_definition,1)
+        handler_origin="historical_6BT_source_graft"
+        existing_handler_sha256=None
+        print("[K1-V7G] GRAFT: existing handler absent; inserted historical 6BT body")
     patched="/* "+MARK+" */\n"+patched
     # Invariants: V7E exact body remains except for the one bounded
     # handler insertion and ICALL_SAFE dispatch; no wholesale replacements.
@@ -150,6 +190,8 @@ def main():
                  "historical_phase6bt_emitter_sha256":sha(historic),
                  "kernel_ordinal":99,"kernel_target":"0x80000063",
                  "handler_source":"phase6bt_ke_delay_execution_thread",
+                 "handler_origin":handler_origin,
+                 "existing_handler_sha256":existing_handler_sha256,
                  "canonical_frame_bytes":16,
                  "bounded_relative_only":True,"max_relative_ms":10000,
                  "absolute_delays_fenced":True,
@@ -165,7 +207,7 @@ def main():
     for p,data in outputs:
         if not p.exists():p.write_bytes(data)
     need((BASE/"main.cpp").read_bytes()==original,"V7E input mutated")
-    print("[K1-V7G] HISTORICAL 6BT KeDelayExecutionThread SOURCE GRAFT PASS")
+    print("[K1-V7G] KEDELAY99 SOURCE ROUTING PASS: "+handler_origin)
     print("[K1-V7G] ORIGINAL 16-byte ordinal-99 frame/relative<=10s/absolute FENCE preserved")
     print("[K1-V7G] V7E five retail functions, 197 instructions, 64 TrueTUs preserved")
     print("[K1-V7G] SOURCE ONLY. NO XDK OR XBOX. NO GUEST ABI BYPASS.")
