@@ -66,15 +66,44 @@ try {
     if($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $args.PublishedXex -PathType Leaf)){
         throw '[K1-V7Z] XDK build/publish failed'
     }
-    $log=Get-Content -LiteralPath $args.BuildLog
-    if(-not ($log | Select-String '========== Build: 1 succeeded')){
-        throw '[K1-V7Z] Successful XDK compile not proven'
+    # A previously compiled XEX is valid when VS2017 reports up-to-date,
+    # provided the exact staged source is still the compiled project input
+    # and the published XEX is byte-identical to the actual Release output.
+    $buildLog=Get-Content -LiteralPath $args.BuildLog -Raw
+    $compiled=[bool]($buildLog -match 'Build:\s*1 succeeded,\s*0 failed')
+    $uptodate=[bool]($buildLog -match 'Build:\s*0 succeeded,\s*0 failed,\s*1 up-to-date')
+    if(-not ($compiled -or $uptodate)){
+        throw '[K1-V7Z] Neither successful compile nor verified VS up-to-date reported'
+    }
+    $shadowMain='C:\Merc360Build\Mercenaries-PPC-Port\Mercenaries-PPC-Port\main.cpp'
+    $shadowXex='C:\Merc360Build\Mercenaries-PPC-Port\Mercenaries-PPC-Port\Release\Mercenaries-PPC-Port.xex'
+    if(!(Test-Path -LiteralPath $shadowMain -PathType Leaf) -or
+       !(Test-Path -LiteralPath $shadowXex -PathType Leaf)){
+        throw '[K1-V7Z] Missing expected shadow-build source or Release XEX'
+    }
+    $shadowSha=(Get-FileHash -LiteralPath $shadowMain -Algorithm SHA256).Hash.ToLowerInvariant()
+    if($shadowSha -ne $h){
+        throw '[K1-V7Z] Compiled shadow main.cpp differs from V7Z source'
+    }
+    $builtSha=(Get-FileHash -LiteralPath $shadowXex -Algorithm SHA256).Hash
+    $publishedSha=(Get-FileHash -LiteralPath $args.PublishedXex -Algorithm SHA256).Hash
+    if($builtSha -ne $publishedSha){
+        throw '[K1-V7Z] Published XEX differs from shadow Release XEX'
     }
     $xex=Get-Item -LiteralPath $args.PublishedXex
-    if($xex.Length -lt 1000000 -or $xex.LastWriteTime -lt $start.AddSeconds(-2)){
-        throw '[K1-V7Z] Fresh XEX publish not proven'
+    if($xex.Length -lt 1000000){
+        throw '[K1-V7Z] Published XEX unexpectedly small'
     }
-    Write-Host '[K1-V7Z] XDK BUILD PASS, HARDWARE UNVERIFIED.'
+    if($compiled){
+        if($xex.LastWriteTime -lt $start.AddSeconds(-2)){
+            throw '[K1-V7Z] Successful compile did not produce a fresh XEX'
+        }
+        Write-Host '[K1-V7Z] XDK PASS: compiled this invocation, source and published hashes match.'
+    } else {
+        Write-Host '[K1-V7Z] XDK PASS: up-to-date XEX reused; exact source and published hashes match.'
+        Write-Host '[K1-V7Z] XEX was NOT recompiled during this invocation.'
+    }
+    Write-Host '[K1-V7Z] HARDWARE IDENTITY STILL UNVERIFIED.'
     Get-Item -LiteralPath $args.PublishedXex | Select-Object FullName,Length,LastWriteTime
     Get-FileHash -LiteralPath $args.PublishedXex -Algorithm SHA256
     Write-Host '[K1-V7Z] Watch for: K1-V7Z-NTREAD-REJECT-TUPLE-20261106 BOOT'
