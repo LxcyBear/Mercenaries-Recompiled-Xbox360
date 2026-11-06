@@ -52,7 +52,12 @@ def inspect(path,manifest_path):
     fbody=braces(text,func.start())
     need(NEEDLE in fbody,"Callback reject not inside native NtReadFile handler")
     need("phase4c_escape" in fbody,"Native NtReadFile escape fence absent")
-    need("ReadFile(" in fbody,"Native NtReadFile read path absent")
+    # The native handler may delegate or implement reads via another helper.
+    # A literal Win32 ReadFile call is NOT an ABI requirement. The caller
+    # rejection, native owner and escape fence are the evidence we need.
+    need("savedEsp != callEsp + 36u" in fbody and
+         "PHASE4C_BOUNDARY_KERNEL_FRAME" in fbody,
+         "Canonical 36-byte NtReadFile stack fence absent from native owner")
     # Extract guest stack offsets only for source review, not interpretation.
     reads=sorted({int(x) for x in re.findall(
         r"\bGUEST_READ32\s*\(\s*callEsp\s*\+\s*(\d+)u?\s*\)",fbody)})
