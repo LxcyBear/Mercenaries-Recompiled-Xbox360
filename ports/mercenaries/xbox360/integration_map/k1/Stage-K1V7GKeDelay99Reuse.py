@@ -90,8 +90,25 @@ def main():
     need(len(definitions)==1,
          "Expected one translated-pack lookup definition; found %d"%(len(definitions),))
     lookup_definition=definitions[0].group(0)
-    need(MARK not in src and "phase6bt_ke_delay_execution_thread(" not in src,
-         "V7G handler already present; refuse duplicate")
+    # A forward declaration or a diagnostic string is NOT an installed
+    # handler. Only a definition/body or an actual ICALL_SAFE branch is.
+    delay_def=re.compile(
+        r'(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+'
+        r'phase6bt_ke_delay_execution_thread\([ \t]*uint32_t[ \t]+savedEsp[ \t]*\)'
+        r'[ \t]*\n[ \t]*\{'
+    )
+    need(MARK not in src and not delay_def.search(src),
+         "V7G handler DEFINITION already installed; refuse duplicate")
+    icall_start=src.find("#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do {")
+    icall_end=src.find("#define RECOMP_ITAIL",icall_start)
+    need(icall_start>=0 and icall_end>icall_start,
+         "Cannot locate ICALL_SAFE dispatch macro")
+    current_macro=src[icall_start:icall_end]
+    need("_phase4c_target == 0x80000063u" not in current_macro and
+         "phase6bt_ke_delay_execution_thread((uint32_t)(saved_esp))" not in current_macro,
+         "V7G ordinal-99 dispatch already installed; refuse duplicate")
+    mentions=len(re.findall(r'\bphase6bt_ke_delay_execution_thread[ \t]*\(',src))
+    print("[K1-V7G] Existing function-name mentions=%d; confirmed handler definitions=0"%mentions)
     historic=OLD.read_bytes()
     module=load(OLD)
     # Use existing historical handler without duplicating or reinterpreting C++.
