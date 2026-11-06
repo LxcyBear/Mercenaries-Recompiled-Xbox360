@@ -29,7 +29,7 @@ def imported(p):
     return module
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("--recon",required=True,type=Path,help="local xboxrecomp inventory zip")
+    ap.add_argument("--recon",type=Path,help="optional local xboxrecomp inventory zip")
     ap.add_argument("--ranges",required=True,type=Path,help="generated-C metadata range file")
     ap.add_argument("--generated",required=True,type=Path,help="original generated C folder")
     ap.add_argument("--emitter",required=True,type=Path,help="original load_ranges/load_generated reader")
@@ -41,16 +41,26 @@ def main():
     ap.add_argument("--cap",type=int,default=400)
     args=ap.parse_args()
     need(1<=args.depth<=5 and 10<=args.cap<=2000,"Unsupported graph budget")
-    with zipfile.ZipFile(args.recon) as z:
-        manifest=json.loads(z.read("xboxrecomp_manifest.json"))
-        summary=z.read("merc360_frontier_summary.txt").decode("utf-8-sig")
-    need(manifest.get("functions")==16662 and manifest.get("no_raw_game_bytes") is True and
-         RETAIL in summary,"Wrong/incomplete retail xboxrecomp inventory")
-    inventory={number(row.get("address")):row for row in manifest["function_list"]}
-    need(len(inventory)==16662 and all(seed in inventory for seed in SEEDS[:2]),
-         "Original function inventory incomplete")
     reader=imported(args.emitter)
-    _,by_name=reader.load_ranges(args.ranges)
+    verified_ranges,by_name=reader.load_ranges(args.ranges)
+    need(len(verified_ranges)>=13000,"Original disassembly function range inventory incomplete")
+    if args.recon is not None:
+        with zipfile.ZipFile(args.recon) as z:
+            manifest=json.loads(z.read("xboxrecomp_manifest.json"))
+            summary=z.read("merc360_frontier_summary.txt").decode("utf-8-sig")
+        need(manifest.get("functions")==16662 and manifest.get("no_raw_game_bytes") is True and
+             RETAIL in summary,"Wrong/incomplete retail xboxrecomp inventory")
+        inventory={number(row.get("address")):row for row in manifest["function_list"]}
+        need(len(inventory)==16662,"Incomplete cached xboxrecomp inventory")
+        provenance="xboxrecomp_zip_verified_retail_summary"
+    else:
+        # Existing original disassembler inventory is a different artifact:
+        # it has range metadata, not all xboxrecomp call graph/ABI fields.
+        # Do not claim to have verified 16,662 cached function rows.
+        inventory=verified_ranges
+        provenance="local_original_disasm_ranges_without_xboxrecomp_zip"
+    need(all(seed in inventory for seed in SEEDS[:2]),
+         "Original source inventory lacks hardware-frontier roots")
     sources=reader.load_generated(args.generated,by_name)
     need(len(sources)>=10000,"Generated C inventory incomplete")
     shard_files=sorted(args.shards.glob("translated_???.cpp"))
@@ -118,7 +128,8 @@ def main():
     report={
         "phase":"K1_V7J_RETAIL_XBOXRECOMP_TRUE_TU_SOURCE_BATCH_READ_ONLY",
         "retail_sha256":RETAIL,"v7i_main_sha256":hashlib.sha256(current_bytes).hexdigest(),
-        "xboxrecomp_functions":len(inventory),
+        "inventory_provenance":provenance,"inventory_functions":len(inventory),
+        "xboxrecomp_functions":len(inventory) if args.recon is not None else None,
         "generated_source_functions":len(sources),"true_tus":len(shard_files),
         "roots":[hx(v) for v in SEEDS],"depth":args.depth,"budget":args.cap,
         "counts":counts,"candidate_priority":candidates,
@@ -126,12 +137,14 @@ def main():
         "limits":["Cached xrefs are static hints, not runtime provenance",
                   "Source presence does not prove execution or ABI",
                   "No game source bytes exported in metadata",
-                  "APC callback ABI must be verified before accepting new shapes"],
+                  "APC callback ABI must be verified before accepting new shapes",
+                  "Without xboxrecomp ZIP: original function ranges are unverified cache, not equivalent to retail SHA-verified graph"],
         "xdk_built":False,"xbox_run":False}
     args.out.mkdir(parents=True,exist_ok=True)
     path=args.out/"v7j_batch_frontiers.json"
     path.write_text(json.dumps(report,indent=2,default=str)+"\n",encoding="utf-8")
-    print("[K1-V7J] VERIFIED retail / xboxrecomp / generated C / 64 TrueTUs")
+    print("[K1-V7J] INVENTORY MODE "+provenance)
+    print("[K1-V7J] Source corpus / current main / 64 TrueTUs analyzed; no retail bytes emitted")
     print("[K1-V7J] scanned=%(visited)d new_generated_not_staged=%(generated_present_not_staged)d missing_body=%(generated_missing)d TrueTU=%(already_staged_true_tu)d main=%(already_in_main)d" % counts)
     print("[K1-V7J] PRIORITY CANDIDATES (NO ABI CLAIM):")
     for c in candidates[:20]:
