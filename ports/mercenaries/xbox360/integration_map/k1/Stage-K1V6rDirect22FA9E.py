@@ -126,7 +126,7 @@ def stage():
     matches=list(lit.finditer(packed))
     require(len(matches)==1,"Cannot insert unique runtime XEX fingerprint")
     old=matches[0].group()
-    finger="K1-V6R-RETAIL17A120-"+sha(packed.encode())[:12].upper()
+    finger="K1-V6R-RETAIL22FA9E-"+sha(packed.encode())[:12].upper()
     replacement=old[:-1]+" v6r_xex="+finger+'"'
     packed=packed.replace(old,replacement,1)
     require(len(replacement)<350,"Fingerprint risks overflowing hard-stop trace buffer")
@@ -149,7 +149,7 @@ def stage():
     OUT.mkdir(parents=True,exist_ok=True)
     for p,b in files:
         if not p.exists():p.write_bytes(b)
-    require((PARENT/"main.cpp").read_bytes()==raw,"V6o source drifted during stage")
+    require((PARENT/"main.cpp").read_bytes()==raw,"V6q source drifted during stage")
     print("[K1-V6r] SOURCE PASS: authentic retail 0022FA9E + bounded dependency closure")
     print("[K1-V6r] XEX FINGERPRINT: "+finger)
     print("[K1-V6r] 7 APC source paths, D3D Reset, native Watson, hard fences, 64 TrueTUs preserved. NO XDK/HARDWARE PROOF YET")
