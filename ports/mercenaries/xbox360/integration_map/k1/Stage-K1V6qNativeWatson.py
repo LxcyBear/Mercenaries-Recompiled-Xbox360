@@ -11,7 +11,7 @@ from pathlib import Path
 P=Path("build/phase6_integration_map/k1_pixel_direct_17a120_v6p")
 OUT=Path("build/phase6_integration_map/k1_pixel_native_watson_v6q")
 MARK="K1-V6Q-NATIVE-WATSON-MUX-20261105"
-ENTRY=re.compile(r'(?m)^([ \t]*(?:static[ \t]+)?void[ \t]+trace[ \t]*\([ \t]*(?:const[ \t]+)?char[ \t]*\*[ \t]*(\w+)[ \t]*\)[ \t]*\{)')
+ENTRY=re.compile(r'(?m)^([ \t]*(?:(?:static|inline)[ \t]+)*void[ \t]+trace[ \t]*\([ \t]*(?:const[ \t]+)?char[ \t]*\*[ \t]*(\w+)[ \t]*\)[ \t\r\n]*\{)')
 DECL=re.compile(r'(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+trace[ \t]*\(')
 FILTER=r'''
 /* Native xbWatson output filter ONLY. Never changes guest execution.
