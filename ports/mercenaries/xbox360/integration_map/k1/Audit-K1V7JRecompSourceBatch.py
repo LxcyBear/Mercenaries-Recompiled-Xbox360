@@ -132,11 +132,13 @@ def main():
                 if v not in done and v in inventory:todo.append((v,level+1,root))
     candidates=sorted(done.values(),key=lambda r:(
         0 if r["generated_body_present"] and not r["already_compiled"] else
-        1 if r["missing_source"] and r["retail_present"] else 2,
+        1 if r["missing_source"] and not r["already_compiled"] and r["retail_present"] else 2,
         r["depth"],r["va"]))
     counts={
         "visited":len(done),
         "generated_missing":sum(x["missing_source"] for x in done.values()),
+        "missing_source_unstaged":sum(x["missing_source"] and not x["already_compiled"] for x in done.values()),
+        "missing_source_already_recovered":sum(x["missing_source"] and x["already_compiled"] for x in done.values()),
         "generated_present_not_staged":sum(x["generated_body_present"] and not x["already_compiled"] for x in done.values()),
         "already_staged_true_tu":sum(bool(x["in_true_tus"]) for x in done.values()),
         "already_in_main":sum(x["in_current_main"] for x in done.values()),
@@ -162,10 +164,10 @@ def main():
     path.write_text(json.dumps(report,indent=2,default=str)+"\n",encoding="utf-8")
     print("[K1-V7J] INVENTORY MODE "+provenance)
     print("[K1-V7J] Source corpus / current main / 64 TrueTUs analyzed; no retail bytes emitted")
-    print("[K1-V7J] scanned=%(visited)d new_generated_not_staged=%(generated_present_not_staged)d missing_body=%(generated_missing)d TrueTU=%(already_staged_true_tu)d main=%(already_in_main)d" % counts)
+    print("[K1-V7J] scanned=%(visited)d new_generated_not_staged=%(generated_present_not_staged)d missing_body=%(generated_missing)d unresolved_missing_body=%(missing_source_unstaged)d recovered_missing_body=%(missing_source_already_recovered)d TrueTU=%(already_staged_true_tu)d main=%(already_in_main)d" % counts)
     print("[K1-V7J] PRIORITY CANDIDATES (NO ABI CLAIM):")
     for c in candidates[:20]:
-        if (c["generated_body_present"] and not c["already_compiled"]) or c["missing_source"]:
+        if (c["generated_body_present"] and not c["already_compiled"]) or (c["missing_source"] and not c["already_compiled"]):
             print("[K1-V7J] %s depth=%d generated=%s TrueTU=%s root=%s"%(
                   c["va"],c["depth"],c["generated_body_present"],bool(c["in_true_tus"]),c["root"]))
     print("[K1-V7J] REPORT "+str(path))
