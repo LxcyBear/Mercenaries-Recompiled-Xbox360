@@ -130,86 +130,98 @@ def stage():
     replacement=old[:-1]+" v6r_xex="+finger+'"'
     packed=packed.replace(old,replacement,1)
     require(len(replacement)<350,"Fingerprint risks overflowing hard-stop trace buffer")
-    # Native-only summary after the existing END line. Never touches guest
-    # registers/control flow; sample the already-emitted boundary tick text.
-    summary_hook=r"""
+    # Native-only end-of-run metrics. The running guest remains untouched.
+    # Read the already logged boundary and the guest display_calls counters,
+    # then append actual results immediately after the original END line.
+    native_summary=r"""
 #include <stdio.h>
 #include <stdlib.h>
-static unsigned int s_v6r_last_boundary_ticks = 0;
-static unsigned int s_v6r_last_boundary_kind = 0;
-static bool s_v6r_summary_busy = false;
-static void k1v6r_runtime_summary(const char* line) {
-    if (!line || s_v6r_summary_busy) return;
+static unsigned int k1v6r_last_ticks = 0;
+static unsigned int k1v6r_kind_score = 0;
+static unsigned int k1v6r_guest_displays = 0;
+static bool k1v6r_seen_displays = false;
+static bool k1v6r_emitting_summary = false;
+static bool k1v6r_native_run_summary(const char* line) {
+    if (!line || k1v6r_emitting_summary) return false;
     if (strstr(line, "BOUNDARY:")) {
         const char* tick = strstr(line, "ticks=");
         const char* kind = strstr(line, "kind=");
-        if (tick) s_v6r_last_boundary_ticks = (unsigned int)strtoul(tick + 6, 0, 10);
+        if (tick) k1v6r_last_ticks = (unsigned int)strtoul(tick + 6, 0, 10);
         if (kind) {
-            s_v6r_last_boundary_kind =
-                strstr(kind, "DIRECT_FRONTIER") == kind+5 ? 4u :
-                strstr(kind, "ICALL") == kind+5 ? 6u : 8u;
+            kind += 5;
+            k1v6r_kind_score =
+                strncmp(kind, "DIRECT_FRONTIER", 15) == 0 ? 4u :
+                strncmp(kind, "ICALL", 5) == 0 ? 6u : 8u;
+        }
+    }
+    if (strstr(line, "P6DQ PIXEL CHASE:") ||
+        strstr(line, "P6DQ PRESENT PROXIMITY:") ||
+        strstr(line, "entered XACTENG frontier 00280141")) {
+        const char* n = strstr(line, "display_calls=");
+        if (n) {
+            unsigned int value = (unsigned int)strtoul(n + 14, 0, 10);
+            if (!k1v6r_seen_displays || value > k1v6r_guest_displays)
+                k1v6r_guest_displays = value;
+            k1v6r_seen_displays = true;
         }
     }
     if (strstr(line, "PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF END")) {
-        char buffer[180];
-        s_v6r_summary_busy = true;
+        char buf[160];
+        k1v6r_emitting_summary = true;
         trace(line);
         trace("OLD TICK COUNT: 61948779");
-        if (s_v6r_last_boundary_ticks) {
-            snprintf(buffer,sizeof(buffer),"NEW TICK COUNT: %u",s_v6r_last_boundary_ticks);
+        if (k1v6r_last_ticks)
+            sprintf(buf, "NEW TICK COUNT: %u", k1v6r_last_ticks);
+        else
+            sprintf(buf, "NEW TICK COUNT: N/A (no boundary observed)");
+        trace(buf);
+        if (k1v6r_kind_score)
+            sprintf(buf, "SCALE 1-10 ON NEXT APPEARED PROBLEM: %u/10 (estimated from boundary kind)", k1v6r_kind_score);
+        else
+            sprintf(buf, "SCALE 1-10 ON NEXT APPEARED PROBLEM: N/A (no boundary observed)");
+        trace(buf);
+        if (k1v6r_seen_displays) {
+            sprintf(buf, "GUEST DISPLAY CALLS: %u", k1v6r_guest_displays);
+            trace(buf);
+            trace(k1v6r_guest_displays > 0 ?
+                  "DISPLAY_CALLS > 0: YES" : "DISPLAY_CALLS > 0: NO");
         } else {
-            snprintf(buffer,sizeof(buffer),"NEW TICK COUNT: UNAVAILABLE (no runtime boundary)");
+            trace("GUEST DISPLAY CALLS: N/A (no display counter observed)");
+            trace("DISPLAY_CALLS > 0: UNKNOWN");
         }
-        trace(buffer);
-        if (s_v6r_last_boundary_kind) {
-            snprintf(buffer,sizeof(buffer),
-                "SCALE 1-10 ON NEXT APPEARED PROBLEM: %u/10 (heuristic, boundary category only)",
-                s_v6r_last_boundary_kind);
-        } else {
-            snprintf(buffer,sizeof(buffer),
-                "SCALE 1-10 ON NEXT APPEARED PROBLEM: N/A (no boundary evidence)");
-        }
-        trace(buffer);
-        s_v6r_summary_busy = false;
+        k1v6r_emitting_summary = false;
+        return true;
     }
+    return false;
 }
 """
-    # Already-proven V6q trace ingress. Build a hook that intercepts END once
-    # to emit END itself, then three summary lines, without duplicate END.
     trace_entry=re.compile(
         r'(?m)^([ \t]*(?:(?:static|inline)[ \t]+)*void[ \t]+trace[ \t]*'
         r'\([ \t]*(?:const[ \t]+)?char[ \t]*\*[ \t]*(\w+)[ \t]*\)'
         r'[ \t\r\n]*\{)')
     entries=list(trace_entry.finditer(packed))
-    require(len(entries)==1,"V6q trace source entry no longer unique")
-    tr=entries[0];arg=tr.group(2)
-    filter_call="if (!k1v6q_native_watson_allow("+arg+")) return;"
-    require(packed.count(filter_call)==1,"V6q native filtering call drift")
-    require("K1-V6Q-NATIVE-WATSON-MUX-20261105" in packed,"V6q native logger missing")
-    # Skip the native-filter branch when generating *only* these three summary
-    # lines. During nested trace calls, the original writer still executes.
-    packed=packed.replace(filter_call,
-        "if (!s_v6r_summary_busy && !k1v6q_native_watson_allow("+arg+")) return;",1)
-    # Full function prototype is needed before recursive trace() inside helper.
-    # Instead, add a same-scope hook in trace itself and call trace recursively.
-    # Global summary state is placed above the trace definition.
-    helper=summary_hook.replace('static void k1v6r_runtime_summary(const char* line) {',
-                               'static bool k1v6r_runtime_summary(const char* line) {')
-    helper=helper.replace('if (!line || s_v6r_summary_busy) return;',
-                          'if (!line || s_v6r_summary_busy) return false;')
-    helper=helper.replace('        s_v6r_summary_busy = false;\n    }\n}',
-                          '        s_v6r_summary_busy = false;\n        return true;\n    }\n    return false;\n}')
-    helper=helper.replace('static bool k1v6r_runtime_summary', 'static bool k1v6r_runtime_summary')
-    helper='static void trace(const char* line);\n'+helper
-    trace_marker="if (k1v6r_runtime_summary("+arg+")) return;"
-    pos=packed.index(tr.group(1))+len(tr.group(1))
-    packed=packed[:pos]+"\n    "+trace_marker+"\n"+packed[pos:]
-    # Insert native helper immediately before trace definition, not inside it.
-    head=packed.index(tr.group(1))
-    packed=packed[:head]+helper+"\n"+packed[head:]
-    require(packed.count("OLD TICK COUNT: 61948779")==1,"Summary injected incorrectly")
-    require(packed.count(trace_marker)==1 and packed.count("PHASE 6DQ REAL TRANSLATED STARTUP BOUNDARY PROOF END")==2,
-            "END summary hook invariant differs")
+    require(len(entries)==1,"V6q native trace entry no longer unique")
+    tr=entries[0]
+    arg=tr.group(2)
+    old_filter="if (!k1v6q_native_watson_allow("+arg+")) return;"
+    require(packed.count(old_filter)==1,"V6q native logging filter drift")
+    require(packed.count("K1-V6Q-NATIVE-WATSON-MUX-20261105")==1,"V6q trace guard missing")
+    # The same trace() writer is used recursively for the five summary
+    # messages. A reentrancy guard bypasses the filter ONLY for those messages.
+    packed=packed.replace(old_filter,
+        "if (!k1v6r_emitting_summary && !k1v6q_native_watson_allow("+arg+")) return;",1)
+    entry=tr.group(1)
+    # Keep the original function's linkage when declaring it for the helper.
+    linkage="static " if re.match(r'\s*static\b',entry) else ""
+    helper=linkage+"void trace(const char* line);\n"+native_summary+"\n"
+    call="if (k1v6r_native_run_summary("+arg+")) return;"
+    start=packed.index(entry)
+    packed=packed[:start]+helper+packed[start:]
+    offset=start+len(helper)+len(entry)
+    packed=packed[:offset]+"\n    "+call+"\n"+packed[offset:]
+    require(packed.count(call)==1,"Native summary hook not unique")
+    require(packed.count("OLD TICK COUNT: 61948779")==1,"Old hardware record drift")
+    require(packed.count("GUEST DISPLAY CALLS: %u")==1,"Display count hook missing")
 
     packed="/* "+MARK+" */\n"+packed
     result=packed.replace("\n","\r\n").encode("utf-8") if b"\r\n" in raw else packed.encode("utf-8")
