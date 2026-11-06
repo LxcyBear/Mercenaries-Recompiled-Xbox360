@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""V7U source-only patcher selftest (no original retail game data)."""
+"""V7U synthetic missing-body integration regression; no original retail bytes."""
 from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-spec=importlib.util.spec_from_file_location("stage_v7u",Path(__file__).with_name("Stage-K1V7URetailTlsPair.py"))
+spec=importlib.util.spec_from_file_location(
+    "v7u",Path(__file__).with_name("Stage-K1V7URetailTlsPair.py"))
 assert spec and spec.loader
 v=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(v)
@@ -13,35 +14,38 @@ fixture="""uint32_t g_eflags, g_eax, g_ecx, g_esp;
 #define GUEST_READ32(x) read32(x)
 #define GUEST_WRITE32(x,y) write32(x,y)
 const char* untouched = "APC stream graphics native preserved";
-""" + v.OLD_GET + "\n" + v.OLD_SET + """
-recomp_func_t phase4c_lookup_pack_func(uint32_t va)
+recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va);
+recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)
 {
-switch(va) {
-  case 0x0022B150u: return sub_0022B150;
-  case 0x0022B178u: return sub_0022B178;
-}
-return 0;
+    if (xbox_va == 0x0027F2C2u) return some_other_function;
+    return 0;
 }
 """
-patch=v.patch(fixture)
-assert patch.startswith("/* "+v.MARK+" */\n")
-assert v.NEW_GET in patch and v.NEW_SET in patch
-assert v.OLD_GET not in patch and v.OLD_SET not in patch
-assert patch.replace("/* "+v.MARK+" */\n","",1).replace(v.NEW_GET,v.OLD_GET,1).replace(v.NEW_SET,v.OLD_SET,1)==fixture
-for target,advance in (("0022B150","4u"),("0022B178","8u")):
-    body=v.fetch_func(patch,"sub_"+target)
-    assert "g_esp += "+advance in body
+new=v.patch(fixture)
+assert new.startswith("/* "+v.MARK+" */\n")
+assert v.NEW_GET in new and v.NEW_SET in new
+assert new.count("static void sub_0022B150(void)")==1
+assert new.count("static void sub_0022B178(void)")==1
+assert new.count("if (xbox_va == 0x0022B150u) return sub_0022B150;")==1
+assert new.count("if (xbox_va == 0x0022B178u) return sub_0022B178;")==1
+assert "if (xbox_va == 0x0027F2C2u) return some_other_function;" in new
+for va,delta in (("0022B150","4u"),("0022B178","8u")):
+    body=v.fetch_func(new,"sub_"+va)
+    assert "g_esp += "+delta in body
     assert "g_eflags = (oldflags & ~0x08D5u) | flags;" in body
     assert "GUEST_READ8(0x24u)" in body
     assert "if (selector < 2u) g_eax = GUEST_READ32(0x28u);" in body
-assert patch.count("APC stream graphics native preserved")==1
-assert patch.count("case 0x0022B150u: return sub_0022B150;")==1
-assert patch.count("case 0x0022B178u: return sub_0022B178;")==1
-for malformed in (fixture.replace("0x0022B150u: return sub_0022B150;","0x0022B150u: return missing;"),
-                  fixture+v.OLD_GET,
-                  fixture.replace("g_esp += 4u;", "g_esp += 16u;")):
-    try:v.patch(malformed)
+for broken in (
+    new,
+    fixture+v.OLD_GET,
+    fixture.replace(
+      "recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{",
+      "recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{\n"
+      "    if (xbox_va == 0x0022B150u) return unknown_function;"),
+    fixture+"recomp_func_t phase4c_lookup_pack_func(uint32_t xbox_va)\n{return 0;}\n",
+):
+    try:v.patch(broken)
     except ValueError:pass
-    else:raise AssertionError("Malformed source was not fenced")
-print("[K1-V7U] SELFTEST PASS: exactly two TLS bodies, ret0/ret4 stack delta, FS24/FS28, EFLAGS, dispatch, guards")
-print("[K1-V7U] SOURCE-ONLY TEST; no original retail bytes, no XDK or Xbox")
+    else:raise AssertionError("Duplicate/malformed source was not fenced")
+print("[K1-V7U] SELFTEST PASS: V7I missing-body insertion, unique lookup, FS, flags, ret0/ret4 and hard fences")
+print("[K1-V7U] NO ORIGINAL GAME SOURCE / NO XDK / NO XBOX")
