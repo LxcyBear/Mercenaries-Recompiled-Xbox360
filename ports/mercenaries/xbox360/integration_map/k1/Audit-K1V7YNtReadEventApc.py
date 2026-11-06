@@ -97,9 +97,9 @@ def main():
         "44_byte_frame_corrected":False,
         "apc_event_callback_supported":False,
         "next":"Review local excerpt and retail call-site semantics before adding any real Event/APC support."}
-    data=json.dumps(report,indent=2)+"\n\n=== NATIVE NTREADFILE OWNER ===\n"+i["function_excerpt"]+
-    "\n\n=== CALLBACK REJECTION CONTEXT ===\n"+i["rejection_excerpt"]+
-    "\n\n=== ORIGINAL FRAME GUARD CONTEXT ===\n"+i["guard_excerpt"]+"\n"
+    data=(json.dumps(report,indent=2)+"\n\n=== NATIVE NTREADFILE OWNER ===\n"+i["function_excerpt"]+
+          "\n\n=== CALLBACK REJECTION CONTEXT ===\n"+i["rejection_excerpt"]+
+          "\n\n=== ORIGINAL FRAME GUARD CONTEXT ===\n"+i["guard_excerpt"]+"\n")
     a.output.parent.mkdir(parents=True,exist_ok=True)
     a.output.write_text(data,encoding="utf-8")
     print("[K1-V7Y] SOURCE PASS: V7I/V7X identical native NtReadFile handler")
