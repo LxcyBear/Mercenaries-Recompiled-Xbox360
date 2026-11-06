@@ -6,10 +6,12 @@ $repo = (Resolve-Path (Join-Path $here '..\..\..\..\..')).Path
 Push-Location $repo
 try {
   # Fail early with an explicit parser gate before any source staging or XDK call.
-  & python.exe -m py_compile (Join-Path $here 'Stage-K1V6qNativeWatson.py') (Join-Path $here 'Stage-K1V6qDirect17A120.py')
+  & python.exe -m py_compile (Join-Path $here 'Stage-K1V6qNativeWatson.py') (Join-Path $here 'Stage-K1V6pDirect17A120.py')
   if ($LASTEXITCODE -ne 0) { throw 'V6q Python syntax preflight failed. No XDK invoked.' }
   Write-Host '[K1-V6q] PYTHON SYNTAX PREFLIGHT PASS'
-  & python.exe (Join-Path $here 'Stage-K1V6qDirect17A120.py')
+  & python.exe (Join-Path $here 'Stage-K1V6qNativeWatson.py') --self-test
+  if ($LASTEXITCODE -ne 0) { throw 'V6q native filter self-test failed' }
+  & python.exe (Join-Path $here 'Stage-K1V6qNativeWatson.py')
   if ($LASTEXITCODE -ne 0) { throw 'V6q native trace signature/source proof blocked the build' }
   $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_native_watson_v6q'
   $manifest = Get-Content (Join-Path $stage 'v6q-manifest.json') -Raw | ConvertFrom-Json
