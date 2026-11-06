@@ -42,7 +42,7 @@ def addr(x):
     inside=m.group(1).strip()
     if re.fullmatch(r'0x[0-9a-f]+',inside):
         return inside+"u"
-    m=re.fullmatch(r'(eax|ebp)(?: ([+-]) (0x[0-9a-f]+))?',inside)
+    m=re.fullmatch(r'(eax|ebp)(?: ([+-]) (0x[0-9a-f]+|[0-9]+))?',inside)
     need(m,"Unsupported memory base/index: "+inside)
     base,sign,off=m.groups()
     if not sign:return base
