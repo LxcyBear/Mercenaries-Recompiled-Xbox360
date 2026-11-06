@@ -5,6 +5,10 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = (Resolve-Path (Join-Path $here '..\..\..\..\..')).Path
 Push-Location $repo
 try {
+  # Fail early with an explicit parser gate before any source staging or XDK call.
+  & python.exe -m py_compile (Join-Path $here 'Stage-K1V6pDirect17A120.py') (Join-Path $here 'Audit-K1V6pRetailAssetCheckpoint.py')
+  if ($LASTEXITCODE -ne 0) { throw 'V6p Python syntax preflight failed. No XDK invoked.' }
+  Write-Host '[K1-V6p] PYTHON SYNTAX PREFLIGHT PASS'
   & python.exe (Join-Path $here 'Stage-K1V6pDirect17A120.py')
   if ($LASTEXITCODE -ne 0) { throw 'V6p retail source or dependency proof blocked the build' }
   $stage = Join-Path $repo 'build\phase6_integration_map\k1_pixel_direct_17a120_v6p'
