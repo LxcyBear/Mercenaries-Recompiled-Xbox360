@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""K1-V7U: replace exactly two legacy TLS shortcuts in V7I with original x86.
+"""K1-V7U: insert two absent retail TLS helpers into V7I with their original x86.
 
 Works on a local V7I main.cpp only; leaves parent and all TrueTUs untouched.
 Requires original retail ABI (V7N), V7I manifest, and Phase2E TIB contract.
@@ -121,24 +121,44 @@ def check_provenance(parent,manifest,abi,phase2):
         "TLS index readback",
     ):need(s in phase2,"Phase2E guest FS/TLS low-memory contract absent: "+s)
 def patch(src):
-    need(MARK not in src,"V7U marker already present")
-    need(fetch_func(src,"sub_0022B150").strip()==OLD_GET,
-         "Older TLS getter differs; cannot automatically replace")
-    need(fetch_func(src,"sub_0022B178").strip()==OLD_SET,
-         "Older TLS setter differs; cannot automatically replace")
-    for sym in ("g_eflags","g_eax","g_ecx","g_esp","GUEST_READ8","GUEST_READ32","GUEST_WRITE32"):
-        need(sym in src,"Missing actual translated runtime primitive "+sym)
+    """Insert the missing retail pair into the one real V7I pack lookup."""
+    need(MARK not in src, "V7U marker already present")
+    for sym in ("g_eflags","g_eax","g_ecx","g_esp","GUEST_READ8",
+                "GUEST_READ32","GUEST_WRITE32"):
+        need(sym in src,"Missing translated runtime primitive "+sym)
     for va in (0x22B150,0x22B178):
-        need(src.count("case 0x%08Xu: return sub_%08X;"%(va,va))==1,
-             "Expected exactly one existing packed dispatch route "+hex(va))
-    # Replace only the two exact function bodies, leaving dispatch and all
-    # original streaming, D3D, APC, NtReadFile and watchdog code unchanged.
-    result=src.replace(OLD_GET,NEW_GET,1).replace(OLD_SET,NEW_SET,1)
-    need(result.replace(NEW_GET,OLD_GET,1).replace(NEW_SET,OLD_SET,1)==src,
-         "Unexpected source changes beyond two exact original TLS helpers")
-    need(result.count("static void sub_0022B150(void)")==1 and
-         result.count("static void sub_0022B178(void)")==1,
-         "Duplicate translated TLS definitions")
+        name="sub_%08X"%va
+        definitions=re.findall(
+            r"(?m)^[ \t]*(?:static[ \t]+)?void[ \t]+"+name+
+            r"\s*\(\s*void\s*\)\s*\{",src)
+        need(not definitions,
+             "Existing TLS function needs manual reconciliation: "+name)
+        need(not re.search(r"\bcase\s+0x%08X[uUlL]*\s*:"%va,src,re.I),
+             "Pre-existing TLS switch case "+name)
+        need(not re.search(r"\bif\s*\(\s*xbox_va\s*==\s*0x%08X[uUlL]*"%va,src,re.I),
+             "Pre-existing TLS lookup route "+name)
+    pattern=(r"(?m)^[ \t]*recomp_func_t[ \t]+phase4c_lookup_pack_func"
+             r"\(uint32_t xbox_va\)\s*\{")
+    matches=list(re.finditer(pattern,src))
+    need(len(matches)==1,
+         "Expected exactly one full packed lookup; found %d"%len(matches))
+    definition=matches[0]
+    anchor=definition.group(0)
+    routes=(
+        "    /* K1-V7U: unique original retail TLS lookup routes. */\n"
+        "    if (xbox_va == 0x0022B150u) return sub_0022B150;\n"
+        "    if (xbox_va == 0x0022B178u) return sub_0022B178;\n"
+    )
+    inserted=NEW_GET+"\n\n"+NEW_SET+"\n\n"+anchor+"\n"+routes
+    result=src[:definition.start()]+inserted+src[definition.end():]
+    need(result.replace(inserted,anchor,1)==src,
+         "Unexpected modification outside TLS functions and lookup routes")
+    for va in (0x22B150,0x22B178):
+        name="sub_%08X"%va
+        need(len(re.findall(r"\bstatic void "+name+r"\(void\)\s*\{",result))==1,
+             "New TLS function definition not unique "+name)
+        need(result.count("if (xbox_va == 0x%08Xu) return %s;"%(va,name))==1,
+             "New TLS lookup route not unique "+name)
     return "/* "+MARK+" */\n"+result
 def main():
     p=argparse.ArgumentParser()
@@ -164,7 +184,7 @@ def main():
         "fs_guest_low_address_mapping_proven_in_phase2e":True,
         "fs24_selector_source":"guest RAM byte at FS-relative 0x24 (no invented value)",
         "flags_mask":"0x08D5",
-        "replaced_legacy_last_error_shortcuts":True,
+        "inserted_missing_tls_helpers_and_lookup_routes":True,
         "apc_and_storage_fences_unchanged":True,
         "source_only":True,"xdk_compiled":False,"xbox_verified":False,
     })
@@ -177,10 +197,10 @@ def main():
         path.parent.mkdir(parents=True,exist_ok=True)
         if not path.exists():path.write_bytes(data)
     need(a.parent.read_bytes()==original,"Parent changed during stage")
-    print("[K1-V7U] SOURCE PATCH PASS: retail TLS 0022B150/0022B178 replaced original legacy shortcuts")
+    print("[K1-V7U] SOURCE PATCH PASS: original retail TLS pair inserted into V7I lookup")
     print("[K1-V7U] Original Phase2E FS4/FS28/negative-index mapping + V7N ret0/ret4 PASS")
     print("[K1-V7U] Preserve guest FS24 conditional read, EAX/ECX, CMP flags, 4/8 stack advances")
-    print("[K1-V7U] Single dispatcher routes retained; V7I APC/stream/graphics unchanged")
+    print("[K1-V7U] Unique new lookup routes; V7I APC/stream/graphics unchanged")
     print("[K1-V7U] SOURCE OUTPUT "+str(a.out))
     print("[K1-V7U] NO XDK / NO XBOX; BUILD NOT YET AUTHORISED")
 if __name__=="__main__":
