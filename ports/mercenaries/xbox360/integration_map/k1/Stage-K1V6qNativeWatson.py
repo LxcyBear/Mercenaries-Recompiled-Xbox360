@@ -133,8 +133,8 @@ def patch(src,verbose=False):
     # strings, so counting signatures in the whole modified file would
     # falsely report a change. Compare the recovered original source instead.
     recovered=(modified.replace(
-        "\\n    if (!k1v6q_native_watson_allow("+arg+")) return;\\n","",1)
-        .replace("/* "+MARK+" */\\n"+filter_code+"\\n","",1))
+        "\n    if (!k1v6q_native_watson_allow("+arg+")) return;\n","",1)
+        .replace("/* "+MARK+" */\n"+filter_code+"\n","",1))
     if recovered!=normalized:
         die("Native Watson patch changed code outside trace ingress")
     for sig in ("K1-V6O-LOCKED-DSK-EXACT-LOWER-BUFFER-20261105",
