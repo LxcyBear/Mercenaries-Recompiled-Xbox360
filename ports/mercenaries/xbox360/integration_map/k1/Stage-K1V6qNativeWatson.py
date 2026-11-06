@@ -129,12 +129,20 @@ def patch(src,verbose=False):
     if (modified.replace("\n    if (!k1v6q_native_watson_allow("+arg+")) return;\n","",1)
          .replace("/* "+MARK+" */\n"+filter_code+"\n","",1)!=normalized):
         die("Non-logger source bytes modified")
-    # All known important original runtime signatures survive.
+    # The logging allowlist intentionally mentions some original message
+    # strings, so counting signatures in the whole modified file would
+    # falsely report a change. Compare the recovered original source instead.
+    recovered=(modified.replace(
+        "\\n    if (!k1v6q_native_watson_allow("+arg+")) return;\\n","",1)
+        .replace("/* "+MARK+" */\\n"+filter_code+"\\n","",1))
+    if recovered!=normalized:
+        die("Native Watson patch changed code outside trace ingress")
     for sig in ("K1-V6O-LOCKED-DSK-EXACT-LOWER-BUFFER-20261105",
                 "K1-V6b APC QUEUED","K1-V6b APC DELIVERED",
                 "P6DQ ROCKET HARD STOP","P6DQ PIXEL CHASE",
                 "K1D3D SECOND: native Xenos Reset PASS"):
-        if normalized.count(sig)!=modified.count(sig):die("Native logger broke "+sig)
+        if normalized.count(sig)<1 or recovered.count(sig)!=normalized.count(sig):
+            die("Missing or modified original guest milestone: "+sig)
     if "\r\n" in src:modified=modified.replace("\n","\r\n")
     return modified,entry.group(1)
 def test():
